@@ -31190,8 +31190,16 @@ function _decompressGzipToText(arrayBuffer) {
 // Parse parquet.gz ArrayBuffer and return { fields: string[], rows: object[] }
 async function _parseParquetGz(arrayBuffer) {
     var gzBytes = new Uint8Array(arrayBuffer);
-    var pqBytes = pako.ungzip(gzBytes);
-    var pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
+    var pqBuf;
+    // Check for gzip magic bytes (0x1f 0x8b) before decompressing
+    if (gzBytes.length >= 2 && gzBytes[0] === 0x1f && gzBytes[1] === 0x8b) {
+        var pqBytes = pako.ungzip(gzBytes);
+        pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
+    } else {
+        // Data is not gzip-compressed — likely raw parquet (browser may have auto-decompressed)
+        console.warn('[Parquet] Data is not gzip-compressed, trying as raw parquet');
+        pqBuf = arrayBuffer;
+    }
     var hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.1/+esm');
     var meta = hp.parquetMetadata(pqBuf);
     var fields = meta.schema.slice(1).map(function(s) { return s.name; });
@@ -31958,7 +31966,39 @@ async function autoLoadCrashData(skipCache = false) {
                             });
                         }
                     } catch (err) {
-                        console.error('[AutoLoad] Parquet parse error:', err);
+                        console.error('[AutoLoad] Parquet parse error, falling back to CSV:', err);
+                        // Build CSV fallback URLs from the original dataFilePath
+                        var csvGzUrl = resolveDataUrl(dataFilePath);
+                        var csvUrl = resolveDataUrl(dataFilePath.slice(0, -3)); // strip .gz
+                        console.log('[AutoLoad] Trying CSV fallback:', csvGzUrl);
+                        try {
+                            var csvResp = await fetch(csvGzUrl);
+                            if (!csvResp.ok) {
+                                console.log('[AutoLoad] csv.gz fallback failed, trying plain csv:', csvUrl);
+                                csvResp = await fetch(csvUrl);
+                            }
+                            if (csvResp.ok) {
+                                var csvText;
+                                try {
+                                    var ab = await csvResp.arrayBuffer();
+                                    var bytes = new Uint8Array(ab);
+                                    if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
+                                        csvText = _decompressGzipToText(ab);
+                                    } else {
+                                        csvText = new TextDecoder('utf-8').decode(bytes);
+                                    }
+                                } catch (decErr) {
+                                    console.warn('[AutoLoad] CSV decode error, trying as text:', decErr);
+                                    csvText = null;
+                                }
+                                if (csvText) {
+                                    console.log('[AutoLoad] CSV fallback succeeded, parsing...');
+                                    return csvText; // flows to .then(csvText => ...) handler
+                                }
+                            }
+                        } catch (csvErr) {
+                            console.error('[AutoLoad] CSV fallback also failed:', csvErr);
+                        }
                         showFilterLoadingState(false);
                         updateDataConnectionStatus('error', 'Parquet parse error: ' + err.message);
                         showAutoLoadFallback('Parquet parse error: ' + err.message);
