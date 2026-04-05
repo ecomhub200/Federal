@@ -14,6 +14,7 @@ CL.worker = CL.worker || {};
 
     var _loadPromise = null;
     var _cachedCsvText = null; // Cached from initial fetch — avoids second network request
+    var _cachedRowObjects = null; // Cached from parquet parse — { fields: string[], rows: object[] }
 
     /**
      * Cache CSV text from the initial fetch so lazy sampleRows load doesn't re-download.
@@ -22,6 +23,18 @@ CL.worker = CL.worker || {};
      */
     CL.worker.cacheCsvText = function(csvText) {
         _cachedCsvText = csvText;
+        _cachedRowObjects = null; // Clear parquet cache if CSV is cached
+    };
+
+    /**
+     * Cache parsed row objects from parquet for lazy sampleRows load.
+     * Call this from autoLoadCrashData after parsing parquet data.
+     * @param {string[]} fields - Column names
+     * @param {object[]} rows - Array of row objects
+     */
+    CL.worker.cacheRowObjects = function(fields, rows) {
+        _cachedRowObjects = { fields: fields, rows: rows };
+        _cachedCsvText = null; // Clear CSV cache if row objects are cached
     };
 
     /**
@@ -36,7 +49,7 @@ CL.worker = CL.worker || {};
      * @returns {boolean}
      */
     CL.worker.hasCachedCsv = function() {
-        return _cachedCsvText !== null;
+        return _cachedCsvText !== null || _cachedRowObjects !== null;
     };
 
     /**
@@ -44,8 +57,9 @@ CL.worker = CL.worker || {};
      * @returns {number}
      */
     CL.worker.getCachedCsvSizeMB = function() {
-        if (!_cachedCsvText) return 0;
-        return Math.round(_cachedCsvText.length / (1024 * 1024) * 10) / 10;
+        if (_cachedCsvText) return Math.round(_cachedCsvText.length / (1024 * 1024) * 10) / 10;
+        if (_cachedRowObjects) return Math.round(JSON.stringify(_cachedRowObjects.rows.slice(0, 100)).length * _cachedRowObjects.rows.length / 100 / (1024 * 1024) * 10) / 10;
+        return 0;
     };
 
     /**
@@ -108,6 +122,7 @@ CL.worker = CL.worker || {};
     CL.worker.resetSampleRowsLoader = function() {
         _loadPromise = null;
         _cachedCsvText = null;
+        _cachedRowObjects = null;
     };
 
     /**
@@ -117,7 +132,20 @@ CL.worker = CL.worker || {};
     function _loadSampleRows() {
         console.log('[SampleRowsLoader] Starting lazy sampleRows load...');
 
-        // Preferred path: use cached CSV text (avoids re-download)
+        // Preferred path A: use cached row objects from parquet (avoids re-download & re-parse)
+        if (_cachedRowObjects && typeof processSampleRowsFromObjects === 'function') {
+            console.log('[SampleRowsLoader] Using cached parquet row objects (' +
+                _cachedRowObjects.rows.length + ' rows) — no network request');
+            var rowData = _cachedRowObjects;
+            return Promise.resolve().then(function() {
+                return processSampleRowsFromObjects(rowData.fields, rowData.rows);
+            }).then(function() {
+                _cachedRowObjects = null;
+                console.log('[SampleRowsLoader] sampleRows loaded from parquet cache, cache released');
+            });
+        }
+
+        // Preferred path B: use cached CSV text (avoids re-download)
         if (_cachedCsvText && typeof processSampleRowsFromText === 'function') {
             console.log('[SampleRowsLoader] Using cached CSV text (' +
                 CL.worker.getCachedCsvSizeMB() + 'MB) — no network request');
@@ -133,28 +161,36 @@ CL.worker = CL.worker || {};
 
         // Fallback: use existing background loader if available (it handles R2 fallback, generation checks, etc.)
         if (typeof loadSampleRowsInBackground === 'function') {
-            console.log('[SampleRowsLoader] No cached CSV — falling back to network fetch');
+            console.log('[SampleRowsLoader] No cached data — falling back to network fetch');
             var gen = (typeof _autoLoadGeneration !== 'undefined') ? _autoLoadGeneration : 0;
             return loadSampleRowsInBackground(gen);
         }
 
-        // Last resort: direct fetch
+        // Last resort: direct fetch (with multi-format fallback)
         if (typeof getDataFilePath !== 'function' || typeof resolveDataUrl !== 'function') {
             return Promise.reject(new Error('Data path functions not available'));
         }
 
-        console.log('[SampleRowsLoader] No cached CSV — falling back to direct network fetch');
+        console.log('[SampleRowsLoader] No cached data — falling back to direct network fetch');
         var dataFilePath = getDataFilePath();
-        return fetch(resolveDataUrl(dataFilePath))
+        var fetchUrl = resolveDataUrl(dataFilePath);
+        return (typeof fetchCsvWithFallback === 'function' ? fetchCsvWithFallback(fetchUrl) : fetch(fetchUrl))
             .then(function(response) {
                 if (!response.ok) throw new Error('HTTP ' + response.status);
-                return response.text();
-            })
-            .then(function(csvText) {
-                if (typeof processSampleRowsFromText === 'function') {
-                    return processSampleRowsFromText(csvText);
+                var fmt = response._dataFormat || 'csv';
+                if (fmt === 'parquet.gz' && typeof _parseParquetGz === 'function' && typeof processSampleRowsFromObjects === 'function') {
+                    return response.arrayBuffer().then(function(buf) {
+                        return _parseParquetGz(buf);
+                    }).then(function(result) {
+                        return processSampleRowsFromObjects(result.fields, result.rows);
+                    });
                 }
-                throw new Error('processSampleRowsFromText not available');
+                return response.text().then(function(csvText) {
+                    if (typeof processSampleRowsFromText === 'function') {
+                        return processSampleRowsFromText(csvText);
+                    }
+                    throw new Error('processSampleRowsFromText not available');
+                });
             });
     }
 
