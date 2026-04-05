@@ -22724,7 +22724,8 @@ function checkR2DataAvailability(stateKey, jurisdiction) {
     // If manifest is loaded, check for diagnostic info (cross-state correction)
     // but never block loading based on manifest contents
     if (r2State.manifest?.files) {
-        const hasAnyVariant = ['all_roads.csv.gz', 'county_roads.csv.gz', 'no_interstate.csv.gz',
+        const hasAnyVariant = ['all_roads.parquet.gz', 'county_roads.parquet.gz', 'no_interstate.parquet.gz',
+                                'all_roads.csv.gz', 'county_roads.csv.gz', 'no_interstate.csv.gz',
                                 'all_roads.csv', 'county_roads.csv', 'no_interstate.csv'].some(variant => {
             const key = `${r2Prefix}/${jurisdiction}/${variant}`;
             const entry = r2State.manifest.files[key];
@@ -22846,7 +22847,8 @@ function resolveDataUrl(localPath) {
                 // Jurisdiction names can contain underscores (e.g., fairfax_county, richmond_city)
                 // so we must match from the END, not split at the first underscore.
                 // Known suffixes: _county_roads.csv.gz, _city_roads.csv.gz, _no_interstate.csv.gz, _all_roads.csv.gz (and legacy .csv)
-                const knownSuffixes = ['_county_roads.csv.gz', '_city_roads.csv.gz', '_no_interstate.csv.gz', '_all_roads.csv.gz',
+                const knownSuffixes = ['_county_roads.parquet.gz', '_city_roads.parquet.gz', '_no_interstate.parquet.gz', '_all_roads.parquet.gz',
+                                       '_county_roads.csv.gz', '_city_roads.csv.gz', '_no_interstate.csv.gz', '_all_roads.csv.gz',
                                        '_county_roads.csv', '_city_roads.csv', '_no_interstate.csv', '_all_roads.csv'];
                 let jurisdiction = null;
                 let filterWithExt = null;
@@ -22888,7 +22890,7 @@ function resolveDataUrl(localPath) {
     const tierPrefixes = ['_state/', '_statewide/', '_region/', '_planning_district/', '_mpo/', '_city/', '_federal/', '_national/'];
     const isR2NativePath = !normalizedPath.startsWith('data/') &&
         normalizedPath.includes('/') &&
-        (normalizedPath.endsWith('.csv') || normalizedPath.endsWith('.json') || normalizedPath.endsWith('.csv.gz'));
+        (normalizedPath.endsWith('.csv') || normalizedPath.endsWith('.json') || normalizedPath.endsWith('.csv.gz') || normalizedPath.endsWith('.parquet.gz'));
     if (isR2NativePath || tierPrefixes.some(p => normalizedPath.includes(p))) {
         const r2Url = `${baseUrl}/${normalizedPath}`;
         console.log(`[R2] Resolved (R2-native path): ${localPath} -> ${r2Url}`);
@@ -22953,9 +22955,14 @@ function buildLocalFallbackPaths(r2NativePath) {
 
     const statePrefix = parts[0]; // e.g., "colorado", "virginia"
     const jurisdiction = parts[1]; // e.g., "douglas", "henrico"
-    // Strip .gz suffix for local fallback paths (R2 uses .csv.gz, local uses .csv)
-    let filename = parts.slice(2).join('/'); // e.g., "county_roads.csv.gz" or "county_roads.csv"
-    if (filename.endsWith('.gz')) filename = filename.slice(0, -3);
+    // Normalize to .csv for local fallback paths
+    // R2 uses .parquet.gz or .csv.gz, but local files are always .csv
+    let filename = parts.slice(2).join('/'); // e.g., "county_roads.csv.gz", "county_roads.parquet.gz", or "county_roads.csv"
+    if (filename.endsWith('.parquet.gz')) {
+        filename = filename.slice(0, -11) + '.csv'; // county_roads.parquet.gz → county_roads.csv
+    } else if (filename.endsWith('.gz')) {
+        filename = filename.slice(0, -3); // county_roads.csv.gz → county_roads.csv
+    }
 
     // Look up the state's dataDir from config (e.g., colorado→"CDOT", virginia→null)
     const stateKey = statePrefix;
@@ -22988,35 +22995,52 @@ function buildLocalFallbackPaths(r2NativePath) {
 }
 
 /**
- * Fetch a crash data URL with .csv.gz → .csv fallback.
- * New pipelines upload as .csv.gz; legacy states (Virginia) still use .csv.
- * Tries the given URL first; if it ends with .csv.gz and fails, retries with .csv.
+ * Fetch a crash data URL with multi-format fallback: .parquet.gz → .csv.gz → .csv
+ * Delaware and newer pipelines use .parquet.gz; Colorado uses .csv.gz; Virginia uses .csv.
+ * Tries parquet first (best compression), then csv.gz, then plain csv.
+ * Tags the successful response with _dataFormat so callers know how to parse it.
  *
  * @param {string} url - The URL to fetch (typically ending in .csv.gz)
  * @param {RequestInit} [opts] - Fetch options
- * @returns {Promise<Response>}
+ * @returns {Promise<Response>} Response with _dataFormat property ('parquet.gz'|'csv.gz'|'csv')
  */
 async function fetchCsvWithFallback(url, opts) {
-    try {
-        const resp = await fetch(url, opts);
-        if (resp.ok) return resp;
-        // If .csv.gz failed, try .csv (legacy format)
-        if (url.endsWith('.csv.gz')) {
-            const legacyUrl = url.slice(0, -3); // strip .gz → .csv
-            console.log(`[R2] .csv.gz not found (HTTP ${resp.status}), trying legacy .csv: ${legacyUrl}`);
-            const legacyResp = await fetch(legacyUrl, opts);
-            if (legacyResp.ok) return legacyResp;
-        }
-        return resp; // Return original failed response
-    } catch (netErr) {
-        // Network error on primary — still try .csv fallback
-        if (url.endsWith('.csv.gz')) {
-            const legacyUrl = url.slice(0, -3);
-            console.log(`[R2] Network error on .csv.gz, trying legacy .csv: ${legacyUrl}`);
-            try { return await fetch(legacyUrl, opts); } catch (e) { /* fall through */ }
-        }
-        throw netErr;
+    // Build ordered list of URLs to try: parquet.gz → csv.gz → csv
+    const candidates = [];
+    if (url.endsWith('.csv.gz')) {
+        // Try parquet.gz first (replace .csv.gz with .parquet.gz)
+        candidates.push({ url: url.slice(0, -7) + '.parquet.gz', format: 'parquet.gz' });
+        candidates.push({ url: url, format: 'csv.gz' });
+        candidates.push({ url: url.slice(0, -3), format: 'csv' }); // strip .gz
+    } else if (url.endsWith('.parquet.gz')) {
+        candidates.push({ url: url, format: 'parquet.gz' });
+        candidates.push({ url: url.slice(0, -11) + '.csv.gz', format: 'csv.gz' });
+        candidates.push({ url: url.slice(0, -11) + '.csv', format: 'csv' });
+    } else if (url.endsWith('.csv')) {
+        candidates.push({ url: url + '.gz'.replace('.csv.gz', '.parquet.gz'), format: 'parquet.gz' });
+        candidates.push({ url: url, format: 'csv' });
+    } else {
+        // Unknown extension — try as-is
+        candidates.push({ url: url, format: 'csv' });
     }
+
+    let lastResp = null;
+    for (const candidate of candidates) {
+        try {
+            const resp = await fetch(candidate.url, opts);
+            if (resp.ok) {
+                resp._dataFormat = candidate.format;
+                console.log(`[R2] Fetched successfully (${candidate.format}): ${candidate.url}`);
+                return resp;
+            }
+            console.log(`[R2] ${candidate.format} not found (HTTP ${resp.status}): ${candidate.url}`);
+            lastResp = resp;
+        } catch (netErr) {
+            console.log(`[R2] Network error on ${candidate.format}: ${candidate.url}`);
+            lastResp = lastResp || new Response('', { status: 0, statusText: 'Network Error' });
+        }
+    }
+    return lastResp; // Return last failed response
 }
 
 // ============================================================
@@ -27330,6 +27354,68 @@ async function processSampleRowsFromText(csvText) {
             }
         });
     });
+}
+
+/**
+ * Process pre-parsed row objects (from parquet) into sampleRows and mapPoints.
+ * Mirrors processSampleRowsFromText but skips CSV parsing.
+ * @param {string[]} fields - Column names
+ * @param {object[]} rows - Array of row objects
+ */
+async function processSampleRowsFromObjects(fields, rows) {
+    // Defensive reset
+    crashState.sampleRows = [];
+    crashState.mapPoints = [];
+    crashState.missingGPS = 0;
+
+    // Detect state from fields
+    if (typeof StateAdapter !== 'undefined') {
+        StateAdapter.detect(fields);
+    }
+    const needsNormalization = typeof StateAdapter !== 'undefined' && StateAdapter.needsNormalization();
+
+    let rowCount = 0;
+    for (let i = 0; i < rows.length; i++) {
+        try {
+            let row = needsNormalization ? StateAdapter.normalizeRow(rows[i]) : rows[i];
+            const parsedRow = parseRowForSampleData(row);
+            if (parsedRow) {
+                crashState.sampleRows.push(parsedRow);
+                const lng = parseFloat(row[COL.X]);
+                const lat = parseFloat(row[COL.Y]);
+                if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                    const sev = (row[COL.SEVERITY] || '').trim().toUpperCase().charAt(0) || 'O';
+                    crashState.mapPoints.push({
+                        lat: lat, lng: lng, sev: sev,
+                        route: row[COL.ROUTE] || '', node: row[COL.NODE] || '',
+                        date: row[COL.DATE] || '', collision: row[COL.COLLISION] || '',
+                        time: row[COL.TIME] || '', isPed: isYes(row[COL.PED]),
+                        isBike: isYes(row[COL.BIKE]), isInt: isIntersection(row),
+                        weather: row[COL.WEATHER] || '', light: row[COL.LIGHT] || '',
+                        isSpeed: isYes(row[COL.SPEED]), isYoung: isYes(row[COL.YOUNG]),
+                        isNight: isYes(row[COL.NIGHT]), docNum: row[COL.ID] || ''
+                    });
+                } else {
+                    crashState.missingGPS++;
+                }
+                rowCount++;
+            }
+        } catch (e) {
+            // Skip malformed rows silently
+        }
+    }
+
+    console.log(`%c[CrashCache] Background load complete (parquet): ${rowCount} sampleRows, ${crashState.mapPoints.length} mapPoints`, 'color: #22c55e');
+    crashState.sampleRowsLoaded = true;
+    showBackgroundLoadingIndicator(false);
+
+    if (typeof applyStateAdapterConfig === 'function') applyStateAdapterConfig();
+    if (typeof refreshMapAfterBackgroundLoad === 'function') refreshMapAfterBackgroundLoad();
+    if (typeof loadValidatorIframe === 'function') loadValidatorIframe();
+    if (typeof refreshDistrictStatisticsOnDataLoad === 'function') refreshDistrictStatisticsOnDataLoad();
+    if (typeof sendCrashDataToAssetDeficiency === 'function') sendCrashDataToAssetDeficiency();
+
+    return true;
 }
 
 /**
@@ -31810,9 +31896,83 @@ async function autoLoadCrashData(skipCache = false) {
             if (!response.ok) {
                 throw new Error(`Data not found (tried R2 and ${buildLocalFallbackPaths(dataFilePath).length} local paths)`);
             }
+
+            // Determine format from response tag (set by fetchCsvWithFallback) or URL
+            const dataFormat = response._dataFormat ||
+                (response.url && response.url.endsWith('.parquet.gz') ? 'parquet.gz' : 'csv');
+
+            if (dataFormat === 'parquet.gz') {
+                // ── Parquet path: read as ArrayBuffer, parse with hyparquet ──
+                console.log('%c[AutoLoad] Parquet data detected, parsing...', 'color: #8b5cf6; font-weight: bold');
+                return response.arrayBuffer().then(async (arrayBuffer) => {
+                    if (myGeneration !== _autoLoadGeneration) {
+                        console.warn(`[AutoLoad] Generation ${myGeneration} superseded before parquet parse, aborting`);
+                        return;
+                    }
+                    resetState();
+                    if (prog) prog.style.display = 'block';
+                    if (uploadIcon) uploadIcon.textContent = '🔄';
+                    if (loadingTitle) loadingTitle.textContent = 'Auto-Loading Crash Data';
+                    if (loadingSubtitle) loadingSubtitle.textContent = `Parsing ${jurisdictionName} parquet data...`;
+
+                    const startTime = Date.now();
+                    try {
+                        const result = await _parseParquetGz(arrayBuffer);
+                        console.log(`[AutoLoad] Parquet parsed: ${result.rows.length} rows, ${result.fields.length} fields`);
+
+                        // Cache row objects for lazy sampleRows load (parquet has no CSV text)
+                        if (typeof CL !== 'undefined' && CL.worker && CL.worker.cacheRowObjects) {
+                            CL.worker.cacheRowObjects(result.fields, result.rows);
+                        }
+
+                        // Detect state from parquet fields
+                        if (typeof StateAdapter !== 'undefined') {
+                            StateAdapter.detect(result.fields);
+                            console.log('[AutoLoad] State detected:', StateAdapter.getStateName());
+                        }
+
+                        const needsNormalization = typeof StateAdapter !== 'undefined' && StateAdapter.needsNormalization();
+                        let rowCount = 0, lastUpdate = startTime;
+                        for (let i = 0; i < result.rows.length; i++) {
+                            try {
+                                const normalized = needsNormalization ? StateAdapter.normalizeRow(result.rows[i]) : result.rows[i];
+                                processRow(normalized);
+                                rowCount++;
+                            } catch (e) {
+                                console.warn('[AutoLoad] Skipping malformed row:', e.message);
+                            }
+                            const now = Date.now();
+                            if (now - lastUpdate > 100) { updateProgress(rowCount, startTime); lastUpdate = now; }
+                        }
+
+                        crashState.totalRows = rowCount;
+                        crashState.loaded = true;
+                        finalizeData();
+                        updateProgress(rowCount, startTime);
+                        _onAutoLoadComplete(rowCount, startTime, dataFilePath, jurisdictionName, uploadIcon, loadingTitle, loadingSubtitle, prog);
+
+                        // Start lazy sampleRows load in background
+                        if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
+                            CL.worker.ensureSampleRows().catch(err => {
+                                console.warn('[AutoLoad] Background sampleRows load failed:', err);
+                            });
+                        }
+                    } catch (err) {
+                        console.error('[AutoLoad] Parquet parse error:', err);
+                        showFilterLoadingState(false);
+                        updateDataConnectionStatus('error', 'Parquet parse error: ' + err.message);
+                        showAutoLoadFallback('Parquet parse error: ' + err.message);
+                    }
+                });
+            }
+
+            // ── CSV path (csv.gz or csv) ──
             return response.text();
         })
         .then(csvText => {
+            // Parquet path returns undefined from its .then() — skip CSV processing
+            if (!csvText) return;
+
             // Check if superseded before processing fresh data
             if (myGeneration !== _autoLoadGeneration) {
                 console.warn(`[AutoLoad] Generation ${myGeneration} superseded before CSV parse, aborting`);

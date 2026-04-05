@@ -178,7 +178,8 @@ CL.upload = CL.upload || {};
             if (stateConfig && stateConfig.r2Prefix) {
                 var filename = normalizedPath.split('/').pop();
                 if (filename) {
-                    var knownSuffixes = ['_county_roads.csv.gz', '_city_roads.csv.gz', '_no_interstate.csv.gz', '_all_roads.csv.gz',
+                    var knownSuffixes = ['_county_roads.parquet.gz', '_city_roads.parquet.gz', '_no_interstate.parquet.gz', '_all_roads.parquet.gz',
+                                         '_county_roads.csv.gz', '_city_roads.csv.gz', '_no_interstate.csv.gz', '_all_roads.csv.gz',
                                          '_county_roads.csv', '_city_roads.csv', '_no_interstate.csv', '_all_roads.csv'];
                     var jurisdiction = null, filterWithExt = null;
                     for (var i = 0; i < knownSuffixes.length; i++) {
@@ -209,7 +210,8 @@ CL.upload = CL.upload || {};
             normalizedPath.indexOf('/') !== -1 &&
             (normalizedPath.indexOf('.csv', normalizedPath.length - 4) !== -1 ||
              normalizedPath.indexOf('.json', normalizedPath.length - 5) !== -1 ||
-             normalizedPath.indexOf('.csv.gz', normalizedPath.length - 7) !== -1);
+             normalizedPath.indexOf('.csv.gz', normalizedPath.length - 7) !== -1 ||
+             normalizedPath.indexOf('.parquet.gz', normalizedPath.length - 11) !== -1);
 
         var hasTierPrefix = false;
         for (var t = 0; t < tierPrefixes.length; t++) {
@@ -242,9 +244,14 @@ CL.upload = CL.upload || {};
 
         var statePrefix = parts[0];
         var jurisdiction = parts[1];
-        // Strip .gz suffix for local fallback paths (R2 uses .csv.gz, local uses .csv)
+        // Normalize to .csv for local fallback paths
+        // R2 uses .parquet.gz or .csv.gz, but local files are always .csv
         var filename = parts.slice(2).join('/');
-        if (filename.indexOf('.gz', filename.length - 3) !== -1) filename = filename.slice(0, -3);
+        if (filename.indexOf('.parquet.gz', filename.length - 11) !== -1) {
+            filename = filename.slice(0, -11) + '.csv'; // county_roads.parquet.gz → county_roads.csv
+        } else if (filename.indexOf('.gz', filename.length - 3) !== -1) {
+            filename = filename.slice(0, -3); // county_roads.csv.gz → county_roads.csv
+        }
         var stateDataDir = appConfig && appConfig.states && appConfig.states[statePrefix] && appConfig.states[statePrefix].dataDir;
 
         if (stateDataDir) {
