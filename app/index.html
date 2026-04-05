@@ -23008,17 +23008,17 @@ async function fetchCsvWithFallback(url, opts) {
     // Build ordered list of URLs to try: parquet.gz → csv.gz → csv
     const candidates = [];
     if (url.endsWith('.csv.gz')) {
-        // Try parquet.gz first (replace .csv.gz with .parquet.gz)
-        candidates.push({ url: url.slice(0, -7) + '.parquet.gz', format: 'parquet.gz' });
+        // Try csv.gz first (most states use CSV), then parquet.gz, then legacy csv
         candidates.push({ url: url, format: 'csv.gz' });
+        candidates.push({ url: url.slice(0, -7) + '.parquet.gz', format: 'parquet.gz' });
         candidates.push({ url: url.slice(0, -3), format: 'csv' }); // strip .gz
     } else if (url.endsWith('.parquet.gz')) {
         candidates.push({ url: url, format: 'parquet.gz' });
         candidates.push({ url: url.slice(0, -11) + '.csv.gz', format: 'csv.gz' });
         candidates.push({ url: url.slice(0, -11) + '.csv', format: 'csv' });
     } else if (url.endsWith('.csv')) {
-        candidates.push({ url: url + '.gz'.replace('.csv.gz', '.parquet.gz'), format: 'parquet.gz' });
         candidates.push({ url: url, format: 'csv' });
+        candidates.push({ url: url.slice(0, -4) + '.parquet.gz', format: 'parquet.gz' });
     } else {
         // Unknown extension — try as-is
         candidates.push({ url: url, format: 'csv' });
@@ -31197,9 +31197,16 @@ async function _parseParquetGz(arrayBuffer) {
     // Check for gzip magic bytes (0x1f 0x8b) to determine if decompression is needed
     if (gzBytes.length >= 2 && gzBytes[0] === 0x1f && gzBytes[1] === 0x8b) {
         // Gzip-compressed — decompress first
-        console.log('[Parquet] Decompressing gzip data...');
-        var pqBytes = pako.ungzip(gzBytes);
-        pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
+        try {
+            console.log('[Parquet] Decompressing gzip data...');
+            var pqBytes = pako.ungzip(gzBytes);
+            pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
+        } catch (gzErr) {
+            // Decompression failed — try parsing as raw parquet anyway
+            // This handles edge cases like CDN double-decompression or corrupt gzip wrappers
+            console.warn('[Parquet] Gzip decompression failed, trying as raw parquet:', gzErr.message);
+            pqBuf = arrayBuffer;
+        }
     } else {
         // Already decompressed (browser/CDN handled it) — use raw bytes
         console.log('[Parquet] Data already decompressed, parsing directly...');
