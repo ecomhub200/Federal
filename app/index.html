@@ -31200,7 +31200,7 @@ async function _parseParquetGz(arrayBuffer) {
         console.warn('[Parquet] Data is not gzip-compressed, trying as raw parquet');
         pqBuf = arrayBuffer;
     }
-    var hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.1/+esm');
+    var hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
     var meta = hp.parquetMetadata(pqBuf);
     var fields = meta.schema.slice(1).map(function(s) { return s.name; });
     var rawRows;
@@ -81895,7 +81895,7 @@ async function loadADTrafficInventory() {
         const gzBytes = new Uint8Array(await resp.arrayBuffer());
         const parquetBytes = pako.ungzip(gzBytes);
         const pqBuf = parquetBytes.buffer.slice(parquetBytes.byteOffset, parquetBytes.byteOffset + parquetBytes.byteLength);
-        const hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.1/+esm');
+        const hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
         const meta = hp.parquetMetadata(pqBuf);
         const headers = meta.schema.slice(1).map(function(s) { return s.name.toLowerCase(); });
         const idxMutcd = headers.indexOf('mutcd');
@@ -129448,7 +129448,7 @@ async function loadTrafficInventoryForMap() {
             var gzBytes = new Uint8Array(await resp.arrayBuffer());
             var pqBytes = pako.ungzip(gzBytes);
             var pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
-            var hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.1/+esm');
+            var hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
             var meta = hp.parquetMetadata(pqBuf);
             var headers = meta.schema.slice(1).map(function(s) { return s.name.toLowerCase(); });
             var idxMutcd = headers.indexOf('mutcd');
@@ -149693,7 +149693,7 @@ async function signDef_loadInventory() {
         const gzBytes = new Uint8Array(await resp.arrayBuffer());
         const pqBytes = pako.ungzip(gzBytes);
         const pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
-        const hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.1/+esm');
+        const hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
         const meta = hp.parquetMetadata(pqBuf);
         const headers = meta.schema.slice(1).map(function(s) { return s.name.toLowerCase(); });
         const idxMutcd = headers.indexOf('mutcd');
