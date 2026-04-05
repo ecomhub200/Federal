@@ -31188,10 +31188,24 @@ function _decompressGzipToText(arrayBuffer) {
 }
 
 // Parse parquet.gz ArrayBuffer and return { fields: string[], rows: object[] }
+// Handles both gzip-compressed and already-decompressed parquet data
+// (browsers/CDNs may auto-decompress gzip via Content-Encoding)
 async function _parseParquetGz(arrayBuffer) {
     var gzBytes = new Uint8Array(arrayBuffer);
-    var pqBytes = pako.ungzip(gzBytes);
-    var pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
+    var pqBuf;
+
+    // Check for gzip magic bytes (0x1f 0x8b) to determine if decompression is needed
+    if (gzBytes.length >= 2 && gzBytes[0] === 0x1f && gzBytes[1] === 0x8b) {
+        // Gzip-compressed — decompress first
+        console.log('[Parquet] Decompressing gzip data...');
+        var pqBytes = pako.ungzip(gzBytes);
+        pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
+    } else {
+        // Already decompressed (browser/CDN handled it) — use raw bytes
+        console.log('[Parquet] Data already decompressed, parsing directly...');
+        pqBuf = arrayBuffer;
+    }
+
     var hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.1/+esm');
     var meta = hp.parquetMetadata(pqBuf);
     var fields = meta.schema.slice(1).map(function(s) { return s.name; });
