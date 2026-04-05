@@ -31201,10 +31201,11 @@ async function _parseParquetGz(arrayBuffer) {
         pqBuf = arrayBuffer;
     }
     var hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
+    var hpc = await import('https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.1/+esm');
     var meta = hp.parquetMetadata(pqBuf);
     var fields = meta.schema.slice(1).map(function(s) { return s.name; });
     var rawRows;
-    await hp.parquetRead({ file: pqBuf, onComplete: function(data) { rawRows = data; } });
+    await hp.parquetRead({ file: pqBuf, compressors: hpc.compressors, onComplete: function(data) { rawRows = data; } });
     // Convert columnar arrays to row objects keyed by field name
     var rows = [];
     for (var i = 0; i < rawRows.length; i++) {
@@ -81896,6 +81897,7 @@ async function loadADTrafficInventory() {
         const parquetBytes = pako.ungzip(gzBytes);
         const pqBuf = parquetBytes.buffer.slice(parquetBytes.byteOffset, parquetBytes.byteOffset + parquetBytes.byteLength);
         const hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
+        const hpc = await import('https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.1/+esm');
         const meta = hp.parquetMetadata(pqBuf);
         const headers = meta.schema.slice(1).map(function(s) { return s.name.toLowerCase(); });
         const idxMutcd = headers.indexOf('mutcd');
@@ -81906,7 +81908,7 @@ async function loadADTrafficInventory() {
         const idxLon = headers.indexOf('lon');
 
         let pqRows;
-        await hp.parquetRead({ file: pqBuf, onComplete: function(data) { pqRows = data; } });
+        await hp.parquetRead({ file: pqBuf, compressors: hpc.compressors, onComplete: function(data) { pqRows = data; } });
 
         const allAssets = [];
         for (var i = 0; i < pqRows.length; i++) {
@@ -129449,6 +129451,7 @@ async function loadTrafficInventoryForMap() {
             var pqBytes = pako.ungzip(gzBytes);
             var pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
             var hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
+            var hpc = await import('https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.1/+esm');
             var meta = hp.parquetMetadata(pqBuf);
             var headers = meta.schema.slice(1).map(function(s) { return s.name.toLowerCase(); });
             var idxMutcd = headers.indexOf('mutcd');
@@ -129459,7 +129462,7 @@ async function loadTrafficInventoryForMap() {
             var idxLon = headers.indexOf('lon');
 
             var pqRows;
-            await hp.parquetRead({ file: pqBuf, onComplete: function(d) { pqRows = d; } });
+            await hp.parquetRead({ file: pqBuf, compressors: hpc.compressors, onComplete: function(d) { pqRows = d; } });
 
             var data = [];
             for (var i = 0; i < pqRows.length; i++) {
@@ -149694,6 +149697,7 @@ async function signDef_loadInventory() {
         const pqBytes = pako.ungzip(gzBytes);
         const pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
         const hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
+        const hpc = await import('https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.1/+esm');
         const meta = hp.parquetMetadata(pqBuf);
         const headers = meta.schema.slice(1).map(function(s) { return s.name.toLowerCase(); });
         const idxMutcd = headers.indexOf('mutcd');
@@ -149704,7 +149708,7 @@ async function signDef_loadInventory() {
         const idxLon = headers.indexOf('lon');
 
         let pqRows;
-        await hp.parquetRead({ file: pqBuf, onComplete: function(d) { pqRows = d; } });
+        await hp.parquetRead({ file: pqBuf, compressors: hpc.compressors, onComplete: function(d) { pqRows = d; } });
 
         signDefState.inventoryData = [];
         for (var i = 0; i < pqRows.length; i++) {

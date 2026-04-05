@@ -507,8 +507,9 @@ async function loadUrl(type){
       if(url.endsWith('.gz'))bytes=pako.ungzip(gzBytes);
       const buf=bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
       const hp=await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
+      const hpc=await import('https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.1/+esm');
       const meta=hp.parquetMetadata(buf);const cols=meta.schema.slice(1).map(s=>s.name);
-      let rows;await hp.parquetRead({file:buf,onComplete:data=>{rows=data}});
+      let rows;await hp.parquetRead({file:buf,compressors:hpc.compressors,onComplete:data=>{rows=data}});
       const txt=cols.join(',')+'\n'+rows.map(r=>r.map(v=>{const s=String(v==null?'':v);return s.includes(',')||s.includes('"')?'"'+s.replace(/"/g,'""')+'"':s}).join(',')).join('\n');
       await cacheSet(url,txt);procData(txt,type,url.split('/').pop());
     }else{
