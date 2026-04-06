@@ -162,8 +162,9 @@ CL.batchBA._analyzeLocation = function(location, locationIndex) {
     var cmf, crf, pValue, isSignificant;
 
     if (beforeStats.total === 0 && afterStats.total === 0) {
-        cmf = 1.0;
-        crf = 0;
+        // No crashes in either period — cannot evaluate effectiveness
+        cmf = null;
+        crf = null;
         pValue = 1.0;
         isSignificant = false;
     } else if (beforeStats.total === 0) {
@@ -187,9 +188,10 @@ CL.batchBA._analyzeLocation = function(location, locationIndex) {
         isSignificant = pValue < (1 - s.confidenceLevel);
     }
 
-    // Get EPDO weights
-    var epdoInfo = CL.core.epdo.getStateEPDOWeights(typeof STATE_FIPS !== 'undefined' ? STATE_FIPS : '_default');
-    var weights = epdoInfo.weights;
+    // Get EPDO weights — use the app's active weights (respects user's state/preset selection)
+    var fips = (typeof getCurrentStateFips === 'function') ? getCurrentStateFips() : '_default';
+    var epdoInfo = CL.core.epdo.getStateEPDOWeights(fips);
+    var weights = (typeof EPDO_WEIGHTS !== 'undefined') ? EPDO_WEIGHTS : epdoInfo.weights;
     var beforeEPDO = CL.core.epdo.calcEPDO(beforeStats, weights);
     var afterEPDO = CL.core.epdo.calcEPDO(afterStats, weights);
 
@@ -332,28 +334,38 @@ CL.batchBA._computeSummary = function() {
     var byEffectiveness = { 'Highly Effective': 0, 'Effective': 0, 'Marginal': 0, 'Ineffective': 0, 'Negative Impact': 0 };
     var byType = {};
 
-    var cmfCount = 0; // track locations with valid CMF
+    var cmfCount = 0; // track locations with valid CMF (before > 0)
+    var evaluableCount = 0; // track locations with before-period crashes (valid for B/A evaluation)
     successful.forEach(function(r) {
-        totalCrashChange += r.changePct;
         if (r.cmf !== null) { totalCMF += r.cmf; cmfCount++; }
         if (r.isSignificant) significantCount++;
-        // Rate-adjusted: compare actual after to expected after (scaled to after period)
-        var expectedAfterForPrevented = r.beforeTotal * (r.afterYears / r.beforeYears);
-        crashesPrevented += Math.round(expectedAfterForPrevented - r.afterTotal);
         var rating = CL.batchBA.getEffectivenessRating(r.cmf).label;
         byEffectiveness[rating] = (byEffectiveness[rating] || 0) + 1;
 
+        // Only include locations with before-period crashes in rate metrics
+        // (locations with 0 before crashes have no valid baseline for comparison)
+        if (r.beforeTotal > 0) {
+            evaluableCount++;
+            totalCrashChange += r.changePct;
+            var expectedAfterForPrevented = r.beforeTotal * (r.afterYears / r.beforeYears);
+            crashesPrevented += Math.round(expectedAfterForPrevented - r.afterTotal);
+        }
+
         var type = r.countermeasureType || 'Not specified';
-        if (!byType[type]) byType[type] = { count: 0, totalCMF: 0, cmfCount: 0, totalChange: 0 };
+        if (!byType[type]) byType[type] = { count: 0, totalCMF: 0, cmfCount: 0, totalChange: 0, evaluableCount: 0 };
         byType[type].count++;
         if (r.cmf !== null) { byType[type].totalCMF += r.cmf; byType[type].cmfCount++; }
-        byType[type].totalChange += r.changePct;
+        if (r.beforeTotal > 0) {
+            byType[type].totalChange += r.changePct;
+            byType[type].evaluableCount++;
+        }
     });
 
     CL.batchBA.state.summary = {
         totalAnalyzed: successful.length,
+        evaluableCount: evaluableCount,
         errors: errors.length,
-        avgCrashReduction: -(totalCrashChange / successful.length),
+        avgCrashReduction: evaluableCount > 0 ? -(totalCrashChange / evaluableCount) : 0,
         avgCMF: cmfCount > 0 ? (totalCMF / cmfCount) : null,
         significantCount: significantCount,
         significantPct: (significantCount / successful.length * 100),

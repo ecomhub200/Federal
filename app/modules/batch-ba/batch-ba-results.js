@@ -57,7 +57,8 @@ CL.batchBA._renderSummaryCards = function() {
         { label: 'Effective', count: eff['Effective'] || 0, color: '#65a30d' },
         { label: 'Marginal', count: eff['Marginal'] || 0, color: '#ca8a04' },
         { label: 'Ineffective', count: eff['Ineffective'] || 0, color: '#ea580c' },
-        { label: 'Negative Impact', count: eff['Negative Impact'] || 0, color: '#dc2626' }
+        { label: 'Negative Impact', count: eff['Negative Impact'] || 0, color: '#dc2626' },
+        { label: 'N/A', count: eff['N/A'] || 0, color: '#94a3b8' }
     ];
     badges.forEach(function(b) {
         if (b.count > 0) {
