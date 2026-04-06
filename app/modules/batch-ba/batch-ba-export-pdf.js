@@ -44,7 +44,8 @@ CL.batchBA.exportPDF = function() {
     var sum = s.summary;
     var dateStamp = new Date().toISOString().split('T')[0];
     var generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    var epdoInfo = CL.core.epdo.getStateEPDOWeights(typeof STATE_FIPS !== 'undefined' ? STATE_FIPS : '_default');
+    var fips = (typeof getCurrentStateFips === 'function') ? getCurrentStateFips() : '_default';
+    var epdoInfo = CL.core.epdo.getStateEPDOWeights(fips);
     var pageNum = 0;
     var y = m + headerH;
 
@@ -391,7 +392,7 @@ CL.batchBA.exportPDF = function() {
         var typeRows = typeKeys.sort().map(function(t) {
             var info = sum.byType[t];
             var avgCmf = info.cmfCount > 0 ? (info.totalCMF / info.cmfCount).toFixed(3) : 'N/A';
-            var avgChange = (info.totalChange / info.count).toFixed(1) + '%';
+            var avgChange = (info.evaluableCount || 0) > 0 ? (info.totalChange / info.evaluableCount).toFixed(1) + '%' : 'N/A';
             return [t, String(info.count), avgCmf, avgChange];
         });
         doc.autoTable({
