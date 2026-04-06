@@ -1330,6 +1330,22 @@ def standardize_columns(df):
         if raw.isin(plan_map.keys()).any() and not raw.str.contains('[a-zA-Z]', na=False, regex=True).any():
             df['Planning District'] = raw.map(plan_map).fillna(df['Planning District'])
 
+    # ── Sanitize Max Speed Diff: detect encoded speed-limit values ──
+    # Starting ~2025, TREDS may encode posted speed limits as 900+limit in
+    # SPEED_DIFF_MAX and set SPEED_NOTSPEED=1 for all such records.  Real
+    # speed differentials are < 100 mph; anything >= 100 is treated as an
+    # encoded speed-limit value and cleared.
+    if 'Max Speed Diff' in df.columns:
+        diff_raw = pd.to_numeric(df['Max Speed Diff'], errors='coerce')
+        corrupt_mask = diff_raw >= 100
+        n_corrupt = int(corrupt_mask.sum())
+        if n_corrupt > 0:
+            print(f"  [SPEED FIX] Clearing {n_corrupt:,} encoded speed-limit "
+                  f"values (>= 100) from Max Speed Diff")
+            df.loc[corrupt_mask, 'Max Speed Diff'] = ''
+            if 'Speed?' in df.columns:
+                df.loc[corrupt_mask, 'Speed?'] = 'No'
+
     # ── Boolean fields: 0/1 → Yes/No ──
     bool_yes_no_fields = [
         'Alcohol?', 'Bike?', 'Pedestrian?', 'Speed?', 'Distracted?',
