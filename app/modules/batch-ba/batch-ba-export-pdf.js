@@ -41,6 +41,11 @@ CL.batchBA.exportPDF = function() {
 
     var successful = s.results.filter(function(r) { return r.status === 'success'; });
     var sum = s.summary;
+
+    // Run validation before generating PDF
+    if (typeof CL.batchBA._validateSummary === 'function') {
+        CL.batchBA._validateSummary();
+    }
     var dateStamp = new Date().toISOString().split('T')[0];
     var generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     var fips = (typeof getCurrentStateFips === 'function') ? getCurrentStateFips() : '_default';
@@ -58,9 +63,25 @@ CL.batchBA.exportPDF = function() {
     function setFill(hex) { var rgb = hexToRgb(hex); doc.setFillColor(rgb.r, rgb.g, rgb.b); }
     function cleanText(text) {
         if (!text) return '';
-        return String(text).replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"')
-            .replace(/[\u2013\u2014]/g, '-').replace(/[\u2026]/g, '...')
-            .replace(/[\u00A0]/g, ' ').replace(/[^\x00-\x7F]/g, '').replace(/\s+/g, ' ').trim();
+        var s = String(text);
+        // Fix common mojibake: UTF-8 bytes misinterpreted as Latin-1/Windows-1252
+        s = s.replace(/\u00e2\u0080\u0093/g, '-');   // â€" → en-dash → hyphen
+        s = s.replace(/\u00e2\u0080\u0094/g, '-');   // â€" → em-dash → hyphen
+        s = s.replace(/\u00e2\u0080\u0099/g, "'");   // â€™ → right single quote
+        s = s.replace(/\u00e2\u0080\u009c/g, '"');   // â€œ → left double quote
+        s = s.replace(/\u00e2\u0080\u009d/g, '"');   // â€ → right double quote
+        s = s.replace(/\u00e2\u0080\u00a6/g, '...');  // â€¦ → ellipsis
+        s = s.replace(/\u00c3\u00a9/g, 'e');          // Ã© → é → e
+        // Also fix string-level mojibake patterns (when already decoded as text)
+        s = s.replace(/â€"/g, '-').replace(/â€"/g, '-');
+        s = s.replace(/â€™/g, "'").replace(/â€˜/g, "'");
+        s = s.replace(/â€œ/g, '"').replace(/â€\u009d/g, '"');
+        s = s.replace(/â€¦/g, '...');
+        // Standard Unicode normalization
+        s = s.replace(/[\u2018\u2019\u0060\u00B4]/g, "'").replace(/[\u201C\u201D]/g, '"');
+        s = s.replace(/[\u2013\u2014\u2012]/g, '-').replace(/[\u2026]/g, '...');
+        s = s.replace(/[\u00A0]/g, ' ').replace(/[^\x00-\x7F]/g, '').replace(/\s+/g, ' ');
+        return s.trim();
     }
     function drawPageHeader() {
         var rgb = hexToRgb(C.primary);
@@ -231,8 +252,9 @@ CL.batchBA.exportPDF = function() {
     addSectionTitle('Executive Summary');
 
     // Narrative summary paragraph
-    var improved = successful.filter(function(r) { return r.changePct < 0; }).length;
-    var pctImproved = (improved / successful.length * 100).toFixed(0);
+    // Use pre-computed fewerCrashesCount: locations where afterTotal < beforeTotal (excludes 0/0 ties)
+    var improved = sum.fewerCrashesCount;
+    var pctImproved = successful.length > 0 ? (improved / successful.length * 100).toFixed(0) : '0';
     var narrative = 'This evaluation analyzed ' + sum.totalAnalyzed + ' locations where safety countermeasures were installed.';
     if (sum.avgCrashReduction > 0) {
         narrative += ' Overall, treated locations experienced a ' + sum.avgCrashReduction.toFixed(1) + '% average reduction in crash frequency, with ' + improved + ' of ' + successful.length + ' locations (' + pctImproved + '%) showing improvement.';
@@ -343,8 +365,8 @@ CL.batchBA.exportPDF = function() {
     doc.text(sum.significantCount + ' of ' + sum.totalAnalyzed + ' locations (' + sum.significantPct.toFixed(0) + '%) showed statistically significant crash changes at ' + (s.confidenceLevel * 100) + '% confidence.', m, y);
     y += 6;
     var cpText = sum.crashesPrevented >= 0
-        ? 'Net estimated crashes prevented: ' + sum.crashesPrevented : 'Net crash increase: ' + Math.abs(sum.crashesPrevented);
-    doc.text(cpText + '.', m, y);
+        ? 'Net crashes prevented: ' + sum.crashesPrevented : 'Net crash increase: ' + Math.abs(sum.crashesPrevented);
+    doc.text(cpText + ' (true net: sum of before minus after across all locations).', m, y);
     y += 10;
 
     if (successful.length > 0) {

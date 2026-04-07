@@ -56,15 +56,15 @@ CL.batchBA._renderKeyTakeaways = function(results) {
     var sum = CL.batchBA.state.summary;
     if (!sum || sum.totalAnalyzed === 0) { el.style.display = 'none'; return; }
     var takeaways = [];
-    var improved = results.filter(function(r) { return r.changePct < 0; }).length;
+    var improved = sum.fewerCrashesCount;
     var pctImproved = (improved / results.length * 100).toFixed(0);
     takeaways.push(improved + ' of ' + results.length + ' locations (' + pctImproved + '%) had <strong>fewer crashes</strong> after treatment.');
     if (sum.avgCrashReduction > 0) takeaways.push('On average, crashes <strong>decreased by ' + sum.avgCrashReduction.toFixed(1) + '%</strong> across all locations.');
     else if (sum.avgCrashReduction < 0) takeaways.push('On average, crashes <strong>increased by ' + Math.abs(sum.avgCrashReduction).toFixed(1) + '%</strong> across all locations.');
     var best = results.slice().sort(function(a, b) { return a.changePct - b.changePct; })[0];
     if (best && best.changePct < 0) takeaways.push('Best result: <strong>' + best.locationName + '</strong> saw a ' + Math.abs(best.changePct).toFixed(1) + '% reduction in crashes.');
-    if (sum.crashesPrevented > 0) takeaways.push('A net estimated <strong>' + sum.crashesPrevented + ' crashes were prevented</strong> across all treated locations.');
-    else if (sum.crashesPrevented < 0) takeaways.push('There was a net <strong>increase of ' + Math.abs(sum.crashesPrevented) + ' crashes</strong> across all treated locations.');
+    if (sum.crashesPrevented > 0) takeaways.push('True net: <strong>' + sum.crashesPrevented + ' fewer crashes</strong> across all treated locations (before minus after).');
+    else if (sum.crashesPrevented < 0) takeaways.push('True net: <strong>' + Math.abs(sum.crashesPrevented) + ' more crashes</strong> across all treated locations (before minus after).');
     var sigCount = results.filter(function(r) { return r.isSignificant; }).length;
     if (sigCount > 0) takeaways.push(sigCount + ' location(s) showed <strong>statistically significant</strong> improvement (results unlikely due to random chance).');
     var html = '<div style="background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:1px solid #bfdbfe;border-radius:var(--radius);padding:1rem 1.25rem">';

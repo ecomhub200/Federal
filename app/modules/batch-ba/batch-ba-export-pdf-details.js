@@ -45,7 +45,7 @@ CL.batchBA._exportPDFDetails = function() {
         var bMo = Math.round(r.beforeYears * 12);
         var aMo = Math.round(r.afterYears * 12);
         return [
-            cleanText(r.locationName).substring(0, 45),
+            cleanText(r.locationName).substring(0, 60),
             r.countermeasureType ? r.countermeasureType.substring(0, 15) : '-',
             r.beforeTotal,
             r.afterTotal,
@@ -69,12 +69,12 @@ CL.batchBA._exportPDFDetails = function() {
         styles: { fontSize: 6.5, cellPadding: 1.5, overflow: 'linebreak' },
         headStyles: { fillColor: hexToRgb(C.primary), textColor: [255, 255, 255], fontSize: 6.5 },
         columnStyles: {
-            0: { cellWidth: 34 }, 1: { cellWidth: 18 },
-            2: { halign: 'center', cellWidth: 12 }, 3: { halign: 'center', cellWidth: 12 },
+            0: { cellWidth: 40 }, 1: { cellWidth: 18 },
+            2: { halign: 'center', cellWidth: 11 }, 3: { halign: 'center', cellWidth: 11 },
             4: { halign: 'center', cellWidth: 14 },
-            5: { halign: 'center', cellWidth: 14 }, 6: { halign: 'center', cellWidth: 14 },
-            7: { halign: 'center', cellWidth: 16 }, 8: { halign: 'center', cellWidth: 16 },
-            9: { cellWidth: 26 }
+            5: { halign: 'center', cellWidth: 13 }, 6: { halign: 'center', cellWidth: 13 },
+            7: { halign: 'center', cellWidth: 14 }, 8: { halign: 'center', cellWidth: 14 },
+            9: { cellWidth: 24 }
         },
         didParseCell: function(data) {
             if (data.section !== 'body') return;
@@ -121,7 +121,7 @@ CL.batchBA._exportPDFDetails = function() {
         doc.setLineWidth(0.5);
         doc.roundedRect(m, ctx.y, cw, 8, 1, 1, 'FD');
         doc.setFontSize(9); doc.setFont('helvetica', 'bold'); setColor(C.primary);
-        doc.text((i + 1) + '. ' + cleanText(r.locationName).substring(0, 55), m + 3, ctx.y + 5.5);
+        doc.text((i + 1) + '. ' + cleanText(r.locationName).substring(0, 65), m + 3, ctx.y + 5.5);
         doc.setFont('helvetica', 'normal'); setColor(C.textLight);
         doc.text(r.countermeasureType || '-', pw - m - 3, ctx.y + 5.5, { align: 'right' });
         ctx.y += 11;
