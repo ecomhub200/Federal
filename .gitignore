@@ -316,6 +316,19 @@ NOTES.md
 TODO.local.md
 SCRATCH.md
 
+# ============================================================
+# MEMORY COMPILER (Claude Memory Knowledge Base)
+# ============================================================
+# Runtime state files (regenerated automatically)
+memory/scripts/state.json
+memory/scripts/last-flush.json
+memory/scripts/flush.log
+memory/scripts/compile.log
+memory/scripts/session-flush-*.md
+memory/scripts/flush-context-*.md
+memory/reports/
+memory/uv.lock
+
 # Test data with real crash information
 test-data-real/
 sample-crashes-real.csv
