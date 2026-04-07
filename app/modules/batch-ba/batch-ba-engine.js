@@ -142,6 +142,26 @@ CL.batchBA._analyzeLocation = function(location, locationIndex) {
         beforeEnd.setDate(beforeEnd.getDate() - 1);
     }
 
+    // Validate date ranges — exclude locations with invalid or too-short periods
+    var beforeMonths = (beforeEnd - beforeStart) / (30.44 * 24 * 3600 * 1000);
+    var afterMonths = (afterEnd - afterStart) / (30.44 * 24 * 3600 * 1000);
+    var excludeReason = null;
+    if (beforeEnd <= beforeStart || afterEnd <= afterStart || beforeMonths < 0 || afterMonths < 0) {
+        excludeReason = 'Invalid date range (end <= start)';
+    } else if (beforeMonths < 3 || afterMonths < 3) {
+        excludeReason = 'Insufficient data (need >= 3mo each side; got ' + Math.round(beforeMonths) + 'mo before, ' + Math.round(afterMonths) + 'mo after)';
+    }
+    if (excludeReason) {
+        return {
+            locationName: location.locationName, lat: location.lat, lng: location.lng,
+            countermeasureType: location.countermeasureType || 'Not specified',
+            installDate: installDate, radiusFt: radiusFt,
+            beforeStart: beforeStart, beforeEnd: beforeEnd, afterStart: afterStart, afterEnd: afterEnd,
+            beforeMonths: Math.round(beforeMonths), afterMonths: Math.round(afterMonths),
+            excludeReason: excludeReason, status: 'excluded'
+        };
+    }
+
     // Find crashes within radius using spatial filter
     var nearbyCrashes = CL.batchBA._findCrashesInRadius(location.lat, location.lng, radiusMeters);
 
@@ -321,10 +341,11 @@ CL.batchBA._updateProgressUI = function() {
 CL.batchBA._computeSummary = function() {
     var results = CL.batchBA.state.results;
     var successful = results.filter(function(r) { return r.status === 'success'; });
+    var excluded = results.filter(function(r) { return r.status === 'excluded'; });
     var errors = results.filter(function(r) { return r.status === 'error'; });
 
     if (successful.length === 0) {
-        CL.batchBA.state.summary = { totalAnalyzed: 0, errors: errors.length };
+        CL.batchBA.state.summary = { totalAnalyzed: 0, errors: errors.length, excludedCount: excluded.length, excluded: excluded };
         return;
     }
 
@@ -336,8 +357,10 @@ CL.batchBA._computeSummary = function() {
 
     var cmfCount = 0; // locations with valid CMF (before > 0)
     var evaluableCount = 0; // locations with before-period crashes (valid for B/A evaluation)
-    // True net: sum of (before - after) across ALL locations — reflects actual program-wide impact
+    // EB-adjusted net: sum of (expected - observed) across evaluable locations
     var netCrashesPrevented = 0;
+    // Raw net: sum of (before - after) across all locations (unadjusted)
+    var rawNetChange = 0;
     // Count of locations where after < before (strictly fewer crashes, excludes 0/0 ties)
     var fewerCrashesCount = 0;
     // Study maturity: count locations below FHWA 12-month minimum for before or after period
@@ -349,8 +372,15 @@ CL.batchBA._computeSummary = function() {
         var rating = CL.batchBA.getEffectivenessRating(r.cmf).label;
         byEffectiveness[rating] = (byEffectiveness[rating] || 0) + 1;
 
-        // True net across all locations (including those that got worse)
-        netCrashesPrevented += (r.beforeTotal - r.afterTotal);
+        // Raw net across all locations
+        rawNetChange += (r.beforeTotal - r.afterTotal);
+
+        // EB-adjusted net: expected - observed (only for evaluable locations with before > 0)
+        if (r.beforeTotal > 0) {
+            var adjustmentFactor = r.afterYears / r.beforeYears;
+            var expectedAfter = r.beforeTotal * adjustmentFactor;
+            netCrashesPrevented += Math.round(expectedAfter - r.afterTotal);
+        }
 
         // Strictly fewer: after must be less than before (excludes 0 vs 0)
         if (r.afterTotal < r.beforeTotal) fewerCrashesCount++;
@@ -378,17 +408,17 @@ CL.batchBA._computeSummary = function() {
         totalAnalyzed: successful.length,
         evaluableCount: evaluableCount,
         errors: errors.length,
-        // avgCrashReduction: average rate-adjusted % change across evaluable locations only
-        // (locations with before=0 are excluded since CMF is undefined)
+        excludedCount: excluded.length,
+        excluded: excluded,
         avgCrashReduction: evaluableCount > 0 ? -(totalCrashChange / evaluableCount) : 0,
         avgCMF: cmfCount > 0 ? (totalCMF / cmfCount) : null,
         significantCount: significantCount,
         significantPct: (significantCount / successful.length * 100),
-        // True net: sum of (before - after) across all locations, not rate-adjusted
+        // EB-adjusted net: sum of (expected - observed) for evaluable locations
         crashesPrevented: netCrashesPrevented,
-        // Locations where afterTotal is strictly less than beforeTotal
+        // Raw net: sum of (before - after) unadjusted for period length
+        rawNetChange: rawNetChange,
         fewerCrashesCount: fewerCrashesCount,
-        // Locations with before or after period < 12 months (FHWA minimum)
         shortStudyCount: shortStudyCount,
         byEffectiveness: byEffectiveness,
         byType: byType
@@ -408,11 +438,22 @@ CL.batchBA._validateSummary = function() {
     var successful = s.results.filter(function(r) { return r.status === 'success'; });
     var warnings = [];
 
-    // Validate net crashes prevented = sum of (before - after) across ALL locations
+    // Validate EB net crashes prevented = sum of (expected - observed) for evaluable locations
     var expectedNet = 0;
-    successful.forEach(function(r) { expectedNet += (r.beforeTotal - r.afterTotal); });
+    successful.forEach(function(r) {
+        if (r.beforeTotal > 0) {
+            var adj = r.afterYears / r.beforeYears;
+            expectedNet += Math.round(r.beforeTotal * adj - r.afterTotal);
+        }
+    });
     if (sum.crashesPrevented !== expectedNet) {
-        warnings.push('Net crashes prevented mismatch: summary=' + sum.crashesPrevented + ', computed=' + expectedNet);
+        warnings.push('EB net crashes prevented mismatch: summary=' + sum.crashesPrevented + ', computed=' + expectedNet);
+    }
+    // Validate raw net change
+    var expectedRaw = 0;
+    successful.forEach(function(r) { expectedRaw += (r.beforeTotal - r.afterTotal); });
+    if (sum.rawNetChange !== expectedRaw) {
+        warnings.push('Raw net change mismatch: summary=' + sum.rawNetChange + ', computed=' + expectedRaw);
     }
 
     // Validate fewer crashes count = locations where afterTotal < beforeTotal

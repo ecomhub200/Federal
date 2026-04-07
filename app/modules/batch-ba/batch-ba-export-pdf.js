@@ -64,23 +64,28 @@ CL.batchBA.exportPDF = function() {
     function cleanText(text) {
         if (!text) return '';
         var s = String(text);
-        // Fix common mojibake: UTF-8 bytes misinterpreted as Latin-1/Windows-1252
-        s = s.replace(/\u00e2\u0080\u0093/g, '-');   // â€" → en-dash → hyphen
-        s = s.replace(/\u00e2\u0080\u0094/g, '-');   // â€" → em-dash → hyphen
-        s = s.replace(/\u00e2\u0080\u0099/g, "'");   // â€™ → right single quote
-        s = s.replace(/\u00e2\u0080\u009c/g, '"');   // â€œ → left double quote
-        s = s.replace(/\u00e2\u0080\u009d/g, '"');   // â€ → right double quote
-        s = s.replace(/\u00e2\u0080\u00a6/g, '...');  // â€¦ → ellipsis
-        s = s.replace(/\u00c3\u00a9/g, 'e');          // Ã© → é → e
-        // Also fix string-level mojibake patterns (when already decoded as text)
-        s = s.replace(/â€"/g, '-').replace(/â€"/g, '-');
-        s = s.replace(/â€™/g, "'").replace(/â€˜/g, "'");
-        s = s.replace(/â€œ/g, '"').replace(/â€\u009d/g, '"');
-        s = s.replace(/â€¦/g, '...');
-        // Standard Unicode normalization
+        // Fix mojibake: UTF-8 bytes misinterpreted as Latin-1/Windows-1252
+        // Byte-level patterns (3-byte UTF-8 sequences decoded as 3 Latin-1 chars)
+        s = s.replace(/\u00e2\u0080\u0093/g, '-');    // en-dash
+        s = s.replace(/\u00e2\u0080\u0094/g, '-');    // em-dash
+        s = s.replace(/\u00e2\u0080\u0099/g, "'");    // right single quote
+        s = s.replace(/\u00e2\u0080\u0098/g, "'");    // left single quote
+        s = s.replace(/\u00e2\u0080\u009c/g, '"');    // left double quote
+        s = s.replace(/\u00e2\u0080\u009d/g, '"');    // right double quote
+        s = s.replace(/\u00e2\u0080\u00a6/g, '...');  // ellipsis
+        s = s.replace(/\u00c3\u00a9/g, 'e');           // é
+        s = s.replace(/\u00c3\u00b1/g, 'n');           // ñ
+        // String-level mojibake (already decoded)
+        s = s.replace(/â€"/g, '-').replace(/â€"/g, '-').replace(/â€˜/g, "'").replace(/â€™/g, "'");
+        s = s.replace(/â€œ/g, '"').replace(/â€\u009d/g, '"').replace(/â€¦/g, '...');
+        // Catch any remaining â€ followed by any char (common mojibake prefix)
+        s = s.replace(/â€./g, '-');
+        // Standard Unicode → ASCII
         s = s.replace(/[\u2018\u2019\u0060\u00B4]/g, "'").replace(/[\u201C\u201D]/g, '"');
-        s = s.replace(/[\u2013\u2014\u2012]/g, '-').replace(/[\u2026]/g, '...');
-        s = s.replace(/[\u00A0]/g, ' ').replace(/[^\x00-\x7F]/g, '').replace(/\s+/g, ' ');
+        s = s.replace(/[\u2013\u2014\u2012\u2015]/g, '-').replace(/\u2026/g, '...');
+        s = s.replace(/[\u00A0]/g, ' ');
+        // Strip any remaining non-ASCII
+        s = s.replace(/[^\x20-\x7E\n\r\t]/g, '').replace(/\s+/g, ' ');
         return s.trim();
     }
     function drawPageHeader() {
@@ -164,17 +169,9 @@ CL.batchBA.exportPDF = function() {
         var map = { 'Highly Effective': C.successLight, 'Effective': '#65a30d', 'Marginal': '#ca8a04', 'Ineffective': C.warning, 'Negative Impact': C.danger };
         return map[label] || C.gray;
     }
-    // Row background tint based on effectiveness rating
-    function ratingRowBg(label) {
-        var map = { 'Highly Effective': '#f0fdf4', 'Effective': '#f0fdf4', 'Marginal': '#fefce8', 'Ineffective': '#fef2f2', 'Negative Impact': '#fef2f2' };
-        return map[label] || C.lightBg;
-    }
 
-    // ================================================================
-    // PAGE 1: COVER PAGE
-    // ================================================================
-    newPage();
-    y = 55;
+    // === COVER PAGE ===
+    newPage(); y = 55;
     doc.setFontSize(26); doc.setFont('helvetica', 'bold'); setColor(C.primary);
     doc.text('BATCH BEFORE/AFTER STUDY', pw / 2, y, { align: 'center' });
     y += 10;
@@ -221,16 +218,14 @@ CL.batchBA.exportPDF = function() {
     y += 6;
     doc.text('Method: Empirical Bayes (simplified) | Significance: Two-tailed z-test (Poisson)', pw / 2, y, { align: 'center' });
 
-    // ================================================================
-    // PAGE 2: TABLE OF CONTENTS (placeholder — page numbers filled after full render)
-    // ================================================================
+    // === TABLE OF CONTENTS ===
     newPage();
     var tocPageNum = pageNum;
     addSectionTitle('Table of Contents');
     y += 4;
     var tocSections = [
-        'Executive Summary', 'Visual Analysis', 'Location Summary Table',
-        'Individual Location Results', 'How to Read This Report', 'Methodology Notes'
+        'Executive Summary', 'Visual Analysis', 'How to Read This Report',
+        'Location Summary Table', 'Individual Location Results', 'Methodology Notes'
     ];
     var tocYPositions = [];
     doc.setFontSize(11); doc.setFont('helvetica', 'normal'); setColor(C.text);
@@ -244,9 +239,7 @@ CL.batchBA.exportPDF = function() {
         y += 9;
     });
 
-    // ================================================================
-    // PAGE 3: EXECUTIVE SUMMARY
-    // ================================================================
+    // === EXECUTIVE SUMMARY ===
     newPage();
     sectionPages['Executive Summary'] = pageNum;
     addSectionTitle('Executive Summary');
@@ -264,7 +257,7 @@ CL.batchBA.exportPDF = function() {
         narrative += ' On average, crash frequency remained unchanged across ' + successful.length + ' locations.';
     }
     if (sum.crashesPrevented > 0) {
-        narrative += ' An estimated ' + sum.crashesPrevented + ' crashes were prevented across all treated sites.';
+        narrative += ' An estimated ' + sum.crashesPrevented + ' crashes were prevented across all treated sites (EB-adjusted).';
     }
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); setColor(C.text);
     var narrativeLines = doc.splitTextToSize(cleanText(narrative), cw);
@@ -380,11 +373,13 @@ CL.batchBA.exportPDF = function() {
         y += 3;
     }
     var cpText = sum.crashesPrevented >= 0
-        ? 'Net crashes prevented: ' + sum.crashesPrevented : 'Net crash increase: ' + Math.abs(sum.crashesPrevented);
-    doc.text(cpText + ' (true net: sum of before minus after across all locations).', m, y);
+        ? 'Net estimated crashes prevented: ' + sum.crashesPrevented : 'Net estimated crash increase: ' + Math.abs(sum.crashesPrevented);
+    doc.text(cpText + ' (EB-adjusted: sum of expected minus observed across evaluable locations).', m, y);
     y += 10;
 
     if (successful.length > 0) {
+        // Keep entire severity section together on one page (~55mm needed)
+        checkPageBreak(55);
         addSubsectionTitle('Aggregated Severity: Before vs After');
         var aggBefore = { K: 0, A: 0, B: 0, C: 0, O: 0 };
         var aggAfter = { K: 0, A: 0, B: 0, C: 0, O: 0 };
@@ -418,9 +413,7 @@ CL.batchBA.exportPDF = function() {
         y = doc.lastAutoTable.finalY + 10;
     }
 
-    // ================================================================
-    // VISUAL ANALYSIS PAGE — Chart Images
-    // ================================================================
+    // === VISUAL ANALYSIS — Chart Images ===
     function captureChart(canvasId) {
         var canvas = document.getElementById(canvasId);
         if (!canvas || canvas.width === 0 || canvas.height === 0) return null;
@@ -470,18 +463,16 @@ CL.batchBA.exportPDF = function() {
         }
     }
 
-    // ================================================================
-    // Pass context to details module (table, cards, methodology, TOC fill, save)
-    // ================================================================
+    // Pass context to details module
     CL.batchBA._pdfCtx = {
         doc: doc, y: y, pageNum: pageNum,
         m: m, pw: pw, ph: ph, cw: cw, C: C,
-        s: s, sum: sum, successful: successful, epdoInfo: epdoInfo,
+        s: s, sum: s.summary, successful: successful, epdoInfo: epdoInfo,
         safeBottom: safeBottom, generatedDate: generatedDate, dateStamp: dateStamp,
         sectionPages: sectionPages, tocPageNum: tocPageNum, tocYPositions: tocYPositions,
         hexToRgb: hexToRgb, setColor: setColor, setFill: setFill, cleanText: cleanText,
         drawPageHeader: drawPageHeader, drawPageFooter: drawPageFooter,
-        ratingColor: ratingColor, ratingRowBg: ratingRowBg,
+        ratingColor: ratingColor,
         newPage: function() {
             var ctx = CL.batchBA._pdfCtx;
             y = ctx.y; pageNum = ctx.pageNum; newPage(); ctx.y = y; ctx.pageNum = pageNum;

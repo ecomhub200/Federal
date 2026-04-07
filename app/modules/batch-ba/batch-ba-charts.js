@@ -63,8 +63,8 @@ CL.batchBA._renderKeyTakeaways = function(results) {
     else if (sum.avgCrashReduction < 0) takeaways.push('On average, crashes <strong>increased by ' + Math.abs(sum.avgCrashReduction).toFixed(1) + '%</strong> across all locations.');
     var best = results.slice().sort(function(a, b) { return a.changePct - b.changePct; })[0];
     if (best && best.changePct < 0) takeaways.push('Best result: <strong>' + best.locationName + '</strong> saw a ' + Math.abs(best.changePct).toFixed(1) + '% reduction in crashes.');
-    if (sum.crashesPrevented > 0) takeaways.push('True net: <strong>' + sum.crashesPrevented + ' fewer crashes</strong> across all treated locations (before minus after).');
-    else if (sum.crashesPrevented < 0) takeaways.push('True net: <strong>' + Math.abs(sum.crashesPrevented) + ' more crashes</strong> across all treated locations (before minus after).');
+    if (sum.crashesPrevented > 0) takeaways.push('Estimated <strong>' + sum.crashesPrevented + ' crashes prevented</strong> across all treated locations (EB-adjusted: expected minus observed).');
+    else if (sum.crashesPrevented < 0) takeaways.push('Estimated <strong>' + Math.abs(sum.crashesPrevented) + ' additional crashes</strong> across all treated locations (EB-adjusted: expected minus observed).');
     var sigCount = results.filter(function(r) { return r.isSignificant; }).length;
     if (sigCount > 0) {
         takeaways.push(sigCount + ' location(s) showed <strong>statistically significant</strong> improvement (results unlikely due to random chance).');
