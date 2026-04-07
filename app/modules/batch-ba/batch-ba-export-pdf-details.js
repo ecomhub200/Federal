@@ -42,8 +42,8 @@ CL.batchBA._exportPDFDetails = function() {
 
     var tableBody = sorted.map(function(r) {
         var rating = CL.batchBA.getEffectivenessRating(r.cmf);
-        var maturityMonths = Math.round(r.afterYears * 12);
-        var maturity = maturityMonths >= 12 ? 'Full' : maturityMonths + 'mo';
+        var bMo = Math.round(r.beforeYears * 12);
+        var aMo = Math.round(r.afterYears * 12);
         return [
             cleanText(r.locationName).substring(0, 45),
             r.countermeasureType ? r.countermeasureType.substring(0, 15) : '-',
@@ -52,10 +52,9 @@ CL.batchBA._exportPDFDetails = function() {
             r.changePct.toFixed(1) + '%',
             Math.round(r.beforeEPDO),
             Math.round(r.afterEPDO),
-            r.cmf !== null ? r.cmf.toFixed(3) : 'N/A',
-            r.isSignificant ? 'Yes' : 'No',
-            rating.label,
-            maturity
+            bMo,
+            aMo,
+            rating.label
         ];
     });
 
@@ -64,18 +63,18 @@ CL.batchBA._exportPDFDetails = function() {
 
     doc.autoTable({
         startY: ctx.y,
-        head: [['Location', 'Type', 'Before', 'After', 'Change', 'EPDO B', 'EPDO A', 'CMF', 'Sig.', 'Rating', 'Maturity']],
+        head: [['Location', 'Type', 'Before', 'After', 'Change', 'EPDO B', 'EPDO A', 'Before (mo)', 'After (mo)', 'Rating']],
         body: tableBody,
         margin: { left: m, right: m },
         styles: { fontSize: 6.5, cellPadding: 1.5, overflow: 'linebreak' },
         headStyles: { fillColor: hexToRgb(C.primary), textColor: [255, 255, 255], fontSize: 6.5 },
         columnStyles: {
-            0: { cellWidth: 32 }, 1: { cellWidth: 16 },
-            2: { halign: 'center', cellWidth: 10 }, 3: { halign: 'center', cellWidth: 10 },
-            4: { halign: 'center', cellWidth: 13 },
-            5: { halign: 'center', cellWidth: 12 }, 6: { halign: 'center', cellWidth: 12 },
-            7: { halign: 'center', cellWidth: 12 }, 8: { halign: 'center', cellWidth: 9 },
-            9: { cellWidth: 24 }, 10: { halign: 'center', cellWidth: 14 }
+            0: { cellWidth: 34 }, 1: { cellWidth: 18 },
+            2: { halign: 'center', cellWidth: 12 }, 3: { halign: 'center', cellWidth: 12 },
+            4: { halign: 'center', cellWidth: 14 },
+            5: { halign: 'center', cellWidth: 14 }, 6: { halign: 'center', cellWidth: 14 },
+            7: { halign: 'center', cellWidth: 16 }, 8: { halign: 'center', cellWidth: 16 },
+            9: { cellWidth: 26 }
         },
         didParseCell: function(data) {
             if (data.section !== 'body') return;
@@ -93,8 +92,8 @@ CL.batchBA._exportPDFDetails = function() {
                 data.cell.styles.textColor = hexToRgb(ratingColor(data.cell.raw));
                 data.cell.styles.fontStyle = 'bold';
             }
-            // Maturity warning for short studies
-            if (data.column.index === 10 && data.cell.raw !== 'Full') {
+            // After months warning for short studies
+            if (data.column.index === 8 && data.cell.raw < 12) {
                 data.cell.styles.textColor = hexToRgb(C.warning);
                 data.cell.styles.fontStyle = 'bold';
             }

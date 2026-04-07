@@ -155,8 +155,8 @@ CL.batchBA._renderResultsTable = function() {
         { key: 'beforeEPDO', label: 'Before EPDO', title: 'Severity-weighted crash score before treatment (higher = more severe crashes)' },
         { key: 'afterEPDO', label: 'After EPDO', title: 'Severity-weighted crash score after treatment' },
         { key: 'epdoChangePct', label: 'EPDO Change %', title: 'Rate-adjusted change in severity-weighted crash score (accounts for different before/after durations)' },
-        { key: 'cmf', label: 'Safety Score', title: 'Below 1.0 = improvement, above 1.0 = worsening' },
-        { key: 'pValue', label: 'Sig.', title: 'Statistical significance — check mark means the result is unlikely due to random chance' },
+        { key: '_beforeMonths', label: 'Before (mo)', title: 'Length of the before study period in months' },
+        { key: '_afterMonths', label: 'After (mo)', title: 'Length of the after study period in months' },
         { key: '_effectiveness', label: 'Rating', title: 'Overall effectiveness rating based on safety score' }
     ];
 
@@ -185,10 +185,11 @@ CL.batchBA._renderResultsTable = function() {
             html += '<td style="text-align:center">' + Math.round(r.beforeEPDO) + '</td>';
             html += '<td style="text-align:center">' + Math.round(r.afterEPDO) + '</td>';
             html += '<td style="text-align:center;color:' + epdoColor + ';font-weight:600">' + r.epdoChangePct.toFixed(1) + '%</td>';
-            html += '<td style="text-align:center;font-weight:700;color:' + rating.color + '">' + (r.cmf !== null ? r.cmf.toFixed(3) : 'N/A') + '</td>';
-            var sigColor = r.isSignificant ? (r.changePct <= 0 ? '#16a34a' : '#dc2626') : '#94a3b8';
-            var sigSymbol = r.isSignificant ? '✓' : '✗';
-            html += '<td style="text-align:center"><span style="color:' + sigColor + ';font-weight:' + (r.isSignificant ? '700' : '400') + '">' + sigSymbol + '</span></td>';
+            var bMo = Math.round(r.beforeYears * 12);
+            var aMo = Math.round(r.afterYears * 12);
+            html += '<td style="text-align:center">' + bMo + '</td>';
+            var amoColor = aMo < 12 ? '#ea580c' : 'inherit';
+            html += '<td style="text-align:center;color:' + amoColor + ';font-weight:' + (aMo < 12 ? '600' : '400') + '">' + aMo + '</td>';
             html += '<td><span style="display:inline-block;padding:.15rem .5rem;border-radius:9999px;font-size:.72rem;font-weight:600;background:' + rating.color + '20;color:' + rating.color + '">' + rating.label + '</span></td>';
             html += '</tr>';
         });
