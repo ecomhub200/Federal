@@ -74,6 +74,7 @@ CL.batchBA._processChunk = function(startIdx, chunkSize) {
         // Processing complete
         s.processing = false;
         CL.batchBA._computeSummary();
+        CL.batchBA._validateSummary();
         document.getElementById('batchBAProgressSection').style.display = 'none';
         CL.batchBA.renderResults();
     }
@@ -330,25 +331,32 @@ CL.batchBA._computeSummary = function() {
     var totalCrashChange = 0;
     var totalCMF = 0;
     var significantCount = 0;
-    var crashesPrevented = 0;
     var byEffectiveness = { 'Highly Effective': 0, 'Effective': 0, 'Marginal': 0, 'Ineffective': 0, 'Negative Impact': 0 };
     var byType = {};
 
-    var cmfCount = 0; // track locations with valid CMF (before > 0)
-    var evaluableCount = 0; // track locations with before-period crashes (valid for B/A evaluation)
+    var cmfCount = 0; // locations with valid CMF (before > 0)
+    var evaluableCount = 0; // locations with before-period crashes (valid for B/A evaluation)
+    // True net: sum of (before - after) across ALL locations — reflects actual program-wide impact
+    var netCrashesPrevented = 0;
+    // Count of locations where after < before (strictly fewer crashes, excludes 0/0 ties)
+    var fewerCrashesCount = 0;
+
     successful.forEach(function(r) {
         if (r.cmf !== null) { totalCMF += r.cmf; cmfCount++; }
         if (r.isSignificant) significantCount++;
         var rating = CL.batchBA.getEffectivenessRating(r.cmf).label;
         byEffectiveness[rating] = (byEffectiveness[rating] || 0) + 1;
 
+        // True net across all locations (including those that got worse)
+        netCrashesPrevented += (r.beforeTotal - r.afterTotal);
+
+        // Strictly fewer: after must be less than before (excludes 0 vs 0)
+        if (r.afterTotal < r.beforeTotal) fewerCrashesCount++;
+
         // Only include locations with before-period crashes in rate metrics
-        // (locations with 0 before crashes have no valid baseline for comparison)
         if (r.beforeTotal > 0) {
             evaluableCount++;
             totalCrashChange += r.changePct;
-            var expectedAfterForPrevented = r.beforeTotal * (r.afterYears / r.beforeYears);
-            crashesPrevented += Math.round(expectedAfterForPrevented - r.afterTotal);
         }
 
         var type = r.countermeasureType || 'Not specified';
@@ -365,14 +373,70 @@ CL.batchBA._computeSummary = function() {
         totalAnalyzed: successful.length,
         evaluableCount: evaluableCount,
         errors: errors.length,
+        // avgCrashReduction: average rate-adjusted % change across evaluable locations only
+        // (locations with before=0 are excluded since CMF is undefined)
         avgCrashReduction: evaluableCount > 0 ? -(totalCrashChange / evaluableCount) : 0,
         avgCMF: cmfCount > 0 ? (totalCMF / cmfCount) : null,
         significantCount: significantCount,
         significantPct: (significantCount / successful.length * 100),
-        crashesPrevented: crashesPrevented,
+        // True net: sum of (before - after) across all locations, not rate-adjusted
+        crashesPrevented: netCrashesPrevented,
+        // Locations where afterTotal is strictly less than beforeTotal
+        fewerCrashesCount: fewerCrashesCount,
         byEffectiveness: byEffectiveness,
         byType: byType
     };
+};
+
+/**
+ * Validate aggregate statistics against individual location data.
+ * Logs warnings if any mismatches are detected. Called after _computeSummary.
+ * @returns {{ valid: boolean, warnings: string[] }}
+ */
+CL.batchBA._validateSummary = function() {
+    var s = CL.batchBA.state;
+    var sum = s.summary;
+    if (!sum || sum.totalAnalyzed === 0) return { valid: true, warnings: [] };
+
+    var successful = s.results.filter(function(r) { return r.status === 'success'; });
+    var warnings = [];
+
+    // Validate net crashes prevented = sum of (before - after) across ALL locations
+    var expectedNet = 0;
+    successful.forEach(function(r) { expectedNet += (r.beforeTotal - r.afterTotal); });
+    if (sum.crashesPrevented !== expectedNet) {
+        warnings.push('Net crashes prevented mismatch: summary=' + sum.crashesPrevented + ', computed=' + expectedNet);
+    }
+
+    // Validate fewer crashes count = locations where afterTotal < beforeTotal
+    var expectedFewer = 0;
+    successful.forEach(function(r) { if (r.afterTotal < r.beforeTotal) expectedFewer++; });
+    if (sum.fewerCrashesCount !== expectedFewer) {
+        warnings.push('Fewer crashes count mismatch: summary=' + sum.fewerCrashesCount + ', computed=' + expectedFewer);
+    }
+
+    // Validate avgCMF only averages locations with defined CMF (before > 0)
+    var cmfSum = 0; var cmfN = 0;
+    successful.forEach(function(r) { if (r.cmf !== null) { cmfSum += r.cmf; cmfN++; } });
+    var expectedAvgCMF = cmfN > 0 ? cmfSum / cmfN : null;
+    if (sum.avgCMF !== null && expectedAvgCMF !== null && Math.abs(sum.avgCMF - expectedAvgCMF) > 0.0001) {
+        warnings.push('Avg CMF mismatch: summary=' + sum.avgCMF.toFixed(4) + ', computed=' + expectedAvgCMF.toFixed(4));
+    }
+
+    // Validate evaluableCount (locations with before > 0)
+    var expectedEvaluable = successful.filter(function(r) { return r.beforeTotal > 0; }).length;
+    if (sum.evaluableCount !== expectedEvaluable) {
+        warnings.push('Evaluable count mismatch: summary=' + sum.evaluableCount + ', computed=' + expectedEvaluable);
+    }
+
+    if (warnings.length > 0) {
+        console.warn('[BatchBA Validation] ' + warnings.length + ' issue(s) detected:');
+        warnings.forEach(function(w) { console.warn('  - ' + w); });
+    } else {
+        console.log('[BatchBA Validation] All aggregate statistics validated successfully.');
+    }
+
+    return { valid: warnings.length === 0, warnings: warnings };
 };
 
 CL._registerModule('batch-ba/engine');
