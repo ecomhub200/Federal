@@ -66,7 +66,11 @@ CL.batchBA._renderKeyTakeaways = function(results) {
     if (sum.crashesPrevented > 0) takeaways.push('True net: <strong>' + sum.crashesPrevented + ' fewer crashes</strong> across all treated locations (before minus after).');
     else if (sum.crashesPrevented < 0) takeaways.push('True net: <strong>' + Math.abs(sum.crashesPrevented) + ' more crashes</strong> across all treated locations (before minus after).');
     var sigCount = results.filter(function(r) { return r.isSignificant; }).length;
-    if (sigCount > 0) takeaways.push(sigCount + ' location(s) showed <strong>statistically significant</strong> improvement (results unlikely due to random chance).');
+    if (sigCount > 0) {
+        takeaways.push(sigCount + ' location(s) showed <strong>statistically significant</strong> improvement (results unlikely due to random chance).');
+    } else if (sum.shortStudyCount > 0) {
+        takeaways.push('No locations reached statistical significance. <strong>' + sum.shortStudyCount + ' of ' + results.length + '</strong> locations have a study period shorter than the FHWA-recommended 12-month minimum, which limits statistical power.');
+    }
     var html = '<div style="background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:1px solid #bfdbfe;border-radius:var(--radius);padding:1rem 1.25rem">';
     html += '<div style="display:flex;gap:.75rem;align-items:flex-start"><span style="font-size:1.3rem;flex-shrink:0">&#128161;</span><div>';
     html += '<strong style="font-size:.95rem;display:block;margin-bottom:.5rem;color:#1e40af">Key Takeaways</strong>';

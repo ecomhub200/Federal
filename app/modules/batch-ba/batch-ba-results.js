@@ -67,6 +67,14 @@ CL.batchBA._renderSummaryCards = function() {
     });
     html += '</div>';
 
+    // Study maturity note
+    if (sum.shortStudyCount > 0) {
+        html += '<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--radius);margin-bottom:.75rem;font-size:.82rem;color:#9a3412">';
+        html += '<span style="font-size:1rem;flex-shrink:0">&#9888;&#65039;</span>';
+        html += '<span><strong>' + sum.shortStudyCount + ' of ' + sum.totalAnalyzed + ' locations</strong> have a before or after study period shorter than the FHWA-recommended 12-month minimum. Short study periods reduce statistical power and may explain limited significance.</span>';
+        html += '</div>';
+    }
+
     // Error summary
     if (sum.errors > 0) {
         html += '<div class="info-box warning" style="margin-bottom:1rem"><span class="icon">⚠️</span><div class="content"><p>' + sum.errors + ' location(s) could not be analyzed.</p></div></div>';

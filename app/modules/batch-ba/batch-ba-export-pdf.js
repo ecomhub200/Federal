@@ -279,7 +279,11 @@ CL.batchBA.exportPDF = function() {
     var best = successful.slice().sort(function(a, b) { return a.changePct - b.changePct; })[0];
     if (best && best.changePct < 0) takeaways.push('Best result: ' + cleanText(best.locationName) + ' - ' + Math.abs(best.changePct).toFixed(1) + '% reduction.');
     var sigCount = successful.filter(function(r) { return r.isSignificant; }).length;
-    if (sigCount > 0) takeaways.push(sigCount + ' location(s) showed statistically significant results.');
+    if (sigCount > 0) {
+        takeaways.push(sigCount + ' location(s) showed statistically significant results.');
+    } else if (sum.shortStudyCount > 0) {
+        takeaways.push(sum.shortStudyCount + ' of ' + successful.length + ' locations have study periods below the FHWA 12-month minimum, limiting statistical power.');
+    }
     var takeawayH = 8 + takeaways.length * 5.5;
     checkPageBreak(takeawayH + 5);
     setFill('#eff6ff');
@@ -363,7 +367,18 @@ CL.batchBA.exportPDF = function() {
     addSubsectionTitle('Statistical Significance');
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); setColor(C.text);
     doc.text(sum.significantCount + ' of ' + sum.totalAnalyzed + ' locations (' + sum.significantPct.toFixed(0) + '%) showed statistically significant crash changes at ' + (s.confidenceLevel * 100) + '% confidence.', m, y);
-    y += 6;
+    y += 5;
+    // Study maturity note — explain why significance may be low
+    if (sum.shortStudyCount > 0) {
+        doc.setFontSize(8); doc.setFont('helvetica', 'italic'); setColor(C.warning);
+        doc.text('Note: ' + sum.shortStudyCount + ' of ' + sum.totalAnalyzed + ' locations have a before or after period shorter than the FHWA-recommended 12-month minimum.', m, y);
+        y += 4;
+        doc.text('Short study periods reduce statistical power and may explain limited significance. Consider re-evaluating when more data is available.', m, y);
+        y += 6;
+        doc.setFont('helvetica', 'normal'); setColor(C.text);
+    } else {
+        y += 3;
+    }
     var cpText = sum.crashesPrevented >= 0
         ? 'Net crashes prevented: ' + sum.crashesPrevented : 'Net crash increase: ' + Math.abs(sum.crashesPrevented);
     doc.text(cpText + ' (true net: sum of before minus after across all locations).', m, y);

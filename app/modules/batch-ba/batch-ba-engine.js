@@ -340,6 +340,8 @@ CL.batchBA._computeSummary = function() {
     var netCrashesPrevented = 0;
     // Count of locations where after < before (strictly fewer crashes, excludes 0/0 ties)
     var fewerCrashesCount = 0;
+    // Study maturity: count locations below FHWA 12-month minimum for before or after period
+    var shortStudyCount = 0;
 
     successful.forEach(function(r) {
         if (r.cmf !== null) { totalCMF += r.cmf; cmfCount++; }
@@ -352,6 +354,9 @@ CL.batchBA._computeSummary = function() {
 
         // Strictly fewer: after must be less than before (excludes 0 vs 0)
         if (r.afterTotal < r.beforeTotal) fewerCrashesCount++;
+
+        // Flag locations below FHWA 12-month recommended minimum
+        if (r.beforeYears < 1.0 || r.afterYears < 1.0) shortStudyCount++;
 
         // Only include locations with before-period crashes in rate metrics
         if (r.beforeTotal > 0) {
@@ -383,6 +388,8 @@ CL.batchBA._computeSummary = function() {
         crashesPrevented: netCrashesPrevented,
         // Locations where afterTotal is strictly less than beforeTotal
         fewerCrashesCount: fewerCrashesCount,
+        // Locations with before or after period < 12 months (FHWA minimum)
+        shortStudyCount: shortStudyCount,
         byEffectiveness: byEffectiveness,
         byType: byType
     };
@@ -427,6 +434,12 @@ CL.batchBA._validateSummary = function() {
     var expectedEvaluable = successful.filter(function(r) { return r.beforeTotal > 0; }).length;
     if (sum.evaluableCount !== expectedEvaluable) {
         warnings.push('Evaluable count mismatch: summary=' + sum.evaluableCount + ', computed=' + expectedEvaluable);
+    }
+
+    // Validate shortStudyCount (locations with before or after < 12 months)
+    var expectedShort = successful.filter(function(r) { return r.beforeYears < 1.0 || r.afterYears < 1.0; }).length;
+    if (sum.shortStudyCount !== expectedShort) {
+        warnings.push('Short study count mismatch: summary=' + sum.shortStudyCount + ', computed=' + expectedShort);
     }
 
     if (warnings.length > 0) {
