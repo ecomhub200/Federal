@@ -53,52 +53,26 @@ CL.batchBA.renderCharts = function() {
 CL.batchBA._renderKeyTakeaways = function(results) {
     var el = document.getElementById('batchBAKeyTakeaways');
     if (!el) return;
-
     var sum = CL.batchBA.state.summary;
     if (!sum || sum.totalAnalyzed === 0) { el.style.display = 'none'; return; }
-
     var takeaways = [];
-
-    // Overall effectiveness
     var improved = results.filter(function(r) { return r.changePct < 0; }).length;
     var pctImproved = (improved / results.length * 100).toFixed(0);
     takeaways.push(improved + ' of ' + results.length + ' locations (' + pctImproved + '%) had <strong>fewer crashes</strong> after treatment.');
-
-    // Average reduction
-    if (sum.avgCrashReduction > 0) {
-        takeaways.push('On average, crashes <strong>decreased by ' + sum.avgCrashReduction.toFixed(1) + '%</strong> across all locations.');
-    } else if (sum.avgCrashReduction < 0) {
-        takeaways.push('On average, crashes <strong>increased by ' + Math.abs(sum.avgCrashReduction).toFixed(1) + '%</strong> across all locations.');
-    }
-
-    // Best performer
+    if (sum.avgCrashReduction > 0) takeaways.push('On average, crashes <strong>decreased by ' + sum.avgCrashReduction.toFixed(1) + '%</strong> across all locations.');
+    else if (sum.avgCrashReduction < 0) takeaways.push('On average, crashes <strong>increased by ' + Math.abs(sum.avgCrashReduction).toFixed(1) + '%</strong> across all locations.');
     var best = results.slice().sort(function(a, b) { return a.changePct - b.changePct; })[0];
-    if (best && best.changePct < 0) {
-        takeaways.push('Best result: <strong>' + best.locationName + '</strong> saw a ' + Math.abs(best.changePct).toFixed(1) + '% reduction in crashes.');
-    }
-
-    // Crashes prevented
-    if (sum.crashesPrevented > 0) {
-        takeaways.push('A net estimated <strong>' + sum.crashesPrevented + ' crashes were prevented</strong> across all treated locations.');
-    } else if (sum.crashesPrevented < 0) {
-        takeaways.push('There was a net <strong>increase of ' + Math.abs(sum.crashesPrevented) + ' crashes</strong> across all treated locations.');
-    }
-
-    // Statistical significance
+    if (best && best.changePct < 0) takeaways.push('Best result: <strong>' + best.locationName + '</strong> saw a ' + Math.abs(best.changePct).toFixed(1) + '% reduction in crashes.');
+    if (sum.crashesPrevented > 0) takeaways.push('A net estimated <strong>' + sum.crashesPrevented + ' crashes were prevented</strong> across all treated locations.');
+    else if (sum.crashesPrevented < 0) takeaways.push('There was a net <strong>increase of ' + Math.abs(sum.crashesPrevented) + ' crashes</strong> across all treated locations.');
     var sigCount = results.filter(function(r) { return r.isSignificant; }).length;
-    if (sigCount > 0) {
-        takeaways.push(sigCount + ' location(s) showed <strong>statistically significant</strong> improvement (results unlikely due to random chance).');
-    }
-
+    if (sigCount > 0) takeaways.push(sigCount + ' location(s) showed <strong>statistically significant</strong> improvement (results unlikely due to random chance).');
     var html = '<div style="background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:1px solid #bfdbfe;border-radius:var(--radius);padding:1rem 1.25rem">';
-    html += '<div style="display:flex;gap:.75rem;align-items:flex-start">';
-    html += '<span style="font-size:1.3rem;flex-shrink:0">💡</span>';
-    html += '<div>';
+    html += '<div style="display:flex;gap:.75rem;align-items:flex-start"><span style="font-size:1.3rem;flex-shrink:0">&#128161;</span><div>';
     html += '<strong style="font-size:.95rem;display:block;margin-bottom:.5rem;color:#1e40af">Key Takeaways</strong>';
     html += '<ul style="margin:0;padding-left:1.2rem;font-size:.85rem;line-height:1.7;color:#334155">';
     takeaways.forEach(function(t) { html += '<li>' + t + '</li>'; });
     html += '</ul></div></div></div>';
-
     el.innerHTML = html;
     el.style.display = 'block';
 };
@@ -124,6 +98,34 @@ CL.batchBA._renderBeforeAfterBar = function(results) {
         'Rates are normalized by study period length for accurate comparison. ' +
         'Sorted from most improved at top to least improved. ' +
         'Showing all ' + sorted.length + ' locations' + (sorted.length > 20 ? ' — scroll down to see more.' : '.'));
+
+    // CRF label plugin — draws CRF% next to each bar group
+    var crfLabelPlugin = {
+        id: 'crfLabels',
+        afterDraw: function(chart) {
+            var drawCtx = chart.ctx;
+            var meta = chart.getDatasetMeta(1); // After dataset
+            if (!meta || !meta.data) return;
+            drawCtx.save();
+            drawCtx.font = 'bold 10px sans-serif';
+            drawCtx.textBaseline = 'middle';
+            meta.data.forEach(function(bar, idx) {
+                var r = sorted[idx];
+                if (!r || r.crf === null || r.crf === undefined) return;
+                var crfVal = r.crf;
+                var label = (crfVal > 0 ? '+' : '') + crfVal.toFixed(0) + '%';
+                drawCtx.fillStyle = crfVal > 0 ? '#065f46' : '#991B1B';
+                if (isHorizontal) {
+                    drawCtx.textAlign = 'left';
+                    drawCtx.fillText(label, bar.x + 4, bar.y);
+                } else {
+                    drawCtx.textAlign = 'center';
+                    drawCtx.fillText(label, bar.x, bar.y - 6);
+                }
+            });
+            drawCtx.restore();
+        }
+    };
 
     CL.batchBA._charts.bar = new Chart(ctx, {
         type: 'bar',
@@ -170,7 +172,8 @@ CL.batchBA._renderBeforeAfterBar = function(results) {
                 x: { beginAtZero: true, title: { display: true, text: 'Crashes per Year' } },
                 y: { beginAtZero: true }
             }
-        }
+        },
+        plugins: [crfLabelPlugin]
     });
 };
 
@@ -200,6 +203,31 @@ CL.batchBA._renderCMFDistribution = function(results) {
         'This chart shows how many locations fall into each safety score range. ' +
         'Scores below 1.0 (green bars) mean fewer crashes after treatment. ' +
         'Scores above 1.0 (red bars) mean more crashes — the treatment may not have helped.');
+
+    // Color band plugin — draws green/yellow/red background zones
+    var cmfBandPlugin = {
+        id: 'cmfColorBands',
+        beforeDraw: function(chart) {
+            var drawCtx = chart.ctx;
+            var xAxis = chart.scales.x;
+            var yAxis = chart.scales.y;
+            var chartArea = chart.chartArea;
+            if (!chartArea) return;
+            drawCtx.save();
+            // Green band: bins 0-2 (CMF < 0.7)
+            var greenEnd = xAxis.getPixelForValue(2) + (xAxis.getPixelForValue(3) - xAxis.getPixelForValue(2)) / 2;
+            drawCtx.fillStyle = 'rgba(22, 163, 74, 0.06)';
+            drawCtx.fillRect(chartArea.left, chartArea.top, greenEnd - chartArea.left, chartArea.bottom - chartArea.top);
+            // Yellow band: bins 3-5 (CMF 0.7-1.0)
+            var yellowEnd = xAxis.getPixelForValue(5) + (xAxis.getPixelForValue(6) - xAxis.getPixelForValue(5)) / 2;
+            drawCtx.fillStyle = 'rgba(202, 138, 4, 0.06)';
+            drawCtx.fillRect(greenEnd, chartArea.top, yellowEnd - greenEnd, chartArea.bottom - chartArea.top);
+            // Red band: bins 6-10 (CMF > 1.0)
+            drawCtx.fillStyle = 'rgba(220, 38, 38, 0.06)';
+            drawCtx.fillRect(yellowEnd, chartArea.top, chartArea.right - yellowEnd, chartArea.bottom - chartArea.top);
+            drawCtx.restore();
+        }
+    };
 
     CL.batchBA._charts.cmf = new Chart(ctx, {
         type: 'bar',
@@ -232,7 +260,8 @@ CL.batchBA._renderCMFDistribution = function(results) {
                 y: { beginAtZero: true, title: { display: true, text: 'Number of Locations' } },
                 x: { title: { display: true, text: 'Safety Score (lower = better)' } }
             }
-        }
+        },
+        plugins: [cmfBandPlugin]
     });
 };
 
@@ -434,59 +463,29 @@ CL.batchBA._renderScatterPlot = function(results) {
 CL.batchBA._renderCMFByType = function(results) {
     var ctx = document.getElementById('batchBACMFByTypeChart');
     if (!ctx) return;
-
     var byType = {};
     results.forEach(function(r) {
         var t = r.countermeasureType || 'Not specified';
         if (!byType[t]) byType[t] = [];
         byType[t].push(r.cmf);
     });
-
     var types = Object.keys(byType).sort();
-    var avgCMFs = types.map(function(t) {
-        var arr = byType[t];
-        return arr.reduce(function(a, b) { return a + b; }, 0) / arr.length;
-    });
+    var avgCMFs = types.map(function(t) { var arr = byType[t]; return arr.reduce(function(a, b) { return a + b; }, 0) / arr.length; });
     var colors = avgCMFs.map(function(cmf) { return CL.batchBA.getEffectivenessRating(cmf).color; });
-
-    // Description
     CL.batchBA._setChartDescription('batchBACMFByTypeChartDesc',
         'Compares average safety scores by treatment type. Bars below the dashed 1.0 line indicate the treatment was effective on average.');
-
     CL.batchBA._charts.cmfByType = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: types,
-            datasets: [{
-                label: 'Avg Safety Score',
-                data: avgCMFs,
-                backgroundColor: colors.map(function(c) { return c + 'cc'; }),
-                borderColor: colors,
-                borderWidth: 1
-            }]
+            datasets: [{ label: 'Avg Safety Score', data: avgCMFs, backgroundColor: colors.map(function(c) { return c + 'cc'; }), borderColor: colors, borderWidth: 1 }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                title: { display: false },
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            var rating = CL.batchBA.getEffectivenessRating(context.raw);
-                            return 'Avg Score: ' + context.raw.toFixed(3) + ' — ' + rating.label;
-                        }
-                    }
-                }
+            responsive: true, maintainAspectRatio: false,
+            plugins: { title: { display: false }, legend: { display: false },
+                tooltip: { callbacks: { label: function(context) { var rating = CL.batchBA.getEffectivenessRating(context.raw); return 'Avg Score: ' + context.raw.toFixed(3) + ' - ' + rating.label; } } }
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: { display: true, text: 'Average Safety Score' },
-                    suggestedMax: 1.5
-                }
-            }
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'Average Safety Score' }, suggestedMax: 1.5 } }
         }
     });
 };
