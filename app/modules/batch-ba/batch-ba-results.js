@@ -32,7 +32,7 @@ CL.batchBA.renderResults = function() {
 /** Render KPI summary cards row */
 CL.batchBA._renderSummaryCards = function() {
     var sum = CL.batchBA.state.summary;
-    var html = '<div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem">';
+    var html = '<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.5rem">';
 
     var avgCMFDisplay = sum.avgCMF !== null ? sum.avgCMF.toFixed(3) : 'N/A';
     var avgCMFColor = sum.avgCMF !== null && sum.avgCMF < 1 ? '#15803d' : (sum.avgCMF !== null ? '#dc2626' : '#64748b');
@@ -45,7 +45,6 @@ CL.batchBA._renderSummaryCards = function() {
     var cpColor = sum.crashesPrevented >= 0 ? '#7c3aed' : '#dc2626';
     var cpLight = sum.crashesPrevented >= 0 ? '#a78bfa' : '#ef4444';
     html += CL.batchBA._kpiCard(Math.abs(sum.crashesPrevented), cpLabel, cpColor, cpLight);
-    html += CL.batchBA._kpiCard(sum.significantPct.toFixed(0) + '%', 'Statistically Significant', '#0369a1', '#38bdf8');
 
     html += '</div>';
 
