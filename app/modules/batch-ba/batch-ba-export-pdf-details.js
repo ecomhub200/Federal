@@ -61,13 +61,17 @@ CL.batchBA._exportPDFDetails = function() {
     // Build rating lookup for row coloring
     var ratingByRow = sorted.map(function(r) { return CL.batchBA.getEffectivenessRating(r.cmf).label; });
 
+    // Helper: convert hex to [r,g,b] array for jsPDF-AutoTable
+    function hexArr(hex) { var c = hexToRgb(hex); return [c.r, c.g, c.b]; }
+
     doc.autoTable({
         startY: ctx.y,
         head: [['Location', 'Type', 'Before', 'After', 'Change', 'EPDO B', 'EPDO A', 'Before (mo)', 'After (mo)', 'Rating']],
         body: tableBody,
         margin: { left: m, right: m },
-        styles: { fontSize: 6.5, cellPadding: 1.5, overflow: 'linebreak' },
-        headStyles: { fillColor: hexToRgb(C.primary), textColor: [255, 255, 255], fontSize: 6.5 },
+        styles: { fontSize: 6.5, cellPadding: 1.5, overflow: 'linebreak', textColor: [55, 65, 81] },
+        headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontSize: 6.5, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [241, 245, 249] },
         columnStyles: {
             0: { cellWidth: 40 }, 1: { cellWidth: 18 },
             2: { halign: 'center', cellWidth: 11 }, 3: { halign: 'center', cellWidth: 11 },
@@ -78,23 +82,20 @@ CL.batchBA._exportPDFDetails = function() {
         },
         didParseCell: function(data) {
             if (data.section !== 'body') return;
-            var rowRating = ratingByRow[data.row.index];
-            // Row background by rating
-            data.cell.styles.fillColor = hexToRgb(ratingRowBg(rowRating));
-            // Change% coloring
+            // Change% coloring — green for reduction, red for increase
             if (data.column.index === 4) {
                 var val = parseFloat(data.cell.raw);
-                if (val < 0) { data.cell.styles.textColor = hexToRgb(C.successLight); data.cell.styles.fontStyle = 'bold'; }
-                else if (val > 0) { data.cell.styles.textColor = hexToRgb(C.danger); data.cell.styles.fontStyle = 'bold'; }
+                if (val < 0) { data.cell.styles.textColor = hexArr('#047857'); data.cell.styles.fontStyle = 'bold'; }
+                else if (val > 0) { data.cell.styles.textColor = hexArr('#b91c1c'); data.cell.styles.fontStyle = 'bold'; }
             }
             // Rating text coloring
             if (data.column.index === 9) {
-                data.cell.styles.textColor = hexToRgb(ratingColor(data.cell.raw));
+                data.cell.styles.textColor = hexArr(ratingColor(data.cell.raw));
                 data.cell.styles.fontStyle = 'bold';
             }
             // After months warning for short studies
             if (data.column.index === 8 && data.cell.raw < 12) {
-                data.cell.styles.textColor = hexToRgb(C.warning);
+                data.cell.styles.textColor = hexArr('#c2410c');
                 data.cell.styles.fontStyle = 'bold';
             }
         }
@@ -152,8 +153,8 @@ CL.batchBA._exportPDFDetails = function() {
                 ['After', r.afterStats.K, r.afterStats.A, r.afterStats.B, r.afterStats.C, r.afterStats.O, r.afterStats.U || 0, r.afterTotal, Math.round(r.afterEPDO), (r.afterTotal / r.afterYears).toFixed(1)]
             ],
             margin: { left: m + 3, right: m + 3 },
-            styles: { fontSize: 7, cellPadding: 1.5 },
-            headStyles: { fillColor: hexToRgb(C.primary), textColor: [255, 255, 255], fontSize: 7 },
+            styles: { fontSize: 7, cellPadding: 1.5, textColor: [55, 65, 81] },
+            headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontSize: 7 },
             columnStyles: {
                 0: { fontStyle: 'bold', cellWidth: 16 },
                 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' },
@@ -226,8 +227,8 @@ CL.batchBA._exportPDFDetails = function() {
         ],
         margin: { left: m, right: m },
         styles: { fontSize: 8, cellPadding: 2.5 },
-        headStyles: { fillColor: hexToRgb(C.primary), textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: hexToRgb(C.lightBg) },
+        headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: [241, 245, 249] },
         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 35 }, 1: { halign: 'center', cellWidth: 25 } },
         didDrawCell: function(data) {
             if (data.column.index === 0 && data.section === 'body') {

@@ -340,12 +340,12 @@ CL.batchBA.exportPDF = function() {
     var effColors = [C.successLight, '#65a30d', '#ca8a04', C.warning, C.danger];
     doc.autoTable({
         startY: y, head: [['Rating', 'CMF Range', 'Count']], body: effData,
-        margin: { left: m, right: m }, styles: { fontSize: 9, cellPadding: 3 },
-        headStyles: { fillColor: hexToRgb(C.primary), textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: hexToRgb(C.lightBg) },
+        margin: { left: m, right: m }, styles: { fontSize: 9, cellPadding: 3, textColor: [55, 65, 81] },
+        headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: [241, 245, 249] },
         columnStyles: { 0: { cellWidth: 50 }, 2: { halign: 'center', cellWidth: 25, fontStyle: 'bold' } },
         didParseCell: function(data) {
-            if (data.column.index === 0 && data.section === 'body') { data.cell.styles.textColor = hexToRgb(C.text); data.cell.styles.fontStyle = 'bold'; }
+            if (data.column.index === 0 && data.section === 'body') { data.cell.styles.textColor = [55, 65, 81]; data.cell.styles.fontStyle = 'bold'; }
         },
         didDrawCell: function(data) {
             if (data.column.index === 0 && data.section === 'body' && data.row.index < effColors.length) {
@@ -393,9 +393,9 @@ CL.batchBA.exportPDF = function() {
         });
         doc.autoTable({
             startY: y, head: [['Countermeasure Type', 'Locations', 'Avg CMF', 'Avg Change']], body: typeRows,
-            margin: { left: m, right: m }, styles: { fontSize: 9, cellPadding: 2.5 },
-            headStyles: { fillColor: hexToRgb(C.secondary), textColor: [255, 255, 255] },
-            alternateRowStyles: { fillColor: hexToRgb(C.lightBg) },
+            margin: { left: m, right: m }, styles: { fontSize: 9, cellPadding: 2.5, textColor: [55, 65, 81] },
+            headStyles: { fillColor: [124, 58, 237], textColor: [255, 255, 255] },
+            alternateRowStyles: { fillColor: [241, 245, 249] },
             columnStyles: { 1: { halign: 'center', cellWidth: 25 }, 2: { halign: 'center', cellWidth: 25 }, 3: { halign: 'center', cellWidth: 25 } }
         });
         y = doc.lastAutoTable.finalY + 10;
