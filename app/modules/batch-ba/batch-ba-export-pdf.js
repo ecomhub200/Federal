@@ -192,7 +192,7 @@ CL.batchBA.exportPDF = function() {
     // KPI Cards Row
     y += 18;
     var cardW = 35; var cardH = 26; var cardGap = 5;
-    var totalW = cardW * 5 + cardGap * 4;
+    var totalW = cardW * 4 + cardGap * 3;
     var cardX = (pw - totalW) / 2;
     drawKPICard(cardX, y, cardW, cardH, sum.totalAnalyzed, 'Locations Analyzed', C.primary);
     cardX += cardW + cardGap;
@@ -202,8 +202,6 @@ CL.batchBA.exportPDF = function() {
     cardX += cardW + cardGap;
     var cpLabel = sum.crashesPrevented >= 0 ? 'Net Prevented' : 'Net Increase';
     drawKPICard(cardX, y, cardW, cardH, Math.abs(sum.crashesPrevented), cpLabel, sum.crashesPrevented >= 0 ? C.secondary : C.danger);
-    cardX += cardW + cardGap;
-    drawKPICard(cardX, y, cardW, cardH, sum.significantPct.toFixed(0) + '%', 'Significant', C.primaryLight);
     y += cardH + 20;
 
     // Report details box
