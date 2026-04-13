@@ -48436,7 +48436,34 @@ function updateMapDisplay() {
     if (typeof refreshDrawingSelectionIfActive === 'function') {
         refreshDrawingSelectionIfActive();
     }
+
+    // If the user has route/node locations selected (via dropdown or map
+    // click), re-aggregate the stats panel + highlight layer against the
+    // new filter set so the 'Total / Fatal / K+A / EPDO / Ped / Bike'
+    // numbers in the Map Selection panel track the timeline. Only runs
+    // when there's an actual selection AND we're not already inside a
+    // location update (guarded by _updatingMultiLocation).
+    if (typeof updateMultiLocationSelection === 'function' &&
+        typeof selectedMapLocations !== 'undefined' &&
+        selectedMapLocations.length > 0 &&
+        !_updatingMultiLocation) {
+        _updatingMultiLocation = true;
+        try {
+            // skipFit so the filter change doesn't steal the user's pan/zoom
+            updateMultiLocationSelection({ skipFit: true });
+        } catch (err) {
+            console.warn('[Map] updateMultiLocationSelection refresh failed:', err);
+        } finally {
+            _updatingMultiLocation = false;
+        }
+    }
 }
+
+// Re-entrancy guard for the multi-location refresh hook. updateMapDisplay()
+// triggers updateMultiLocationSelection() on filter changes, which in turn
+// calls highlightMultipleLocationsOnMap() which repaints the map -- without
+// this flag the two could bounce off each other.
+let _updatingMultiLocation = false;
 
 function createMarker(p) {
     const colors = { K: '#dc2626', A: '#ea580c', B: '#eab308', C: '#22c55e', O: '#64748b' };
@@ -48974,40 +49001,65 @@ function aggregateMultiLocationStats() {
 
     if (selectedMapLocations.length === 0) return stats;
 
-    const aggregates = mapSelectionMode === 'route'
-        ? crashState.aggregates.byRoute
-        : crashState.aggregates.byNode;
+    // Read the Map tab's date/year filters so location selection respects
+    // the same timeline the user picked with the 1Y / 3Y / 5Y / date inputs.
+    // Without this, selecting a route while a timeline is active would show
+    // counts and a PDF report covering ALL years for that route, but the map
+    // markers only show the filtered window -- a visible mismatch.
+    const startDateStr = document.getElementById('mapStartDate')?.value || '';
+    const endDateStr   = document.getElementById('mapEndDate')?.value || '';
+    const yearStr      = document.getElementById('mapYearFilter')?.value || '';
+    const hasDateFilter = !!(startDateStr || endDateStr || yearStr);
+
+    const startMs = startDateStr ? (() => {
+        const d = new Date(startDateStr); d.setHours(0,0,0,0);
+        return d.getTime();
+    })() : null;
+    const endMs = endDateStr ? (() => {
+        const d = new Date(endDateStr); d.setHours(23,59,59,999);
+        return d.getTime();
+    })() : null;
+    const yearInt = yearStr ? parseInt(yearStr, 10) : null;
+
+    const passesDateFilter = (rowDateRaw) => {
+        if (!hasDateFilter) return true;
+        if (!rowDateRaw) return false;
+        const t = Number(rowDateRaw);
+        if (!isFinite(t)) return false;
+        if (startMs !== null && t < startMs) return false;
+        if (endMs !== null && t > endMs) return false;
+        if (yearInt !== null && new Date(t).getFullYear() !== yearInt) return false;
+        return true;
+    };
 
     selectedMapLocations.forEach(name => {
-        const data = aggregates[name];
-        if (data) {
-            stats.total += data.total || 0;
-            stats.K += data.K || 0;
-            stats.A += data.A || 0;
-            stats.B += data.B || 0;
-            stats.C += data.C || 0;
-            stats.O += data.O || 0;
-        }
-
-        // Get crash points for this location
-        const locationPoints = crashState.mapPoints.filter(p =>
-            mapSelectionMode === 'route' ? p.route === name : String(p.node) === String(name)
-        );
+        // Filter map points by route/node AND the active Map tab date filter.
+        const locationPoints = crashState.mapPoints.filter(p => {
+            const match = mapSelectionMode === 'route'
+                ? p.route === name
+                : String(p.node) === String(name);
+            if (!match) return false;
+            return passesDateFilter(p.date);
+        });
         stats.points = stats.points.concat(locationPoints);
 
-        // Calculate ped/bike from points
+        // Severity, ped/bike counts now come from the filtered points so they
+        // match what is drawn on the map.
         locationPoints.forEach(p => {
-            if (p.ped) stats.ped++;
-            if (p.bike) stats.bike++;
+            stats.total++;
+            if (p.sev && stats[p.sev] !== undefined) stats[p.sev]++;
+            if (p.isPed) stats.ped++;
+            if (p.isBike) stats.bike++;
         });
 
-        // Get crash rows for this location
+        // Get raw crash rows for this location + date window (used by PDF /
+        // CSV / KML exports so the listed crashes match the displayed period).
         const matchedRows = crashState.sampleRows.filter(row => {
-            if (mapSelectionMode === 'route') {
-                return row[COL.ROUTE] === name;
-            } else {
-                return String(row[COL.NODE]) === String(name);
-            }
+            const routeMatch = mapSelectionMode === 'route'
+                ? row[COL.ROUTE] === name
+                : String(row[COL.NODE]) === String(name);
+            if (!routeMatch) return false;
+            return passesDateFilter(row[COL.DATE]);
         });
         stats.crashes = stats.crashes.concat(matchedRows);
     });
@@ -49018,7 +49070,10 @@ function aggregateMultiLocationStats() {
 }
 
 // Update UI and map for multi-location selection
-function updateMultiLocationSelection() {
+// @param {object} opts - { skipFit: bool } forwarded to
+//                        highlightMultipleLocationsOnMap so a filter-refresh
+//                        doesn't re-zoom the map.
+function updateMultiLocationSelection(opts) {
     const stats = aggregateMultiLocationStats();
 
     // Update selectionState for cross-tab use
@@ -49086,7 +49141,7 @@ function updateMultiLocationSelection() {
         document.getElementById('mapSelected').textContent = shortLabel;
 
         // Update map to show selected locations
-        highlightMultipleLocationsOnMap();
+        highlightMultipleLocationsOnMap(opts);
     } else {
         document.getElementById('mapSelectedInfo').style.display = 'none';
         document.getElementById('mapSelected').textContent = 'None';
@@ -49096,7 +49151,11 @@ function updateMultiLocationSelection() {
 }
 
 // Highlight multiple locations on the map
-function highlightMultipleLocationsOnMap() {
+// @param {object} opts - { skipFit: bool } set skipFit=true when re-rendering
+//                        after a filter change so we don't steal the user's
+//                        map pan/zoom position.
+function highlightMultipleLocationsOnMap(opts) {
+    const skipFit = !!(opts && opts.skipFit);
     // Clear existing highlights
     clearRouteHighlights();
 
@@ -49105,10 +49164,18 @@ function highlightMultipleLocationsOnMap() {
         return;
     }
 
-    // Get all points for selected locations
+    // Use the map's already-filtered point set so the highlighted route/node
+    // respects the date/year/severity/quick filters the user has active.
+    // Without this, selecting a route while a 1Y date filter is on would
+    // repaint the map with ALL years of crashes for that route.
+    const basePoints = (typeof getFilteredMapPoints === 'function')
+        ? getFilteredMapPoints()
+        : crashState.mapPoints;
+
+    // Get all points for selected locations (restricted to filtered base set)
     const allPoints = [];
     selectedMapLocations.forEach(name => {
-        const points = crashState.mapPoints.filter(p =>
+        const points = basePoints.filter(p =>
             mapSelectionMode === 'route' ? p.route === name : String(p.node) === String(name)
         );
         allPoints.push(...points);
@@ -49129,8 +49196,9 @@ function highlightMultipleLocationsOnMap() {
     });
     crashMap.addLayer(markerCluster);
 
-    // Fit bounds to all selected points
-    if (allPoints.length > 0) {
+    // Fit bounds to all selected points (skipped on filter-change refresh so
+    // the user's current pan/zoom isn't stolen every time they change a date).
+    if (!skipFit && allPoints.length > 0) {
         const bounds = L.latLngBounds(allPoints.map(p => [p.lat, p.lng]));
         crashMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     }
