@@ -37794,9 +37794,10 @@ function getCombinedSelectionStats() {
  * matching grants, target program) into a structured context block.
  */
 function buildEnrichedGrantContext(selectedLocs, combined, options = {}) {
-    const yearRange = crashState.years?.length > 0
-        ? `${crashState.years[0]}-${crashState.years[crashState.years.length - 1]}`
-        : 'analysis period';
+    // Grant analysis respects the Grants tab date filter (grantStartDate /
+    // grantEndDate). Pass the same window into the AI context so the model's
+    // narrative matches the numbers the user is looking at.
+    const yearRange = resolveReportPeriod('grantStartDate', 'grantEndDate');
     const yearsOfData = crashState.years?.length || 1;
     const jurisdiction = jurisdictionContext.jurisdictionName || 'the county';
     const stateName = jurisdictionContext.stateName || 'the state';
@@ -38067,8 +38068,11 @@ function generateAppPreview() {
     const grantProgram = document.getElementById('appGrantProgram').value || 'ss4a';
     const projectCost = parseFloat(document.getElementById('appProjectCost').value) || 500000;
     const cmf = parseFloat(document.getElementById('appCMF').value) || 0.7;
-    const yearRange = crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'N/A';
-    
+    // Grants tab has its own date filter (grantStartDate / grantEndDate) —
+    // application preview must reflect what the user picked, not the full
+    // available data range.
+    const yearRange = resolveReportPeriod('grantStartDate', 'grantEndDate');
+
     let html = `<div class="app-preview-section"><h3>📋 ${projectTitle}</h3><p><strong>Grant Program:</strong> ${grantProgram.toUpperCase()} | <strong>${isMulti ? 'Locations:' : 'Location:'}</strong> ${locationNames.join(', ')} | <strong>Analysis Period:</strong> ${yearRange}</p></div>`;
     let sectionNum = 1;
     
@@ -38279,9 +38283,11 @@ async function generateFullApplicationContent(location, isMulti, locationNames) 
     const projectCost = parseFloat(document.getElementById('appProjectCost').value) || 500000;
     const cmf = parseFloat(document.getElementById('appCMF').value) || 0.7;
     const program = document.getElementById('appGrantProgram').value || 'SS4A';
-    const yearRange = crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'analysis period';
+    // Grants tab has its own date filter (grantStartDate / grantEndDate) —
+    // use that instead of the full available data range.
+    const yearRange = resolveReportPeriod('grantStartDate', 'grantEndDate');
     const bc = calculateBenefitCost(location, projectCost, cmf);
-    
+
     // Get crash cost values from Application Builder inputs
     const crashCostK = parseFloat(document.getElementById('crashCostK')?.value) || 12800000;
     const crashCostA = parseFloat(document.getElementById('crashCostA')?.value) || 655000;
@@ -38443,7 +38449,9 @@ async function downloadFullApplicationPDF() {
         const projectCost = parseFloat(document.getElementById('appProjectCost').value) || 500000;
         const cmf = parseFloat(document.getElementById('appCMF').value) || 0.7;
         const program = document.getElementById('appGrantProgram').value || 'SS4A';
-        const yearRange = crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'N/A';
+        // Grants tab has its own date filter (grantStartDate / grantEndDate) —
+        // use that instead of the full available data range.
+        const yearRange = resolveReportPeriod('grantStartDate', 'grantEndDate');
         const bc = calculateBenefitCost(location, projectCost, cmf);
         const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -38973,7 +38981,9 @@ async function downloadFullApplicationWord() {
         const projectCost = parseFloat(document.getElementById('appProjectCost').value) || 500000;
         const cmf = parseFloat(document.getElementById('appCMF').value) || 0.7;
         const program = document.getElementById('appGrantProgram').value || 'SS4A';
-        const yearRange = crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'N/A';
+        // Grants tab has its own date filter (grantStartDate / grantEndDate) —
+        // use that instead of the full available data range.
+        const yearRange = resolveReportPeriod('grantStartDate', 'grantEndDate');
         const bc = calculateBenefitCost(location, projectCost, cmf);
         const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -39525,7 +39535,9 @@ function exportAppPDF() {
 
     const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const dateStamp = new Date().toISOString().split('T')[0];
-    const yearRange = crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'N/A';
+    // Grants tab has its own date filter (grantStartDate / grantEndDate) —
+    // use that instead of the full available data range.
+    const yearRange = resolveReportPeriod('grantStartDate', 'grantEndDate');
 
     // === PAGE HEADER ===
     doc.setFillColor(...colors.primary);
@@ -56367,9 +56379,13 @@ function exportOverRepSegmentsPDF() {
     doc.setFont('helvetica', 'bold');
     doc.text('Over-Represented Segments Analysis', 14, 15);
 
+    // Period must match the Segment tab's own date filter
+    // (segStartDate / segEndDate). Falls back to the full data range.
+    const segPeriod = resolveReportPeriod('segStartDate', 'segEndDate');
+
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Generated: ${new Date().toLocaleDateString()} | Threshold: ${segmentAnalysisState.lastAnalysisParams?.threshold || 1.5}x | Method: FHWA Functional Class Comparison`, 14, 22);
+    doc.text(`Generated: ${new Date().toLocaleDateString()} | Period: ${segPeriod} | Threshold: ${segmentAnalysisState.lastAnalysisParams?.threshold || 1.5}x | Method: FHWA Functional Class Comparison`, 14, 22);
 
     // Summary stats
     doc.setFontSize(9);
@@ -63414,7 +63430,9 @@ function exportPedLocationsPDF() {
     const sevColors = SELECTION_PDF_STYLES.severityColors;
     const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const dateStamp = new Date().toISOString().split('T')[0];
-    const yearRange = crashState.years && crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'N/A';
+    // Period must reflect the Pedestrian tab's own date filter (pedStartDate /
+    // pedEndDate), not the full data range. Falls back to crashState.years.
+    const yearRange = resolveReportPeriod('pedStartDate', 'pedEndDate');
 
     const ped = crashState.aggregates.ped;
     const pedEPDO = calcEPDO(ped);
@@ -64046,7 +64064,9 @@ function exportBikeLocationsPDF() {
     const sevColors = SELECTION_PDF_STYLES.severityColors;
     const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const dateStamp = new Date().toISOString().split('T')[0];
-    const yearRange = crashState.years && crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'N/A';
+    // Period must reflect the Bicycle tab's own date filter (bikeStartDate /
+    // bikeEndDate), not the full data range. Falls back to crashState.years.
+    const yearRange = resolveReportPeriod('bikeStartDate', 'bikeEndDate');
 
     const bike = crashState.aggregates.bike;
     const bikeEPDO = calcEPDO(bike);
@@ -65527,7 +65547,13 @@ function generateSystemwideReport(crashes, title, author) {
 
 function _legacySystemwideReport(crashes, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
 
     document.getElementById('rptTitle').textContent = title;
@@ -66022,7 +66048,13 @@ function generateEnhancedRecommendations(stats, crashes, categoryData) {
 
 function generateCorridorReport(crashes, route, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
 
     document.getElementById('rptTitle').textContent = `${title}: ${route}`;
@@ -66083,7 +66115,13 @@ function generateCorridorReport(crashes, route, title, author) {
 
 function generateSafetyReport(crashes, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const kaRate = stats.total > 0 ? ((stats.K + stats.A) / stats.total * 100).toFixed(2) : 0;
     const reportId = generateReportId();
 
@@ -66162,7 +66200,13 @@ function generateSafetyReport(crashes, title, author) {
 function generatePedBikeReport(crashes, title, author) {
     const pedCrashes = crashes.filter(c => isYes(c[COL.PED]));
     const bikeCrashes = crashes.filter(c => isYes(c[COL.BIKE]));
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
 
     const pedStats = computeStats(pedCrashes);
@@ -66371,7 +66415,13 @@ function createEnhancedPedBikeCharts(pedCrashes, bikeCrashes) {
 
 function generateTrendReport(crashes, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
 
     document.getElementById('rptTitle').textContent = title;
@@ -66842,6 +66892,59 @@ function getDateRange(crashes) {
     const minDate = new Date(Math.min(...dates));
     const maxDate = new Date(Math.max(...dates));
     return `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`;
+}
+
+/**
+ * Shared helper: resolve the "Period:" string for a PDF / Excel / HTML report
+ * from a tab's Start Date / End Date input ids. Every tab (Map, Hotspots,
+ * Intersection, Segments, Ped, Bike, Safety Focus, Before/After, ...) has its
+ * own date filter, and the corresponding export MUST display the same window
+ * the user picked in the UI — not the min/max of the crashes that happened
+ * to land inside the selection and not the full available data range.
+ *
+ * Priority:
+ *   1. Explicit Start + End inputs (passed in as element ids)
+ *   2. Start-only → "MM/DD/YYYY - Present"
+ *   3. End-only   → "Up to MM/DD/YYYY"
+ *   4. Fall back to the full available data range (`crashState.years`)
+ *   5. Last resort: 'N/A'
+ *
+ * Dates are parsed in LOCAL time to avoid UTC off-by-one from the
+ * `YYYY-MM-DD` value that HTML <input type="date"> uses.
+ *
+ * @param {string} startInputId - element id of the Start Date input (may be null)
+ * @param {string} endInputId   - element id of the End Date input (may be null)
+ * @returns {string} "MM/DD/YYYY - MM/DD/YYYY" | "YYYY - YYYY" | "N/A"
+ */
+function resolveReportPeriod(startInputId, endInputId) {
+    const fmt = (d) => {
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${mm}/${dd}/${d.getFullYear()}`;
+    };
+    const parseLocal = (str) => {
+        if (!str) return null;
+        const parts = String(str).split('-').map(Number);
+        if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return null;
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    };
+    const startRaw = startInputId ? document.getElementById(startInputId)?.value : '';
+    const endRaw = endInputId ? document.getElementById(endInputId)?.value : '';
+    const startDate = parseLocal(startRaw);
+    const endDate = parseLocal(endRaw);
+
+    if (startDate && endDate) return `${fmt(startDate)} - ${fmt(endDate)}`;
+    if (startDate) return `${fmt(startDate)} - Present`;
+    if (endDate) return `Up to ${fmt(endDate)}`;
+
+    // Full available data range fallback
+    try {
+        if (typeof crashState !== 'undefined' && Array.isArray(crashState.years) && crashState.years.length > 0) {
+            const yrs = crashState.years.slice().sort();
+            return `${yrs[0]} - ${yrs[yrs.length - 1]}`;
+        }
+    } catch (_) { /* crashState not ready yet */ }
+    return 'N/A';
 }
 
 function generateFindings(stats, crashes) {
@@ -67491,7 +67594,33 @@ function generateStandardReportPDF(type, crashes, title, author, route, startDat
 
     // Compute statistics
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Period must reflect the Report tab's user-selected range
+    // (reportStartDate / reportEndDate / the startDate/endDate args passed in
+    // from downloadReportPDF), not the min/max of the crashes that happen to
+    // fall in the filter. Falls back to crash min/max if nothing is set.
+    const fmtRptDate = (d) => {
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${mm}/${dd}/${d.getFullYear()}`;
+    };
+    const parseRptLocal = (str) => {
+        if (!str) return null;
+        const parts = String(str).split('-').map(Number);
+        if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return null;
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    };
+    const rptStart = parseRptLocal(startDate);
+    const rptEnd = parseRptLocal(endDate);
+    let yearRange;
+    if (rptStart && rptEnd) {
+        yearRange = `${fmtRptDate(rptStart)} - ${fmtRptDate(rptEnd)}`;
+    } else if (rptStart) {
+        yearRange = `${fmtRptDate(rptStart)} - Present`;
+    } else if (rptEnd) {
+        yearRange = `Up to ${fmtRptDate(rptEnd)}`;
+    } else {
+        yearRange = getDateRange(crashes);
+    }
     const reportId = generateReportId();
     const epdo = calcEPDO(stats);
     const kaRate = stats.total > 0 ? ((stats.K + stats.A) / stats.total * 100).toFixed(1) : '0';
@@ -71550,7 +71679,13 @@ function printComprehensivePreview() {
 
 function generateCountermeasuresReport(crashes, route, title, author) {
     const locationName = route || 'System-Wide';
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
 
     // Set report header
@@ -71811,7 +71946,13 @@ function generateHotspotReport() {
  */
 function generateDashboardReport(crashes, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
     const epdo = calcEPDO(stats);
     const kaRate = stats.total > 0 ? ((stats.K + stats.A) / stats.total * 100).toFixed(1) : '0.0';
@@ -71950,7 +72091,13 @@ function generateDashboardReport(crashes, title, author) {
  */
 function generateCrashTreeSystemicReport(crashes, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
     const epdo = calcEPDO(stats);
 
@@ -72084,7 +72231,13 @@ function generateCrashTreeSystemicReport(crashes, title, author) {
  */
 function generateFatalSpeedReport(crashes, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
 
     const fatalCrashes = crashes.filter(r => (r[COL.SEVERITY] || '').charAt(0).toUpperCase() === 'K');
@@ -72234,7 +72387,13 @@ function generateFatalSpeedReport(crashes, title, author) {
  */
 function generateHotspotRankingReport(crashes, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
     const epdo = calcEPDO(stats);
 
@@ -72331,7 +72490,13 @@ function generateHotspotRankingReport(crashes, title, author) {
  */
 function generatePredictionForecastReport(crashes, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
 
     document.getElementById('rptTitle').textContent = title;
@@ -72455,7 +72620,13 @@ function generatePredictionForecastReport(crashes, title, author) {
  */
 function generateDeepDiveAnalysisReport(crashes, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
     const epdo = calcEPDO(stats);
 
@@ -72575,7 +72746,32 @@ function generateDeepDiveAnalysisReport(crashes, title, author) {
  * Maps to: Before/After Study tab
  */
 function generateBeforeAfterStudyReport(title, author) {
-    const yearRange = getDateRange(baState.locationCrashes);
+    // The report header's "Period" must reflect the user-entered Before +
+    // After windows from the B/A tab (baBeforeStart → baAfterEnd), NOT the
+    // min/max of the crashes that landed in the selection. Falls back to
+    // the crash min/max if the user hasn't filled both sides.
+    const fmtBA = (d) => {
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${mm}/${dd}/${d.getFullYear()}`;
+    };
+    const parseBALocal = (val) => {
+        if (!val) return null;
+        // baState.beforePeriod.start / afterPeriod.end store Date objects
+        // (set in updateBAPeriodDisplay); the DOM inputs store 'YYYY-MM-DD'
+        // strings. Handle both.
+        if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+        const [y, m, d] = String(val).split('-').map(Number);
+        if (!y || !m || !d) return null;
+        return new Date(y, m - 1, d);
+    };
+    const baBeforeStart = parseBALocal(document.getElementById('baBeforeStart')?.value)
+        || parseBALocal(baState.beforePeriod?.start);
+    const baAfterEnd = parseBALocal(document.getElementById('baAfterEnd')?.value)
+        || parseBALocal(baState.afterPeriod?.end);
+    const yearRange = (baBeforeStart && baAfterEnd)
+        ? `${fmtBA(baBeforeStart)} - ${fmtBA(baAfterEnd)}`
+        : getDateRange(baState.locationCrashes);
     const reportId = generateReportId();
     const allCrashes = baState.locationCrashes;
     const stats = computeStats(allCrashes);
@@ -72687,7 +72883,13 @@ function generateBeforeAfterStudyReport(title, author) {
  */
 function generateGrantSupportReport(crashes, title, author) {
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const reportId = generateReportId();
     const epdo = calcEPDO(stats);
 
@@ -73152,7 +73354,13 @@ async function generateSystemwideWordMemo(title, author, startDate, endDate) {
     if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
 
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const findings = generateFindings(stats, crashes);
 
     const children = [
@@ -73228,7 +73436,13 @@ async function generateCorridorWordMemo(title, author, route, startDate, endDate
     if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
 
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
     const findings = generateFindings(stats, crashes);
     const locationName = route || 'All Locations';
     const analysisType = type === 'intersection' ? 'Intersection' : 'Corridor';
@@ -73322,7 +73536,13 @@ async function generateSafetyWordMemo(title, author, startDate, endDate) {
     if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
 
     const stats = computeStats(crashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
 
     // Focus on severe crashes
     const severeCrashes = crashes.filter(c => ['K', 'A'].includes((c[COL.SEVERITY] || '').charAt(0).toUpperCase()));
@@ -73415,7 +73635,13 @@ async function generatePedBikeWordMemo(title, author, startDate, endDate) {
     const bikeCrashes = crashes.filter(c => isYes(c[COL.BIKE]));
     const pedStats = computeStats(pedCrashes);
     const bikeStats = computeStats(bikeCrashes);
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
 
     const children = [
         ...buildMemoHeader(`Vulnerable Road User Analysis - ${getJurisdictionLabel()}`, author),
@@ -73495,7 +73721,13 @@ async function generateTrendWordMemo(title, author, startDate, endDate) {
     if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
     if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
 
-    const yearRange = getDateRange(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
 
     // Group by year
     const byYear = {};
@@ -94247,7 +94479,9 @@ function exportSfDetailPDF() {
 
         const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         const dateStamp = new Date().toISOString().split('T')[0];
-        const yearRange = crashState.years && crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'N/A';
+        // Period must reflect the Safety Focus tab's own date filter
+        // (safetyStartDate / safetyEndDate), not the full data range.
+        const yearRange = resolveReportPeriod('safetyStartDate', 'safetyEndDate');
         const total = data.total || 1;
         const kaCount = data.severity.K + data.severity.A;
         const kaRate = (kaCount / total * 100);
@@ -95218,7 +95452,9 @@ function exportSafetyCategoryPDF() {
 
         const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         const dateStamp = new Date().toISOString().split('T')[0];
-        const yearRange = crashState.years && crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'N/A';
+        // Period must reflect the Safety Focus tab's own date filter
+        // (safetyStartDate / safetyEndDate), not the full data range.
+        const yearRange = resolveReportPeriod('safetyStartDate', 'safetyEndDate');
 
         const severity = catData.severity;
         const total = catData.crashes.length;
@@ -96015,7 +96251,9 @@ function exportSafetySelectedLocationsPDF() {
 
         const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         const dateStamp = new Date().toISOString().split('T')[0];
-        const yearRange = crashState.years && crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'N/A';
+        // Period must reflect the Safety Focus tab's own date filter
+        // (safetyStartDate / safetyEndDate), not the full data range.
+        const yearRange = resolveReportPeriod('safetyStartDate', 'safetyEndDate');
 
         const selectedRoutes = Array.from(safetyState.selectedLocations);
         let currentPage = 1;
