@@ -48415,6 +48415,15 @@ function updateMapDisplay() {
         }
         crashMap.addLayer(markerCluster);
     }
+
+    // If the user has an active drawing selection (polygon / circle / measure),
+    // re-run the shape-based crash filter against the newly applied map filters
+    // so the Drawing Selection panel, Analyze modal, and PDF report stay in
+    // sync with the current timeline/year/severity selection. Safe no-op when
+    // no shape is active; guarded against re-entrancy.
+    if (typeof refreshDrawingSelectionIfActive === 'function') {
+        refreshDrawingSelectionIfActive();
+    }
 }
 
 function createMarker(p) {
@@ -50982,6 +50991,16 @@ let selectedBTSFromDrawing = {};
 let drawingStartPoint = null;
 let drawingHighlightGroup = null; // Layer group for highlight markers
 
+// Persisted state of the last finished drawing selection. Used to dynamically
+// re-run the shape-based crash selection whenever the user changes the map
+// date/year/severity filters, so the Drawing Selection panel, Analyze modal
+// and PDF report stay in sync with the currently applied timeline filters.
+// Structure: { shapeType: 'polygon'|'circle'|'measure', shapeData, points: [] }
+let currentDrawingShape = null;
+// Re-entrancy guard so refreshing the drawing selection from inside
+// updateMapDisplay() doesn't ping-pong between the two functions.
+let _refreshingDrawingSelection = false;
+
 // Measure tool specific state
 const MEASURE_BUFFER_METERS = 50; // Buffer distance in meters to find crashes near the line
 let measureVertexMarkers = []; // Markers for measure line vertices
@@ -51565,6 +51584,17 @@ function finishDrawing(shapeType, shapeData) {
 function selectCrashesInDrawing(shapeType, shapeData) {
     if (!currentDrawingLayer) return;
 
+    // Persist a snapshot of the current shape so filter changes (date, year,
+    // severity, quick filters) can re-run this selection dynamically without
+    // forcing the user to redraw the polygon/circle/measure line.
+    currentDrawingShape = {
+        shapeType: shapeType,
+        shapeData: shapeData,
+        // Snapshot polygon vertices — drawingPoints is module-level state and
+        // can be mutated by subsequent drawing actions.
+        points: Array.isArray(drawingPoints) ? drawingPoints.slice() : []
+    };
+
     const filtered = getFilteredMapPoints();
     selectedCrashesFromDrawing = [];
 
@@ -51592,6 +51622,39 @@ function selectCrashesInDrawing(shapeType, shapeData) {
 
     // Update selection panel
     updateDrawingSelectionPanel(shapeType, shapeData);
+}
+
+/**
+ * Re-run the currently active drawing selection against the latest map
+ * filters. Called from updateMapDisplay() so that when the user changes
+ * the date/year/severity/quick filters after drawing a polygon, circle or
+ * measure line, the Drawing Selection panel, Analyze modal, and PDF report
+ * all reflect the newly filtered crash set.
+ *
+ * No-ops when:
+ *   - No drawn shape is active (currentDrawingShape is null)
+ *   - The shape layer was removed from the map
+ *   - We're already in the middle of a refresh (re-entrancy guard)
+ */
+function refreshDrawingSelectionIfActive() {
+    if (_refreshingDrawingSelection) return;
+    if (!currentDrawingShape || !currentDrawingLayer) return;
+
+    _refreshingDrawingSelection = true;
+    try {
+        // Restore polygon vertices from the snapshot so selectCrashesInDrawing
+        // can evaluate point-in-polygon against the original shape.
+        if (currentDrawingShape.shapeType === 'polygon' &&
+            Array.isArray(currentDrawingShape.points) &&
+            currentDrawingShape.points.length >= 3) {
+            drawingPoints = currentDrawingShape.points.slice();
+        }
+        selectCrashesInDrawing(currentDrawingShape.shapeType, currentDrawingShape.shapeData);
+    } catch (err) {
+        console.warn('[Drawing] refreshDrawingSelectionIfActive failed:', err);
+    } finally {
+        _refreshingDrawingSelection = false;
+    }
 }
 
 function isPointInPolygon(point, polygon) {
@@ -51888,6 +51951,9 @@ function cancelDrawing() {
     drawingMode = null;
     drawingPoints = [];
     drawingStartPoint = null;
+    // Drop any saved shape snapshot so updateMapDisplay() no longer tries to
+    // refresh a non-existent drawing selection.
+    currentDrawingShape = null;
 
     document.getElementById('map').style.cursor = '';
     document.getElementById('radiusDisplay').style.display = 'none';
@@ -51932,6 +51998,10 @@ function clearDrawingSelection() {
     selectedCrashesFromDrawing = [];
     selectedTIFromDrawing = [];
     selectedBTSFromDrawing = {};
+    // Belt & suspenders — cancelDrawing() already nulls this, but be explicit
+    // so the dynamic-refresh path in updateMapDisplay() cannot accidentally
+    // re-open a cleared selection.
+    currentDrawingShape = null;
 
     // Clear highlight markers
     clearDrawingHighlights();
