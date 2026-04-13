@@ -53227,15 +53227,68 @@ function getSelectionPDFData(crashesInput = null, suggestedLocationName = null) 
         .map(([route]) => route);
     const suggestedLocation = suggestedLocationName || (topRoutes.length > 0 ? topRoutes.join(' / ') : 'Custom Selection');
 
-    // Calculate years span
+    // Resolve the report period. The PDF's "Period:" header and the
+    // crashes/year KPI must mirror the timeline the user picked on the Map
+    // tab — NOT the min/max of the crash dates that happen to fall inside
+    // the polygon. Priority:
+    //   1) Explicit Start/End date inputs (`mapStartDate`/`mapEndDate`)
+    //   2) A specific Year dropdown (`mapYearFilter`)
+    //   3) Fall back to the full available data range (`crashState.years`)
+    //   4) Last resort: the crash-derived min/max dates (legacy behavior)
     const years = Object.keys(stats.byYear).sort();
-    let numYears = 1;
-    if (minDate && maxDate) {
-        const minYear = minDate.getFullYear();
-        const maxYear = maxDate.getFullYear();
-        numYears = maxYear > minYear ? (maxYear - minYear + 1) : 1;
+    let periodStart = minDate;
+    let periodEnd = maxDate;
+    let periodSource = 'crashes'; // for debugging only
+    try {
+        const uiStartRaw = document.getElementById('mapStartDate')?.value;
+        const uiEndRaw = document.getElementById('mapEndDate')?.value;
+        const uiYearRaw = document.getElementById('mapYearFilter')?.value;
+
+        if (uiStartRaw || uiEndRaw) {
+            if (uiStartRaw) {
+                // `YYYY-MM-DD` from <input type="date"> — parse in local time
+                const [sy, sm, sd] = uiStartRaw.split('-').map(Number);
+                if (sy && sm && sd) {
+                    periodStart = new Date(sy, sm - 1, sd);
+                }
+            }
+            if (uiEndRaw) {
+                const [ey, em, ed] = uiEndRaw.split('-').map(Number);
+                if (ey && em && ed) {
+                    periodEnd = new Date(ey, em - 1, ed);
+                }
+            }
+            periodSource = 'ui-date-range';
+        } else if (uiYearRaw && /^\d{4}$/.test(uiYearRaw)) {
+            const y = parseInt(uiYearRaw, 10);
+            periodStart = new Date(y, 0, 1);
+            periodEnd = new Date(y, 11, 31);
+            periodSource = 'ui-year';
+        } else if (Array.isArray(crashState.years) && crashState.years.length > 0) {
+            const sortedYears = crashState.years.slice().sort();
+            const firstYear = parseInt(sortedYears[0], 10);
+            const lastYear = parseInt(sortedYears[sortedYears.length - 1], 10);
+            if (Number.isFinite(firstYear) && Number.isFinite(lastYear)) {
+                periodStart = new Date(firstYear, 0, 1);
+                periodEnd = new Date(lastYear, 11, 31);
+                periodSource = 'full-data';
+            }
+        }
+    } catch (err) {
+        console.warn('[PDF] period resolution failed, falling back to crash min/max:', err);
     }
-    stats.crashesPerYear = (stats.total / Math.max(numYears, 1)).toFixed(1);
+
+    // Calculate years span — based on the resolved period so the
+    // crashes/year KPI reflects the user-selected timeline.
+    let numYears = 1;
+    if (periodStart && periodEnd && periodEnd >= periodStart) {
+        const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+        // +1 day because inclusive end: a 1/1 – 1/1 selection counts as 1 day,
+        // and a 1/1/2020 – 12/31/2024 selection counts as exactly 5 years.
+        const diffMs = periodEnd.getTime() - periodStart.getTime() + 24 * 60 * 60 * 1000;
+        numYears = Math.max(diffMs / MS_PER_YEAR, 1 / 12); // floor: 1 month
+    }
+    stats.crashesPerYear = (stats.total / Math.max(numYears, 0.0001)).toFixed(1);
 
     // Sort aggregations
     stats.topCollisions = Object.entries(stats.byCollision)
@@ -53281,15 +53334,16 @@ function getSelectionPDFData(crashesInput = null, suggestedLocationName = null) 
         stats.peakDayCount = 0;
     }
 
-    // Build exact period string (MM/DD/YYYY format)
+    // Build exact period string (MM/DD/YYYY format) from the resolved
+    // period (user filter > year dropdown > full data range > crash min/max).
     const formatDate = (d) => {
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
         const yyyy = d.getFullYear();
         return `${mm}/${dd}/${yyyy}`;
     };
-    const exactPeriod = (minDate && maxDate)
-        ? `${formatDate(minDate)} - ${formatDate(maxDate)}`
+    const exactPeriod = (periodStart && periodEnd)
+        ? `${formatDate(periodStart)} - ${formatDate(periodEnd)}`
         : 'N/A';
 
     // Missing data counts
