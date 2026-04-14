@@ -10775,6 +10775,20 @@ THIS QUARTER'S FOCUS
 <!-- ==================== BATCH EVALUATION SECTION ==================== -->
 <div id="baBatchSection" style="display:none">
 
+<!-- Batch Subcategory Toggle: All Crashes | Streetlight (Nighttime Only) -->
+<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;padding:.5rem;background:#fef3c7;border-radius:var(--radius);border:1px solid #fcd34d">
+<div style="font-size:.85rem;color:#92400e;font-weight:600;white-space:nowrap;padding-left:.25rem">Analysis Type:</div>
+<div class="cmf-toggle-group" id="baBatchTypeToggle" style="flex:1">
+<button class="cmf-toggle-btn active algo" id="baTypeBtn-all" onclick="setBatchBAAnalysisType('all')" style="flex:1">All Crashes</button>
+<button class="cmf-toggle-btn" id="baTypeBtn-streetlight" onclick="setBatchBAAnalysisType('streetlight')" style="flex:1"><span aria-hidden="true">&#128161;</span> Streetlight (Nighttime Only)</button>
+</div>
+</div>
+
+<!-- Streetlight mode info banner (shown only when streetlight is active) -->
+<div id="baStreetlightNotice" style="display:none;margin-bottom:1rem;padding:.6rem .8rem;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:var(--radius);font-size:.85rem;color:#78350f">
+<strong>Streetlight mode:</strong> only crashes that occurred in dark conditions (<em>Dark &ndash; Lighted</em> / <em>Dark &ndash; Unlighted</em>) are counted in the before and after periods. This matches FHWA methodology for evaluating lighting countermeasures.
+</div>
+
 <!-- Upload Card -->
 <div class="card" style="background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);border:2px solid #3b82f6">
 <div class="card-title" style="font-size:1.1rem;color:#1d4ed8"><span aria-hidden="true">📤</span> Upload Countermeasure Locations</div>
@@ -74129,6 +74143,13 @@ function switchBAMode(mode) {
         if (btnSingle) { btnSingle.classList.add('active', 'algo'); }
         if (btnBatch) { btnBatch.classList.remove('active', 'algo'); }
         if (CL.batchBA) CL.batchBA.state.mode = 'single';
+    }
+}
+
+// Set the batch BA subcategory: 'all' = every crash, 'streetlight' = dark-only
+function setBatchBAAnalysisType(type) {
+    if (CL.batchBA && CL.batchBA.setAnalysisType) {
+        CL.batchBA.setAnalysisType(type);
     }
 }
 

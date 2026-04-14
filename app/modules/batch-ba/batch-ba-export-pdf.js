@@ -170,6 +170,12 @@ CL.batchBA.exportPDF = function() {
         return map[label] || C.lightBg;
     }
 
+    // Determine analysis subcategory for cover page and details box
+    var analysisType = s.analysisType || 'all';
+    var analysisTypeLabel = analysisType === 'streetlight'
+        ? 'Streetlight (Nighttime Only)'
+        : 'All Crashes';
+
     // ================================================================
     // PAGE 1: COVER PAGE
     // ================================================================
@@ -180,6 +186,12 @@ CL.batchBA.exportPDF = function() {
     y += 10;
     doc.setFontSize(14); doc.setFont('helvetica', 'normal'); setColor(C.textLight);
     doc.text('Countermeasure Effectiveness Evaluation Report', pw / 2, y, { align: 'center' });
+    // Analysis subcategory subtitle (only shown if non-default)
+    if (analysisType === 'streetlight') {
+        y += 7;
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); setColor(C.warning);
+        doc.text('Streetlight Analysis - Nighttime Crashes Only', pw / 2, y, { align: 'center' });
+    }
     // Decorative rule
     y += 6;
     var ruleRgb = hexToRgb(C.primary);
@@ -207,12 +219,14 @@ CL.batchBA.exportPDF = function() {
     // Report details box
     setFill(C.lightBg);
     var borderRgb = hexToRgb(C.border); doc.setDrawColor(borderRgb.r, borderRgb.g, borderRgb.b);
-    doc.roundedRect(m + 20, y, cw - 40, 48, 3, 3, 'FD');
+    doc.roundedRect(m + 20, y, cw - 40, 54, 3, 3, 'FD');
     y += 10;
     doc.setFontSize(10); doc.setFont('helvetica', 'bold'); setColor(C.text);
     doc.text('Report Details', pw / 2, y, { align: 'center' });
     y += 8;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text('Analysis Type: ' + analysisTypeLabel, pw / 2, y, { align: 'center' });
+    y += 6;
     doc.text('Analysis Radius: ' + s.globalRadiusFt + ' ft | Confidence Level: ' + (s.confidenceLevel * 100) + '%', pw / 2, y, { align: 'center' });
     y += 6;
     doc.text('EPDO Weights: ' + epdoInfo.name + ' (K=' + epdoInfo.weights.K + ', A=' + epdoInfo.weights.A + ', B=' + epdoInfo.weights.B + ', C=' + epdoInfo.weights.C + ', O=' + epdoInfo.weights.O + ')', pw / 2, y, { align: 'center' });

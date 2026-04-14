@@ -9,6 +9,11 @@ CL.batchBA.state = {
     // Mode toggle
     mode: 'single', // 'single' | 'batch'
 
+    // Batch subcategory: 'all' counts every crash; 'streetlight' restricts to
+    // nighttime (dark-condition) crashes only — used for evaluating lighting
+    // countermeasures per FHWA CMF Clearinghouse methodology.
+    analysisType: 'all', // 'all' | 'streetlight'
+
     // Upload state
     uploadedFile: null,
     parsedRows: [],
@@ -84,6 +89,7 @@ CL.batchBA.resetState = function() {
     s.uniformDuration = false;
     s.symmetricLock = true;
     s.locationDurations = [];
+    s.analysisType = 'all';
 
     // Destroy any existing chart instances
     if (CL.batchBA._charts) {
@@ -158,6 +164,51 @@ CL.batchBA.getFilteredResults = function() {
         return s.sortAsc ? (valA - valB) : (valB - valA);
     });
     return results;
+};
+
+/**
+ * Set the batch analysis subcategory ('all' or 'streetlight').
+ * Toggles the active button, shows/hides the streetlight info banner,
+ * and warns the user if existing results are now stale.
+ * @param {'all'|'streetlight'} type
+ */
+CL.batchBA.setAnalysisType = function(type) {
+    if (type !== 'all' && type !== 'streetlight') return;
+    var s = CL.batchBA.state;
+    var prev = s.analysisType;
+    s.analysisType = type;
+
+    // Toggle button active state (cmf-toggle-btn pattern)
+    var btnAll = document.getElementById('baTypeBtn-all');
+    var btnSL  = document.getElementById('baTypeBtn-streetlight');
+    if (btnAll) {
+        btnAll.classList.toggle('active', type === 'all');
+        btnAll.classList.toggle('algo',   type === 'all');
+    }
+    if (btnSL) {
+        btnSL.classList.toggle('active', type === 'streetlight');
+        btnSL.classList.toggle('algo',   type === 'streetlight');
+    }
+
+    // Show/hide the streetlight info banner
+    var notice = document.getElementById('baStreetlightNotice');
+    if (notice) notice.style.display = (type === 'streetlight') ? 'block' : 'none';
+
+    // If results are already on screen and the type actually changed,
+    // show a stale-results warning so the user knows to re-run
+    if (prev !== type) {
+        var resSec = document.getElementById('batchBAResultsSection');
+        if (resSec && resSec.style.display !== 'none' && s.results && s.results.length > 0) {
+            var banner = document.getElementById('batchBAStaleBanner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'batchBAStaleBanner';
+                banner.style.cssText = 'padding:.6rem .8rem;background:#fee2e2;border-left:4px solid #dc2626;border-radius:var(--radius);font-size:.85rem;color:#7f1d1d;margin-bottom:.75rem';
+                banner.innerHTML = '<strong>Analysis type changed.</strong> Click <em>Run Batch Analysis</em> to re-compute with the new filter.';
+                resSec.insertBefore(banner, resSec.firstChild);
+            }
+        }
+    }
 };
 
 CL._registerModule('batch-ba/state');

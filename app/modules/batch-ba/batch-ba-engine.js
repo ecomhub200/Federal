@@ -145,6 +145,15 @@ CL.batchBA._analyzeLocation = function(location, locationIndex) {
     // Find crashes within radius using spatial filter
     var nearbyCrashes = CL.batchBA._findCrashesInRadius(location.lat, location.lng, radiusMeters);
 
+    // Streetlight subcategory: keep only dark-condition (nighttime) crashes.
+    // This is the only line that differs between "All Crashes" and
+    // "Streetlight (Nighttime Only)" batch analysis modes — everything
+    // downstream (period split, severity stats, CMF, EB, significance,
+    // EPDO) consumes the filtered array transparently.
+    if (s.analysisType === 'streetlight') {
+        nearbyCrashes = nearbyCrashes.filter(CL.batchBA._isNighttimeCrash);
+    }
+
     // Split into before/after periods
     var beforeCrashes = CL.batchBA._filterByPeriod(nearbyCrashes, beforeStart, beforeEnd);
     var afterCrashes = CL.batchBA._filterByPeriod(nearbyCrashes, afterStart, afterEnd);
@@ -209,6 +218,7 @@ CL.batchBA._analyzeLocation = function(location, locationIndex) {
         lat: location.lat,
         lng: location.lng,
         countermeasureType: location.countermeasureType || 'Not specified',
+        analysisType: s.analysisType, // 'all' | 'streetlight' — records which subcategory produced this result
         installDate: installDate,
         radiusFt: radiusFt,
         beforeStart: beforeStart,
@@ -262,6 +272,27 @@ CL.batchBA._haversineMeters = function(lat1, lng1, lat2, lng2) {
             Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
             Math.sin(dLng / 2) * Math.sin(dLng / 2);
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+/**
+ * True if a crash mapPoint occurred in dark / nighttime conditions.
+ * Used by the Streetlight subcategory to restrict before/after counting
+ * to the crash subset that lighting countermeasures can actually affect.
+ *
+ * Priority:
+ *  1. Normalized `light` string contains "dark" (covers "Dark - Lighted",
+ *     "Dark - Unlighted", and the en-dash variants "Dark – …").
+ *     Dusk and dawn are intentionally excluded — FHWA CMF Clearinghouse
+ *     streetlight evaluations use strict dark conditions only.
+ *  2. Fallback to pre-computed `isNight` flag (set from COL.NIGHT by the
+ *     CSV worker / geocode-engine / sample-row loaders) when `light` is
+ *     not populated for a given state's dataset.
+ */
+CL.batchBA._isNighttimeCrash = function(p) {
+    if (!p) return false;
+    var light = (p.light || '').trim();
+    if (light) return /dark/i.test(light);
+    return p.isNight === true;
 };
 
 /** Filter crash points by date period */
