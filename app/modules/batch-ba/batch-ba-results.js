@@ -17,6 +17,12 @@ CL.batchBA.renderResults = function() {
     }
 
     document.getElementById('batchBAResultsSection').style.display = 'block';
+
+    // Clear any "analysis type changed — re-run required" stale banner now
+    // that fresh results are being rendered
+    var staleBanner = document.getElementById('batchBAStaleBanner');
+    if (staleBanner) staleBanner.remove();
+
     CL.batchBA._renderSummaryCards();
     CL.batchBA._renderFilters();
     CL.batchBA._renderResultsTable();
@@ -32,7 +38,21 @@ CL.batchBA.renderResults = function() {
 /** Render KPI summary cards row */
 CL.batchBA._renderSummaryCards = function() {
     var sum = CL.batchBA.state.summary;
-    var html = '<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.5rem">';
+    var analysisType = CL.batchBA.state.analysisType || 'all';
+
+    // Subtitle badge showing which analysis subcategory produced these results
+    var html = '';
+    if (analysisType === 'streetlight') {
+        html += '<div style="display:inline-flex;align-items:center;gap:.4rem;margin-bottom:.75rem;padding:.35rem .75rem;border-radius:9999px;background:#fffbeb;border:1px solid #f59e0b;color:#78350f;font-size:.8rem;font-weight:600">' +
+            '<span aria-hidden="true">&#128161;</span> Streetlight (Nighttime Only) &mdash; dark-condition crashes only' +
+            '</div>';
+    } else {
+        html += '<div style="display:inline-flex;align-items:center;gap:.4rem;margin-bottom:.75rem;padding:.35rem .75rem;border-radius:9999px;background:#eff6ff;border:1px solid #3b82f6;color:#1e40af;font-size:.8rem;font-weight:600">' +
+            'All Crashes' +
+            '</div>';
+    }
+
+    html += '<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.5rem">';
 
     var avgCMFDisplay = sum.avgCMF !== null ? sum.avgCMF.toFixed(3) : 'N/A';
     var avgCMFColor = sum.avgCMF !== null && sum.avgCMF < 1 ? '#15803d' : (sum.avgCMF !== null ? '#dc2626' : '#64748b');

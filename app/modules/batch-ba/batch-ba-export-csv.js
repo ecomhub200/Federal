@@ -15,6 +15,11 @@ CL.batchBA.exportCSV = function() {
         return;
     }
 
+    var analysisType = CL.batchBA.state.analysisType || 'all';
+    var analysisTypeLabel = analysisType === 'streetlight'
+        ? 'Streetlight (Nighttime Only)'
+        : 'All Crashes';
+
     var rows = results.map(function(r) {
         var rating = CL.batchBA.getEffectivenessRating(r.cmf);
         return {
@@ -22,6 +27,7 @@ CL.batchBA.exportCSV = function() {
             lat: r.lat,
             lng: r.lng,
             countermeasure_type: r.countermeasureType,
+            analysis_type: analysisTypeLabel,
             install_date: r.installDate.toISOString().split('T')[0],
             radius_ft: r.radiusFt,
             before_start: r.beforeStart.toISOString().split('T')[0],
@@ -57,11 +63,14 @@ CL.batchBA.exportCSV = function() {
     });
 
     var csv = Papa.unparse(rows);
+    // Prepend a comment header row describing which analysis mode produced this file
+    csv = '# Batch Before/After Results\r\n# Analysis Type: ' + analysisTypeLabel + '\r\n# Generated: ' + new Date().toISOString() + '\r\n' + csv;
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'Batch_BA_Results_' + new Date().toISOString().split('T')[0] + '.csv';
+    var fileSuffix = analysisType === 'streetlight' ? '_Streetlight' : '';
+    a.download = 'Batch_BA_Results' + fileSuffix + '_' + new Date().toISOString().split('T')[0] + '.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
