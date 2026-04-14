@@ -10,6 +10,13 @@ CL.batchBA = CL.batchBA || {};
  */
 CL.batchBA.renderResults = function() {
     var s = CL.batchBA.state;
+
+    // Clear any "analysis type changed — re-run required" stale banner
+    // unconditionally, so both the normal render path and the empty-result
+    // early-return below leave a clean slate.
+    var staleBanner = document.getElementById('batchBAStaleBanner');
+    if (staleBanner) staleBanner.remove();
+
     if (!s.summary || s.summary.totalAnalyzed === 0) {
         document.getElementById('batchBAResultsSection').style.display = 'block';
         document.getElementById('batchBAResultsContent').innerHTML = '<div class="info-box warning"><span class="icon">⚠️</span><div class="content"><p>No locations could be analyzed. Check that crash data is loaded and locations have valid coordinates within the data coverage area.</p></div></div>';
@@ -17,12 +24,6 @@ CL.batchBA.renderResults = function() {
     }
 
     document.getElementById('batchBAResultsSection').style.display = 'block';
-
-    // Clear any "analysis type changed — re-run required" stale banner now
-    // that fresh results are being rendered
-    var staleBanner = document.getElementById('batchBAStaleBanner');
-    if (staleBanner) staleBanner.remove();
-
     CL.batchBA._renderSummaryCards();
     CL.batchBA._renderFilters();
     CL.batchBA._renderResultsTable();
