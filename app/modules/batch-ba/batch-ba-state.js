@@ -91,6 +91,18 @@ CL.batchBA.resetState = function() {
     s.locationDurations = [];
     s.analysisType = 'all';
 
+    // Sync streetlight toggle UI so a reset after switching to Streetlight
+    // mode (e.g. via the "Remove" file button) doesn't leave the toggle,
+    // notice banner, or stale-results banner stuck in streetlight state.
+    var _btnAll = document.getElementById('baTypeBtn-all');
+    var _btnSL  = document.getElementById('baTypeBtn-streetlight');
+    if (_btnAll) { _btnAll.classList.add('active', 'algo'); }
+    if (_btnSL)  { _btnSL.classList.remove('active', 'algo'); }
+    var _notice = document.getElementById('baStreetlightNotice');
+    if (_notice) _notice.style.display = 'none';
+    var _staleBanner = document.getElementById('batchBAStaleBanner');
+    if (_staleBanner) _staleBanner.remove();
+
     // Destroy any existing chart instances
     if (CL.batchBA._charts) {
         Object.keys(CL.batchBA._charts).forEach(function(key) {

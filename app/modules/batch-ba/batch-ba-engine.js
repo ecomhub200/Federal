@@ -290,7 +290,11 @@ CL.batchBA._haversineMeters = function(lat1, lng1, lat2, lng2) {
  */
 CL.batchBA._isNighttimeCrash = function(p) {
     if (!p) return false;
-    var light = (p.light || '').trim();
+    // Defensive String() coercion — p.light is almost always a string from
+    // the normalizers, but some edge-case loaders or cached mapPoints may
+    // carry a non-string value. String(null|undefined) → 'null'/'undefined'
+    // so we guard with `p.light != null` first.
+    var light = (p.light != null ? String(p.light) : '').trim();
     if (light) return /dark/i.test(light);
     return p.isNight === true;
 };

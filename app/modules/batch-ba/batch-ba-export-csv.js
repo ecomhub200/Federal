@@ -62,9 +62,11 @@ CL.batchBA.exportCSV = function() {
         };
     });
 
+    // Papa.unparse emits a standard header row + data rows. The
+    // `analysis_type` column on every row already records the subcategory,
+    // so we intentionally do NOT prepend comment lines — those would
+    // render as spurious column-A rows in Excel.
     var csv = Papa.unparse(rows);
-    // Prepend a comment header row describing which analysis mode produced this file
-    csv = '# Batch Before/After Results\r\n# Analysis Type: ' + analysisTypeLabel + '\r\n# Generated: ' + new Date().toISOString() + '\r\n' + csv;
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
