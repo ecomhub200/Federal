@@ -114,6 +114,12 @@ the AI tab reflects the new scope.
   the `CL.*` namespace
 - [[concepts/dot-neutral-naming]] — column constants (`COL.*`) used when
   reading rows out of `crashState.sampleRows`
+- [[concepts/ai-context-awareness]] — the resolver that reads *through*
+  these state objects to build AI scope
+- [[concepts/state-onboarding]] — normalized data ends up in
+  `crashState.sampleRows` via this pipeline
+- [[connections/state-scope-and-ai-context]] — why state-object mutations
+  must be paired with UI indicator updates
 
 ## Sources
 

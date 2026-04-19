@@ -76,6 +76,8 @@ is legacy and must not appear in new code or normalized output.
   `CL.core.constants` (the `COL` object)
 - [[concepts/epdo-weights]] — KABCO severity codes feed `calcEPDO()`; they
   are KABCO and are *not* touched by the DOT-neutral rewrite
+- [[concepts/state-onboarding]] — every new normalizer must emit these
+  DOT-neutral labels
 
 ## Sources
 

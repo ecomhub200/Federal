@@ -112,6 +112,12 @@ new features should either:
 - [[concepts/epdo-weights]] — lives under `CL.core` constants
 - [[concepts/dot-neutral-naming]] — column constants (`COL.*`) live in
   `CL.core.constants`
+- [[concepts/ai-context-awareness]] — the resolver and
+  `updateAIContextIndicator()` live under `CL.ai`
+- [[concepts/stripe-payment-flow]] — `CrashLensAuth` is the
+  pre-namespace auth module; future auth code should live under `CL.auth`
+- [[concepts/coolify-deployment]] — client modules read their keys from
+  `config/api-keys.json`, which is rendered at container startup
 
 ## Sources
 

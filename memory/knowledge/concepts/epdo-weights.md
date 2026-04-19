@@ -79,6 +79,12 @@ those must not be reintroduced into the codebase.
   DOT-neutral KABCO and are unaffected by the neutralization effort
 - [[concepts/module-architecture]] — `EPDO_WEIGHTS` and `calcEPDO` live
   under `CL.core` constants
+- [[concepts/ai-context-awareness]] — every `crashProfile` returned by
+  the resolver carries an EPDO score
+- [[concepts/state-onboarding]] — normalizers must emit KABCO codes so
+  these weights apply cleanly
+- [[connections/state-scope-and-ai-context]] — EPDO is part of the
+  uniform `crashProfile` shape all scopes share
 
 ## Sources
 
