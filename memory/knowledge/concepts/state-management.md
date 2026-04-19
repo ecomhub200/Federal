@@ -125,6 +125,14 @@ the AI tab reflects the new scope.
 - [[concepts/warrants-analysis]] — owns `warrantsState`
 - [[concepts/batch-before-after]] — owns `baState`
 - [[concepts/safety-focus]] — owns `safetyState`
+- [[concepts/cmf-tab]] — owns `cmfState`
+- [[concepts/map-tab]] — reads `crashState.sampleRows` directly, writes
+  `selectionState`
+- [[concepts/dashboard-analysis-tabs]] — reads `crashState.aggregates`
+- [[concepts/golden-columns]] — positional schema that
+  `crashState.sampleRows` rows conform to
+- [[concepts/date-filters]] — per-tab date filter lives on each state
+  object
 - [[connections/state-scope-and-ai-context]] — why state-object mutations
   must be paired with UI indicator updates
 - [[connections/module-namespace-vs-legacy-state]] — why these globals

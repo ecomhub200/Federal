@@ -54,3 +54,25 @@
   `build*CrashProfile` naming convention, and two connection articles
   (EPDO parity, namespace split). 17 concept + 3 connection articles
   total.
+
+## [2026-04-19T14:30:00-04:00] compile | Daily Log 2026-04-19 (seed batch 4)
+- Source: daily/2026-04-19.md
+- Articles created:
+  - [[concepts/cmf-tab]]
+  - [[concepts/map-tab]]
+  - [[concepts/dashboard-analysis-tabs]]
+  - [[concepts/qdrant-proxy-server]]
+  - [[concepts/nginx-config]]
+  - [[concepts/golden-columns]]
+  - [[concepts/date-filters]]
+  - [[concepts/proven-safety-countermeasures]]
+  - [[connections/server-api-topology]]
+- Articles updated:
+  - Various first-batch articles — added backlinks to new batch-4
+    entries so the structural linter reports 0 missing-backlinks.
+- Notes: batch 4 fills in the tabs that weren't yet seeded (CMF, Map,
+  Dashboard/Analysis), the server/infra layer (qdrant-proxy.js,
+  nginx-config), the schema layer (golden-columns), a cross-cutting
+  convention (date-filters), a methodology article (PSC), and one
+  connection tying the server stack into a single topology. 25
+  concept + 4 connection articles total.

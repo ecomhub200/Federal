@@ -88,3 +88,8 @@ happens, this is actually the less-surprising choice.
 - [[concepts/firebase-auth]]
 - [[concepts/stripe-payment-flow]] — `CrashLensAuth` is the most
   visible legacy-at-window surface cited here
+- [[concepts/golden-columns]] — `COL` is accessed both through
+  `CL.core` and via a legacy global
+- [[connections/server-api-topology]] — server-side analog:
+  `qdrant-proxy.js` is the single-file pattern that mirrors the
+  client's legacy globals

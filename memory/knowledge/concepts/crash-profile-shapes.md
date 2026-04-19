@@ -121,6 +121,12 @@ it was built by the simple helper.
 - [[concepts/warrants-analysis]] — `warrantsState.crashProfile` comes
   from `buildLocationCrashProfile`
 - [[concepts/batch-before-after]] — per-location rollups
+- [[concepts/cmf-tab]] — uses `buildCMFCrashProfile`
+- [[concepts/map-tab]] — uses `buildDetailedLocationProfile` for
+  cluster click selections
+- [[concepts/dashboard-analysis-tabs]] — uses
+  `buildCountyWideCrashProfile` conceptually (reads aggregates
+  directly)
 - [[connections/epdo-across-tabs]] — every profile's `epdo` field is
   part of the parity contract
 

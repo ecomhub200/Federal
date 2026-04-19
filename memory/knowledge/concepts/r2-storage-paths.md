@@ -151,6 +151,10 @@ deficiency) stays in sync.
 - [[concepts/upload-pipeline]] — reads/writes these paths
 - [[concepts/module-architecture]] — path-construction helpers belong
   in a shared module, not duplicated per feature
+- [[concepts/qdrant-proxy-server]] — the server that holds R2 write
+  credentials
+- [[connections/server-api-topology]] — R2 is the main downstream of
+  `/api/*`
 
 ## Sources
 

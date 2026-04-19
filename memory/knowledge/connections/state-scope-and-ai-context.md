@@ -83,5 +83,6 @@ location-specific numbers (or vice-versa).
 - [[concepts/epdo-weights]] — every `crashProfile` returned by the
   resolver carries an EPDO score
 - [[concepts/hotspots]], [[concepts/grants-ranking]],
-  [[concepts/warrants-analysis]] — tabs whose click-handoff flows
-  implement this contract
+  [[concepts/warrants-analysis]], [[concepts/cmf-tab]],
+  [[concepts/map-tab]] — tabs whose click-handoff flows implement
+  this contract

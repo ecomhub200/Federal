@@ -127,8 +127,12 @@ name, and non-billing metadata.
   move under `CL.auth`
 - [[concepts/upload-pipeline]] — uploads use `CrashLensAuth` to
   authenticate server-side
+- [[concepts/qdrant-proxy-server]] — server verifies Firebase ID
+  tokens via the Admin SDK
 - [[connections/module-namespace-vs-legacy-state]] — tracks the legacy
   modules (including this one) awaiting migration
+- [[connections/server-api-topology]] — auth is enforced at the Node
+  layer, not at Nginx
 
 ## Sources
 

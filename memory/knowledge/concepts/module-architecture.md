@@ -122,13 +122,25 @@ new features should either:
 - [[concepts/batch-before-after]] — canonical example of multi-file
   module split under the 500-line cap
 - [[concepts/grants-ranking]], [[concepts/warrants-analysis]],
-  [[concepts/safety-focus]] — feature modules living under `CL.*`
+  [[concepts/safety-focus]], [[concepts/cmf-tab]], [[concepts/map-tab]],
+  [[concepts/dashboard-analysis-tabs]] — feature modules living under
+  (or aiming for) `CL.*`
 - [[concepts/upload-pipeline]] — four-file upload module
 - [[concepts/r2-storage-paths]] — path helpers belong in shared modules
 - [[concepts/crash-profile-shapes]] — the four `build*CrashProfile`
   helpers should share one module
+- [[concepts/golden-columns]] — `COL` constants live in
+  `CL.core.constants`
+- [[concepts/date-filters]] — shared date helper belongs in
+  `CL.utils.date`
+- [[concepts/qdrant-proxy-server]] — server-side analog to `CL.*`
+  (single Node file today)
+- [[concepts/nginx-config]] — static serving rules for the
+  `app/modules/` directory
 - [[connections/module-namespace-vs-legacy-state]] — the CL.*-vs-
   window split explained
+- [[connections/server-api-topology]] — the server stack this client
+  modularity sits on top of
 
 ## Sources
 

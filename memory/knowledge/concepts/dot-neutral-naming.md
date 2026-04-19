@@ -80,6 +80,10 @@ is legacy and must not appear in new code or normalized output.
   DOT-neutral labels
 - [[concepts/safety-focus]] — category predicates must use normalized
   fields only
+- [[concepts/golden-columns]] — full positional schema where the
+  DOT-neutral columns live (position 53 = `DOT District`)
+- [[concepts/map-tab]] — reads `COL.ROUTE` (a DOT-neutral column)
+  from `sampleRows`
 
 ## Sources
 

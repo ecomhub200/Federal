@@ -19,6 +19,15 @@
 | [[concepts/r2-storage-paths]] | `crash-lens-data` bucket hierarchy, tier-aware path router, file-key ledger naming, write-through-server rule | daily/2026-04-19.md | 2026-04-19 |
 | [[concepts/upload-pipeline]] | Upload tab sub-modules, tier-aware destinations, server-mediated writes, corrections ledger | daily/2026-04-19.md | 2026-04-19 |
 | [[concepts/crash-profile-shapes]] | The four `build*CrashProfile` helpers, minimum vs detailed shapes, naming collision warning | daily/2026-04-19.md | 2026-04-19 |
+| [[concepts/cmf-tab]] | CMF/Countermeasures tab, multiplicative CMF math, AI priority slot #1, Clearinghouse sourcing | daily/2026-04-19.md | 2026-04-19 |
+| [[concepts/map-tab]] | Map tab filters (Year/Route/Severity), cluster click handoff, Mapbox tile layer | daily/2026-04-19.md | 2026-04-19 |
+| [[concepts/dashboard-analysis-tabs]] | Dashboard + Analysis as county-wide aggregate views, filter-free by design, fast first render | daily/2026-04-19.md | 2026-04-19 |
+| [[concepts/qdrant-proxy-server]] | Node API server surface (Stripe/Firebase/R2/Brevo/Qdrant), secret hygiene, middleware order | daily/2026-04-19.md | 2026-04-19 |
+| [[concepts/nginx-config]] | Static + `/api/*` proxy, Stripe-webhook raw-body location, `client_max_body_size`, no-TLS-here rule | daily/2026-04-19.md | 2026-04-19 |
+| [[concepts/golden-columns]] | Canonical positional crash schema, `COL` constants, append-only rule for new columns | daily/2026-04-19.md | 2026-04-19 |
+| [[concepts/date-filters]] | Pre-scope vs post-scope date-filter conventions per tab, canonical predicate, aggregate exemption | daily/2026-04-19.md | 2026-04-19 |
+| [[concepts/proven-safety-countermeasures]] | FHWA PSC subset of CMF Clearinghouse, applicability rules, picker UI + grant narrative usage | daily/2026-04-19.md | 2026-04-19 |
 | [[connections/state-scope-and-ai-context]] | Why the AI resolver reads *through* state objects, the update-state + update-indicator pairing, scope linearization via priority | daily/2026-04-19.md | 2026-04-19 |
 | [[connections/epdo-across-tabs]] | EPDO parity invariants across Hotspots / Grants / CMF / Batch B/A / AI resolver | daily/2026-04-19.md | 2026-04-19 |
 | [[connections/module-namespace-vs-legacy-state]] | `CL.*` behavior vs top-level mutable state; why the split is deliberate; future refactor path | daily/2026-04-19.md | 2026-04-19 |
+| [[connections/server-api-topology]] | Single-container stack: Coolify → Nginx → loopback → Node; implications for debugging and secret rotation | daily/2026-04-19.md | 2026-04-19 |

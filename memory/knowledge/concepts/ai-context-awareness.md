@@ -127,8 +127,14 @@ a bug in the resolver.
 - [[concepts/crash-profile-shapes]] — the four `build*CrashProfile`
   helpers referenced in the resolver
 - [[concepts/hotspots]], [[concepts/grants-ranking]],
-  [[concepts/warrants-analysis]], [[concepts/batch-before-after]] —
-  tabs whose cross-tab selections feed the resolver
+  [[concepts/warrants-analysis]], [[concepts/batch-before-after]],
+  [[concepts/cmf-tab]], [[concepts/map-tab]],
+  [[concepts/dashboard-analysis-tabs]] —
+  tabs whose cross-tab selections (or absence of a selection) feed
+  the resolver
+- [[concepts/date-filters]] — resolver carries active `dateRange`
+- [[concepts/proven-safety-countermeasures]] — AI answers should
+  prefer PSCs when applicable
 - [[connections/state-scope-and-ai-context]] — the cross-cutting
   contract this resolver participates in
 - [[connections/epdo-across-tabs]] — EPDO parity requirement the

@@ -109,6 +109,16 @@ ledger, not the raw file.
 - [[concepts/module-architecture]] — canonical sub-module split
 - [[concepts/stripe-payment-flow]] — both flows share the same server
   auth + Firestore user-doc surface
+- [[concepts/qdrant-proxy-server]] — server entry points that accept
+  uploads
+- [[concepts/nginx-config]] — `client_max_body_size` must allow the
+  upload
+- [[concepts/golden-columns]] — normalized output conforms to this
+  schema
+- [[concepts/dashboard-analysis-tabs]] — aggregates are rebuilt
+  after a successful upload
+- [[connections/server-api-topology]] — debugging hop order when an
+  upload fails
 
 ## Sources
 

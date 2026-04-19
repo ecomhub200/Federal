@@ -134,6 +134,10 @@ section each time a new state is added.
   user uploads
 - [[concepts/safety-focus]] — relies on normalizer-emitted flags for
   category predicates
+- [[concepts/golden-columns]] — the positional schema every
+  normalizer must emit
+- [[concepts/map-tab]] — normalizer must leave null coordinates as
+  null (not zero) so the Map tab can filter them
 - [[connections/epdo-across-tabs]] — normalizer must emit KABCO so
   EPDO parity holds across every tab
 

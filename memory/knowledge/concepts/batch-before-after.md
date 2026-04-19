@@ -112,6 +112,10 @@ Both tabs compute before/after-style effects, but:
   export rollups
 - [[concepts/ai-context-awareness]] — batch-selected locations feed
   `selectionState` so the AI resolver picks them up
+- [[concepts/cmf-tab]] — a-priori counterpart to this a-posteriori
+  evaluation
+- [[concepts/date-filters]] — windows come from treatment dates, not
+  from the user-set global date filter
 - [[connections/epdo-across-tabs]] — B/A deltas use the same
   `calcEPDO` as every other tab
 

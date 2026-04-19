@@ -87,5 +87,11 @@ the whole tool looks unreliable.
 - [[concepts/grants-ranking]]
 - [[concepts/batch-before-after]]
 - [[concepts/crash-profile-shapes]]
+- [[concepts/cmf-tab]] — expected-EPDO uses the same weights +
+  helper
+- [[concepts/dashboard-analysis-tabs]] — headline EPDO from
+  aggregates
 - [[concepts/ai-context-awareness]] — every AI answer quotes an EPDO
   from one of these pipelines
+- [[concepts/state-onboarding]] — normalizers must emit KABCO for
+  parity

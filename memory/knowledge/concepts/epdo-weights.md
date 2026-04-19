@@ -86,8 +86,15 @@ those must not be reintroduced into the codebase.
 - [[concepts/crash-profile-shapes]] — every profile carries an `epdo`
   field
 - [[concepts/hotspots]], [[concepts/grants-ranking]],
-  [[concepts/batch-before-after]] — primary consumers of `calcEPDO`
+  [[concepts/batch-before-after]], [[concepts/cmf-tab]] — primary
+  consumers of `calcEPDO`
 - [[concepts/safety-focus]] — per-category EPDO rollups
+- [[concepts/dashboard-analysis-tabs]] — headline EPDO from
+  aggregates
+- [[concepts/proven-safety-countermeasures]] — PSCs drive the CMFs
+  that feed expected-EPDO math
+- [[concepts/golden-columns]] — `COL.SEVERITY` is the column
+  `calcEPDO` reads
 - [[connections/state-scope-and-ai-context]] — EPDO is part of the
   uniform `crashProfile` shape all scopes share
 - [[connections/epdo-across-tabs]] — the parity invariants that keep

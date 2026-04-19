@@ -107,6 +107,12 @@ This is the cross-tab channel described in
   the one used for grant row selections
 - [[concepts/hotspots]] — neighboring ranking tab at a different
   granularity (route aggregate vs intersection-level)
+- [[concepts/map-tab]] — alternative visual entry point to the same
+  location set
+- [[concepts/date-filters]] — pre-rank date filter semantics
+- [[concepts/cmf-tab]] — common next step after picking a grant row
+- [[concepts/proven-safety-countermeasures]] — grant narratives cite
+  PSC-designated countermeasures
 - [[connections/state-scope-and-ai-context]] — the cross-tab handoff
   contract used when a grant row is clicked
 - [[connections/epdo-across-tabs]] — EPDO parity with Hotspots / CMF /

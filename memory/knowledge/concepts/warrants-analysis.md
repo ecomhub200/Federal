@@ -110,6 +110,7 @@ location — see [[concepts/ai-context-awareness]].
   `app/modules/warrants/signal.js`
 - [[concepts/crash-profile-shapes]] — the `crashProfile` stored on
   `warrantsState` comes from `buildLocationCrashProfile()`
+- [[concepts/date-filters]] — post-location date filter semantics
 - [[connections/state-scope-and-ai-context]] — warrants selection
   must update the AI indicator like every other tab
 

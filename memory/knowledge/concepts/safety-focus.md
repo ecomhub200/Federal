@@ -102,6 +102,9 @@ detects the Safety Focus tab is active. This is a known gap; see
   migrate to
 - [[concepts/state-onboarding]] — normalizer emits the flags the
   predicates rely on
+- [[concepts/date-filters]] — post-category date filter semantics
+- [[concepts/golden-columns]] — predicates read `COL.PED` /
+  `COL.BIKE` / `COL.LIGHT` / etc. from the canonical schema
 
 ## Sources
 

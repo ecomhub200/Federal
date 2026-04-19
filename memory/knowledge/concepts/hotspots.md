@@ -94,6 +94,10 @@ both (same weights, same `calcEPDO`).
 - [[concepts/epdo-weights]] — ranking metric
 - [[concepts/grants-ranking]] — related but distinct ranking
 - [[concepts/ai-context-awareness]] — cross-tab jump contract
+- [[concepts/map-tab]] — alternative visual entry point for the same
+  location data
+- [[concepts/dashboard-analysis-tabs]] — Dashboard shows a
+  condensed top-5 view of this tab's aggregate
 - [[connections/state-scope-and-ai-context]] — click→jump→AI update
   contract
 - [[connections/epdo-across-tabs]] — EPDO parity across Hotspots /

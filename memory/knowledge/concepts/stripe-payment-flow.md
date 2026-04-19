@@ -124,8 +124,14 @@ so the client UI can gate features by plan.
 - [[concepts/firebase-auth]] — the auth surface Stripe hooks into
 - [[concepts/upload-pipeline]] — both flows share the server's
   Firestore user-doc surface
+- [[concepts/qdrant-proxy-server]] — server endpoints handling
+  Checkout / webhook / portal
+- [[concepts/nginx-config]] — webhook location must disable proxy
+  buffering for signature verification
 - [[connections/module-namespace-vs-legacy-state]] — why
   `CrashLensAuth` is still at `window` scope
+- [[connections/server-api-topology]] — end-to-end path from Stripe
+  to Firestore
 
 ## Sources
 

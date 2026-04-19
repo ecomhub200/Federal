@@ -122,6 +122,13 @@ Secrets that must **never** appear in `api-keys.json`:
   server-side env vars here
 - [[concepts/upload-pipeline]] — server uses those R2 credentials to
   accept client uploads
+- [[concepts/qdrant-proxy-server]] — the Node process supervisord
+  manages
+- [[concepts/nginx-config]] — the Nginx config supervisord manages
+- [[concepts/map-tab]] — Mapbox tile key is injected into
+  `api-keys.json` by `entrypoint.sh`
+- [[connections/server-api-topology]] — how Coolify, Nginx, and Node
+  fit together as a single topology
 
 ## Sources
 
