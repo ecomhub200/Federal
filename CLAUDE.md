@@ -470,3 +470,61 @@ When adding a new state:
 | Delaware | `data/DelawareDOT/delaware_dot_data_config_and_onboarding.md` |
 
 Update this table as new states are onboarded.
+
+---
+
+## Persistent Knowledge Base (Wiki)
+
+This project ships with a persistent, LLM-maintained knowledge base in `memory/`, adapted from [Andrej Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). Instead of re-deriving context from raw sources on every query (RAG), the LLM incrementally compiles conversations into a structured wiki that is kept current.
+
+### Layout
+
+```
+memory/
+├── AGENTS.md                 # Full schema + operator manual (READ THIS FIRST)
+├── daily/                    # Immutable conversation logs (one file per day)
+├── knowledge/
+│   ├── index.md              # Master catalog — primary retrieval mechanism
+│   ├── log.md                # Append-only build log
+│   ├── concepts/             # Atomic knowledge articles
+│   ├── connections/          # Cross-cutting insights linking 2+ concepts
+│   └── qa/                   # Filed query answers (compounding knowledge)
+├── hooks/                    # Claude Code hooks (SessionStart, SessionEnd, PreCompact)
+├── scripts/                  # compile.py, query.py, lint.py, flush.py
+└── reports/                  # Lint reports (gitignored)
+```
+
+### Automatic Behavior
+
+Hooks are wired in `.claude/settings.json` and fire automatically:
+
+- **SessionStart** → injects `knowledge/index.md` + most-recent daily log into every new session (the context you're seeing right now under "Knowledge Base Index")
+- **SessionEnd / PreCompact** → extracts the conversation transcript and spawns `flush.py` in the background, which appends distilled notes to today's `daily/YYYY-MM-DD.md`
+- **End-of-day** → after 6 PM local, `flush.py` triggers `compile.py`, which turns daily logs into concept/connection articles and updates the index
+
+No manual curation is required in normal use.
+
+### When to Consult the Wiki
+
+Before answering a question about recurring project decisions, architecture, gotchas, or past debugging, **check `memory/knowledge/index.md` first**. If a relevant concept/connection/qa article exists, read it and cite it in your answer using `[[wikilinks]]`.
+
+### Manual CLI (from `memory/`)
+
+```bash
+uv run python scripts/compile.py                # compile new/changed daily logs
+uv run python scripts/query.py "your question"  # ask the KB
+uv run python scripts/query.py "..." --file-back   # also save answer to knowledge/qa/
+uv run python scripts/lint.py                   # 7 health checks
+uv run python scripts/lint.py --structural-only # free, no LLM
+```
+
+### Authoring Rules (when compiling or editing articles directly)
+
+- **Wikilinks**: `[[concepts/supabase-auth]]` (no `.md` extension, path relative to `knowledge/`)
+- **Frontmatter**: every article needs YAML with `title`, `sources`, `created`, `updated`
+- **Sources**: every article must link back to the `daily/YYYY-MM-DD.md` logs that fed it
+- **File naming**: lowercase-kebab (`epdo-weights.md`, `cmf-state-data-flow.md`)
+- **Style**: encyclopedia-tone, factual, self-contained
+- **Prefer updating** an existing concept over creating a near-duplicate
+
+See `memory/AGENTS.md` for the complete schema, article templates, hook internals, and customization guide.
