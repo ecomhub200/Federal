@@ -118,8 +118,17 @@ the AI tab reflects the new scope.
   these state objects to build AI scope
 - [[concepts/state-onboarding]] — normalized data ends up in
   `crashState.sampleRows` via this pipeline
+- [[concepts/crash-profile-shapes]] — every state object's `crashProfile`
+  matches one of the four canonical shapes
+- [[concepts/hotspots]] — consumes `crashState.aggregates.byRoute`
+- [[concepts/grants-ranking]] — owns `grantState`
+- [[concepts/warrants-analysis]] — owns `warrantsState`
+- [[concepts/batch-before-after]] — owns `baState`
+- [[concepts/safety-focus]] — owns `safetyState`
 - [[connections/state-scope-and-ai-context]] — why state-object mutations
   must be paired with UI indicator updates
+- [[connections/module-namespace-vs-legacy-state]] — why these globals
+  still live at `window` scope instead of `CL.*`
 
 ## Sources
 

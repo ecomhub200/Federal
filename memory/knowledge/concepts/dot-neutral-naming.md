@@ -78,6 +78,8 @@ is legacy and must not appear in new code or normalized output.
   are KABCO and are *not* touched by the DOT-neutral rewrite
 - [[concepts/state-onboarding]] — every new normalizer must emit these
   DOT-neutral labels
+- [[concepts/safety-focus]] — category predicates must use normalized
+  fields only
 
 ## Sources
 

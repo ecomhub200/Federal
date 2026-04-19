@@ -116,8 +116,19 @@ new features should either:
   `updateAIContextIndicator()` live under `CL.ai`
 - [[concepts/stripe-payment-flow]] — `CrashLensAuth` is the
   pre-namespace auth module; future auth code should live under `CL.auth`
+- [[concepts/firebase-auth]] — same legacy module
 - [[concepts/coolify-deployment]] — client modules read their keys from
   `config/api-keys.json`, which is rendered at container startup
+- [[concepts/batch-before-after]] — canonical example of multi-file
+  module split under the 500-line cap
+- [[concepts/grants-ranking]], [[concepts/warrants-analysis]],
+  [[concepts/safety-focus]] — feature modules living under `CL.*`
+- [[concepts/upload-pipeline]] — four-file upload module
+- [[concepts/r2-storage-paths]] — path helpers belong in shared modules
+- [[concepts/crash-profile-shapes]] — the four `build*CrashProfile`
+  helpers should share one module
+- [[connections/module-namespace-vs-legacy-state]] — the CL.*-vs-
+  window split explained
 
 ## Sources
 

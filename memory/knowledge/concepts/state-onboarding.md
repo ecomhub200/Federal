@@ -128,6 +128,14 @@ section each time a new state is added.
 - [[concepts/epdo-weights]] — severity codes the normalizer must emit
 - [[concepts/state-management]] — how normalized output ends up inside
   `crashState.sampleRows` at runtime
+- [[concepts/r2-storage-paths]] — where each state's normalized
+  artifacts land
+- [[concepts/upload-pipeline]] — invokes the normalizer server-side on
+  user uploads
+- [[concepts/safety-focus]] — relies on normalizer-emitted flags for
+  category predicates
+- [[connections/epdo-across-tabs]] — normalizer must emit KABCO so
+  EPDO parity holds across every tab
 
 ## Sources
 

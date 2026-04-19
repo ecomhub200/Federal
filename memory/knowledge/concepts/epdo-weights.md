@@ -83,8 +83,15 @@ those must not be reintroduced into the codebase.
   the resolver carries an EPDO score
 - [[concepts/state-onboarding]] — normalizers must emit KABCO codes so
   these weights apply cleanly
+- [[concepts/crash-profile-shapes]] — every profile carries an `epdo`
+  field
+- [[concepts/hotspots]], [[concepts/grants-ranking]],
+  [[concepts/batch-before-after]] — primary consumers of `calcEPDO`
+- [[concepts/safety-focus]] — per-category EPDO rollups
 - [[connections/state-scope-and-ai-context]] — EPDO is part of the
   uniform `crashProfile` shape all scopes share
+- [[connections/epdo-across-tabs]] — the parity invariants that keep
+  EPDO comparable across every tab
 
 ## Sources
 

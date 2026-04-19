@@ -124,8 +124,15 @@ a bug in the resolver.
 - [[concepts/epdo-weights]] — every returned `crashProfile` carries an
   EPDO score computed via `calcEPDO`
 - [[concepts/module-architecture]] — the resolver lives under `CL.ai`
+- [[concepts/crash-profile-shapes]] — the four `build*CrashProfile`
+  helpers referenced in the resolver
+- [[concepts/hotspots]], [[concepts/grants-ranking]],
+  [[concepts/warrants-analysis]], [[concepts/batch-before-after]] —
+  tabs whose cross-tab selections feed the resolver
 - [[connections/state-scope-and-ai-context]] — the cross-cutting
   contract this resolver participates in
+- [[connections/epdo-across-tabs]] — EPDO parity requirement the
+  resolver inherits
 
 ## Sources
 

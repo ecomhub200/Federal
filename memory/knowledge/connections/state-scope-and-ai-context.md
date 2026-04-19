@@ -82,3 +82,6 @@ location-specific numbers (or vice-versa).
 - [[concepts/ai-context-awareness]]
 - [[concepts/epdo-weights]] — every `crashProfile` returned by the
   resolver carries an EPDO score
+- [[concepts/hotspots]], [[concepts/grants-ranking]],
+  [[concepts/warrants-analysis]] — tabs whose click-handoff flows
+  implement this contract

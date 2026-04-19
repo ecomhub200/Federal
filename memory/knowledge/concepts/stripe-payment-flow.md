@@ -121,6 +121,11 @@ so the client UI can gate features by plan.
   `config/api-keys.json` at container startup
 - [[concepts/module-architecture]] — `CrashLensAuth` lives in
   `assets/js/auth.js`, not under `CL.*` (legacy pre-namespace module)
+- [[concepts/firebase-auth]] — the auth surface Stripe hooks into
+- [[concepts/upload-pipeline]] — both flows share the server's
+  Firestore user-doc surface
+- [[connections/module-namespace-vs-legacy-state]] — why
+  `CrashLensAuth` is still at `window` scope
 
 ## Sources
 

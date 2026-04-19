@@ -116,6 +116,12 @@ Secrets that must **never** appear in `api-keys.json`:
   env vars wired by this deployment
 - [[concepts/module-architecture]] — client modules read from
   `config/api-keys.json` for their keys
+- [[concepts/firebase-auth]] — Firebase Admin service account is a
+  server-only env var
+- [[concepts/r2-storage-paths]] — R2 write credentials are injected as
+  server-side env vars here
+- [[concepts/upload-pipeline]] — server uses those R2 credentials to
+  accept client uploads
 
 ## Sources
 
