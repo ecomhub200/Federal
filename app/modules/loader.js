@@ -13,6 +13,7 @@ CL.safety = CL.safety || {};
 CL.ai = CL.ai || {};
 CL.data = CL.data || {};
 CL.data.client = null; // Populated by data-client.js init (Phase 1)
+CL.data.supabaseBridge = null; // Populated by supabase-bridge.js (Phase 2)
 CL.spatial = CL.spatial || {};
 CL.upload = CL.upload || {};
 CL.utils = CL.utils || {};
