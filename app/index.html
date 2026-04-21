@@ -21222,51 +21222,131 @@ function populatePlanningDistrictDropdown() {
 
 /**
  * Handle planning district selection.
+ * Mirrors handleRegionSelection: updates context, toggles UI, draws a boundary,
+ * loads aggregates, triggers CSV load, and dispatches a tierChanged event so
+ * downstream tabs (school, transit, AI) can react.
  */
-function handlePlanningDistrictSelection() {
-    const select = document.getElementById('tierPlanningDistrictSelect');
-    const pdId = select?.value;
-    if (!pdId) return;
+async function handlePlanningDistrictSelection() {
+    try {
+        const select = document.getElementById('tierPlanningDistrictSelect');
+        const pdId = select?.value;
+        if (!pdId) {
+            if (typeof removePlanningDistrictBoundaryLayer === 'function') removePlanningDistrictBoundaryLayer();
+            return;
+        }
 
-    const pdName = select.options[select.selectedIndex]?.textContent || pdId;
-    jurisdictionContext.tierPlanningDistrict = { id: pdId, name: pdName };
+        const hierarchy = (typeof HierarchyRegistry !== 'undefined') ? HierarchyRegistry.getData() : null;
+        const pdSource = hierarchy?.planningDistricts?.[pdId] || hierarchy?.regions?.[pdId] || null;
+        const pdName = select.options[select.selectedIndex]?.textContent || pdId;
 
-    // Update scope indicator
-    const scopeText = document.getElementById('tierScopeText');
-    if (scopeText) scopeText.textContent = `Planning District: ${pdName}`;
+        jurisdictionContext.tierPlanningDistrict = pdSource
+            ? { id: pdId, name: pdName, ...pdSource }
+            : { id: pdId, name: pdName };
 
-    console.log(`[Tier] Planning district selected: ${pdId} (${pdName})`);
+        if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI('planning_district');
 
-    // Load data for this planning district
-    autoLoadCrashData(true).catch(e => {
-        console.warn('[Tier] Planning district data load failed:', e.message);
-    });
+        // Clear competing boundaries — PD takes precedence while selected
+        if (typeof removeRegionBoundaryLayer === 'function') removeRegionBoundaryLayer();
+        if (typeof removeMPOBoundaryLayer === 'function') removeMPOBoundaryLayer();
+        if (typeof removeCityBoundaryLayer === 'function') removeCityBoundaryLayer();
+        if (typeof removeJurisdictionBoundaryLayer === 'function') {
+            removeJurisdictionBoundaryLayer();
+            builtInLayersState.jurisdictionBoundary.enabled = false;
+        }
+
+        if (pdSource && typeof displayPlanningDistrictBoundary === 'function') {
+            displayPlanningDistrictBoundary(pdSource, pdId);
+        }
+
+        const stateKey = (typeof _getActiveStateKey === 'function')
+            ? _getActiveStateKey()
+            : (appConfig?.defaultState || 'colorado');
+        try {
+            const pdAgg = await AggregateLoader.loadPlanningDistrict(stateKey, pdId);
+            if (pdAgg) console.log(`[Tier] PD aggregate loaded: ${Object.keys(pdAgg).length} keys`);
+        } catch (e) {
+            console.warn('[Tier] PD aggregate load failed:', e.message);
+        }
+        console.log(`[Tier] Planning district selected: ${pdId} (${pdName})`);
+
+        autoLoadCrashData(true).catch(e => {
+            console.warn('[Tier] Planning district CSV load failed (data may not be uploaded yet):', e.message);
+        });
+
+        document.dispatchEvent(new CustomEvent('tierChanged', {
+            detail: {
+                tier: 'planning_district',
+                scopeKey: (typeof getTierScopeKey === 'function') ? getTierScopeKey() : pdId
+            }
+        }));
+    } catch (e) {
+        console.error('[Tier] handlePlanningDistrictSelection failed:', e);
+    }
 }
 
 /**
- * Handle city/town selection from the merged dropdown.
+ * Handle city / town selection from the merged dropdown.
+ * Mirrors handleMPOSelection: updates context, toggles UI, fetches and draws a
+ * TIGERweb boundary, loads aggregates, triggers CSV load, and dispatches a
+ * tierChanged event. The boundary fetch is fire-and-forget so CSV loading is
+ * not blocked on the Census API.
  */
-function handleCitySelection() {
-    const select = document.getElementById('tierCitySelect');
-    const slug = select?.value;
-    if (!slug) return;
+async function handleCitySelection() {
+    try {
+        const select = document.getElementById('tierCitySelect');
+        const slug = select?.value;
+        if (!slug) {
+            if (typeof removeCityBoundaryLayer === 'function') removeCityBoundaryLayer();
+            return;
+        }
 
-    const selectedOption = select.options[select.selectedIndex];
-    const displayName = selectedOption?.textContent || slug;
-    const placeType = selectedOption?.dataset?.type || 'city';
+        const selectedOption = select.options[select.selectedIndex];
+        const displayName = selectedOption?.textContent || slug;
+        const placeType = selectedOption?.dataset?.type || 'city';
 
-    jurisdictionContext.tierCity = { id: slug, name: displayName, type: placeType };
+        jurisdictionContext.tierCity = { id: slug, name: displayName, type: placeType };
 
-    // Update scope indicator
-    const scopeText = document.getElementById('tierScopeText');
-    if (scopeText) scopeText.textContent = displayName;
+        if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI('city');
 
-    console.log(`[Tier] City/Town selected: ${slug} (${displayName}, type=${placeType})`);
+        // Clear competing boundaries — city takes precedence while selected
+        if (typeof removeRegionBoundaryLayer === 'function') removeRegionBoundaryLayer();
+        if (typeof removeMPOBoundaryLayer === 'function') removeMPOBoundaryLayer();
+        if (typeof removePlanningDistrictBoundaryLayer === 'function') removePlanningDistrictBoundaryLayer();
+        if (typeof removeJurisdictionBoundaryLayer === 'function') {
+            removeJurisdictionBoundaryLayer();
+            builtInLayersState.jurisdictionBoundary.enabled = false;
+        }
 
-    // Load data for this city/town
-    autoLoadCrashData(true).catch(e => {
-        console.warn('[Tier] City/Town data load failed:', e.message);
-    });
+        if (typeof displayCityBoundary === 'function') {
+            displayCityBoundary(slug, displayName, placeType).catch(e =>
+                console.warn('[Tier] City boundary fetch failed:', e.message)
+            );
+        }
+
+        const stateKey = (typeof _getActiveStateKey === 'function')
+            ? _getActiveStateKey()
+            : (appConfig?.defaultState || 'colorado');
+        try {
+            const cityAgg = await AggregateLoader.loadCity(stateKey, slug);
+            if (cityAgg) console.log(`[Tier] City aggregate loaded: ${Object.keys(cityAgg).length} keys`);
+        } catch (e) {
+            console.warn('[Tier] City aggregate load failed:', e.message);
+        }
+        console.log(`[Tier] City/Town selected: ${slug} (${displayName}, type=${placeType})`);
+
+        autoLoadCrashData(true).catch(e => {
+            console.warn('[Tier] City/Town CSV load failed (data may not be uploaded yet):', e.message);
+        });
+
+        document.dispatchEvent(new CustomEvent('tierChanged', {
+            detail: {
+                tier: 'city',
+                scopeKey: (typeof getTierScopeKey === 'function') ? getTierScopeKey() : slug
+            }
+        }));
+    } catch (e) {
+        console.error('[Tier] handleCitySelection failed:', e);
+    }
 }
 
 /**
@@ -22267,6 +22347,35 @@ const BoundaryService = (() => {
             return { places, cdps };
         },
 
+        // TIGERweb County Subdivisions (layer 22) — used for Planning District fallback
+        // and for township-type cities (NJ, PA, MI, New England).
+        async getCountySubdivisions(stateFips, countyFips) {
+            const where = countyFips
+                ? `STATE='${stateFips}' AND COUNTY='${countyFips}'`
+                : `STATE='${stateFips}'`;
+            return _queryTigerWeb(LAYERS.countySubdivisions, where, 'NAME,COUSUB,COUNTY,STATE,GEOID,FUNCSTAT');
+        },
+
+        // Name-based place lookup: resolves a single place feature for a city handler
+        // without re-downloading the entire state. Tries incorporated places first,
+        // then falls back to CDPs and county subdivisions.
+        async getPlaceByNameAndState(stateFips, placeName) {
+            const escaped = String(placeName || '').replace(/'/g, "''");
+            const upper = escaped.toUpperCase();
+            let data = await _queryTigerWeb(LAYERS.incorporatedPlaces,
+                `STATE='${stateFips}' AND UPPER(NAME)='${upper}'`,
+                'NAME,PLACEFP,LSAD,STATE,GEOID');
+            if (data?.features?.length) return data;
+            data = await _queryTigerWeb(LAYERS.censusDesignatedPlaces,
+                `STATE='${stateFips}' AND UPPER(NAME)='${upper}'`,
+                'NAME,PLACEFP,LSAD,STATE,GEOID');
+            if (data?.features?.length) return data;
+            data = await _queryTigerWeb(LAYERS.countySubdivisions,
+                `STATE='${stateFips}' AND UPPER(NAME)='${upper}'`,
+                'NAME,COUSUB,COUNTY,STATE,GEOID,FUNCSTAT');
+            return data;
+        },
+
         async getCensusTracts(stateFips, countyFips) {
             return _queryTigerWeb(LAYERS.censusTracts, `STATE='${stateFips}' AND COUNTY='${countyFips}'`, 'NAME,TRACT,GEOID,STATE,COUNTY');
         },
@@ -22486,6 +22595,22 @@ const AggregateLoader = (() => {
             return _fetch(`${stateKey}/_mpo/${mpoId}/hotspots.json`);
         },
 
+        async loadPlanningDistrict(stateKey, pdId) {
+            return _fetch(`${stateKey}/_planning_district/${pdId}/aggregates.json`);
+        },
+
+        async loadPlanningDistrictHotspots(stateKey, pdId) {
+            return _fetch(`${stateKey}/_planning_district/${pdId}/hotspots.json`);
+        },
+
+        async loadCity(stateKey, citySlug) {
+            return _fetch(`${stateKey}/_city/${citySlug}/aggregates.json`);
+        },
+
+        async loadCityHotspots(stateKey, citySlug) {
+            return _fetch(`${stateKey}/_city/${citySlug}/hotspots.json`);
+        },
+
         /**
          * Fetch the statewide crash CSV from R2 (gzipped, browser auto-decompresses).
          * Returns raw CSV text string, or null on failure.
@@ -22537,6 +22662,8 @@ const AggregateLoader = (() => {
                 case 'state': return this.loadStatewide(stateKey);
                 case 'region': return this.loadRegion(stateKey, scopeId);
                 case 'mpo': return this.loadMPO(stateKey, scopeId);
+                case 'planning_district': return this.loadPlanningDistrict(stateKey, scopeId);
+                case 'city': return this.loadCity(stateKey, scopeId);
                 default: return null; // County tier uses CSV, not aggregates
             }
         },
@@ -127438,6 +127565,21 @@ const builtInLayersState = {
         status: 'ready',
         lastError: null,
         currentRegionId: null
+    },
+    planningDistrictBoundary: {
+        enabled: false,
+        layer: null,
+        status: 'ready',
+        lastError: null,
+        currentPdId: null
+    },
+    cityBoundary: {
+        enabled: false,
+        layer: null,
+        status: 'ready',
+        lastError: null,
+        currentCitySlug: null,
+        geojsonCache: {}
     }
 };
 
@@ -133754,6 +133896,190 @@ function removeRegionBoundaryLayer() {
     builtInLayersState.regionBoundary.status = 'ready';
     builtInLayersState.regionBoundary.currentRegionId = null;
     builtInLayersState.regionBoundary.enabled = false;
+}
+
+// ============================================================
+// PLANNING DISTRICT BOUNDARY — hierarchy mapBounds rectangle (mirrors region)
+// ============================================================
+
+/**
+ * Display a planning district boundary on the map. Prefers hierarchy mapBounds
+ * (same approach as region), falls back to center+zoom if only a center is known.
+ * Uses a distinct teal color scheme to visually differentiate from region (blue) and MPO (purple).
+ */
+function displayPlanningDistrictBoundary(pd, pdId) {
+    removePlanningDistrictBoundaryLayer();
+
+    // Clear competing boundaries — PD takes precedence while selected
+    if (typeof removeJurisdictionBoundaryLayer === 'function') {
+        removeJurisdictionBoundaryLayer();
+        builtInLayersState.jurisdictionBoundary.enabled = false;
+    }
+
+    if (!crashMap) return;
+
+    if (!pd?.mapBounds) {
+        if (pd?.center) {
+            crashMap.flyTo([pd.center[1], pd.center[0]], pd.zoom || 9, { duration: 1.2 });
+        }
+        return;
+    }
+
+    const bounds = L.latLngBounds(
+        L.latLng(pd.mapBounds.sw[0], pd.mapBounds.sw[1]),
+        L.latLng(pd.mapBounds.ne[0], pd.mapBounds.ne[1])
+    );
+
+    const pdStyle = {
+        color: '#0e7490',
+        weight: 2,
+        fillColor: '#14b8a6',
+        fillOpacity: 0.06,
+        dashArray: '4 4'
+    };
+
+    const boundaryLayer = L.rectangle(bounds, pdStyle);
+    boundaryLayer.bindPopup(`
+        <div style="text-align:center;padding:0.5rem;">
+            <div style="font-weight:600;margin-bottom:0.25rem;">${pd.name || 'Planning District'}</div>
+            <div style="font-size:0.8rem;color:#666;">
+                ${pd.counties?.length ? pd.counties.length + ' counties' : ''}
+            </div>
+        </div>
+    `);
+    boundaryLayer.addTo(crashMap);
+
+    crashMap.flyToBounds(bounds, { padding: [40, 40], duration: 1.2, maxZoom: pd.zoom || 10 });
+
+    builtInLayersState.planningDistrictBoundary.layer = boundaryLayer;
+    builtInLayersState.planningDistrictBoundary.currentPdId = pdId;
+    builtInLayersState.planningDistrictBoundary.status = 'active';
+    builtInLayersState.planningDistrictBoundary.enabled = true;
+
+    if (typeof updateMapAssetPanel === 'function') updateMapAssetPanel();
+    console.log(`[PDBoundary] Displayed boundary for ${pd.name || pdId}`);
+}
+
+function removePlanningDistrictBoundaryLayer() {
+    if (builtInLayersState.planningDistrictBoundary.layer && crashMap) {
+        crashMap.removeLayer(builtInLayersState.planningDistrictBoundary.layer);
+        builtInLayersState.planningDistrictBoundary.layer = null;
+    }
+    builtInLayersState.planningDistrictBoundary.status = 'ready';
+    builtInLayersState.planningDistrictBoundary.currentPdId = null;
+    builtInLayersState.planningDistrictBoundary.enabled = false;
+}
+
+// ============================================================
+// CITY / TOWN BOUNDARY — TIGERweb Places + County Subdivisions
+// ============================================================
+
+/**
+ * Display a city / town / township boundary from TIGERweb. Incorporated places
+ * and CDPs come from BoundaryService.getPlaceByNameAndState (layers 28/30);
+ * townships fall through to getCountySubdivisions (layer 22). Boundary fetches
+ * are cached per state via the existing BoundaryService cache.
+ *
+ * displayName is used to strip the LSAD suffix ("city", "town", "village",
+ * "CDP", "borough", "township") before querying TIGERweb by NAME.
+ */
+async function displayCityBoundary(citySlug, displayName, placeType) {
+    removeCityBoundaryLayer();
+
+    if (typeof removeJurisdictionBoundaryLayer === 'function') {
+        removeJurisdictionBoundaryLayer();
+        builtInLayersState.jurisdictionBoundary.enabled = false;
+    }
+
+    if (!crashMap) return;
+
+    let stateFips = null;
+    if (typeof _getCurrentStateFips === 'function') {
+        stateFips = _getCurrentStateFips();
+    } else if (typeof HierarchyRegistry !== 'undefined') {
+        stateFips = HierarchyRegistry.getData()?.state?.fips || null;
+    }
+    if (!stateFips) {
+        console.warn('[CityBoundary] Could not determine state FIPS; aborting');
+        return;
+    }
+
+    const placeName = String(displayName || '')
+        .replace(/\s+(city|town|village|CDP|borough|township|municipality)$/i, '')
+        .trim();
+    if (!placeName) return;
+
+    let geo = null;
+    try {
+        if (placeType === 'township') {
+            const fc = await BoundaryService.getCountySubdivisions(stateFips);
+            const matches = (fc?.features || []).filter(f =>
+                String(f.properties?.NAME || '').toLowerCase() === placeName.toLowerCase()
+            );
+            if (matches.length) geo = { type: 'FeatureCollection', features: matches };
+        } else {
+            geo = await BoundaryService.getPlaceByNameAndState(stateFips, placeName);
+        }
+    } catch (e) {
+        console.warn('[CityBoundary] TIGERweb query failed:', e.message);
+    }
+
+    if (!geo?.features?.length) {
+        console.log(`[CityBoundary] No features for "${placeName}" in state ${stateFips}`);
+        return;
+    }
+
+    const cityStyle = {
+        color: '#b45309',
+        weight: 2,
+        fillColor: '#f59e0b',
+        fillOpacity: 0.08,
+        dashArray: '3 3'
+    };
+
+    const boundaryLayer = L.geoJSON(geo, {
+        style: cityStyle,
+        onEachFeature: function(feature, layer) {
+            const p = feature.properties || {};
+            const name = p.NAME || displayName || 'Place';
+            const geoid = p.GEOID || p.PLACEFP || p.COUSUB || '';
+            layer.bindPopup(`
+                <div style="text-align:center;padding:0.5rem;">
+                    <div style="font-weight:600;margin-bottom:0.25rem;">${name}</div>
+                    <div style="font-size:0.75rem;color:#666;">Type: ${placeType || 'place'}${geoid ? ' | GEOID: ' + geoid : ''}</div>
+                    <div style="font-size:0.7rem;color:#888;margin-top:0.25rem;">Source: TIGERweb Census</div>
+                </div>
+            `);
+        }
+    });
+    boundaryLayer.addTo(crashMap);
+
+    try {
+        const bounds = boundaryLayer.getBounds();
+        if (bounds.isValid()) {
+            crashMap.flyToBounds(bounds, { padding: [40, 40], duration: 1.2, maxZoom: 14 });
+        }
+    } catch (e) {
+        console.warn('[CityBoundary] Could not fit to bounds:', e.message);
+    }
+
+    builtInLayersState.cityBoundary.layer = boundaryLayer;
+    builtInLayersState.cityBoundary.currentCitySlug = citySlug;
+    builtInLayersState.cityBoundary.status = 'active';
+    builtInLayersState.cityBoundary.enabled = true;
+
+    if (typeof updateMapAssetPanel === 'function') updateMapAssetPanel();
+    console.log(`[CityBoundary] Displayed boundary for ${displayName || citySlug}`);
+}
+
+function removeCityBoundaryLayer() {
+    if (builtInLayersState.cityBoundary.layer && crashMap) {
+        crashMap.removeLayer(builtInLayersState.cityBoundary.layer);
+        builtInLayersState.cityBoundary.layer = null;
+    }
+    builtInLayersState.cityBoundary.status = 'ready';
+    builtInLayersState.cityBoundary.currentCitySlug = null;
+    builtInLayersState.cityBoundary.enabled = false;
 }
 
 function addBTSMPOAttribution() {
