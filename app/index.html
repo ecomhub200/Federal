@@ -151583,5 +151583,24 @@ function signDef_exportPDF() {
   </div>
 </div>
 
+<!-- CrashLens Supabase Data Client (Phase 1 — foundation only) -->
+<script src="../assets/js/data-client.js"></script>
+<script>
+  // Initialize Supabase data client after page load
+  // This does NOT change any existing data loading — it just makes the client available
+  // for future phases to use. R2 parquet pipeline continues to work exactly as before.
+  document.addEventListener('DOMContentLoaded', function() {
+    try {
+      var stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : 'delaware';
+      window.crashLensClient = CrashLensDataClient.init({ state: stateKey });
+      if (window.CL && CL.data) CL.data.client = window.crashLensClient;
+      console.log('[Phase1] CrashLens Supabase client ready, state:', stateKey);
+    } catch(e) {
+      console.warn('[Phase1] Supabase client init failed (non-fatal):', e.message);
+      // Non-fatal — existing R2 pipeline continues working
+    }
+  });
+</script>
+
 </body>
 </html>
