@@ -151609,6 +151609,15 @@ function signDef_exportPDF() {
       if (CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
         CL.data.supabaseBridge.injectFastDashboard();
       }
+
+      // Re-run the fast dashboard whenever the user changes state / tier / jurisdiction
+      // on the Upload Data tab. updateJurisdictionContext() fires this event after every
+      // selection change, so the bridge picks up the new state key + tier + value.
+      document.addEventListener('jurisdictionChanged', function () {
+        if (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.refresh) {
+          CL.data.supabaseBridge.refresh();
+        }
+      });
     } catch(e) {
       console.warn('[Phase1] Supabase client init failed (non-fatal):', e.message);
       // Non-fatal — existing R2 pipeline continues working
