@@ -21,6 +21,11 @@ CL.data.supabaseBridge = (function () {
     'use strict';
 
     var _injected = false;
+    var _refreshTimer = null;
+
+    function _activeStateKey() {
+        return (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
+    }
 
     function getEpdoWeights() {
         if (typeof EPDO_WEIGHTS !== 'undefined' && EPDO_WEIGHTS) return EPDO_WEIGHTS;
@@ -276,9 +281,10 @@ CL.data.supabaseBridge = (function () {
         if (el) el.remove();
     }
 
-    async function injectFastDashboard() {
+    async function injectFastDashboard(opts) {
+        var force = !!(opts && opts.force);
         try {
-            if (typeof crashState !== 'undefined' && crashState && crashState.loaded) return;
+            if (!force && typeof crashState !== 'undefined' && crashState && crashState.loaded) return;
             if (!window.crashLensClient || typeof window.crashLensClient.getSummary !== 'function') return;
 
             var t = resolveTier();
@@ -306,9 +312,28 @@ CL.data.supabaseBridge = (function () {
         removeBanner();
     }
 
+    function refresh() {
+        if (_refreshTimer) clearTimeout(_refreshTimer);
+        _refreshTimer = setTimeout(function () {
+            _refreshTimer = null;
+            try {
+                if (window.crashLensClient) {
+                    var key = _activeStateKey();
+                    if (key) window.crashLensClient.state = key;
+                }
+                _injected = false;
+                removeBanner();
+                injectFastDashboard({ force: true });
+            } catch (e) {
+                console.warn('[Phase2] refresh failed (non-fatal):', e && e.message);
+            }
+        }, 150);
+    }
+
     return {
         injectFastDashboard: injectFastDashboard,
         onR2LoadComplete: onR2LoadComplete,
+        refresh: refresh,
         get injected() { return _injected; }
     };
 })();
