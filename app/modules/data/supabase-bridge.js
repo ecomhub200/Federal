@@ -284,13 +284,25 @@ CL.data.supabaseBridge = (function () {
     async function injectFastDashboard(opts) {
         var force = !!(opts && opts.force);
         try {
-            if (!force && typeof crashState !== 'undefined' && crashState && crashState.loaded) return;
-            if (!window.crashLensClient || typeof window.crashLensClient.getSummary !== 'function') return;
+            if (!force && typeof crashState !== 'undefined' && crashState && crashState.loaded) {
+                console.log('[Phase2] R2 already loaded before bridge started, skipping');
+                return;
+            }
+            if (!window.crashLensClient || typeof window.crashLensClient.getSummary !== 'function') {
+                console.log('[Phase2] No Supabase client available, skipping');
+                return;
+            }
 
             var t = resolveTier();
+            console.log('[Phase2] Fetching summary from Supabase...', { tier: t.tier, value: t.value });
+            var startTime = Date.now();
             var rows = await window.crashLensClient.getSummary(t.tier, t.value);
+            var fetchMs = Date.now() - startTime;
 
-            if (typeof crashState !== 'undefined' && crashState && crashState.loaded) return;
+            if (typeof crashState !== 'undefined' && crashState && crashState.loaded) {
+                console.log('[Phase2] R2 won the race (' + fetchMs + 'ms fetch, but R2 finished first), discarding');
+                return;
+            }
             if (!Array.isArray(rows) || rows.length === 0) return;
 
             var agg = aggregate(rows);
