@@ -21241,6 +21241,8 @@ function handlePlanningDistrictSelection() {
     autoLoadCrashData(true).catch(e => {
         console.warn('[Tier] Planning district data load failed:', e.message);
     });
+
+    document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier: 'planning_district', scopeKey: getTierScopeKey() } }));
 }
 
 /**
@@ -21267,6 +21269,8 @@ function handleCitySelection() {
     autoLoadCrashData(true).catch(e => {
         console.warn('[Tier] City/Town data load failed:', e.message);
     });
+
+    document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier: 'city', scopeKey: getTierScopeKey() } }));
 }
 
 /**
