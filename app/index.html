@@ -21322,6 +21322,7 @@ async function loadStatewideCSVForTier(stateKey) {
             complete: function() {
                 crashState.totalRows = rowCount;
                 crashState.loaded = true;
+                if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
                 if (typeof finalizeData === 'function') finalizeData();
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 console.log(`[Tier] Statewide CSV parsed: ${rowCount.toLocaleString()} records in ${elapsed}s`);
@@ -27144,6 +27145,7 @@ function restoreCrashStateFromCache(cached) {
     crashState.nodes = cached.nodes;
     crashState.totalRows = cached.totalRows;
     crashState.loaded = true;
+    if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
 
     // Track what data was loaded for later verification
     crashState._loadedState = cached.stateKey || currentState;
@@ -31347,6 +31349,7 @@ function _processRowObjects(fields, rows, uploadZone, prog) {
 
     crashState.totalRows = rowCount;
     crashState.loaded = true;
+    if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
     finalizeData();
     updateProgress(rowCount, startTime);
     _onUploadComplete(rowCount, uploadZone, prog);
@@ -31385,6 +31388,7 @@ function _parseCsvText(csvText, uploadZone, prog) {
         complete: function() {
                 crashState.totalRows = rowCount;
                 crashState.loaded = true;
+                if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
                 finalizeData();
                 updateProgress(rowCount, startTime);
                 _onUploadComplete(rowCount, uploadZone, prog);
@@ -31968,6 +31972,7 @@ async function autoLoadCrashData(skipCache = false) {
 
                         crashState.totalRows = rowCount;
                         crashState.loaded = true;
+                        if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
                         finalizeData();
                         updateProgress(rowCount, startTime);
                         _onAutoLoadComplete(rowCount, startTime, dataFilePath, jurisdictionName, uploadIcon, loadingTitle, loadingSubtitle, prog);
@@ -32122,6 +32127,7 @@ async function autoLoadCrashData(skipCache = false) {
                             crashState.missingGPS = msg.missingGPS;
                             crashState.totalRows = msg.totalRows;
                             crashState.loaded = true;
+                            if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
 
                             console.log(`[AutoLoad] Worker complete: ${msg.totalRows.toLocaleString()} rows, ${_pendingMapPoints.length.toLocaleString()} mapPoints (${msg.mapPointChunks} chunks)`);
 
@@ -32201,6 +32207,7 @@ async function autoLoadCrashData(skipCache = false) {
 function _onAutoLoadComplete(rowCount, startTime, dataFilePath, jurisdictionName, uploadIcon, loadingTitle, loadingSubtitle, prog) {
     crashState.totalRows = rowCount;
     crashState.loaded = true;
+    if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
 
     // Only call finalizeData if sampleRows were loaded (main-thread path)
     // Worker path sets years/routes/nodes directly
@@ -76829,6 +76836,7 @@ function loadSession(event) {
         try {
             const s = JSON.parse(e.target.result);
             crashState.loaded = true;
+            if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
             crashState.totalRows = s.totalRows;
             crashState.aggregates = s.aggregates;
             crashState.years = s.years;
@@ -151585,6 +151593,7 @@ function signDef_exportPDF() {
 
 <!-- CrashLens Supabase Data Client (Phase 1 — foundation only) -->
 <script src="../assets/js/data-client.js"></script>
+<script src="modules/data/supabase-bridge.js"></script>
 <script>
   // Initialize Supabase data client after page load
   // This does NOT change any existing data loading — it just makes the client available
@@ -151595,6 +151604,11 @@ function signDef_exportPDF() {
       window.crashLensClient = CrashLensDataClient.init({ state: stateKey });
       if (window.CL && CL.data) CL.data.client = window.crashLensClient;
       console.log('[Phase1] CrashLens Supabase client ready, state:', stateKey);
+
+      // Phase 2: Fast Dashboard pre-load from Supabase
+      if (CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+        CL.data.supabaseBridge.injectFastDashboard();
+      }
     } catch(e) {
       console.warn('[Phase1] Supabase client init failed (non-fatal):', e.message);
       // Non-fatal — existing R2 pipeline continues working
