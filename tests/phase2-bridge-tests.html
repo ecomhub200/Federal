@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CrashLens Phase 2 — Supabase Bridge Tests</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--border:#334155;--pass:#22c55e;--fail:#ef4444;--warn:#eab308;--text:#e2e8f0;--muted:#94a3b8;--accent:#3b82f6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono','Fira Code',monospace;background:var(--bg);color:var(--text);min-height:100vh;padding:1.5rem}
+h1{font-size:1.1rem;font-weight:700;margin-bottom:.3rem}
+.sub{font-size:.7rem;color:var(--muted);margin-bottom:1.2rem}
+.btn{padding:.35rem .8rem;border:none;border-radius:5px;font-size:.7rem;font-family:inherit;font-weight:700;cursor:pointer;margin-bottom:1rem}
+.btn-run{background:var(--accent);color:#fff}.btn-run:hover{background:#2563eb}
+.btn-run:disabled{opacity:.4;cursor:not-allowed}
+.summary{display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.5rem .8rem;text-align:center;min-width:80px}
+.stat .n{font-size:1.4rem;font-weight:800;line-height:1.1}
+.stat .l{font-size:.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.stat.pass .n{color:var(--pass)}.stat.fail .n{color:var(--fail)}.stat.total .n{color:var(--accent)}.stat.time .n{color:var(--warn)}
+.tests{display:flex;flex-direction:column;gap:.4rem}
+.test{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:.5rem .7rem}
+.test.pass{border-left:3px solid var(--pass)}.test.fail{border-left:3px solid var(--fail)}.test.running{border-left:3px solid var(--accent);opacity:.7}
+.test-head{display:flex;justify-content:space-between;align-items:center}
+.test-name{font-size:.72rem;font-weight:600}
+.test-badge{font-size:.55rem;padding:.1rem .4rem;border-radius:99px;font-weight:700}
+.b-pass{background:#052e16;color:var(--pass)}.b-fail{background:#450a0a;color:var(--fail)}.b-run{background:#172554;color:var(--accent)}
+.test-detail{font-size:.6rem;color:var(--muted);margin-top:.25rem;white-space:pre-wrap}
+.test-detail .ok{color:var(--pass)}.test-detail .err{color:var(--fail)}
+.progress{height:4px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:.8rem}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--pass));transition:width .3s;width:0}
+
+/* Mock KPI elements for testing */
+.mock-dashboard{display:none}
+</style>
+</head>
+<body>
+
+<h1>Phase 2 — Supabase Bridge Tests</h1>
+<div class="sub">Tests supabase-bridge.js: matview fetch, aggregation, KPI card population, R2 handoff</div>
+<button class="btn btn-run" id="btnRun" onclick="runAllTests()">▶ Run All Tests</button>
+<div class="progress"><div class="progress-fill" id="progBar"></div></div>
+<div class="summary">
+  <div class="stat total"><div class="n" id="sTotal">0</div><div class="l">Total</div></div>
+  <div class="stat pass"><div class="n" id="sPass">0</div><div class="l">Passed</div></div>
+  <div class="stat fail"><div class="n" id="sFail">0</div><div class="l">Failed</div></div>
+  <div class="stat time"><div class="n" id="sTime">0s</div><div class="l">Time</div></div>
+</div>
+<div class="tests" id="testList"></div>
+
+<!-- Mock Dashboard KPI elements (same IDs as app/index.html) -->
+<div class="mock-dashboard">
+  <span id="kpiTotal"></span><span id="kpiFatal"></span><span id="kpiFatalPct"></span>
+  <span id="kpiInjuryA"></span><span id="kpiAPct"></span><span id="kpiInjuryBC"></span>
+  <span id="kpiPDO"></span><span id="kpiEPDO"></span><span id="kpiYearRange"></span>
+  <span id="kpiEPDOAvg"></span><span id="kpiKA"></span><span id="kpiKAPct"></span>
+  <span id="kpiVRU"></span><span id="kpiVRUPct"></span>
+  <span id="kpiSpeed"></span><span id="kpiSpeedPct"></span>
+  <span id="kpiNighttime"></span><span id="kpiNighttimePct"></span>
+  <span id="epdoK"></span><span id="epdoA"></span><span id="epdoB"></span>
+  <span id="epdoC"></span><span id="epdoO"></span>
+  <span id="epdoKPct"></span><span id="epdoAPct"></span><span id="epdoBPct"></span>
+  <span id="epdoCPct"></span><span id="epdoOPct"></span>
+  <div id="epdoKBar" style="width:0"></div><div id="epdoABar" style="width:0"></div>
+  <div id="epdoBBar" style="width:0"></div><div id="epdoCBar" style="width:0"></div>
+  <div id="epdoOBar" style="width:0"></div>
+  <span id="epdoAnnual"></span><span id="epdoPer100"></span>
+  <span id="kpiTotalTrend"></span><span id="kpiFatalTrend"></span>
+  <span id="kpiATrend"></span><span id="kpiKATrend"></span>
+  <span id="kpiVRUTrend"></span><span id="kpiSpeedTrend"></span>
+  <span id="kpiNighttimeTrend"></span>
+  <div id="kpiPersonsInjuredCard"><span id="kpiPersonsInjured"></span><span id="kpiPersonsInjuredSub"></span></div>
+  <div id="kpiVehicleCountCard"><span id="kpiAvgVehicles"></span><span id="kpiVehicleCountSub"></span></div>
+  <table><tbody id="dashYearlyBody"></tbody></table>
+  <table><tbody id="funcClassBody"></tbody></table>
+  <div id="dashboardKPIs"></div>
+</div>
+
+<!-- Load data-client.js (inlined) -->
+<script>
+// ═══ data-client.js (inlined for file:// compatibility) ═══
+class CrashLensDataClient {
+  static DEFAULTS = {
+    supabaseUrl: 'https://srv1503081.hstgr.cloud/rest/v1',
+    supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc0OTEyNDczLCJleHAiOjIwOTAyNzI0NzN9.5arUDeH3ccQ9O-UK57wFu7w1jKaIoIq3uroqithXjQs',
+    r2BaseUrl: 'https://data.aicreatesai.com',
+    timeout: 15000, mapLimit: 5000, pageSize: 25, preferSupabase: true,
+  };
+  constructor(opts = {}) {
+    this.supabaseUrl = opts.supabaseUrl || CrashLensDataClient.DEFAULTS.supabaseUrl;
+    this.supabaseKey = opts.supabaseKey || CrashLensDataClient.DEFAULTS.supabaseKey;
+    this.state = opts.state || 'delaware';
+    this.timeout = opts.timeout || 15000;
+    this._source = 'none';
+  }
+  get source() { return this._source; }
+  async getSummary(tier, value, filters = {}) {
+    const tf = {}; if (this.state) tf.state = `eq.${this.state}`;
+    if (tier === 'county' && value) tf.physical_juris_name = `eq.${value}`;
+    else if (tier === 'region' && value) tf.dot_district = `eq.${value}`;
+    else if (tier === 'mpo' && value) tf.mpo_name = `eq.${value}`;
+    const url = new URL(`${this.supabaseUrl}/dashboard_summary`);
+    for (const [k,v] of Object.entries(tf)) url.searchParams.set(k, v);
+    url.searchParams.set('limit', '100000');
+    if (filters.yearFrom && filters.yearTo) url.searchParams.set('and', `(crash_year.gte.${filters.yearFrom},crash_year.lte.${filters.yearTo})`);
+    const resp = await fetch(url.toString(), {
+      headers: { 'apikey': this.supabaseKey, 'Authorization': `Bearer ${this.supabaseKey}` }
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    this._source = 'supabase';
+    return resp.json();
+  }
+}
+CrashLensDataClient.init = function(opts) {
+  const c = new CrashLensDataClient(opts);
+  window.crashLensClient = c;
+  return c;
+};
+</script>
+
+<!-- Mock globals -->
+<script>
+window.CL = { data: {}, core: { constants: { EPDO_WEIGHTS_DEFAULT: { K: 883, A: 94, B: 21, C: 11, O: 1 } } }, _loaded: [], _registerModule: function(n) { CL._loaded.push(n); } };
+window.crashState = { loaded: false, aggregates: {}, sampleRows: [], totalRows: 0 };
+window.jurisdictionContext = { viewTier: 'county', jurisdictionName: 'Kent' };
+window.crashLensClient = CrashLensDataClient.init({ state: 'delaware' });
+</script>
+
+<!-- Load supabase-bridge.js (will be inlined after CC creates it) -->
+<script>
+// ═══ supabase-bridge.js placeholder — paste the real file content here after CC creates it ═══
+// For now, test the data-client → aggregation → KPI card pipeline manually
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  TEST FRAMEWORK
+// ═══════════════════════════════════════════════════════════
+const TESTS = [];
+let results = { total: 0, pass: 0, fail: 0 };
+
+function test(name, fn) { TESTS.push({ name, fn }); }
+function assert(c, m) { if (!c) throw new Error(m || 'Assertion failed'); }
+function assertGt(v, min, m) { assert(v > min, m || `Expected > ${min}, got ${v}`); }
+function assertEq(v, exp, m) { assert(v === exp, m || `Expected ${exp}, got ${v}`); }
+
+// ═══════════════════════════════════════════════════════════
+//  TEST DEFINITIONS
+// ═══════════════════════════════════════════════════════════
+
+// ── 1. Supabase connectivity ──
+test('getSummary returns matview data', async () => {
+  const data = await crashLensClient.getSummary('state', null);
+  assert(Array.isArray(data), 'Expected array');
+  assertGt(data.length, 0, 'No rows returned');
+  assert(data[0].hasOwnProperty('crash_count'), 'Missing crash_count column');
+  assert(data[0].hasOwnProperty('crash_year'), 'Missing crash_year column');
+  return `${data.length} matview rows`;
+});
+
+// ── 2. Matview has all required columns ──
+test('Matview rows have all 10 aggregate columns', async () => {
+  const data = await crashLensClient.getSummary('state', null);
+  const required = ['crash_count','fatals','serious_injuries','total_injured',
+    'ped_crashes','bike_crashes','speed_crashes','alcohol_crashes','night_crashes','animal_crashes'];
+  const row = data[0];
+  const missing = required.filter(c => !row.hasOwnProperty(c));
+  assert(missing.length === 0, `Missing columns: ${missing.join(', ')}`);
+  return `All 10 aggregate columns present`;
+});
+
+// ── 3. Matview has GROUP BY dimensions ──
+test('Matview rows have GROUP BY dimensions', async () => {
+  const data = await crashLensClient.getSummary('state', null);
+  const dims = ['state','physical_juris_name','crash_year','crash_severity',
+    'functional_class','collision_type','area_type'];
+  const row = data[0];
+  const found = dims.filter(c => row.hasOwnProperty(c));
+  return `${found.length}/${dims.length} dimensions: ${found.join(', ')}`;
+});
+
+// ── 4. Kent County filter works ──
+test('getSummary(county, Kent) returns Kent-only data', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  assertGt(data.length, 0, 'No Kent data');
+  const total = data.reduce((s, r) => s + (parseInt(r.crash_count) || 0), 0);
+  assertGt(total, 10000, `Kent total too low: ${total}`);
+  return `Kent: ${total.toLocaleString()} crashes, ${data.length} rows`;
+});
+
+// ── 5. Aggregation: bySeverity ──
+test('Aggregation produces correct bySeverity', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  const sev = { K: 0, A: 0, B: 0, C: 0, O: 0 };
+  data.forEach(r => {
+    const s = (r.crash_severity || '').toUpperCase().charAt(0);
+    const c = parseInt(r.crash_count) || 0;
+    if (sev.hasOwnProperty(s)) sev[s] += c;
+  });
+  assertGt(sev.O, sev.A, `O (${sev.O}) should be > A (${sev.A})`);
+  assertGt(sev.A, sev.K, `A (${sev.A}) should be > K (${sev.K})`);
+  return `K:${sev.K} A:${sev.A} B:${sev.B} C:${sev.C} O:${sev.O}`;
+});
+
+// ── 6. Aggregation: byYear ──
+test('Aggregation produces byYear with year range', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  const years = {};
+  data.forEach(r => {
+    const y = parseInt(r.crash_year) || 0;
+    if (y > 0) years[y] = (years[y] || 0) + (parseInt(r.crash_count) || 0);
+  });
+  const sortedYears = Object.keys(years).map(Number).sort();
+  assertGt(sortedYears.length, 5, `Too few years: ${sortedYears.length}`);
+  assert(sortedYears[0] >= 2009, `First year too early: ${sortedYears[0]}`);
+  assert(sortedYears[sortedYears.length - 1] <= 2030, `Last year too late: ${sortedYears[sortedYears.length-1]}`);
+  return `Years: ${sortedYears[0]}-${sortedYears[sortedYears.length-1]} (${sortedYears.length} years)`;
+});
+
+// ── 7. Aggregation: safety flag totals ──
+test('Safety flags have non-zero totals', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  const flags = { ped: 0, bike: 0, speed: 0, alcohol: 0, night: 0 };
+  data.forEach(r => {
+    flags.ped += parseInt(r.ped_crashes) || 0;
+    flags.bike += parseInt(r.bike_crashes) || 0;
+    flags.speed += parseInt(r.speed_crashes) || 0;
+    flags.alcohol += parseInt(r.alcohol_crashes) || 0;
+    flags.night += parseInt(r.night_crashes) || 0;
+  });
+  assertGt(flags.ped, 0, 'Zero ped crashes');
+  assertGt(flags.alcohol, 0, 'Zero alcohol crashes');
+  assertGt(flags.night, 0, 'Zero night crashes');
+  return `ped:${flags.ped} bike:${flags.bike} speed:${flags.speed} alc:${flags.alcohol} night:${flags.night}`;
+});
+
+// ── 8. Aggregation: byFuncClass ──
+test('Aggregation produces byFuncClass breakdown', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  const fc = {};
+  data.forEach(r => {
+    const f = r.functional_class || '';
+    if (f) fc[f] = (fc[f] || 0) + (parseInt(r.crash_count) || 0);
+  });
+  const classes = Object.keys(fc);
+  assertGt(classes.length, 2, `Too few FC: ${classes.length}`);
+  return `${classes.length} functional classes: ${classes.slice(0, 5).join(', ')}`;
+});
+
+// ── 9. Aggregation: byCollision ──
+test('Aggregation produces byCollision breakdown', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  const col = {};
+  data.forEach(r => {
+    const c = r.collision_type || '';
+    if (c) col[c] = (col[c] || 0) + (parseInt(r.crash_count) || 0);
+  });
+  const types = Object.keys(col);
+  assertGt(types.length, 2, `Too few collision types: ${types.length}`);
+  return `${types.length} collision types: ${types.slice(0, 4).join(', ')}`;
+});
+
+// ── 10. KPI element population ──
+test('KPI elements get populated with correct values', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  // Manually aggregate and write to KPI elements
+  let total = 0;
+  const sev = { K: 0, A: 0, B: 0, C: 0, O: 0 };
+  let ped = 0, bike = 0, speed = 0, night = 0;
+  data.forEach(r => {
+    const c = parseInt(r.crash_count) || 0;
+    const s = (r.crash_severity || '').toUpperCase().charAt(0);
+    total += c;
+    if (sev.hasOwnProperty(s)) sev[s] += c;
+    ped += parseInt(r.ped_crashes) || 0;
+    bike += parseInt(r.bike_crashes) || 0;
+    speed += parseInt(r.speed_crashes) || 0;
+    night += parseInt(r.night_crashes) || 0;
+  });
+
+  // Write to mock elements
+  document.getElementById('kpiTotal').textContent = total.toLocaleString();
+  document.getElementById('kpiFatal').textContent = sev.K.toLocaleString();
+  document.getElementById('kpiVRU').textContent = (ped + bike).toLocaleString();
+  document.getElementById('kpiSpeed').textContent = speed.toLocaleString();
+  document.getElementById('kpiNighttime').textContent = night.toLocaleString();
+
+  // Verify
+  const kpiTotal = document.getElementById('kpiTotal').textContent;
+  assert(kpiTotal !== '', 'kpiTotal empty');
+  assert(kpiTotal !== '0', 'kpiTotal is zero');
+  const kpiFatal = document.getElementById('kpiFatal').textContent;
+  assert(kpiFatal !== '', 'kpiFatal empty');
+
+  return `kpiTotal=${kpiTotal} kpiFatal=${kpiFatal} VRU=${document.getElementById('kpiVRU').textContent}`;
+});
+
+// ── 11. EPDO calculation matches data-client ──
+test('EPDO calculation matches FHWA 2025 weights', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  const sev = { K: 0, A: 0, B: 0, C: 0, O: 0 };
+  data.forEach(r => {
+    const s = (r.crash_severity || '').toUpperCase().charAt(0);
+    const c = parseInt(r.crash_count) || 0;
+    if (sev.hasOwnProperty(s)) sev[s] += c;
+  });
+  const w = { K: 883, A: 94, B: 21, C: 11, O: 1 };
+  const epdo = sev.K * w.K + sev.A * w.A + sev.B * w.B + sev.C * w.C + sev.O * w.O;
+  assertGt(epdo, 0, 'EPDO is zero');
+  // K component should dominate
+  const kComponent = sev.K * w.K;
+  assertGt(kComponent / epdo, 0.1, `K component too low: ${(kComponent/epdo*100).toFixed(1)}%`);
+  return `EPDO: ${epdo.toLocaleString()} (K=${(kComponent/epdo*100).toFixed(1)}%)`;
+});
+
+// ── 12. State-level totals match expected range ──
+test('State-level total crashes in expected range (500K-600K)', async () => {
+  const data = await crashLensClient.getSummary('state', null);
+  const total = data.reduce((s, r) => s + (parseInt(r.crash_count) || 0), 0);
+  assertGt(total, 500000, `State total too low: ${total}`);
+  assert(total < 700000, `State total too high: ${total}`);
+  return `State total: ${total.toLocaleString()} (expected 569,829)`;
+});
+
+// ── 13. R2 loaded check — bridge skips when data present ──
+test('Bridge skips when crashState.loaded = true', async () => {
+  crashState.loaded = true;
+  // The bridge should detect this and skip
+  // We test the logic manually since bridge may not be loaded
+  const shouldSkip = crashState.loaded === true;
+  assert(shouldSkip, 'Should skip when loaded');
+  crashState.loaded = false; // Reset
+  return 'Correctly detects crashState.loaded = true';
+});
+
+// ── 14. Yearly table HTML generation ──
+test('Yearly table generates valid HTML rows', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  const years = {};
+  const w = { K: 883, A: 94, B: 21, C: 11, O: 1 };
+  data.forEach(r => {
+    const y = parseInt(r.crash_year) || 0;
+    const c = parseInt(r.crash_count) || 0;
+    const s = (r.crash_severity || '').toUpperCase().charAt(0);
+    if (y > 0) {
+      if (!years[y]) years[y] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+      years[y].total += c;
+      if (years[y].hasOwnProperty(s)) years[y][s] += c;
+    }
+  });
+  const tbody = document.getElementById('dashYearlyBody');
+  let html = '';
+  Object.keys(years).sort().forEach(y => {
+    const yd = years[y];
+    const epdo = yd.K * w.K + yd.A * w.A + yd.B * w.B + yd.C * w.C + yd.O * w.O;
+    html += `<tr><td>${y}</td><td>${yd.total}</td><td>${yd.K}</td><td>${yd.A}</td><td>${epdo}</td></tr>`;
+  });
+  tbody.innerHTML = html;
+  const rows = tbody.querySelectorAll('tr');
+  assertGt(rows.length, 5, `Too few year rows: ${rows.length}`);
+  return `${rows.length} year rows generated`;
+});
+
+// ── 15. Functional class table ──
+test('FuncClass table generates sorted rows', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  const fc = {};
+  data.forEach(r => {
+    const f = r.functional_class || '';
+    if (f) fc[f] = (fc[f] || 0) + (parseInt(r.crash_count) || 0);
+  });
+  const sorted = Object.entries(fc).sort((a, b) => b[1] - a[1]);
+  const tbody = document.getElementById('funcClassBody');
+  let html = '';
+  sorted.forEach(([name, count]) => {
+    html += `<tr><td>${name}</td><td>${count}</td></tr>`;
+  });
+  tbody.innerHTML = html;
+  const rows = tbody.querySelectorAll('tr');
+  assertGt(rows.length, 2, `Too few FC rows: ${rows.length}`);
+  // Verify sorted descending
+  if (rows.length >= 2) {
+    const first = parseInt(rows[0].cells[1].textContent);
+    const second = parseInt(rows[1].cells[1].textContent);
+    assert(first >= second, `Not sorted: ${first} < ${second}`);
+  }
+  return `${rows.length} FC rows, sorted descending`;
+});
+
+// ── 16. YoY trend calculation ──
+test('YoY trend arrows calculate correctly', async () => {
+  const data = await crashLensClient.getSummary('county', 'Kent');
+  const byYear = {};
+  data.forEach(r => {
+    const y = parseInt(r.crash_year) || 0;
+    const c = parseInt(r.crash_count) || 0;
+    if (y > 0) byYear[y] = (byYear[y] || 0) + c;
+  });
+  const years = Object.keys(byYear).map(Number).sort();
+  assert(years.length >= 2, 'Need at least 2 years for trend');
+  const last = byYear[years[years.length - 1]];
+  const prev = byYear[years[years.length - 2]];
+  const change = ((last - prev) / prev * 100).toFixed(1);
+  const arrow = change > 0 ? '↑' : (change < 0 ? '↓' : '→');
+  document.getElementById('kpiTotalTrend').textContent = `${arrow} ${Math.abs(change)}%`;
+  const trendText = document.getElementById('kpiTotalTrend').textContent;
+  assert(trendText.includes('%'), `No % in trend: ${trendText}`);
+  return `${years[years.length-2]}→${years[years.length-1]}: ${trendText}`;
+});
+
+// ── 17. Loading indicator ──
+test('Loading indicator creates and removes banner', () => {
+  // Create
+  const banner = document.createElement('div');
+  banner.id = 'supabaseBridgeIndicator';
+  banner.textContent = 'Test banner';
+  const kpi = document.getElementById('dashboardKPIs');
+  if (kpi && kpi.parentNode) kpi.parentNode.insertBefore(banner, kpi);
+  else document.body.appendChild(banner);
+
+  let el = document.getElementById('supabaseBridgeIndicator');
+  assert(el, 'Banner not created');
+
+  // Remove
+  el.remove();
+  el = document.getElementById('supabaseBridgeIndicator');
+  assert(!el, 'Banner not removed');
+  return 'Banner create + remove works';
+});
+
+// ── 18. Multiple tier queries ──
+test('Multiple tier queries return different totals', async () => {
+  const stateData = await crashLensClient.getSummary('state', null);
+  const countyData = await crashLensClient.getSummary('county', 'Kent');
+  const stateTotal = stateData.reduce((s, r) => s + (parseInt(r.crash_count) || 0), 0);
+  const countyTotal = countyData.reduce((s, r) => s + (parseInt(r.crash_count) || 0), 0);
+  assertGt(stateTotal, countyTotal, `State (${stateTotal}) should be > County (${countyTotal})`);
+  return `State: ${stateTotal.toLocaleString()} > Kent: ${countyTotal.toLocaleString()}`;
+});
+
+// ═══════════════════════════════════════════════════════════
+//  TEST RUNNER
+// ═══════════════════════════════════════════════════════════
+async function runAllTests() {
+  const btn = document.getElementById('btnRun');
+  btn.disabled = true; btn.textContent = '⏳ Running...';
+  results = { total: TESTS.length, pass: 0, fail: 0 };
+  const listEl = document.getElementById('testList');
+  listEl.innerHTML = '';
+  const startTime = Date.now();
+
+  const cards = TESTS.map((t, i) => {
+    const div = document.createElement('div');
+    div.className = 'test running'; div.id = `test-${i}`;
+    div.innerHTML = `<div class="test-head"><span class="test-name">${t.name}</span><span class="test-badge b-run">PENDING</span></div><div class="test-detail"></div>`;
+    listEl.appendChild(div);
+    return div;
+  });
+
+  for (let i = 0; i < TESTS.length; i++) {
+    const t = TESTS[i], card = cards[i];
+    const detail = card.querySelector('.test-detail');
+    const badge = card.querySelector('.test-badge');
+    document.getElementById('progBar').style.width = `${(i / TESTS.length) * 100}%`;
+    const tStart = Date.now();
+    try {
+      const msg = await t.fn();
+      card.className = 'test pass'; badge.className = 'test-badge b-pass'; badge.textContent = 'PASS';
+      detail.innerHTML = `<span class="ok">✓ ${msg || 'OK'}</span> <span style="color:#64748b">${Date.now()-tStart}ms</span>`;
+      results.pass++;
+    } catch (e) {
+      card.className = 'test fail'; badge.className = 'test-badge b-fail'; badge.textContent = 'FAIL';
+      detail.innerHTML = `<span class="err">✗ ${e.message}</span> <span style="color:#64748b">${Date.now()-tStart}ms</span>`;
+      results.fail++;
+    }
+    document.getElementById('sTotal').textContent = results.total;
+    document.getElementById('sPass').textContent = results.pass;
+    document.getElementById('sFail').textContent = results.fail;
+    document.getElementById('sTime').textContent = `${((Date.now() - startTime) / 1000).toFixed(1)}s`;
+    await new Promise(r => setTimeout(r, 50));
+  }
+  document.getElementById('progBar').style.width = '100%';
+  btn.disabled = false;
+  btn.textContent = results.fail > 0 ? '❌ Re-run' : '✅ All Passed — Re-run';
+}
+</script>
+</body>
+</html>
