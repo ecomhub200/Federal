@@ -407,6 +407,39 @@ if (tierChangeFnMatch) {
     // Verify hierarchy loading
     assert(fnBody.includes('HierarchyRegistry.load'),
         'handleTierChange loads hierarchy when needed');
+
+    // Verify cleanup of Planning District and City overlays on any tier switch
+    assert(fnBody.includes('removePlanningDistrictBoundaryLayer'),
+        'handleTierChange clears Planning District boundary on tier switch');
+    assert(fnBody.includes('removeCityBoundaryLayer'),
+        'handleTierChange clears City boundary on tier switch');
+}
+
+
+// ═════════════════════════════════════════════════════════════
+//  7b. CODE PATHS — getTierScopeKey handles all tiers
+// ═════════════════════════════════════════════════════════════
+section('7b. Code Paths — getTierScopeKey Handles All Tiers');
+
+const scopeKeyMatch = indexHtml.match(
+    /function getTierScopeKey\(\)\s*\{([\s\S]*?)\n\}/
+);
+assert(scopeKeyMatch, 'getTierScopeKey function exists');
+
+if (scopeKeyMatch) {
+    const body = scopeKeyMatch[1];
+
+    // Each non-default tier must have its own case producing a <tier>_<id> key.
+    // Without these, PD/City selections dispatch tierChanged events with a
+    // stale county_<fips> scope key, silently miswiring downstream listeners.
+    assert(/case 'planning_district'[\s\S]*?planning_district_\$\{/.test(body),
+        "getTierScopeKey emits planning_district_<id> for 'planning_district' tier");
+    assert(/case 'city'[\s\S]*?city_\$\{/.test(body),
+        "getTierScopeKey emits city_<id> for 'city' tier");
+    assert(body.includes('tierPlanningDistrict?.id'),
+        'getTierScopeKey reads jurisdictionContext.tierPlanningDistrict.id');
+    assert(body.includes('tierCity?.id'),
+        'getTierScopeKey reads jurisdictionContext.tierCity.id');
 }
 
 
