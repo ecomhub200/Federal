@@ -20,7 +20,7 @@ class CrashLensDataClient {
     supabaseKey:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc0OTEyNDczLCJleHAiOjIwOTAyNzI0NzN9.5arUDeH3ccQ9O-UK57wFu7w1jKaIoIq3uroqithXjQs',
     r2BaseUrl:    'https://data.aicreatesai.com',
     timeout:      15000,   // 15s for Supabase, then fallback
-    mapLimit:     5000,    // max crash dots per viewport
+    mapLimit:     10000,   // max crash dots per viewport (raised for Phase 3 viewport queries)
     pageSize:     25,      // rows per page for detail tables
     preferSupabase: true,
   };
@@ -221,6 +221,93 @@ class CrashLensDataClient {
       const rx = parseFloat(r.x || r['x']), ry = parseFloat(r.y || r['y']);
       return rx >= bounds.west && rx <= bounds.east && ry >= bounds.south && ry <= bounds.north;
     }).slice(0, limit);
+  }
+
+  /**
+   * Phase 3: Zoom-aware viewport crash query via PostGIS RPC.
+   * Returns clusters at low zoom, individual points at high zoom.
+   *
+   * @param {object} bounds - { south, west, north, east } from crashMap.getBounds()
+   * @param {number} zoom   - crashMap.getZoom()
+   * @param {object} opts   - { tier, tierValue, year, severity[], limit }
+   * @returns {Promise<Array>} rows with { cx, cy, n, fatals, serious, epdo, is_cluster, ...pointFields }
+   */
+  async getViewportCrashes(bounds, zoom, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) {
+      return this._fallbackViewportFromMapPoints(bounds, zoom);
+    }
+
+    const tierCol = opts.tier ? CrashLensDataClient.TIER_COLUMNS[opts.tier] : null;
+    const body = {
+      p_state:    this.state,
+      p_bbox:     `SRID=4326;POLYGON((${bounds.west} ${bounds.south},${bounds.east} ${bounds.south},${bounds.east} ${bounds.north},${bounds.west} ${bounds.north},${bounds.west} ${bounds.south}))`,
+      p_zoom:     zoom,
+      p_tier_col: tierCol || null,
+      p_tier_val: opts.tierValue || null,
+      p_year:     opts.year || null,
+      p_severity: opts.severity || null,
+      p_limit:    opts.limit || this.mapLimit
+    };
+
+    const url = `${this.supabaseUrl}/rpc/map_viewport_crashes`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+
+      this._source = 'supabase';
+      return await resp.json();
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[DataClient] Viewport query failed, falling back:', e.message);
+      return this._fallbackViewportFromMapPoints(bounds, zoom);
+    }
+  }
+
+  /**
+   * Fallback: filter existing crashState.mapPoints client-side.
+   * Used when Supabase is unavailable or during R2-only sessions.
+   */
+  _fallbackViewportFromMapPoints(bounds, zoom) {
+    if (typeof crashState === 'undefined' || !crashState.mapPoints) return [];
+    const pts = crashState.mapPoints.filter(p =>
+      p.lat >= bounds.south && p.lat <= bounds.north &&
+      p.lng >= bounds.west  && p.lng <= bounds.east
+    );
+    return pts.map(p => ({
+      cx: p.lng, cy: p.lat, n: 1, fatals: p.sev === 'K' ? 1 : 0,
+      serious: p.sev === 'A' ? 1 : 0,
+      epdo: ({ K: 883, A: 94, B: 21, C: 11, O: 1 })[p.sev] || 1,
+      is_cluster: false,
+      objectid: p.docNum || null,
+      crash_severity: p.sev, crash_year: null,
+      collision_type: p.collision, rte_name: p.route,
+      intersection_name: p.node,
+      crash_date: p.date, crash_military_time: p.time,
+      pedestrian: p.isPed ? 'Yes' : 'No',
+      bike: p.isBike ? 'Yes' : 'No',
+      speed: p.isSpeed ? 'Yes' : 'No',
+      weather_condition: p.weather,
+      light_condition: p.light,
+      document_nbr: p.docNum || null,
+      night: p.isNight ? 'Yes' : 'No'
+    }));
   }
 
   /**

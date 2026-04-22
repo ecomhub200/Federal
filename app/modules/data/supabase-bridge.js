@@ -346,6 +346,7 @@ CL.data.supabaseBridge = (function () {
         injectFastDashboard: injectFastDashboard,
         onR2LoadComplete: onR2LoadComplete,
         refresh: refresh,
+        resolveTier: resolveTier,
         get injected() { return _injected; }
     };
 })();
