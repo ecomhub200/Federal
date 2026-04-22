@@ -20903,6 +20903,8 @@ async function handleTierChange(tier) {
         // ── Clear previous tier's boundary overlays ──
         if (typeof removeMPOBoundaryLayer === 'function') removeMPOBoundaryLayer();
         if (typeof removeRegionBoundaryLayer === 'function') removeRegionBoundaryLayer();
+        if (typeof removePlanningDistrictBoundaryLayer === 'function') removePlanningDistrictBoundaryLayer();
+        if (typeof removeCityBoundaryLayer === 'function') removeCityBoundaryLayer();
         // Remove state outline overlay (uses same slot as jurisdiction boundary for state tier)
         if (builtInLayersState._stateOutlineLayer && crashMap) {
             crashMap.removeLayer(builtInLayersState._stateOutlineLayer);
@@ -21798,8 +21800,11 @@ function getTierScopeKey() {
             return `region_${jurisdictionContext.tierRegion?.id || 'unknown'}`;
         case 'mpo':
             return `mpo_${jurisdictionContext.tierMpo?.id || 'unknown'}`;
-        case 'county':
+        case 'planning_district':
+            return `planning_district_${jurisdictionContext.tierPlanningDistrict?.id || 'unknown'}`;
         case 'city':
+            return `city_${jurisdictionContext.tierCity?.id || 'unknown'}`;
+        case 'county':
         default:
             return `county_${jurisdictionContext.fullFips || jurisdictionContext.jurisdictionKey || 'unknown'}`;
     }
