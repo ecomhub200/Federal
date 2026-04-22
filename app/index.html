@@ -48349,9 +48349,13 @@ function initMap() {
     // Fit bounds to data using dynamic state-aware coordinate validation
     fitMapToData();
 
-    // Phase 3: Attach Supabase viewport query listeners
+    // Phase 3: Attach Supabase viewport query listeners and fire an initial fetch
+    // so the viewport data renders without waiting for a user pan/zoom.
     if (CL.data.mapBridge && typeof CL.data.mapBridge.attach === 'function') {
         CL.data.mapBridge.attach();
+        if (typeof CL.data.mapBridge.refresh === 'function' && CL.data.mapBridge.isActive()) {
+            CL.data.mapBridge.refresh();
+        }
     }
 }
 

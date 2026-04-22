@@ -229,7 +229,10 @@ class CrashLensDataClient {
    *
    * @param {object} bounds - { south, west, north, east } from crashMap.getBounds()
    * @param {number} zoom   - crashMap.getZoom()
-   * @param {object} opts   - { tier, tierValue, year, severity[], limit }
+   * @param {object} opts   - { tier, tierValue, year, severity[], limit, signal }
+   *                          `signal` is an external AbortSignal — if it fires,
+   *                          the error is propagated (NOT swallowed into fallback)
+   *                          so the caller can ignore a superseded request.
    * @returns {Promise<Array>} rows with { cx, cy, n, fatals, serious, epdo, is_cluster, ...pointFields }
    */
   async getViewportCrashes(bounds, zoom, opts = {}) {
@@ -250,8 +253,19 @@ class CrashLensDataClient {
     };
 
     const url = `${this.supabaseUrl}/rpc/map_viewport_crashes`;
+    // Combine: timeout (internal) + optional external abort signal
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeout);
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, this.timeout);
+    const onExternalAbort = () => controller.abort();
+    if (opts.signal) {
+      if (opts.signal.aborted) {
+        clearTimeout(timer);
+        const err = new DOMException('Aborted', 'AbortError');
+        throw err;
+      }
+      opts.signal.addEventListener('abort', onExternalAbort, { once: true });
+    }
 
     try {
       const resp = await fetch(url, {
@@ -265,6 +279,7 @@ class CrashLensDataClient {
         signal: controller.signal,
       });
       clearTimeout(timer);
+      if (opts.signal) opts.signal.removeEventListener('abort', onExternalAbort);
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
@@ -275,6 +290,10 @@ class CrashLensDataClient {
       return await resp.json();
     } catch (e) {
       clearTimeout(timer);
+      if (opts.signal) opts.signal.removeEventListener('abort', onExternalAbort);
+      // External abort (caller superseded the request): propagate — do NOT fallback
+      if (e.name === 'AbortError' && !timedOut) throw e;
+      // Timeout or network/server error: fall back to client-side filtering
       console.warn('[DataClient] Viewport query failed, falling back:', e.message);
       return this._fallbackViewportFromMapPoints(bounds, zoom);
     }
