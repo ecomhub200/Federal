@@ -32637,6 +32637,11 @@ function resetState() {
         routePolylines = [];
     }
 
+    // Phase 3: Detach map bridge before destroying map
+    if (CL.data.mapBridge && typeof CL.data.mapBridge.detach === 'function') {
+        CL.data.mapBridge.detach();
+    }
+
     // === CHARTS AND MAP ===
     Object.keys(charts).forEach(k => { if(charts[k]) { charts[k].destroy(); delete charts[k]; } });
     if (crashMap) { crashMap.remove(); crashMap = null; markerCluster = null; heatLayer = null; }
@@ -48343,6 +48348,11 @@ function initMap() {
 
     // Fit bounds to data using dynamic state-aware coordinate validation
     fitMapToData();
+
+    // Phase 3: Attach Supabase viewport query listeners
+    if (CL.data.mapBridge && typeof CL.data.mapBridge.attach === 'function') {
+        CL.data.mapBridge.attach();
+    }
 }
 
 /**
@@ -48507,7 +48517,13 @@ function getActiveMapFilters() {
 
 function updateMapDisplay() {
     if (!crashMap) return;
-    
+
+    // Phase 3: If Supabase map bridge is active, delegate rendering to it
+    if (CL.data.mapBridge && CL.data.mapBridge.isActive()) {
+        CL.data.mapBridge.refresh();
+        return;
+    }
+
     const filtered = getFilteredMapPoints();
     
     // Calculate stats
@@ -151925,6 +151941,7 @@ function signDef_exportPDF() {
 <!-- CrashLens Supabase Data Client (Phase 1 — foundation only) -->
 <script src="../assets/js/data-client.js"></script>
 <script src="modules/data/supabase-bridge.js"></script>
+<script src="modules/data/supabase-map-bridge.js"></script>
 <script>
   // Initialize Supabase data client after page load
   // This does NOT change any existing data loading — it just makes the client available
