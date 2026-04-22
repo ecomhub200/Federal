@@ -4622,8 +4622,10 @@
       "r2Prefix": "alabama",
       "appSubtitle": "Alabama Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4639,8 +4641,10 @@
       "r2Prefix": "alaska",
       "appSubtitle": "Alaska Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4656,8 +4660,10 @@
       "r2Prefix": "arizona",
       "appSubtitle": "Arizona Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4673,8 +4679,10 @@
       "r2Prefix": "arkansas",
       "appSubtitle": "Arkansas Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4690,8 +4698,10 @@
       "r2Prefix": "california",
       "appSubtitle": "California Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4707,8 +4717,10 @@
       "r2Prefix": "colorado",
       "appSubtitle": "Colorado Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4724,8 +4736,10 @@
       "r2Prefix": "connecticut",
       "appSubtitle": "Connecticut Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4741,8 +4755,10 @@
       "r2Prefix": "delaware",
       "appSubtitle": "Delaware Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4758,8 +4774,10 @@
       "r2Prefix": "district_of_columbia",
       "appSubtitle": "District of Columbia Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4775,8 +4793,10 @@
       "r2Prefix": "florida",
       "appSubtitle": "Florida Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4792,8 +4812,10 @@
       "r2Prefix": "georgia",
       "appSubtitle": "Georgia Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4809,8 +4831,10 @@
       "r2Prefix": "hawaii",
       "appSubtitle": "Hawaii Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4826,8 +4850,10 @@
       "r2Prefix": "idaho",
       "appSubtitle": "Idaho Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4843,8 +4869,10 @@
       "r2Prefix": "illinois",
       "appSubtitle": "Illinois Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4860,8 +4888,10 @@
       "r2Prefix": "indiana",
       "appSubtitle": "Indiana Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4877,8 +4907,10 @@
       "r2Prefix": "iowa",
       "appSubtitle": "Iowa Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4894,8 +4926,10 @@
       "r2Prefix": "kansas",
       "appSubtitle": "Kansas Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4911,8 +4945,10 @@
       "r2Prefix": "kentucky",
       "appSubtitle": "Kentucky Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4928,8 +4964,10 @@
       "r2Prefix": "louisiana",
       "appSubtitle": "Louisiana Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4945,8 +4983,10 @@
       "r2Prefix": "maine",
       "appSubtitle": "Maine Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4962,8 +5002,10 @@
       "r2Prefix": "maryland",
       "appSubtitle": "Maryland Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4979,8 +5021,10 @@
       "r2Prefix": "massachusetts",
       "appSubtitle": "Massachusetts Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -4996,8 +5040,10 @@
       "r2Prefix": "michigan",
       "appSubtitle": "Michigan Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5013,8 +5059,10 @@
       "r2Prefix": "minnesota",
       "appSubtitle": "Minnesota Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5030,8 +5078,10 @@
       "r2Prefix": "mississippi",
       "appSubtitle": "Mississippi Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5047,8 +5097,10 @@
       "r2Prefix": "missouri",
       "appSubtitle": "Missouri Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5064,8 +5116,10 @@
       "r2Prefix": "montana",
       "appSubtitle": "Montana Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5081,8 +5135,10 @@
       "r2Prefix": "nebraska",
       "appSubtitle": "Nebraska Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5098,8 +5154,10 @@
       "r2Prefix": "nevada",
       "appSubtitle": "Nevada Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5115,8 +5173,10 @@
       "r2Prefix": "new_hampshire",
       "appSubtitle": "New Hampshire Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5132,8 +5192,10 @@
       "r2Prefix": "new_jersey",
       "appSubtitle": "New Jersey Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5149,8 +5211,10 @@
       "r2Prefix": "new_mexico",
       "appSubtitle": "New Mexico Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5166,8 +5230,10 @@
       "r2Prefix": "new_york",
       "appSubtitle": "New York Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5183,8 +5249,10 @@
       "r2Prefix": "north_carolina",
       "appSubtitle": "North Carolina Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5200,8 +5268,10 @@
       "r2Prefix": "north_dakota",
       "appSubtitle": "North Dakota Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5217,8 +5287,10 @@
       "r2Prefix": "ohio",
       "appSubtitle": "Ohio Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5234,8 +5306,10 @@
       "r2Prefix": "oklahoma",
       "appSubtitle": "Oklahoma Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5251,8 +5325,10 @@
       "r2Prefix": "oregon",
       "appSubtitle": "Oregon Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5268,8 +5344,10 @@
       "r2Prefix": "pennsylvania",
       "appSubtitle": "Pennsylvania Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5285,8 +5363,10 @@
       "r2Prefix": "rhode_island",
       "appSubtitle": "Rhode Island Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5302,8 +5382,10 @@
       "r2Prefix": "south_carolina",
       "appSubtitle": "South Carolina Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5319,8 +5401,10 @@
       "r2Prefix": "south_dakota",
       "appSubtitle": "South Dakota Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5336,8 +5420,10 @@
       "r2Prefix": "tennessee",
       "appSubtitle": "Tennessee Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5353,8 +5439,10 @@
       "r2Prefix": "texas",
       "appSubtitle": "Texas Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5370,8 +5458,10 @@
       "r2Prefix": "utah",
       "appSubtitle": "Utah Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5387,8 +5477,10 @@
       "r2Prefix": "vermont",
       "appSubtitle": "Vermont Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5404,8 +5496,10 @@
       "r2Prefix": "virginia",
       "appSubtitle": "Virginia Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5421,8 +5515,10 @@
       "r2Prefix": "washington",
       "appSubtitle": "Washington Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5438,8 +5534,10 @@
       "r2Prefix": "west_virginia",
       "appSubtitle": "West Virginia Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5455,8 +5553,10 @@
       "r2Prefix": "wisconsin",
       "appSubtitle": "Wisconsin Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
@@ -5472,8 +5572,10 @@
       "r2Prefix": "wyoming",
       "appSubtitle": "Wyoming Crash Analysis Tool",
       "tiers": [
+        "federal",
         "state",
         "region",
+        "planning_district",
         "mpo",
         "county",
         "city"
