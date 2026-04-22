@@ -126,8 +126,9 @@ CL.data.mapBridge = (function () {
             east:  b.getEast()
         };
 
-        // Build filter options from current UI state
+        // Build filter options from current UI state and attach abort signal
         var opts = _buildFilterOpts();
+        opts.signal = _abortController.signal;
 
         try {
             var rows = await window.crashLensClient.getViewportCrashes(bounds, zoom, opts);
