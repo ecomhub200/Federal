@@ -43,7 +43,8 @@ CL.data.supabaseBridge = (function () {
         if (t === 'region') return { tier: 'region', value: ctx.tierRegion && ctx.tierRegion.name };
         if (t === 'mpo')    return { tier: 'mpo',    value: ctx.tierMpo && ctx.tierMpo.name };
         if (t === 'planning_district') return { tier: 'planning_district', value: ctx.tierPlanningDistrict && ctx.tierPlanningDistrict.name };
-        if (t === 'county' || t === 'city') return { tier: 'county', value: ctx.jurisdictionName || null };
+        if (t === 'city') return { tier: 'county', value: (ctx.tierCity && ctx.tierCity.name) || ctx.jurisdictionName || null };
+        if (t === 'county') return { tier: 'county', value: ctx.jurisdictionName || null };
         return { tier: 'state', value: null };
     }
 
