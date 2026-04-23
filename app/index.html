@@ -21804,6 +21804,8 @@ function getBoundsForTier() {
 function getTierScopeKey() {
     const tier = jurisdictionContext.viewTier;
     switch (tier) {
+        case 'federal':
+            return 'federal_all';
         case 'state':
             return `state_${jurisdictionContext.stateCode || jurisdictionContext.stateFips || 'unknown'}`;
         case 'region':
@@ -21839,8 +21841,18 @@ function getTierScopeName() {
             const countyCount = m?.counties?.length || 0;
             return m ? `${m.shortName || m.name}${countyCount ? ` (${countyCount} counties)` : ''}` : 'MPO';
         }
+        case 'planning_district': {
+            const pd = jurisdictionContext.tierPlanningDistrict;
+            const countyCount = pd?.counties?.length || 0;
+            return pd ? `${pd.shortName || pd.name}${countyCount ? ` (${countyCount} counties)` : ''}` : 'Planning District';
+        }
+        case 'city': {
+            const c = jurisdictionContext.tierCity;
+            return c ? (c.name || c.id) : 'City/Town';
+        }
+        case 'federal':
+            return 'Nationwide';
         case 'county':
-        case 'city':
         default:
             return jurisdictionContext.jurisdictionName || 'County';
     }
