@@ -113,7 +113,7 @@ function decodeUrl(url) {
 }
 
 async function testTextSearchIlike() {
-    console.log('\nA. Text search ilike OR clause');
+    console.log('\nA. Text search ilike OR clause (narrowed to 2 columns)');
     const ctx = loadClient();
     const calls = stubFetch(ctx, []);
     const c = makeClient(ctx);
@@ -123,9 +123,11 @@ async function testTextSearchIlike() {
     const u = decodeUrl(url);
     assertIncludes(u, 'rte_name.ilike.*main st*', 'ilike on rte_name');
     assertIncludes(u, 'collision_type.ilike.*main st*', 'ilike on collision_type');
-    assertIncludes(u, 'document_nbr.ilike.*main st*', 'ilike on document_nbr');
-    assertIncludes(u, 'intersection_name.ilike.*main st*', 'ilike on intersection_name');
-    assertIncludes(u, 'weather_condition.ilike.*main st*', 'ilike on weather_condition');
+    // Phase 4 narrowed text-search columns to avoid PostgreSQL statement timeouts
+    // on large jurisdictions (Sussex/86K rows). Assert the slow columns are OUT.
+    assertNotIncludes(u, 'document_nbr.ilike', 'document_nbr removed from ILIKE (server-side trigram index needed)');
+    assertNotIncludes(u, 'intersection_name.ilike', 'intersection_name removed from ILIKE');
+    assertNotIncludes(u, 'weather_condition.ilike', 'weather_condition removed from ILIKE');
 }
 
 async function testNodeFilter() {

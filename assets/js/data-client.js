@@ -19,7 +19,7 @@ class CrashLensDataClient {
     supabaseUrl:  'https://srv1503081.hstgr.cloud/rest/v1',
     supabaseKey:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc0OTEyNDczLCJleHAiOjIwOTAyNzI0NzN9.5arUDeH3ccQ9O-UK57wFu7w1jKaIoIq3uroqithXjQs',
     r2BaseUrl:    'https://data.aicreatesai.com',
-    timeout:      15000,   // 15s for Supabase, then fallback
+    timeout:      30000,   // 30s for Supabase (text ILIKE on large jurisdictions can take >15s), then fallback
     mapLimit:     10000,   // max crash dots per viewport (raised for Phase 3 viewport queries)
     pageSize:     25,      // rows per page for detail tables
     preferSupabase: true,
@@ -515,13 +515,15 @@ class CrashLensDataClient {
     if (filters.dateFrom) andParts.push(`crash_date.gte.${filters.dateFrom}`);
     if (filters.dateTo)   andParts.push(`crash_date.lte.${filters.dateTo}`);
 
-    // Text search across route/collision/doc_nbr/intersection/weather
+    // Text search — narrowed to the two columns that actually matter (rte_name,
+    // collision_type). Searching all 5 columns (doc_nbr/intersection/weather)
+    // triggered `canceling statement due to statement timeout` on 86K-row
+    // Sussex because the leading-wildcard ILIKE forces a full scan per column.
+    // Until trigram/GIN indexes exist server-side, keep the scan narrow.
     if (filters.text && String(filters.text).trim()) {
       const t = this._escapeIlike(filters.text);
-      // Use lowercase pattern — PostgREST ilike is case-insensitive but PostgREST
-      // parses `*` as a wildcard in ilike filters.
       const pattern = `*${t}*`;
-      allFilters.or = `(rte_name.ilike.${pattern},collision_type.ilike.${pattern},document_nbr.ilike.${pattern},intersection_name.ilike.${pattern},weather_condition.ilike.${pattern})`;
+      allFilters.or = `(rte_name.ilike.${pattern},collision_type.ilike.${pattern})`;
     }
 
     if (filters.pedBike === 'either') {
@@ -682,22 +684,47 @@ class CrashLensDataClient {
   //  R2 FALLBACK
   // ─────────────────────────────────────────────────────────
 
-  /** Load parquet from R2 — delegates to existing hyparquet loader */
+  /**
+   * Load crashes from R2 as a .parquet file.
+   *
+   * Policy (2026-04-23): R2 crash data is `.parquet` only — not `.parquet.gz`,
+   * not `.csv`. The app's global _parseParquetGz() tolerates both raw and
+   * gzipped bytes (it sniffs the 0x1F 0x8B magic bytes), so we delegate to
+   * it and let it decide. We NEVER fall back to `.csv` — if the .parquet
+   * isn't there, the fetch throws.
+   */
   async _r2LoadCrashes(tier, value) {
-    const path = this._r2Path(tier, value);
+    const path = this._r2Path(tier, value);        // always ends in .parquet
     const url = `${this.r2BaseUrl}/${path}`;
 
-    // Use existing parquet loader if available
-    if (typeof window !== 'undefined' && window.loadParquetFromUrl) {
-      return window.loadParquetFromUrl(url);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`R2 parquet fetch failed (${resp.status}): ${url}`);
+    const buf = await resp.arrayBuffer();
+
+    // Prefer the app's shared parquet parser so we match the main pipeline's
+    // column parsing exactly (Title Case keys, same hyparquet version).
+    // Other modules reference `_parseParquetGz` as a bare global — do the same
+    // so we work regardless of whether it's attached to window or not.
+    const appParser =
+      (typeof window !== 'undefined' && window._parseParquetGz) ||
+      (typeof globalThis !== 'undefined' && globalThis._parseParquetGz) ||
+      null;
+    if (typeof appParser === 'function') {
+      const { rows } = await appParser(buf);
+      return rows;
     }
 
-    // Fallback: fetch as CSV (legacy support)
-    const csvUrl = url.replace('.parquet', '.csv');
-    const resp = await fetch(csvUrl);
-    if (!resp.ok) throw new Error(`R2 load failed: ${resp.status}`);
-    const text = await resp.text();
-    return this._parseCSV(text);
+    // Test / Node environments: inline hyparquet — same logic as the in-app parser.
+    const hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
+    const meta = hp.parquetMetadata(buf);
+    const fields = meta.schema.slice(1).map(s => s.name);
+    let rawRows;
+    await hp.parquetRead({ file: buf, onComplete: data => { rawRows = data; } });
+    return rawRows.map(r => {
+      const obj = {};
+      for (let j = 0; j < fields.length; j++) obj[fields[j]] = r[j] != null ? String(r[j]) : '';
+      return obj;
+    });
   }
 
   /** Build R2 path for a tier/value */
