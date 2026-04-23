@@ -23151,20 +23151,28 @@ function buildLocalFallbackPaths(r2NativePath) {
  * @returns {Promise<Response>} Response with _dataFormat property ('parquet.gz'|'csv.gz'|'csv')
  */
 async function fetchCsvWithFallback(url, opts) {
-    // Build ordered list of URLs to try: parquet.gz → csv.gz → csv
+    // Build ordered list of URLs to try: parquet → parquet.gz → csv.gz → csv
     const candidates = [];
-    if (url.endsWith('.csv.gz')) {
-        // Try parquet.gz first (replace .csv.gz with .parquet.gz)
+    if (url.endsWith('.parquet')) {
+        // State-tier uncompressed parquet is the primary format on R2
+        candidates.push({ url: url,                            format: 'parquet' });
+        candidates.push({ url: url + '.gz',                    format: 'parquet.gz' });
+        candidates.push({ url: url.slice(0, -8) + '.csv.gz',   format: 'csv.gz' });
+        candidates.push({ url: url.slice(0, -8) + '.csv',      format: 'csv' });
+    } else if (url.endsWith('.csv.gz')) {
+        candidates.push({ url: url.slice(0, -7) + '.parquet',    format: 'parquet' });
         candidates.push({ url: url.slice(0, -7) + '.parquet.gz', format: 'parquet.gz' });
-        candidates.push({ url: url, format: 'csv.gz' });
-        candidates.push({ url: url.slice(0, -3), format: 'csv' }); // strip .gz
+        candidates.push({ url: url,                              format: 'csv.gz' });
+        candidates.push({ url: url.slice(0, -3),                 format: 'csv' }); // strip .gz
     } else if (url.endsWith('.parquet.gz')) {
-        candidates.push({ url: url, format: 'parquet.gz' });
-        candidates.push({ url: url.slice(0, -11) + '.csv.gz', format: 'csv.gz' });
-        candidates.push({ url: url.slice(0, -11) + '.csv', format: 'csv' });
+        candidates.push({ url: url,                              format: 'parquet.gz' });
+        candidates.push({ url: url.slice(0, -3),                 format: 'parquet' });
+        candidates.push({ url: url.slice(0, -11) + '.csv.gz',    format: 'csv.gz' });
+        candidates.push({ url: url.slice(0, -11) + '.csv',       format: 'csv' });
     } else if (url.endsWith('.csv')) {
-        candidates.push({ url: url + '.gz'.replace('.csv.gz', '.parquet.gz'), format: 'parquet.gz' });
-        candidates.push({ url: url, format: 'csv' });
+        candidates.push({ url: url.slice(0, -4) + '.parquet',    format: 'parquet' });
+        candidates.push({ url: url.slice(0, -4) + '.parquet.gz', format: 'parquet.gz' });
+        candidates.push({ url: url,                              format: 'csv' });
     } else {
         // Unknown extension — try as-is
         candidates.push({ url: url, format: 'csv' });
@@ -24079,13 +24087,15 @@ function getActiveRoadTypeSuffix(tier) {
 
     if (activeTier === 'state' || activeTier === 'federal' || activeTier === 'region') {
         // State/Federal/Region: DOT Roads, Non-DOT Roads, All Roads
+        // R2 files live under the tier folder (_state/, _national/, _region/<id>/)
+        // with state-agnostic names: all_roads.parquet, dot_roads.parquet, non_dot_roads.parquet
         const dotMap = {
             'countyOnly':      'dot_roads',
             'cityOnly':        'city_roads',
             'countyPlusVDOT':  'non_dot_roads',
-            'allRoads':        activeTier === 'state' ? 'statewide_all_roads' : 'all_roads'
+            'allRoads':        'all_roads'
         };
-        return dotMap[filterValue] || (activeTier === 'state' ? 'statewide_all_roads' : 'all_roads');
+        return dotMap[filterValue] || 'all_roads';
     }
 
     // County, MPO: County Roads, City Roads, No Interstate, All Roads
@@ -24162,7 +24172,8 @@ function getDataFilePath() {
 
     // ── State tier ──
     if (tier === 'state') {
-        return `${r2Prefix}/_state/${roadType}.csv.gz`;
+        // R2 publishes statewide data as uncompressed parquet: {state}/_state/{road_type}.parquet
+        return `${r2Prefix}/_state/${roadType}.parquet`;
     }
 
     // ── Region tier ──
@@ -31950,17 +31961,30 @@ async function autoLoadCrashData(skipCache = false) {
         }
     }
 
-    // Build data file path AFTER state correction to ensure correct R2 prefix
-    const correctedR2Prefix = appConfig?.states?.[activeStateKey]?.r2Prefix || activeStateKey;
-    const roadType = getActiveRoadTypeSuffix(typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county');
-    let r2JurisdictionPath = activeJurisdiction;
-    const stAbbr = appConfig?.states?.[activeStateKey]?.abbreviation?.toLowerCase() || '';
-    if (stAbbr && activeJurisdiction.startsWith(stAbbr + '_')) {
-        r2JurisdictionPath = activeJurisdiction.substring(stAbbr.length + 1);
+    // Build data file path AFTER state correction to ensure correct R2 prefix.
+    // Delegate to the tier-aware helper getDataFilePath() — it is tier-aware and picks
+    // the right folder/suffix/extension per View Level (State→_state/all_roads.parquet,
+    // County→{county}/all_roads.csv.gz, etc.). `tier` is declared earlier in this fn.
+    const dataFilePath = getDataFilePath();
+
+    // r2JurisdictionPath is used downstream for the manifest-availability check.
+    // For non-county tiers, use the tier folder sentinel so manifest lookups don't
+    // accidentally match a county slug.
+    let r2JurisdictionPath;
+    if      (tier === 'state')              r2JurisdictionPath = '_state';
+    else if (tier === 'federal')            r2JurisdictionPath = '_national';
+    else if (tier === 'region')             r2JurisdictionPath = '_region';
+    else if (tier === 'mpo')                r2JurisdictionPath = '_mpo';
+    else if (tier === 'planning_district')  r2JurisdictionPath = '_planning_district';
+    else if (tier === 'city')               r2JurisdictionPath = '_city';
+    else {
+        r2JurisdictionPath = activeJurisdiction;
+        const stAbbr = appConfig?.states?.[activeStateKey]?.abbreviation?.toLowerCase() || '';
+        if (stAbbr && activeJurisdiction.startsWith(stAbbr + '_')) {
+            r2JurisdictionPath = activeJurisdiction.substring(stAbbr.length + 1);
+        }
+        r2JurisdictionPath = r2JurisdictionPath.toLowerCase();
     }
-    // Normalize to lowercase for R2 case-sensitive paths
-    r2JurisdictionPath = r2JurisdictionPath.toLowerCase();
-    const dataFilePath = `${correctedR2Prefix}/${r2JurisdictionPath}/${roadType}.csv.gz`;
     console.log('[AutoLoad] Loading data from:', dataFilePath);
 
     const r2Availability = checkR2DataAvailability(activeStateKey, r2JurisdictionPath);
@@ -32031,6 +32055,13 @@ async function autoLoadCrashData(skipCache = false) {
         })
         .then(response => {
             if (!response.ok) {
+                // Local file fallbacks only make sense for county-tier data (filenames
+                // like sussex_all_roads.csv). Skip them for State/Federal/Region/MPO/PD/City
+                // tiers — those scopes have no local equivalent and the attempts just
+                // generate noise 404s in the console.
+                if (tier !== 'county') {
+                    return response;
+                }
                 // R2 is inaccessible (403/CORS/network) - try local fallback paths
                 console.warn(`[AutoLoad] R2 fallback failed (HTTP ${response.status}), trying local paths...`);
                 const localPaths = buildLocalFallbackPaths(dataFilePath);
@@ -32054,11 +32085,16 @@ async function autoLoadCrashData(skipCache = false) {
                 throw new Error(`Data not found (tried R2 and ${buildLocalFallbackPaths(dataFilePath).length} local paths)`);
             }
 
-            // Determine format from response tag (set by fetchCsvWithFallback) or URL
+            // Determine format from response tag (set by fetchCsvWithFallback) or URL.
+            // Bare .parquet is used by statewide files (e.g., delaware/_state/all_roads.parquet).
+            // Bare .parquet.gz is used by older county uploads. Both are routed to the
+            // parquet parser, which auto-detects gzip wrapping.
             const dataFormat = response._dataFormat ||
-                (response.url && response.url.endsWith('.parquet.gz') ? 'parquet.gz' : 'csv');
+                (response.url && response.url.endsWith('.parquet.gz') ? 'parquet.gz' :
+                 response.url && response.url.endsWith('.parquet')    ? 'parquet'    :
+                 'csv');
 
-            if (dataFormat === 'parquet.gz') {
+            if (dataFormat === 'parquet.gz' || dataFormat === 'parquet') {
                 // ── Parquet path: read as ArrayBuffer, parse with hyparquet ──
                 console.log('%c[AutoLoad] Parquet data detected, parsing...', 'color: #8b5cf6; font-weight: bold');
                 return response.arrayBuffer().then(async (arrayBuffer) => {
@@ -32325,11 +32361,23 @@ async function autoLoadCrashData(skipCache = false) {
             showFilterLoadingState(false);  // Hide loading state on error
             updateDataConnectionStatus('disconnected');
             logConnectionEvent('load_failed', error.message || 'File not found');
-            const availSummary = getR2DataAvailabilitySummary();
-            showAutoLoadFallback(
-                `No crash data available for ${jurisdictionName}. ${availSummary}. ` +
-                `You can upload a CSV file manually or run the data pipeline to add this jurisdiction.`
-            );
+            // Tier-aware failure message — the county-dataset availability summary is
+            // misleading when the user asked for a non-county scope.
+            const stateName = appConfig?.states?.[activeStateKey]?.name || activeStateKey;
+            let msg;
+            if (tier === 'state') {
+                msg = `Statewide data for ${stateName} could not be loaded from R2 (${dataFilePath}). ` +
+                      `If this is a new state, run the pipeline to publish {state}/_state/all_roads.parquet.`;
+            } else if (tier === 'federal') {
+                msg = `Nationwide data could not be loaded from R2 (${dataFilePath}).`;
+            } else if (tier === 'region' || tier === 'mpo' || tier === 'planning_district' || tier === 'city') {
+                msg = `Data for the selected ${tier.replace('_', ' ')} could not be loaded from R2 (${dataFilePath}).`;
+            } else {
+                const availSummary = getR2DataAvailabilitySummary();
+                msg = `No crash data available for ${jurisdictionName}. ${availSummary}. ` +
+                      `You can upload a CSV file manually or run the data pipeline to add this jurisdiction.`;
+            }
+            showAutoLoadFallback(msg);
         });
 }
 
