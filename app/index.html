@@ -153,6 +153,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .tab-content{display:none}.tab-content.active{display:block}
 .card{background:var(--white);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem;box-shadow:var(--shadow);border:1px solid var(--gray-light)}
 .card-title{font-size:1rem;font-weight:600;margin-bottom:.75rem;color:var(--dark);display:flex;align-items:center;gap:.5rem}
+.card-collapsible>.card-title{cursor:pointer;user-select:none;margin-bottom:.75rem}
+.card-collapsible>.card-title:hover{color:var(--primary)}
+.card-collapsible>.card-title .card-collapse-arrow{margin-left:auto;font-size:.8rem;color:var(--gray);transition:transform .2s}
+.card-collapsible.collapsed>.card-title{margin-bottom:0}
+.card-collapsible.collapsed>.card-title .card-collapse-arrow{transform:rotate(-90deg)}
+.card-collapsible.collapsed>.card-collapsible-body{display:none}
 .upload-zone{border:2px dashed var(--border);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;cursor:pointer;background:var(--light);transition:all .3s}
 .upload-zone:hover,.upload-zone.dragover{border-color:var(--primary);background:var(--primary-light)}
 .upload-zone h2{font-size:1.3rem;margin-bottom:.4rem;color:var(--dark)}
@@ -5399,8 +5405,9 @@ Import
 
 
 <!-- Data Connection Status Card -->
-<div class="card" id="dataConnectionCard" style="display:none">
-<div class="card-title"><span aria-hidden="true">📊</span> Data Connection Status</div>
+<div class="card card-collapsible" id="dataConnectionCard" style="display:none">
+<div class="card-title" role="button" tabindex="0" aria-expanded="true" aria-controls="dataConnectionCardBody" onclick="toggleCollapsibleCard('dataConnectionCard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleCollapsibleCard('dataConnectionCard')}"><span aria-hidden="true">📊</span> Data Connection Status<span class="card-collapse-arrow" aria-hidden="true">▼</span></div>
+<div class="card-collapsible-body" id="dataConnectionCardBody">
 <div id="dataConnectionStatus" style="padding:.5rem 0">
 <div style="display:flex;flex-wrap:wrap;gap:1.5rem">
 <div class="data-stat-item">
@@ -5431,10 +5438,12 @@ Import
 </div>
 </div>
 </div>
+</div>
 
 <!-- Cache Status Card -->
-<div class="card" id="cacheStatusCard" style="display:none;margin-top:1rem">
-<div class="card-title"><span aria-hidden="true">💾</span> Data Cache Status</div>
+<div class="card card-collapsible" id="cacheStatusCard" style="display:none;margin-top:1rem">
+<div class="card-title" role="button" tabindex="0" aria-expanded="true" aria-controls="cacheStatusCardBody" onclick="toggleCollapsibleCard('cacheStatusCard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleCollapsibleCard('cacheStatusCard')}"><span aria-hidden="true">💾</span> Data Cache Status<span class="card-collapse-arrow" aria-hidden="true">▼</span></div>
+<div class="card-collapsible-body" id="cacheStatusCardBody">
 <div style="padding:.5rem 0">
 <div style="display:flex;flex-wrap:wrap;gap:1.5rem">
 <div class="data-stat-item">
@@ -5456,6 +5465,7 @@ Cached data loads instantly. Use "Refresh" button above to fetch fresh data from
 <div style="margin-top:.75rem;display:flex;gap:.5rem">
 <button class="btn-soft btn-soft-secondary btn-soft-sm" onclick="crashCacheClearAll()" title="Clear all cached data">🗑️ Clear Cache</button>
 <button class="btn-soft btn-soft-secondary btn-soft-sm" onclick="showCacheStats()" title="View cache statistics">📊 Stats</button>
+</div>
 </div>
 </div>
 </div>
@@ -25837,6 +25847,39 @@ function logConnectionEvent(type, message) {
         connectionState.connectionHistory.shift();
     }
 }
+
+// Toggle collapsible card (used by Data Connection and Data Cache status cards)
+function toggleCollapsibleCard(cardId) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+    const collapsed = card.classList.toggle('collapsed');
+    const title = card.querySelector('.card-title');
+    if (title) title.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    try { localStorage.setItem('cl-collapsed-' + cardId, collapsed ? '1' : '0'); } catch (e) {}
+}
+
+// Restore collapsible card states from localStorage on load
+(function restoreCollapsibleCardStates() {
+    function apply() {
+        ['dataConnectionCard', 'cacheStatusCard'].forEach(function(id) {
+            try {
+                if (localStorage.getItem('cl-collapsed-' + id) === '1') {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.classList.add('collapsed');
+                        const title = el.querySelector('.card-title');
+                        if (title) title.setAttribute('aria-expanded', 'false');
+                    }
+                }
+            } catch (e) {}
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', apply);
+    } else {
+        apply();
+    }
+})();
 
 // Refresh data connection (show current status)
 function refreshDataConnection() {
