@@ -85789,6 +85789,17 @@ function loadLocationForCMF() {
             .then(rows => {
                 // Discard if user has picked another location since
                 if (reqToken !== cmfState._locReqToken) return;
+                // Empty-response guard: if aggregates say this location has crashes but
+                // Supabase returns 0 rows, the column format differs between the R2 CSV
+                // and the Supabase `crashes` table. Fall back to sampleRows.
+                if ((rows || []).length === 0 && (cmfState.aggregateCount || 0) > 0 && crashState.sampleRows?.length) {
+                    console.log('[CMF] Supabase returned 0 rows for', name, '— falling back to sampleRows');
+                    cmfState.locationCrashes = crashState.sampleRows.filter(row =>
+                        type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name
+                    );
+                    _finalizeCMFAfterLocationLoad();
+                    return;
+                }
                 cmfState.locationCrashes = rows || [];
                 _finalizeCMFAfterLocationLoad();
             })
@@ -104971,13 +104982,14 @@ document.addEventListener('crashDataLoaded', () => {
 // WARRANTS TAB FUNCTIONS
 // ============================================================
 
-// No-op stub: earlier code calls updateWarrantAPIKeyStatus() during
-// initWarrantsTab(), but the real implementation was never added and the
-// reference throws `ReferenceError`, which halts tab init and blocks
-// Phase 4 Warrants testing. Declared on window so it survives even if
-// another script tries to replace it.
+// No-op stubs: both of these are called by Warrants flow but never defined
+// anywhere. Their ReferenceErrors halt tab init / location load and block
+// Phase 4 verification. Guarded so any real implementation added later wins.
 if (typeof window.updateWarrantAPIKeyStatus !== 'function') {
     window.updateWarrantAPIKeyStatus = function updateWarrantAPIKeyStatus() { /* no-op */ };
+}
+if (typeof window.loadWarrantImagery !== 'function') {
+    window.loadWarrantImagery = function loadWarrantImagery() { /* no-op */ };
 }
 
 // Initialize Warrants Tab
@@ -105741,7 +105753,16 @@ function selectWarrantLocation(type, name) {
             ? CL.data.supabaseBridge.resolveTier()
             : { tier: 'state', value: null };
         window.crashLensClient.getCrashesByLocation(tierInfo.tier, tierInfo.value, type, name)
-            .then(rows => loadLocationDataForWarrants(name, type, rows || [], aggregateCount, displayName))
+            .then(rows => {
+                // Empty-response guard (see main entry point for explanation)
+                if ((rows || []).length === 0 && aggregateCount > 0 && crashState.sampleRows?.length) {
+                    console.log('[Warrant] Supabase returned 0 rows for', name, '— falling back to sampleRows');
+                    const fallback = crashState.sampleRows.filter(row => type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name);
+                    loadLocationDataForWarrants(name, type, fallback, aggregateCount, displayName);
+                    return;
+                }
+                loadLocationDataForWarrants(name, type, rows || [], aggregateCount, displayName);
+            })
             .catch(err => {
                 console.warn('[Phase4] Warrants Supabase location load failed, falling back to sampleRows:', err && err.message);
                 const crashes = (crashState.sampleRows || []).filter(row => type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name);
@@ -105816,7 +105837,18 @@ function loadLocationForWarrants() {
             : { tier: 'state', value: null };
         window.crashLensClient.getCrashesByLocation(tierInfo.tier, tierInfo.value, type, name)
             .then(rows => {
-                console.log('[Warrant] Supabase location load:', { type, name, rows: rows.length });
+                // Empty-response guard: if aggregates say this location has crashes but
+                // Supabase returns 0 rows, the rte_name/node column format differs between
+                // the R2 CSV and the Supabase `crashes` table (Delaware: `DE 18` vs server-
+                // side normalised form). Fall back to sampleRows silently — Phase 4 is a
+                // performance optimisation, not a correctness change.
+                if ((rows || []).length === 0 && aggregateCount > 0 && crashState.sampleRows?.length) {
+                    console.log('[Warrant] Supabase returned 0 rows for', name, '— falling back to sampleRows');
+                    const fallback = crashState.sampleRows.filter(row => type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name);
+                    loadLocationDataForWarrants(name, type, fallback, aggregateCount, displayName);
+                    return;
+                }
+                console.log('[Warrant] Supabase location load:', { type, name, rows: (rows || []).length });
                 loadLocationDataForWarrants(name, type, rows || [], aggregateCount, displayName);
             })
             .catch(err => {
