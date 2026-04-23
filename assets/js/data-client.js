@@ -202,9 +202,31 @@ class CrashLensDataClient {
   }
 
   /**
+   * Canonical form of a route/node name: uppercased, stripped of every
+   * non-alphanumeric character. Used to compare values across the
+   * client-side CSV and server-side Postgres when formatting rules differ.
+   *   'DE 18'  → 'DE18'
+   *   'DE-18'  → 'DE18'
+   *   'DE 18 ' → 'DE18'
+   *   'SR 1'   → 'SR1'    (note: does NOT match 'SR0001' / zero-padding)
+   */
+  static canonicalLocationName(s) {
+    return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  /**
    * Fetch ALL crash rows for a specific location (route or node) within a tier.
    * Used by CMF & Warrants tabs which need the complete set of location crashes
    * for profile/pattern analysis — pagination would break those aggregates.
+   *
+   * Resilience strategy for cross-state name-format drift:
+   *   1. Try exact match: rte_name=eq.<value>. Fast, uses b-tree index.
+   *   2. If 0 rows AND the value contains separators (space/dash/dot/underscore),
+   *      retry with ILIKE — replace run of separators with a single `*` wildcard
+   *      so 'DE 18' matches 'DE-18', 'DE18', 'DE  18', etc.
+   *   3. Verify the ILIKE response client-side by canonicalising each row's
+   *      name (strip non-alphanumerics, uppercase) — eliminates false
+   *      positives like 'SR 1' accidentally matching 'SR 11'.
    *
    * @param {string} tier - 'county'|'state'|...
    * @param {string} tierValue - jurisdiction name (e.g. 'Kent')
@@ -214,13 +236,51 @@ class CrashLensDataClient {
    * @returns {Promise<Array>} Array of rows (Title Case keys, matching COL)
    */
   async getCrashesByLocation(tier, tierValue, locationType, locationValue, maxRows) {
-    const filters = { all: true, maxRows: maxRows || 10000 };
-    if (locationType === 'route') filters.route = locationValue;
-    else if (locationType === 'node') filters.node = locationValue;
-    else throw new Error('locationType must be "route" or "node"');
+    if (locationType !== 'route' && locationType !== 'node') {
+      throw new Error('locationType must be "route" or "node"');
+    }
+    const cap = maxRows || 10000;
 
-    const data = await this.getCrashes(tier, tierValue, filters);
-    return data.rows || [];
+    // Stage 1: exact match
+    const exactFilters = { all: true, maxRows: cap };
+    if (locationType === 'route') exactFilters.route = locationValue;
+    else exactFilters.node = locationValue;
+    const exact = await this.getCrashes(tier, tierValue, exactFilters);
+    const exactRows = exact.rows || [];
+    if (exactRows.length > 0) return exactRows;
+
+    // Stage 2 + 3: fuzzy ILIKE retry with canonical verification.
+    // Only bother if the value has a separator we could normalise away.
+    const raw = String(locationValue || '');
+    const pattern = raw.replace(/[\s\-_.]+/g, '*').trim();
+    if (!pattern || pattern === raw) return exactRows; // nothing to fuzz
+
+    const fuzzyFilters = { all: true, maxRows: cap };
+    if (locationType === 'route') fuzzyFilters.routePattern = pattern;
+    else fuzzyFilters.nodePattern = pattern;
+
+    let fuzzyRows;
+    try {
+      const fuzzy = await this.getCrashes(tier, tierValue, fuzzyFilters);
+      fuzzyRows = fuzzy.rows || [];
+    } catch (e) {
+      console.warn('[DataClient] Fuzzy location retry failed:', e.message);
+      return exactRows; // fall through to caller's own fallback (e.g. sampleRows)
+    }
+
+    // Client-side canonical verification
+    const canonicalTarget = CrashLensDataClient.canonicalLocationName(raw);
+    const key = locationType === 'route' ? 'RTE Name' : 'Node';
+    const verified = fuzzyRows.filter(r =>
+      CrashLensDataClient.canonicalLocationName(r[key]) === canonicalTarget
+    );
+
+    if (verified.length > 0) {
+      console.log(
+        `[DataClient] Fuzzy match recovered ${verified.length} rows for ${locationType}='${raw}' via pattern '${pattern}'`
+      );
+    }
+    return verified;
   }
 
   /**
@@ -487,6 +547,11 @@ class CrashLensDataClient {
     if (filters.year) allFilters.crash_year = `eq.${filters.year}`;
     if (filters.route) allFilters.rte_name = `eq.${filters.route}`;
     if (filters.node) allFilters.node = `eq.${filters.node}`;
+
+    // Fuzzy-match filters — used by getCrashesByLocation retry when exact
+    // matching fails due to route/node format drift between R2 CSV and Supabase.
+    if (filters.routePattern) allFilters.rte_name = `ilike.${filters.routePattern}`;
+    if (filters.nodePattern)  allFilters.node     = `ilike.${filters.nodePattern}`;
 
     // Severity: string or array (multi-severity via in.(...))
     if (filters.severity) {
