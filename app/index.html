@@ -48049,29 +48049,64 @@ function createChart(id, type, data, opts = {}) {
 // ============================================================
 // DASHBOARD SEARCH FUNCTIONS
 // ============================================================
+// Phase 4: server-paginated search via Supabase (window.crashLensClient).
+// Falls back to client-side sampleRows filtering if Supabase unavailable.
 
-let dashSearchResults = [];
+let dashSearchResults = [];           // Current PAGE of rows (server mode) or full results (fallback)
+let dashSearchTotal = 0;              // Total matching rows across all pages
 let dashCurrentSearchPage = 1;
+let dashSearchFilters = {};           // Last applied filters (used for pagination + export)
+let dashSearchMode = 'local';         // 'supabase' | 'local'
+let dashSearchInFlight = 0;           // Monotonic counter — guards against stale responses
+
+// Resolve current tier/value for Supabase queries via the supabase-bridge helper
+function _dashResolveTier() {
+    try {
+        if (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier) {
+            return CL.data.supabaseBridge.resolveTier();
+        }
+    } catch (e) { /* fall through */ }
+    return { tier: 'state', value: null };
+}
+
+// Read form inputs into a filters object accepted by data-client.getCrashes()
+function _dashReadFilters() {
+    return {
+        text: (document.getElementById('dashSearchText').value || '').trim(),
+        year: document.getElementById('dashSearchYear').value || null,
+        severity: document.getElementById('dashSearchSeverity').value || null,
+        pedBike: document.getElementById('dashSearchPedBike').value || null,
+    };
+}
+
+function _dashCanUseSupabase() {
+    return !!(window.crashLensClient && window.crashLensClient.supabaseKey);
+}
 
 function initDashboardSearch() {
-    if (!crashState.loaded) return;
-
-    // Populate year dropdown
+    // Populate year dropdown from whatever year list we have (crashState or state config)
     const yearSelect = document.getElementById('dashSearchYear');
-    if (yearSelect && crashState.years.length > 0) {
+    if (yearSelect && crashState.years && crashState.years.length > 0 && yearSelect.options.length <= 1) {
         yearSelect.innerHTML = '<option value="">All</option>' +
             crashState.years.map(y => `<option value="${y}">${y}</option>`).join('');
     }
 
-    // Initialize results only once
-    if (dashSearchResults.length === 0) {
-        dashSearchResults = [...crashState.sampleRows];
-        dashRenderSearchResults();
-    }
+    // Fire an initial (filter-less) search so the table is populated
+    dashSearchCrashes();
 }
 
-function dashSearchCrashes() {
-    // Guard: ensure sampleRows loaded before searching
+async function dashSearchCrashes() {
+    dashSearchFilters = _dashReadFilters();
+    dashCurrentSearchPage = 1;
+
+    if (_dashCanUseSupabase()) {
+        dashSearchMode = 'supabase';
+        await _dashFetchPage(1);
+        return;
+    }
+
+    // Fallback: client-side filtering on sampleRows
+    dashSearchMode = 'local';
     if (!crashState.sampleRowsLoaded || !crashState.sampleRows || crashState.sampleRows.length === 0) {
         if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
             showToast('Loading crash records for search...', 'info');
@@ -48079,26 +48114,46 @@ function dashSearchCrashes() {
         }
         return;
     }
-
-    const text = (document.getElementById('dashSearchText').value || '').toLowerCase();
-    const year = document.getElementById('dashSearchYear').value;
-    const sev = document.getElementById('dashSearchSeverity').value;
-    const pb = document.getElementById('dashSearchPedBike').value;
-
+    const f = dashSearchFilters;
+    const textLower = (f.text || '').toLowerCase();
     dashSearchResults = crashState.sampleRows.filter(row => {
-        if (year && String(row[COL.YEAR]) !== year) return false;
-        if (sev && (row[COL.SEVERITY]||'').charAt(0) !== sev) return false;
-        if (pb === 'ped' && !isYes(row[COL.PED])) return false;
-        if (pb === 'bike' && !isYes(row[COL.BIKE])) return false;
-        if (text) {
+        if (f.year && String(row[COL.YEAR]) !== f.year) return false;
+        if (f.severity && (row[COL.SEVERITY]||'').charAt(0) !== f.severity) return false;
+        if (f.pedBike === 'ped' && !isYes(row[COL.PED])) return false;
+        if (f.pedBike === 'bike' && !isYes(row[COL.BIKE])) return false;
+        if (textLower) {
             const searchable = [row[COL.ID], row[COL.ROUTE], row[COL.COLLISION], row[COL.WEATHER], row[COL.NODE]].join(' ').toLowerCase();
-            if (!searchable.includes(text)) return false;
+            if (!searchable.includes(textLower)) return false;
         }
         return true;
     });
-
-    dashCurrentSearchPage = 1;
+    dashSearchTotal = dashSearchResults.length;
     dashRenderSearchResults();
+}
+
+// Fetch a specific page from Supabase using the last applied filter set
+async function _dashFetchPage(page) {
+    const t = _dashResolveTier();
+    const filters = Object.assign({}, dashSearchFilters, { page: page, pageSize: PAGE_SIZE });
+    const myReq = ++dashSearchInFlight;
+
+    const tbody = document.getElementById('dashSearchBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--gray);padding:1rem">Loading…</td></tr>';
+
+    try {
+        const data = await window.crashLensClient.getCrashes(t.tier, t.value, filters);
+        // Ignore stale responses (older than the most recent in-flight request)
+        if (myReq !== dashSearchInFlight) return;
+        dashSearchResults = data.rows || [];
+        dashSearchTotal = data.total || dashSearchResults.length;
+        dashCurrentSearchPage = page;
+        dashRenderSearchResults();
+    } catch (e) {
+        console.warn('[Phase4] Dashboard search Supabase fetch failed:', e && e.message);
+        // One-time fallback to local filtering for this search
+        dashSearchMode = 'local';
+        dashSearchCrashes();
+    }
 }
 
 function dashClearSearch() {
@@ -48106,14 +48161,14 @@ function dashClearSearch() {
     document.getElementById('dashSearchYear').value = '';
     document.getElementById('dashSearchSeverity').value = '';
     document.getElementById('dashSearchPedBike').value = '';
-    dashSearchResults = [...crashState.sampleRows];
-    dashCurrentSearchPage = 1;
-    dashRenderSearchResults();
+    dashSearchCrashes();
 }
 
 function dashRenderSearchResults() {
-    const start = (dashCurrentSearchPage - 1) * PAGE_SIZE;
-    const page = dashSearchResults.slice(start, start + PAGE_SIZE);
+    // In Supabase mode, rows are already the current page. In local mode, slice here.
+    const page = (dashSearchMode === 'supabase')
+        ? dashSearchResults
+        : dashSearchResults.slice((dashCurrentSearchPage - 1) * PAGE_SIZE, dashCurrentSearchPage * PAGE_SIZE);
 
     const tbody = document.getElementById('dashSearchBody');
     if (!tbody) return;
@@ -48149,12 +48204,13 @@ function dashRenderSearchPagination() {
     const paginationEl = document.getElementById('dashSearchPagination');
     if (!paginationEl) return;
 
-    const totalPages = Math.ceil(dashSearchResults.length / PAGE_SIZE);
+    const total = dashSearchTotal || 0;
+    const totalPages = Math.ceil(total / PAGE_SIZE);
     if (totalPages <= 1) {
-        paginationEl.innerHTML = `<span style="color:var(--gray);font-size:.8rem">${dashSearchResults.length} results</span>`;
+        paginationEl.innerHTML = `<span style="color:var(--gray);font-size:.8rem">${total} results</span>`;
         return;
     }
-    let html = `<span style="color:var(--gray);font-size:.8rem;margin-right:.5rem">${dashSearchResults.length.toLocaleString()} results</span>`;
+    let html = `<span style="color:var(--gray);font-size:.8rem;margin-right:.5rem">${total.toLocaleString()} results</span>`;
     html += `<button class="page-btn" onclick="dashGoSearchPage(1)" ${dashCurrentSearchPage===1?'disabled':''}>«</button>`;
     html += `<button class="page-btn" onclick="dashGoSearchPage(${dashCurrentSearchPage-1})" ${dashCurrentSearchPage===1?'disabled':''}>‹</button>`;
     const start = Math.max(1, dashCurrentSearchPage - 2), end = Math.min(totalPages, dashCurrentSearchPage + 2);
@@ -48164,12 +48220,35 @@ function dashRenderSearchPagination() {
     paginationEl.innerHTML = html;
 }
 
-function dashGoSearchPage(p) { dashCurrentSearchPage = p; dashRenderSearchResults(); }
+function dashGoSearchPage(p) {
+    if (dashSearchMode === 'supabase') {
+        _dashFetchPage(p);
+    } else {
+        dashCurrentSearchPage = p;
+        dashRenderSearchResults();
+    }
+}
 
-function dashExportSearchCSV() {
-    if (!dashSearchResults.length) { alert('No results'); return; }
+async function dashExportSearchCSV() {
+    let rowsForExport = [];
+    if (dashSearchMode === 'supabase' && _dashCanUseSupabase()) {
+        // Bulk fetch all matching rows for export
+        try {
+            showToast('Exporting — fetching all matches…', 'info');
+            const t = _dashResolveTier();
+            const filters = Object.assign({}, dashSearchFilters, { all: true, maxRows: 50000 });
+            const data = await window.crashLensClient.getCrashes(t.tier, t.value, filters);
+            rowsForExport = data.rows || [];
+        } catch (e) {
+            console.warn('[Phase4] Bulk export fetch failed, using current page:', e && e.message);
+            rowsForExport = dashSearchResults;
+        }
+    } else {
+        rowsForExport = dashSearchResults;
+    }
+    if (!rowsForExport.length) { alert('No results'); return; }
     const headers = ['Date','Time','Severity','Route','Node','Collision Type','Weather','Light','Ped','Bike','Alcohol','Speed'];
-    const rows = dashSearchResults.map(r => [r[COL.DATE], r[COL.TIME], r[COL.SEVERITY], r[COL.ROUTE], r[COL.NODE], r[COL.COLLISION], r[COL.WEATHER], r[COL.LIGHT], r[COL.PED], r[COL.BIKE], r[COL.ALCOHOL], r[COL.SPEED]]);
+    const rows = rowsForExport.map(r => [r[COL.DATE], r[COL.TIME], r[COL.SEVERITY], r[COL.ROUTE], r[COL.NODE], r[COL.COLLISION], r[COL.WEATHER], r[COL.LIGHT], r[COL.PED], r[COL.BIKE], r[COL.ALCOHOL], r[COL.SPEED]]);
     const csv = [headers, ...rows].map(r => r.map(c => `"${c||''}"`).join(',')).join('\n');
     downloadFile(csv, 'dashboard_crash_search_results.csv', 'text/csv');
 }
@@ -65283,10 +65362,36 @@ document.addEventListener('click', function(e) {
 // ============================================================
 // ANALYSIS TAB SEARCH FUNCTIONS (Merged Search Feature)
 // ============================================================
+// Phase 4: server-paginated search via Supabase (window.crashLensClient).
+// Falls back to client-side sampleRows filtering if Supabase unavailable.
 
-let analysisSearchResults = [];
+let analysisSearchResults = [];       // Current PAGE of rows (server mode) or full results (fallback)
+let analysisSearchTotal = 0;
 let analysisCurrentSearchPage = 1;
+let analysisSearchFilters = {};
+let analysisSearchMode = 'local';
+let analysisSearchInFlight = 0;
 let analysisSelectedQuickLocation = null;
+
+function _analysisReadFilters() {
+    return {
+        text: (document.getElementById('analysisSearchText').value || '').trim(),
+        year: document.getElementById('analysisSearchYear').value || null,
+        severity: document.getElementById('analysisSearchSeverity').value || null,
+        pedBike: document.getElementById('analysisSearchPedBike').value || null,
+    };
+}
+function _analysisCanUseSupabase() {
+    return !!(window.crashLensClient && window.crashLensClient.supabaseKey);
+}
+function _analysisResolveTier() {
+    try {
+        if (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier) {
+            return CL.data.supabaseBridge.resolveTier();
+        }
+    } catch (e) { /* fall through */ }
+    return { tier: 'state', value: null };
+}
 
 function analysisQuickLocationFilter(searchText) {
     const resultsDiv = document.getElementById('analysisQuickLocationResults');
@@ -65396,26 +65501,61 @@ function analysisGoToCountermeasures() {
     }, 300);
 }
 
-function analysisSearchCrashes() {
-    const text = (document.getElementById('analysisSearchText').value || '').toLowerCase();
-    const year = document.getElementById('analysisSearchYear').value;
-    const sev = document.getElementById('analysisSearchSeverity').value;
-    const pb = document.getElementById('analysisSearchPedBike').value;
+async function analysisSearchCrashes() {
+    analysisSearchFilters = _analysisReadFilters();
+    analysisCurrentSearchPage = 1;
 
+    if (_analysisCanUseSupabase()) {
+        analysisSearchMode = 'supabase';
+        await _analysisFetchPage(1);
+        return;
+    }
+
+    analysisSearchMode = 'local';
+    if (!crashState.sampleRowsLoaded || !crashState.sampleRows || crashState.sampleRows.length === 0) {
+        if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
+            showToast('Loading crash records for search...', 'info');
+            CL.worker.ensureSampleRows().then(() => analysisSearchCrashes());
+        }
+        return;
+    }
+    const f = analysisSearchFilters;
+    const textLower = (f.text || '').toLowerCase();
     analysisSearchResults = crashState.sampleRows.filter(row => {
-        if (year && String(row[COL.YEAR]) !== year) return false;
-        if (sev && (row[COL.SEVERITY]||'').charAt(0) !== sev) return false;
-        if (pb === 'ped' && !isYes(row[COL.PED])) return false;
-        if (pb === 'bike' && !isYes(row[COL.BIKE])) return false;
-        if (text) {
+        if (f.year && String(row[COL.YEAR]) !== f.year) return false;
+        if (f.severity && (row[COL.SEVERITY]||'').charAt(0) !== f.severity) return false;
+        if (f.pedBike === 'ped' && !isYes(row[COL.PED])) return false;
+        if (f.pedBike === 'bike' && !isYes(row[COL.BIKE])) return false;
+        if (textLower) {
             const searchable = [row[COL.ID], row[COL.ROUTE], row[COL.COLLISION], row[COL.WEATHER], row[COL.NODE]].join(' ').toLowerCase();
-            if (!searchable.includes(text)) return false;
+            if (!searchable.includes(textLower)) return false;
         }
         return true;
     });
-
-    analysisCurrentSearchPage = 1;
+    analysisSearchTotal = analysisSearchResults.length;
     analysisRenderSearchResults();
+}
+
+async function _analysisFetchPage(page) {
+    const t = _analysisResolveTier();
+    const filters = Object.assign({}, analysisSearchFilters, { page: page, pageSize: PAGE_SIZE });
+    const myReq = ++analysisSearchInFlight;
+
+    const tbody = document.getElementById('analysisSearchBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--gray);padding:1rem">Loading…</td></tr>';
+
+    try {
+        const data = await window.crashLensClient.getCrashes(t.tier, t.value, filters);
+        if (myReq !== analysisSearchInFlight) return;
+        analysisSearchResults = data.rows || [];
+        analysisSearchTotal = data.total || analysisSearchResults.length;
+        analysisCurrentSearchPage = page;
+        analysisRenderSearchResults();
+    } catch (e) {
+        console.warn('[Phase4] Analysis search Supabase fetch failed:', e && e.message);
+        analysisSearchMode = 'local';
+        analysisSearchCrashes();
+    }
 }
 
 function analysisClearSearch() {
@@ -65423,14 +65563,13 @@ function analysisClearSearch() {
     document.getElementById('analysisSearchYear').value = '';
     document.getElementById('analysisSearchSeverity').value = '';
     document.getElementById('analysisSearchPedBike').value = '';
-    analysisSearchResults = [...crashState.sampleRows];
-    analysisCurrentSearchPage = 1;
-    analysisRenderSearchResults();
+    analysisSearchCrashes();
 }
 
 function analysisRenderSearchResults() {
-    const start = (analysisCurrentSearchPage - 1) * PAGE_SIZE;
-    const page = analysisSearchResults.slice(start, start + PAGE_SIZE);
+    const page = (analysisSearchMode === 'supabase')
+        ? analysisSearchResults
+        : analysisSearchResults.slice((analysisCurrentSearchPage - 1) * PAGE_SIZE, analysisCurrentSearchPage * PAGE_SIZE);
 
     document.getElementById('analysisSearchBody').innerHTML = page.map(r => {
         const flags = [];
@@ -65460,12 +65599,13 @@ function analysisRenderSearchResults() {
 }
 
 function analysisRenderSearchPagination() {
-    const totalPages = Math.ceil(analysisSearchResults.length / PAGE_SIZE);
+    const total = analysisSearchTotal || 0;
+    const totalPages = Math.ceil(total / PAGE_SIZE);
     if (totalPages <= 1) {
-        document.getElementById('analysisSearchPagination').innerHTML = `<span style="color:var(--gray);font-size:.8rem">${analysisSearchResults.length} results</span>`;
+        document.getElementById('analysisSearchPagination').innerHTML = `<span style="color:var(--gray);font-size:.8rem">${total} results</span>`;
         return;
     }
-    let html = `<span style="color:var(--gray);font-size:.8rem;margin-right:.5rem">${analysisSearchResults.length.toLocaleString()} results</span>`;
+    let html = `<span style="color:var(--gray);font-size:.8rem;margin-right:.5rem">${total.toLocaleString()} results</span>`;
     html += `<button class="page-btn" onclick="analysisGoSearchPage(1)" ${analysisCurrentSearchPage===1?'disabled':''}>«</button>`;
     html += `<button class="page-btn" onclick="analysisGoSearchPage(${analysisCurrentSearchPage-1})" ${analysisCurrentSearchPage===1?'disabled':''}>‹</button>`;
     const start = Math.max(1, analysisCurrentSearchPage - 2), end = Math.min(totalPages, analysisCurrentSearchPage + 2);
@@ -65475,30 +65615,47 @@ function analysisRenderSearchPagination() {
     document.getElementById('analysisSearchPagination').innerHTML = html;
 }
 
-function analysisGoSearchPage(p) { analysisCurrentSearchPage = p; analysisRenderSearchResults(); }
+function analysisGoSearchPage(p) {
+    if (analysisSearchMode === 'supabase') {
+        _analysisFetchPage(p);
+    } else {
+        analysisCurrentSearchPage = p;
+        analysisRenderSearchResults();
+    }
+}
 
-function analysisExportSearchCSV() {
-    if (!analysisSearchResults.length) { alert('No results'); return; }
+async function analysisExportSearchCSV() {
+    let rowsForExport = [];
+    if (analysisSearchMode === 'supabase' && _analysisCanUseSupabase()) {
+        try {
+            showToast('Exporting — fetching all matches…', 'info');
+            const t = _analysisResolveTier();
+            const filters = Object.assign({}, analysisSearchFilters, { all: true, maxRows: 50000 });
+            const data = await window.crashLensClient.getCrashes(t.tier, t.value, filters);
+            rowsForExport = data.rows || [];
+        } catch (e) {
+            console.warn('[Phase4] Bulk export fetch failed, using current page:', e && e.message);
+            rowsForExport = analysisSearchResults;
+        }
+    } else {
+        rowsForExport = analysisSearchResults;
+    }
+    if (!rowsForExport.length) { alert('No results'); return; }
     const headers = ['Date','Time','Severity','Route','Node','Collision Type','Weather','Light','Ped','Bike','Alcohol','Speed'];
-    const rows = analysisSearchResults.map(r => [r[COL.DATE], r[COL.TIME], r[COL.SEVERITY], r[COL.ROUTE], r[COL.NODE], r[COL.COLLISION], r[COL.WEATHER], r[COL.LIGHT], r[COL.PED], r[COL.BIKE], r[COL.ALCOHOL], r[COL.SPEED]]);
+    const rows = rowsForExport.map(r => [r[COL.DATE], r[COL.TIME], r[COL.SEVERITY], r[COL.ROUTE], r[COL.NODE], r[COL.COLLISION], r[COL.WEATHER], r[COL.LIGHT], r[COL.PED], r[COL.BIKE], r[COL.ALCOHOL], r[COL.SPEED]]);
     const csv = [headers, ...rows].map(r => r.map(c => `"${c||''}"`).join(',')).join('\n');
     downloadFile(csv, 'analysis_crash_search_results.csv', 'text/csv');
 }
 
 // Initialize Analysis tab search when data is loaded
 function initAnalysisSearch() {
-    if (!crashState.loaded) return;
-
-    // Populate year dropdown
+    // Populate year dropdown from whatever year list we have
     const yearSelect = document.getElementById('analysisSearchYear');
-    if (yearSelect && crashState.years.length > 0) {
+    if (yearSelect && crashState.years && crashState.years.length > 0 && yearSelect.options.length <= 1) {
         yearSelect.innerHTML = '<option value="">All</option>' +
             crashState.years.map(y => `<option value="${y}">${y}</option>`).join('');
     }
-
-    // Initialize results
-    analysisSearchResults = [...crashState.sampleRows];
-    analysisRenderSearchResults();
+    analysisSearchCrashes();
 }
 
 // Note: Analysis Summary content has been moved to Dashboard tab
@@ -85642,8 +85799,65 @@ function loadLocationForCMF() {
         : crashState.aggregates.byNode[name];
     cmfState.aggregateCount = aggData?.total || 0;
 
-    // Filter crashes for this location from sampleRows (for detailed analysis)
-    // Guard: if sampleRows not loaded yet, trigger lazy load then retry
+    // Phase 4: Prefer Supabase getCrashesByLocation() when available; otherwise fall
+    // back to filtering the in-memory sampleRows array (legacy path).
+    const _canSupabaseCMF = !!(window.crashLensClient && window.crashLensClient.supabaseKey);
+
+    const _finalizeCMFAfterLocationLoad = () => {
+        // Apply date filter to location crashes
+        filterCMFCrashesByDate();
+        // Update date filter status
+        updateCMFDateFilterStatus();
+        // Check sample size warning
+        checkCMFSampleSize();
+        // Extract road properties from first crash at location
+        extractRoadProperties();
+        // Build crash profile using filtered crashes
+        buildCMFCrashProfile();
+        displayCrashProfile();
+        // Update AI context indicator (so AI tab knows a location is selected)
+        updateAIContextIndicator();
+        // Auto-load asset deficiency data for this location
+        syncADFromCMF(true);
+    };
+
+    if (_canSupabaseCMF) {
+        // Stamp the request so stale responses from earlier selections are ignored
+        const reqToken = (cmfState._locReqToken = (cmfState._locReqToken || 0) + 1);
+        cmfState.locationCrashes = [];
+        const tierInfo = (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+            ? CL.data.supabaseBridge.resolveTier()
+            : { tier: 'state', value: null };
+        window.crashLensClient.getCrashesByLocation(tierInfo.tier, tierInfo.value, type, name)
+            .then(rows => {
+                // Discard if user has picked another location since
+                if (reqToken !== cmfState._locReqToken) return;
+                cmfState.locationCrashes = rows || [];
+                _finalizeCMFAfterLocationLoad();
+            })
+            .catch(err => {
+                console.warn('[Phase4] CMF Supabase location load failed, falling back to sampleRows:', err && err.message);
+                if (reqToken !== cmfState._locReqToken) return;
+                // Fallback path
+                if (crashState.sampleRowsLoaded && crashState.sampleRows && crashState.sampleRows.length) {
+                    cmfState.locationCrashes = crashState.sampleRows.filter(row =>
+                        type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name
+                    );
+                    _finalizeCMFAfterLocationLoad();
+                } else if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
+                    CL.worker.ensureSampleRows().then(() => {
+                        if (reqToken !== cmfState._locReqToken) return;
+                        cmfState.locationCrashes = crashState.sampleRows.filter(row =>
+                            type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name
+                        );
+                        _finalizeCMFAfterLocationLoad();
+                    });
+                }
+            });
+        return; // async path handles its own finalization
+    }
+
+    // Legacy path: filter in-memory sampleRows
     if (!crashState.sampleRowsLoaded || !crashState.sampleRows || crashState.sampleRows.length === 0) {
         cmfState.locationCrashes = [];
         if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
@@ -105555,7 +105769,22 @@ function selectWarrantLocation(type, name) {
     // Update search input with displayName (not just node number)
     document.getElementById('warrantLocationSearch').value = displayName;
 
-    // Find crashes for this location (handle both routes and nodes)
+    // Phase 4: Prefer Supabase for location crashes; fall back to sampleRows
+    if (window.crashLensClient && window.crashLensClient.supabaseKey) {
+        const tierInfo = (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+            ? CL.data.supabaseBridge.resolveTier()
+            : { tier: 'state', value: null };
+        window.crashLensClient.getCrashesByLocation(tierInfo.tier, tierInfo.value, type, name)
+            .then(rows => loadLocationDataForWarrants(name, type, rows || [], aggregateCount, displayName))
+            .catch(err => {
+                console.warn('[Phase4] Warrants Supabase location load failed, falling back to sampleRows:', err && err.message);
+                const crashes = (crashState.sampleRows || []).filter(row => type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name);
+                loadLocationDataForWarrants(name, type, crashes, aggregateCount, displayName);
+            });
+        return;
+    }
+
+    // Legacy path: filter sampleRows
     const crashes = crashState.sampleRows.filter(row => {
         if (type === 'route') {
             return row[COL.ROUTE] === name;
@@ -105614,7 +105843,25 @@ function loadLocationForWarrants() {
         displayName = formatRouteName(name);
     }
 
-    // Find crashes for this location (handle both routes and nodes)
+    // Phase 4: Prefer Supabase for location crashes; fall back to sampleRows
+    if (window.crashLensClient && window.crashLensClient.supabaseKey) {
+        const tierInfo = (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+            ? CL.data.supabaseBridge.resolveTier()
+            : { tier: 'state', value: null };
+        window.crashLensClient.getCrashesByLocation(tierInfo.tier, tierInfo.value, type, name)
+            .then(rows => {
+                console.log('[Warrant] Supabase location load:', { type, name, rows: rows.length });
+                loadLocationDataForWarrants(name, type, rows || [], aggregateCount, displayName);
+            })
+            .catch(err => {
+                console.warn('[Phase4] Warrants Supabase location load failed, falling back to sampleRows:', err && err.message);
+                const crashes = (crashState.sampleRows || []).filter(row => type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name);
+                loadLocationDataForWarrants(name, type, crashes, aggregateCount, displayName);
+            });
+        return;
+    }
+
+    // Legacy path: filter sampleRows
     const crashes = crashState.sampleRows.filter(row => {
         if (type === 'route') {
             return row[COL.ROUTE] === name;
@@ -105627,13 +105874,7 @@ function loadLocationForWarrants() {
         type, name,
         sampleRowsLength: crashState.sampleRows?.length,
         filteredCrashesLength: crashes?.length,
-        aggregateCount,
-        // Sample check: find matching rows manually to debug
-        manualMatchCount: crashState.sampleRows?.filter(r => r[COL.NODE] === name)?.length,
-        // Check data types
-        sampleNodeValue: crashState.sampleRows[0]?.[COL.NODE],
-        sampleNodeType: typeof crashState.sampleRows[0]?.[COL.NODE],
-        nameType: typeof name
+        aggregateCount
     });
 
     loadLocationDataForWarrants(name, type, crashes, aggregateCount, displayName);

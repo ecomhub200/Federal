@@ -175,7 +175,15 @@ class CrashLensDataClient {
    *
    * @param {string} tier
    * @param {string} value
-   * @param {object} filters - { year, severity, route, page }
+   * @param {object} filters - {
+   *     year, severity (string or array), route, node,
+   *     text (searches route/collision/doc_nbr/intersection/weather),
+   *     pedBike ('ped'|'bike'|'either'),
+   *     dateFrom (YYYY-MM-DD), dateTo (YYYY-MM-DD),
+   *     page, pageSize,
+   *     all (bool) — if true, bypass pagination and fetch up to maxRows rows,
+   *     maxRows (default 10000)
+   * }
    * @returns {Promise<{rows: Array, total: number, page: number}>}
    */
   async getCrashes(tier, value, filters = {}) {
@@ -191,6 +199,28 @@ class CrashLensDataClient {
     const rows = await this._r2LoadCrashes(tier, value);
     this._source = 'r2';
     return this._filterLocally(rows, filters);
+  }
+
+  /**
+   * Fetch ALL crash rows for a specific location (route or node) within a tier.
+   * Used by CMF & Warrants tabs which need the complete set of location crashes
+   * for profile/pattern analysis — pagination would break those aggregates.
+   *
+   * @param {string} tier - 'county'|'state'|...
+   * @param {string} tierValue - jurisdiction name (e.g. 'Kent')
+   * @param {string} locationType - 'route' or 'node'
+   * @param {string} locationValue - route name or node id
+   * @param {number} maxRows - safety cap (default 10000)
+   * @returns {Promise<Array>} Array of rows (Title Case keys, matching COL)
+   */
+  async getCrashesByLocation(tier, tierValue, locationType, locationValue, maxRows) {
+    const filters = { all: true, maxRows: maxRows || 10000 };
+    if (locationType === 'route') filters.route = locationValue;
+    else if (locationType === 'node') filters.node = locationValue;
+    else throw new Error('locationType must be "route" or "node"');
+
+    const data = await this.getCrashes(tier, tierValue, filters);
+    return data.rows || [];
   }
 
   /**
@@ -441,18 +471,91 @@ class CrashLensDataClient {
     });
   }
 
-  /** Query crashes table with pagination */
+  /** Escape an ilike pattern: PostgREST uses `*` as wildcard, comma/parens are reserved */
+  _escapeIlike(s) {
+    return String(s || '').replace(/[,()]/g, ' ').trim();
+  }
+
+  /** Query crashes table with rich filters + pagination (or bulk fetch when filters.all) */
   async _supabaseCrashes(tier, value, filters) {
     const tierFilters = this._tierFilter(tier, value);
     const allFilters = { ...tierFilters };
     const page = filters.page || 1;
+    const pageSize = filters.pageSize || this.pageSize;
 
+    // Exact-match scalar filters
     if (filters.year) allFilters.crash_year = `eq.${filters.year}`;
-    if (filters.severity) allFilters.crash_severity = `eq.${filters.severity}`;
     if (filters.route) allFilters.rte_name = `eq.${filters.route}`;
+    if (filters.node) allFilters.node = `eq.${filters.node}`;
 
-    const rangeStart = (page - 1) * this.pageSize;
-    const rangeEnd = rangeStart + this.pageSize - 1;
+    // Severity: string or array (multi-severity via in.(...))
+    if (filters.severity) {
+      if (Array.isArray(filters.severity)) {
+        if (filters.severity.length === 1) {
+          allFilters.crash_severity = `eq.${filters.severity[0]}`;
+        } else if (filters.severity.length > 1) {
+          allFilters.crash_severity = `in.(${filters.severity.join(',')})`;
+        }
+      } else {
+        allFilters.crash_severity = `eq.${filters.severity}`;
+      }
+    }
+
+    // Ped / Bike flags
+    if (filters.pedBike === 'ped') {
+      allFilters.pedestrian = 'eq.Yes';
+    } else if (filters.pedBike === 'bike') {
+      allFilters.bike = 'eq.Yes';
+    } else if (filters.pedBike === 'either') {
+      // needs OR — handled in andParts below
+    }
+
+    // Date range (crash_date column)
+    const andParts = [];
+    if (filters.dateFrom) andParts.push(`crash_date.gte.${filters.dateFrom}`);
+    if (filters.dateTo)   andParts.push(`crash_date.lte.${filters.dateTo}`);
+
+    // Text search across route/collision/doc_nbr/intersection/weather
+    if (filters.text && String(filters.text).trim()) {
+      const t = this._escapeIlike(filters.text);
+      // Use lowercase pattern — PostgREST ilike is case-insensitive but PostgREST
+      // parses `*` as a wildcard in ilike filters.
+      const pattern = `*${t}*`;
+      allFilters.or = `(rte_name.ilike.${pattern},collision_type.ilike.${pattern},document_nbr.ilike.${pattern},intersection_name.ilike.${pattern},weather_condition.ilike.${pattern})`;
+    }
+
+    if (filters.pedBike === 'either') {
+      // If we're already using `or` for text search, combine into `and` group
+      if (allFilters.or) {
+        andParts.push(`or(pedestrian.eq.Yes,bike.eq.Yes)`);
+      } else {
+        allFilters.or = `(pedestrian.eq.Yes,bike.eq.Yes)`;
+      }
+    }
+
+    if (andParts.length) {
+      allFilters.and = `(${andParts.join(',')})`;
+    }
+
+    // Bulk fetch mode (filters.all) — used by CMF/Warrants/CSV export
+    if (filters.all) {
+      const maxRows = filters.maxRows || 10000;
+      const data = await this._supabaseQuery('crashes', {
+        filters: allFilters,
+        order: 'crash_year.desc,objectid.asc',
+        limit: maxRows,
+      });
+      const rows = Array.isArray(data) ? data : (data.rows || []);
+      return {
+        rows: rows.map(r => this._pgToFrontend(r)),
+        total: rows.length,
+        page: 1,
+      };
+    }
+
+    // Paginated mode (default)
+    const rangeStart = (page - 1) * pageSize;
+    const rangeEnd = rangeStart + pageSize - 1;
 
     const data = await this._supabaseQuery('crashes', {
       filters: allFilters,
@@ -465,6 +568,7 @@ class CrashLensDataClient {
       rows: (data.rows || data).map(r => this._pgToFrontend(r)),
       total: data.count || 0,
       page: page,
+      pageSize: pageSize,
     };
   }
 
@@ -715,21 +819,49 @@ class CrashLensDataClient {
     return Object.values(groups).sort((a, b) => a.crash_year - b.crash_year);
   }
 
-  /** Filter loaded rows with pagination */
+  /** Filter loaded rows with pagination (R2 fallback path) */
   _filterLocally(rows, filters) {
+    const isYes = (v) => {
+      const s = String(v || '').toLowerCase();
+      return s === 'yes' || s === 'y' || s === 'true' || s === '1';
+    };
+
     let filtered = rows;
-    if (filters.year)     filtered = filtered.filter(r => r['Crash Year'] == filters.year);
-    if (filters.severity) filtered = filtered.filter(r => r['Crash Severity'] === filters.severity);
+    if (filters.year)     filtered = filtered.filter(r => String(r['Crash Year']) == String(filters.year));
     if (filters.route)    filtered = filtered.filter(r => r['RTE Name'] === filters.route);
+    if (filters.node)     filtered = filtered.filter(r => r['Node'] === filters.node);
+    if (filters.severity) {
+      const sevSet = Array.isArray(filters.severity) ? new Set(filters.severity) : new Set([filters.severity]);
+      filtered = filtered.filter(r => sevSet.has((r['Crash Severity'] || '').charAt(0) || r['Crash Severity']));
+    }
+    if (filters.pedBike === 'ped')    filtered = filtered.filter(r => isYes(r['Pedestrian?']));
+    if (filters.pedBike === 'bike')   filtered = filtered.filter(r => isYes(r['Bike?']));
+    if (filters.pedBike === 'either') filtered = filtered.filter(r => isYes(r['Pedestrian?']) || isYes(r['Bike?']));
+    if (filters.dateFrom) filtered = filtered.filter(r => (r['Crash Date'] || '') >= filters.dateFrom);
+    if (filters.dateTo)   filtered = filtered.filter(r => (r['Crash Date'] || '') <= filters.dateTo);
+    if (filters.text && String(filters.text).trim()) {
+      const t = String(filters.text).toLowerCase();
+      filtered = filtered.filter(r => {
+        const hay = [r['Document Nbr'], r['RTE Name'], r['Collision Type'], r['Weather Condition'], r['Node'], r['Intersection Name']].join(' ').toLowerCase();
+        return hay.includes(t);
+      });
+    }
+
+    if (filters.all) {
+      const cap = filters.maxRows || 10000;
+      return { rows: filtered.slice(0, cap), total: filtered.length, page: 1 };
+    }
 
     const page = filters.page || 1;
-    const start = (page - 1) * this.pageSize;
-    const end = start + this.pageSize;
+    const pageSize = filters.pageSize || this.pageSize;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
 
     return {
       rows: filtered.slice(start, end),
       total: filtered.length,
       page: page,
+      pageSize: pageSize,
     };
   }
 
