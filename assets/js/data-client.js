@@ -19,7 +19,7 @@ class CrashLensDataClient {
     supabaseUrl:  'https://srv1503081.hstgr.cloud/rest/v1',
     supabaseKey:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc0OTEyNDczLCJleHAiOjIwOTAyNzI0NzN9.5arUDeH3ccQ9O-UK57wFu7w1jKaIoIq3uroqithXjQs',
     r2BaseUrl:    'https://data.aicreatesai.com',
-    timeout:      15000,   // 15s for Supabase, then fallback
+    timeout:      30000,   // 30s for Supabase (text ILIKE on large jurisdictions can take >15s), then fallback
     mapLimit:     10000,   // max crash dots per viewport (raised for Phase 3 viewport queries)
     pageSize:     25,      // rows per page for detail tables
     preferSupabase: true,
@@ -515,13 +515,15 @@ class CrashLensDataClient {
     if (filters.dateFrom) andParts.push(`crash_date.gte.${filters.dateFrom}`);
     if (filters.dateTo)   andParts.push(`crash_date.lte.${filters.dateTo}`);
 
-    // Text search across route/collision/doc_nbr/intersection/weather
+    // Text search — narrowed to the two columns that actually matter (rte_name,
+    // collision_type). Searching all 5 columns (doc_nbr/intersection/weather)
+    // triggered `canceling statement due to statement timeout` on 86K-row
+    // Sussex because the leading-wildcard ILIKE forces a full scan per column.
+    // Until trigram/GIN indexes exist server-side, keep the scan narrow.
     if (filters.text && String(filters.text).trim()) {
       const t = this._escapeIlike(filters.text);
-      // Use lowercase pattern — PostgREST ilike is case-insensitive but PostgREST
-      // parses `*` as a wildcard in ilike filters.
       const pattern = `*${t}*`;
-      allFilters.or = `(rte_name.ilike.${pattern},collision_type.ilike.${pattern},document_nbr.ilike.${pattern},intersection_name.ilike.${pattern},weather_condition.ilike.${pattern})`;
+      allFilters.or = `(rte_name.ilike.${pattern},collision_type.ilike.${pattern})`;
     }
 
     if (filters.pedBike === 'either') {
