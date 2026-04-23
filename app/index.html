@@ -104971,6 +104971,15 @@ document.addEventListener('crashDataLoaded', () => {
 // WARRANTS TAB FUNCTIONS
 // ============================================================
 
+// No-op stub: earlier code calls updateWarrantAPIKeyStatus() during
+// initWarrantsTab(), but the real implementation was never added and the
+// reference throws `ReferenceError`, which halts tab init and blocks
+// Phase 4 Warrants testing. Declared on window so it survives even if
+// another script tries to replace it.
+if (typeof window.updateWarrantAPIKeyStatus !== 'function') {
+    window.updateWarrantAPIKeyStatus = function updateWarrantAPIKeyStatus() { /* no-op */ };
+}
+
 // Initialize Warrants Tab
 function initWarrantsTab() {
     warrantsState.loaded = true;
