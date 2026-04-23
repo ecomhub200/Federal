@@ -85789,11 +85789,13 @@ function loadLocationForCMF() {
             .then(rows => {
                 // Discard if user has picked another location since
                 if (reqToken !== cmfState._locReqToken) return;
-                // Empty-response guard: if aggregates say this location has crashes but
-                // Supabase returns 0 rows, the column format differs between the R2 CSV
-                // and the Supabase `crashes` table. Fall back to sampleRows.
+                // getCrashesByLocation handles name-format drift internally via its
+                // fuzzy ILIKE retry — so an empty result here means there genuinely
+                // are no matching crashes. Still keep a belt-and-braces sampleRows
+                // fallback for the pathological case of Supabase being missing data
+                // that the R2 CSV has.
                 if ((rows || []).length === 0 && (cmfState.aggregateCount || 0) > 0 && crashState.sampleRows?.length) {
-                    console.log('[CMF] Supabase returned 0 rows for', name, '— falling back to sampleRows');
+                    console.log('[CMF] Supabase + fuzzy retry both empty for', name, '— final fallback to sampleRows');
                     cmfState.locationCrashes = crashState.sampleRows.filter(row =>
                         type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name
                     );

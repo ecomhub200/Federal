@@ -245,7 +245,7 @@ async function testTierNotOverridden() {
 
 async function testGetCrashesByLocation() {
     console.log('\nI. getCrashesByLocation');
-    // route
+    // route — exact match returns rows, no fuzzy retry
     let ctx = loadClient();
     let calls = stubFetch(ctx, [{ rte_name: 'SR-1', crash_severity: 'K' }]);
     const rows = await makeClient(ctx).getCrashesByLocation('county', 'Kent', 'route', 'SR-1');
@@ -256,9 +256,9 @@ async function testGetCrashesByLocation() {
     assertEq(rows[0]['RTE Name'], 'SR-1', 'row keys are Title Case (matching COL)');
     assertEq(rows[0]['Crash Severity'], 'K', 'severity mapped to Title Case');
 
-    // node
+    // node — value has no separators, so no fuzzy retry even if exact = []
     ctx = loadClient();
-    calls = stubFetch(ctx, []);
+    calls = stubFetch(ctx, [{ node: 'N12345' }]);
     await makeClient(ctx).getCrashesByLocation('county', 'Kent', 'node', 'N12345');
     assertIncludes(decodeURIComponent(calls[0].url), 'node=eq.N12345', 'node location maps to node=eq');
 
@@ -272,6 +272,62 @@ async function testGetCrashesByLocation() {
         threw = /locationType must be/.test(e.message);
     }
     assert(threw, 'invalid locationType throws');
+}
+
+async function testFuzzyLocationRetry() {
+    console.log('\nL. Fuzzy location retry (state-agnostic name-format drift)');
+
+    // canonicalisation helper
+    const ctx0 = loadClient();
+    const canon = ctx0.CrashLensDataClient.canonicalLocationName;
+    assertEq(canon('DE 18'),    'DE18', 'canonical strips space');
+    assertEq(canon('DE-18'),    'DE18', 'canonical strips dash');
+    assertEq(canon('  de.18 '), 'DE18', 'canonical strips dots + lowercase');
+    assertEq(canon(null),       '',     'canonical handles null');
+
+    // Exact returns 0 → fuzzy ILIKE retry → client-side canonical filter drops
+    // false positives ("DE 180" / "DE 181" which share the ILIKE prefix).
+    let ctx = loadClient();
+    const callUrls = [];
+    ctx.fetch = async (url) => {
+        callUrls.push(String(url));
+        const u = String(url);
+        if (u.includes('rte_name=eq.')) {
+            return { ok: true, status: 200, headers: { get: () => null }, json: async () => [] };
+        }
+        if (u.includes('rte_name=ilike.')) {
+            return {
+                ok: true, status: 200, headers: { get: () => null },
+                json: async () => [
+                    { rte_name: 'DE 18',  crash_severity: 'K' },
+                    { rte_name: 'DE-18',  crash_severity: 'A' },
+                    { rte_name: 'DE 180', crash_severity: 'B' },
+                    { rte_name: 'DE 181', crash_severity: 'C' },
+                ]
+            };
+        }
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => [] };
+    };
+    const out = await makeClient(ctx).getCrashesByLocation('county', 'Sussex', 'route', 'DE 18');
+    assertEq(callUrls.length, 2, 'exact-miss triggers one fuzzy retry (2 calls total)');
+    assertIncludes(decodeUrl(callUrls[1]), 'rte_name=ilike.DE*18', 'fuzzy retry uses ILIKE separator-wildcard');
+    assertEq(out.length, 2, 'canonical filter kept only the two real matches');
+    assertEq(out[0]['RTE Name'], 'DE 18', 'kept DE 18');
+    assertEq(out[1]['RTE Name'], 'DE-18', 'kept DE-18');
+
+    // Exact hit → no fuzzy retry
+    ctx = loadClient();
+    const hitUrls = [];
+    ctx.fetch = async (url) => {
+        hitUrls.push(String(url));
+        return {
+            ok: true, status: 200, headers: { get: () => null },
+            json: async () => [{ rte_name: 'DE 18', crash_severity: 'K' }]
+        };
+    };
+    const hit = await makeClient(ctx).getCrashesByLocation('county', 'Sussex', 'route', 'DE 18');
+    assertEq(hitUrls.length, 1, 'exact hit → single request');
+    assertEq(hit.length, 1, 'exact hit → 1 row returned');
 }
 
 async function testColumnMapping() {
@@ -359,6 +415,7 @@ async function testLocalFilterFallback() {
     await testGetCrashesByLocation();
     await testColumnMapping();
     await testLocalFilterFallback();
+    await testFuzzyLocationRetry();
 
     console.log('\n═══════════════════════════════════════════════');
     console.log(` Passed: ${passed}    Failed: ${failed}`);
