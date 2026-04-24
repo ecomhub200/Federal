@@ -39,7 +39,8 @@ CL.data.supabaseBridge = (function () {
         var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
         if (!ctx) return { tier: 'state', value: null };
         var t = ctx.viewTier || 'county';
-        if (t === 'state' || t === 'federal') return { tier: 'state', value: null };
+        if (t === 'federal') return { tier: 'federal', value: null };
+        if (t === 'state')   return { tier: 'state', value: null };
         if (t === 'region') return { tier: 'region', value: ctx.tierRegion && ctx.tierRegion.name };
         if (t === 'mpo')    return { tier: 'mpo',    value: ctx.tierMpo && ctx.tierMpo.name };
         if (t === 'planning_district') return { tier: 'planning_district', value: ctx.tierPlanningDistrict && ctx.tierPlanningDistrict.name };
