@@ -46892,20 +46892,23 @@ function getFilteredStats() {
 function updateDashboard() {
     if (!crashState.loaded) return;
 
+    // Phase 1B: Update tier-specific sections (comparison matrices, breadcrumb, scope header)
+    // Run BEFORE the aggregate-tier guard — these update the breadcrumb/scope header
+    // even on State/Federal/Region/MPO/PD where the KPI repaint must be skipped.
+    // (buildTierComparison() already short-circuits when sampleRows is empty.)
+    if (typeof updateDashboardTierSections === 'function') {
+        updateDashboardTierSections();
+    }
+
     // For aggregate tiers (State/Federal/Region/MPO/PD), the Supabase bridge
     // paints KPIs directly from the matview — crashState.aggregates still has
-    // stale county data from a prior R2 load. Skip the R2-based repaint.
+    // stale county data from a prior R2 load. Skip the R2-based KPI repaint.
     const _AGG_TIERS = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
     const _curTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext)
         ? (jurisdictionContext.viewTier || 'county') : 'county';
     if (_AGG_TIERS.has(_curTier) && (!crashState.sampleRows || crashState.sampleRows.length === 0)) {
-        console.log('[Dashboard] Skipping R2-based repaint for aggregate tier:', _curTier);
+        console.log('[Dashboard] Skipping R2-based KPI repaint for aggregate tier:', _curTier);
         return;
-    }
-
-    // Phase 1B: Update tier-specific sections (comparison matrices, breadcrumb, scope header)
-    if (typeof updateDashboardTierSections === 'function') {
-        updateDashboardTierSections();
     }
 
     const filtered = getFilteredStats();
