@@ -4915,7 +4915,7 @@ textarea:focus-visible {
 </label>
 <div style="display:flex;flex-direction:column;gap:.5rem">
 <label class="radio-item" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;padding:.4rem .6rem;background:white;border-radius:var(--radius);border:1px solid #e2e8f0">
-<input type="radio" name="roadTypeFilter" id="filterCountyOnly" value="countyOnly" checked onchange="saveFilterProfile()" style="accent-color:#0ea5e9">
+<input type="radio" name="roadTypeFilter" id="filterCountyOnly" value="countyOnly" onchange="saveFilterProfile()" style="accent-color:#0ea5e9">
 <span id="filterLabelCountyOnly" style="font-size:.85rem"><strong>County Roads Only</strong> - County-maintained roads</span>
 </label>
 <label class="radio-item" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;padding:.4rem .6rem;background:white;border-radius:var(--radius);border:1px solid #e2e8f0">
@@ -4927,7 +4927,7 @@ textarea:focus-visible {
 <span id="filterLabelCountyPlusVDOT" style="font-size:.85rem"><strong>All Roads (No Interstate)</strong> - Includes state routes</span>
 </label>
 <label class="radio-item" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;padding:.4rem .6rem;background:white;border-radius:var(--radius);border:1px solid #e2e8f0">
-<input type="radio" name="roadTypeFilter" id="filterAllRoads" value="allRoads" onchange="saveFilterProfile()" style="accent-color:#0ea5e9">
+<input type="radio" name="roadTypeFilter" id="filterAllRoads" value="allRoads" checked onchange="saveFilterProfile()" style="accent-color:#0ea5e9">
 <span id="filterLabelAllRoads" style="font-size:.85rem"><strong>All Roads</strong> - Including interstates</span>
 </label>
 </div>
@@ -21037,6 +21037,8 @@ async function handleTierChange(tier) {
                         crashState.loaded = false;
                         crashState.sampleRows = [];
                         crashState.mapPoints = [];
+                        crashState.aggregates = {};
+                        crashState.totalRows = 0;
                     }
                     if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                         await CL.data.supabaseBridge.injectFastDashboard({ force: true });
@@ -21053,6 +21055,48 @@ async function handleTierChange(tier) {
                 }
             }
         }
+
+        // ── Progressive disclosure: show/hide controls based on tier ──
+        // For aggregate tiers the county dropdown and road-type filter are
+        // irrelevant — the Supabase matview is already pre-aggregated across
+        // all roads for the whole scope. Hide them to avoid confusion.
+        const AGGREGATE_VIEW_TIERS = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
+        const _jSelect = document.getElementById('jurisdictionSelect');
+        const _jGroup = _jSelect ? _jSelect.closest('.filter-group') : null;
+        const _rtRadio = document.getElementById('filterAllRoads');
+        const _rtGroup = _rtRadio ? _rtRadio.closest('.filter-group') : null;
+        const _lockBadge = document.getElementById('jurisdictionLockBadge');
+
+        if (AGGREGATE_VIEW_TIERS.has(tier)) {
+            if (_jGroup) _jGroup.style.display = 'none';
+            if (_rtGroup) _rtGroup.style.display = 'none';
+            if (_lockBadge) _lockBadge.style.display = 'none';
+        } else {
+            if (_jGroup) _jGroup.style.display = '';
+            if (_rtGroup) _rtGroup.style.display = '';
+        }
+
+        // Update the "Current:" scope indicator for aggregate tiers so users
+        // don't see a stale county name next to a hidden dropdown.
+        try {
+            if (AGGREGATE_VIEW_TIERS.has(tier)) {
+                const _display = document.getElementById('currentJurisdictionDisplay');
+                const _nameSpan = document.getElementById('currentJurisdictionName');
+                const _filterSpan = document.getElementById('currentFilterName');
+                let scopeLabel = '';
+                if (tier === 'federal') scopeLabel = 'Federal (All States)';
+                else if (tier === 'state') scopeLabel = (jurisdictionContext.stateName || 'Statewide');
+                else if (tier === 'region') scopeLabel = (jurisdictionContext.tierRegion?.name || 'Region');
+                else if (tier === 'mpo') scopeLabel = (jurisdictionContext.tierMpo?.name || 'MPO');
+                else if (tier === 'planning_district') scopeLabel = (jurisdictionContext.tierPlanningDistrict?.name || 'Planning District');
+                if (_nameSpan) _nameSpan.textContent = scopeLabel;
+                if (_filterSpan) _filterSpan.textContent = 'All Roads';
+                if (_display) _display.style.display = 'block';
+            } else if (typeof updateCurrentSelectionDisplay === 'function') {
+                updateCurrentSelectionDisplay();
+            }
+        } catch (_err) { /* non-fatal */ }
+
         // Dispatch tierChanged event for school/transit tabs
         document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier, scopeKey: getTierScopeKey() } }));
     } catch (e) {
@@ -21308,6 +21352,8 @@ async function handlePlanningDistrictSelection() {
                 crashState.loaded = false;
                 crashState.sampleRows = [];
                 crashState.mapPoints = [];
+                crashState.aggregates = {};
+                crashState.totalRows = 0;
             }
             if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 await CL.data.supabaseBridge.injectFastDashboard({ force: true });
@@ -21556,6 +21602,8 @@ async function handleRegionSelection() {
                 crashState.loaded = false;
                 crashState.sampleRows = [];
                 crashState.mapPoints = [];
+                crashState.aggregates = {};
+                crashState.totalRows = 0;
             }
             if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 await CL.data.supabaseBridge.injectFastDashboard({ force: true });
@@ -21715,6 +21763,8 @@ async function handleMPOSelection() {
                 crashState.loaded = false;
                 crashState.sampleRows = [];
                 crashState.mapPoints = [];
+                crashState.aggregates = {};
+                crashState.totalRows = 0;
             }
             if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 await CL.data.supabaseBridge.injectFastDashboard({ force: true });
@@ -24207,24 +24257,6 @@ function getActiveRoadTypeSuffix(tier) {
  */
 function updateRoadTypeLabels(tier) {
     const labelConfigs = {
-        state: {
-            countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-            cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-            countyPlusVDOT:  '<strong>Non-DOT Roads</strong> - Local and non-state roads',
-            allRoads:        '<strong>Statewide All Roads</strong> - DOT + Non-DOT combined'
-        },
-        federal: {
-            countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-            cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-            countyPlusVDOT:  '<strong>Non-DOT Roads</strong> - Local and non-state roads',
-            allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined (nationwide)'
-        },
-        region: {
-            countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-            cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-            countyPlusVDOT:  '<strong>Non-DOT Roads</strong> - Local and non-state roads',
-            allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined'
-        },
         _default: {
             countyOnly:      '<strong>County Roads Only</strong> - County-maintained roads',
             cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
@@ -24246,6 +24278,13 @@ function updateRoadTypeLabels(tier) {
     if (el3) el3.innerHTML = labels.allRoads;
 
     console.log(`[RoadType] Labels updated for tier: ${tier}`);
+
+    // Always default to "All Roads" when switching tiers
+    const allRoadsRadio = document.getElementById('filterAllRoads');
+    if (allRoadsRadio && !allRoadsRadio.checked) {
+        allRoadsRadio.checked = true;
+        console.log(`[RoadType] Defaulted to All Roads for tier: ${tier}`);
+    }
 }
 
 // Get the data file path based on current selection (tier-aware, R2-aware)
@@ -32075,6 +32114,8 @@ async function autoLoadCrashData(skipCache = false) {
                 crashState.loaded = false;
                 crashState.sampleRows = [];
                 crashState.mapPoints = [];
+                crashState.aggregates = {};
+                crashState.totalRows = 0;
             }
             if (window.crashLensClient
                 && typeof window.crashLensClient.getSummary === 'function'
@@ -46850,6 +46891,17 @@ function getFilteredStats() {
 // ============================================================
 function updateDashboard() {
     if (!crashState.loaded) return;
+
+    // For aggregate tiers (State/Federal/Region/MPO/PD), the Supabase bridge
+    // paints KPIs directly from the matview — crashState.aggregates still has
+    // stale county data from a prior R2 load. Skip the R2-based repaint.
+    const _AGG_TIERS = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
+    const _curTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext)
+        ? (jurisdictionContext.viewTier || 'county') : 'county';
+    if (_AGG_TIERS.has(_curTier) && (!crashState.sampleRows || crashState.sampleRows.length === 0)) {
+        console.log('[Dashboard] Skipping R2-based repaint for aggregate tier:', _curTier);
+        return;
+    }
 
     // Phase 1B: Update tier-specific sections (comparison matrices, breadcrumb, scope header)
     if (typeof updateDashboardTierSections === 'function') {
