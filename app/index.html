@@ -21032,13 +21032,17 @@ async function handleTierChange(tier) {
             // lazy R2 download for the *county-level* file if needed.
             if (tier === 'state' || tier === 'federal') {
                 try {
+                    // Reset stale R2 state before Supabase fetch
+                    if (typeof crashState !== 'undefined') {
+                        crashState.loaded = false;
+                        crashState.sampleRows = [];
+                        crashState.mapPoints = [];
+                    }
                     if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                         await CL.data.supabaseBridge.injectFastDashboard({ force: true });
                     }
                     if (typeof crashState !== 'undefined') {
                         crashState.loaded = true;
-                        crashState.sampleRows = crashState.sampleRows || [];
-                        crashState.mapPoints = crashState.mapPoints || [];
                         crashState.sampleRowsLoaded = false;
                         if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
                     }
@@ -21299,13 +21303,17 @@ async function handlePlanningDistrictSelection() {
 
         // PD tier: use Supabase matview (pre-aggregated) instead of R2 CSV.
         try {
+            // Reset stale R2 state before Supabase fetch
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = false;
+                crashState.sampleRows = [];
+                crashState.mapPoints = [];
+            }
             if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 await CL.data.supabaseBridge.injectFastDashboard({ force: true });
             }
             if (typeof crashState !== 'undefined') {
                 crashState.loaded = true;
-                crashState.sampleRows = crashState.sampleRows || [];
-                crashState.mapPoints = crashState.mapPoints || [];
                 crashState.sampleRowsLoaded = false;
             }
             try { updateDataConnectionStatus('connected'); } catch (e2) {}
@@ -21543,13 +21551,17 @@ async function handleRegionSelection() {
         // Region tier: use Supabase matview (pre-aggregated) instead of R2 CSV.
         // Region R2 files can be 300K+ rows which causes browser OOM.
         try {
+            // Reset stale R2 state before Supabase fetch
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = false;
+                crashState.sampleRows = [];
+                crashState.mapPoints = [];
+            }
             if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 await CL.data.supabaseBridge.injectFastDashboard({ force: true });
             }
             if (typeof crashState !== 'undefined') {
                 crashState.loaded = true;
-                crashState.sampleRows = crashState.sampleRows || [];
-                crashState.mapPoints = crashState.mapPoints || [];
                 crashState.sampleRowsLoaded = false;
             }
             try { updateDataConnectionStatus('connected'); } catch (e2) {}
@@ -21698,13 +21710,17 @@ async function handleMPOSelection() {
         // MPO tier: use Supabase matview (pre-aggregated) instead of R2 CSV.
         // MPO R2 files can be 300K+ rows which causes browser OOM.
         try {
+            // Reset stale R2 state before Supabase fetch
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = false;
+                crashState.sampleRows = [];
+                crashState.mapPoints = [];
+            }
             if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 await CL.data.supabaseBridge.injectFastDashboard({ force: true });
             }
             if (typeof crashState !== 'undefined') {
                 crashState.loaded = true;
-                crashState.sampleRows = crashState.sampleRows || [];
-                crashState.mapPoints = crashState.mapPoints || [];
                 crashState.sampleRowsLoaded = false;
             }
             try { updateDataConnectionStatus('connected'); } catch (e2) {}
@@ -32051,18 +32067,24 @@ async function autoLoadCrashData(skipCache = false) {
     // These tiers use Supabase matview data exclusively.
     // Only county and city tiers are small enough for in-browser R2 parsing.
     const AGGREGATE_TIERS = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
-    if (AGGREGATE_TIERS.has(tier)
-        && window.crashLensClient
-        && typeof window.crashLensClient.getSummary === 'function') {
+    if (AGGREGATE_TIERS.has(tier)) {
         console.log(`[AutoLoad] Tier "${tier}" uses Supabase matview — skipping R2 download (OOM prevention)`);
         try {
-            if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+            // Reset stale R2 state before Supabase fetch
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = false;
+                crashState.sampleRows = [];
+                crashState.mapPoints = [];
+            }
+            if (window.crashLensClient
+                && typeof window.crashLensClient.getSummary === 'function'
+                && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 await CL.data.supabaseBridge.injectFastDashboard({ force: true });
+            } else {
+                console.warn(`[AutoLoad] Tier "${tier}" needs Supabase but client not available — dashboard will be empty`);
             }
             if (typeof crashState !== 'undefined') {
                 crashState.loaded = true;
-                crashState.sampleRows = crashState.sampleRows || [];
-                crashState.mapPoints = crashState.mapPoints || [];
                 crashState.sampleRowsLoaded = false;
                 if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
             }
