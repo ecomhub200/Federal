@@ -323,6 +323,13 @@ CL.data.supabaseBridge = (function () {
 
     function onR2LoadComplete() {
         removeBanner();
+        // Phase 6: notify the lazy loader that full R2 data is available,
+        // so subsequent tab switches skip the lazy-load gate.
+        try {
+            if (CL.data && CL.data.lazyLoader && CL.data.lazyLoader.markR2Loaded) {
+                CL.data.lazyLoader.markR2Loaded();
+            }
+        } catch (e) { /* non-fatal */ }
     }
 
     function refresh() {
