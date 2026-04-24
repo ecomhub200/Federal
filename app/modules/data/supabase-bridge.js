@@ -285,6 +285,15 @@ CL.data.supabaseBridge = (function () {
 
     async function injectFastDashboard(opts) {
         var force = !!(opts && opts.force);
+
+        // Ensure Supabase client uses the currently active state
+        try {
+            if (window.crashLensClient) {
+                var stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
+                if (stateKey) window.crashLensClient.state = stateKey;
+            }
+        } catch (e) { /* non-fatal */ }
+
         try {
             if (!force && typeof crashState !== 'undefined' && crashState && crashState.loaded) {
                 console.log('[Phase2] R2 already loaded before bridge started, skipping');
@@ -301,7 +310,7 @@ CL.data.supabaseBridge = (function () {
             var rows = await window.crashLensClient.getSummary(t.tier, t.value);
             var fetchMs = Date.now() - startTime;
 
-            if (typeof crashState !== 'undefined' && crashState && crashState.loaded) {
+            if (!force && typeof crashState !== 'undefined' && crashState && crashState.loaded) {
                 console.log('[Phase2] R2 won the race (' + fetchMs + 'ms fetch, but R2 finished first), discarding');
                 return;
             }
