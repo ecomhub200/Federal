@@ -30,7 +30,6 @@ CL.data.lazyLoader = (function () {
         'hotspots',
         'crashtree',
         'grants',
-        'beforeafter',
         'deepdive',
         'safety',
         'fatalspeeding',

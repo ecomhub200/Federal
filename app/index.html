@@ -21025,12 +21025,28 @@ async function handleTierChange(tier) {
                 console.log(`[Tier] Loaded ${tier} aggregate data:`, Object.keys(aggData));
             }
 
-            // For state/federal tiers: load the CSV for the selected road type
-            // Uses getDataFilePath() which returns tier-aware R2 paths (e.g., colorado/_state/dot_roads.csv)
+            // For state/federal tiers: use Supabase matview (pre-aggregated).
+            // Do NOT call autoLoadCrashData() — the statewide R2 parquet file
+            // (569K+ rows × 550 cols) causes browser out-of-memory crashes.
+            // Dashboard/Map render from Supabase summary; detail tabs trigger
+            // lazy R2 download for the *county-level* file if needed.
             if (tier === 'state' || tier === 'federal') {
-                autoLoadCrashData(true).catch(e => {
-                    console.warn(`[Tier] Background ${tier} CSV load failed:`, e.message);
-                });
+                try {
+                    if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+                        await CL.data.supabaseBridge.injectFastDashboard({ force: true });
+                    }
+                    if (typeof crashState !== 'undefined') {
+                        crashState.loaded = true;
+                        crashState.sampleRows = crashState.sampleRows || [];
+                        crashState.mapPoints = crashState.mapPoints || [];
+                        crashState.sampleRowsLoaded = false;
+                        if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
+                    }
+                    try { updateDataConnectionStatus('connected'); } catch (e2) {}
+                    console.log(`[Tier] ${tier} view using Supabase matview (R2 download skipped)`);
+                } catch (e) {
+                    console.warn(`[Tier] Supabase bridge for ${tier} failed:`, e.message);
+                }
             }
         }
         // Dispatch tierChanged event for school/transit tabs
@@ -21281,9 +21297,22 @@ async function handlePlanningDistrictSelection() {
         }
         console.log(`[Tier] Planning district selected: ${pdId} (${pdName})`);
 
-        autoLoadCrashData(true).catch(e => {
-            console.warn('[Tier] Planning district CSV load failed (data may not be uploaded yet):', e.message);
-        });
+        // PD tier: use Supabase matview (pre-aggregated) instead of R2 CSV.
+        try {
+            if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+                await CL.data.supabaseBridge.injectFastDashboard({ force: true });
+            }
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = true;
+                crashState.sampleRows = crashState.sampleRows || [];
+                crashState.mapPoints = crashState.mapPoints || [];
+                crashState.sampleRowsLoaded = false;
+            }
+            try { updateDataConnectionStatus('connected'); } catch (e2) {}
+            console.log('[Tier] PD view using Supabase matview (R2 download skipped)');
+        } catch (e) {
+            console.warn('[Tier] PD Supabase bridge failed:', e.message);
+        }
 
         document.dispatchEvent(new CustomEvent('tierChanged', {
             detail: {
@@ -21511,11 +21540,23 @@ async function handleRegionSelection() {
         if (regionAgg) console.log(`[Tier] Region aggregate loaded: ${Object.keys(regionAgg).length} keys`);
         console.log(`[Tier] Region selected: ${region.shortName || region.name}, ${region.counties.length} counties`);
 
-        // Load region CSV from R2 for detailed analysis tabs
-        // Path: {state}/_region/{regionId}/{roadType}.csv (resolved via getDataFilePath → resolveDataUrl)
-        autoLoadCrashData(true).catch(e => {
-            console.warn('[Tier] Region CSV load failed (data may not be uploaded yet):', e.message);
-        });
+        // Region tier: use Supabase matview (pre-aggregated) instead of R2 CSV.
+        // Region R2 files can be 300K+ rows which causes browser OOM.
+        try {
+            if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+                await CL.data.supabaseBridge.injectFastDashboard({ force: true });
+            }
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = true;
+                crashState.sampleRows = crashState.sampleRows || [];
+                crashState.mapPoints = crashState.mapPoints || [];
+                crashState.sampleRowsLoaded = false;
+            }
+            try { updateDataConnectionStatus('connected'); } catch (e2) {}
+            console.log('[Tier] Region view using Supabase matview (R2 download skipped)');
+        } catch (e) {
+            console.warn('[Tier] Region Supabase bridge failed:', e.message);
+        }
 
         // Dispatch tierChanged event for school/transit tabs
         document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier: 'region', scopeKey: getTierScopeKey() } }));
@@ -21654,11 +21695,23 @@ async function handleMPOSelection() {
         if (mpoAgg) console.log(`[Tier] MPO aggregate loaded: ${Object.keys(mpoAgg).length} keys`);
         console.log(`[Tier] MPO selected: ${mpo.shortName || mpo.name}, ${mpo.counties.length} counties`);
 
-        // Load MPO CSV from R2 for detailed analysis tabs
-        // Path: {state}/_mpo/{mpoId}/{roadType}.csv (resolved via getDataFilePath → resolveDataUrl)
-        autoLoadCrashData(true).catch(e => {
-            console.warn('[Tier] MPO CSV load failed (data may not be uploaded yet):', e.message);
-        });
+        // MPO tier: use Supabase matview (pre-aggregated) instead of R2 CSV.
+        // MPO R2 files can be 300K+ rows which causes browser OOM.
+        try {
+            if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+                await CL.data.supabaseBridge.injectFastDashboard({ force: true });
+            }
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = true;
+                crashState.sampleRows = crashState.sampleRows || [];
+                crashState.mapPoints = crashState.mapPoints || [];
+                crashState.sampleRowsLoaded = false;
+            }
+            try { updateDataConnectionStatus('connected'); } catch (e2) {}
+            console.log('[Tier] MPO view using Supabase matview (R2 download skipped)');
+        } catch (e) {
+            console.warn('[Tier] MPO Supabase bridge failed:', e.message);
+        }
 
         // Dispatch tierChanged event for school/transit tabs
         document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier: 'mpo', scopeKey: getTierScopeKey() } }));
@@ -31988,6 +32041,44 @@ async function autoLoadCrashData(skipCache = false) {
         }, 300);
 
         return; // Skip R2 download — will be triggered lazily by showTab()
+    }
+
+    // ========================================
+    // STEP 0b: Aggregate-Tier Guard
+    // ========================================
+    // State/Federal/Region/MPO/PD tiers should NEVER download R2 data —
+    // the statewide parquet (569K+ rows × 550 cols) causes browser OOM.
+    // These tiers use Supabase matview data exclusively.
+    // Only county and city tiers are small enough for in-browser R2 parsing.
+    const AGGREGATE_TIERS = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
+    if (AGGREGATE_TIERS.has(tier)
+        && window.crashLensClient
+        && typeof window.crashLensClient.getSummary === 'function') {
+        console.log(`[AutoLoad] Tier "${tier}" uses Supabase matview — skipping R2 download (OOM prevention)`);
+        try {
+            if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+                await CL.data.supabaseBridge.injectFastDashboard({ force: true });
+            }
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = true;
+                crashState.sampleRows = crashState.sampleRows || [];
+                crashState.mapPoints = crashState.mapPoints || [];
+                crashState.sampleRowsLoaded = false;
+                if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
+            }
+            try { updateDataConnectionStatus('connected'); } catch (e) {}
+            if (uploadIcon) uploadIcon.textContent = '✅';
+            if (loadingTitle) loadingTitle.textContent = 'Dashboard Ready';
+            if (loadingSubtitle) loadingSubtitle.textContent = `${jurisdictionName} — aggregated view`;
+            setTimeout(function () {
+                if (prog) prog.style.display = 'none';
+                try { if (typeof showUploadSummary === 'function') showUploadSummary(); } catch (e) {}
+                try { showTab('dashboard'); } catch (e) {}
+            }, 300);
+        } catch (e) {
+            console.warn('[AutoLoad] Supabase bridge for aggregate tier failed:', e);
+        }
+        return;
     }
 
     // ========================================
