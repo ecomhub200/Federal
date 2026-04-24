@@ -30690,6 +30690,23 @@ function showTab(tabId) {
         }
     });
 
+    // ── Lazy R2 Load Gate ──
+    // If this tab needs full R2 data and it hasn't loaded yet, trigger the
+    // download and re-fire showTab when complete. Tabs that work off the
+    // Supabase summary (Dashboard, Map, CMF, Warrants, AI, Upload, Prediction)
+    // bypass this gate entirely.
+    if (CL.data && CL.data.lazyLoader
+        && CL.data.lazyLoader.tabNeedsR2(tabId)
+        && !CL.data.lazyLoader.isR2Loaded()) {
+        CL.data.lazyLoader.ensureR2Loaded(tabId).then(function (success) {
+            if (success) {
+                // Re-trigger tab init now that full data is available
+                showTab(tabId);
+            }
+        });
+        return; // Don't run tab init yet — data not ready
+    }
+
     if (tabId === 'map' && crashState.loaded) {
         if (!crashMap) {
             setTimeout(initMap, 100);
@@ -31921,6 +31938,59 @@ async function autoLoadCrashData(skipCache = false) {
     }
 
     // ========================================
+    // STEP 0: Lazy Load Mode (Phase 6)
+    // ========================================
+    // If Supabase is available and lazy loading is enabled, skip the R2
+    // download entirely. Dashboard renders from Supabase summary; the R2
+    // fetch is triggered lazily by showTab() when the user clicks a tab
+    // that needs full aggregates or sampleRows.
+    //
+    // When skipCache=true, the lazy loader itself has requested the actual
+    // R2 download, so we bypass this guard and run the normal fetch below.
+    if (!skipCache
+        && CL.data && CL.data.lazyLoader
+        && !CL.data.lazyLoader.isR2Loaded()
+        && window.crashLensClient
+        && typeof window.crashLensClient.getSummary === 'function') {
+        console.log('[AutoLoad] Lazy mode — deferring R2 download, using Supabase for dashboard');
+
+        // Let supabase-bridge handle dashboard painting from the matview
+        try {
+            if (CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+                await CL.data.supabaseBridge.injectFastDashboard({ force: true });
+            }
+        } catch (e) {
+            console.warn('[AutoLoad] Supabase bridge paint failed:', e);
+        }
+
+        // Set minimal crashState so Dashboard/Map tabs can function.
+        // crashState.loaded = true signals "we have something to show"; the
+        // actual row-level data will populate when a detail tab triggers R2.
+        if (!crashState.loaded) {
+            crashState.loaded = true;
+            crashState.sampleRows = [];
+            crashState.mapPoints = [];
+            crashState.sampleRowsLoaded = false;
+            if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
+
+            try { updateDataConnectionStatus('connected'); } catch (e) {}
+            try { logConnectionEvent('supabase_lazy', 'Dashboard loaded from Supabase, R2 deferred'); } catch (e) {}
+        }
+
+        // Update loading UI
+        if (uploadIcon) uploadIcon.textContent = '✅';
+        if (loadingTitle) loadingTitle.textContent = 'Dashboard Ready';
+        if (loadingSubtitle) loadingSubtitle.textContent = 'Detailed data loads on demand';
+        setTimeout(function () {
+            if (prog) prog.style.display = 'none';
+            try { if (typeof showUploadSummary === 'function') showUploadSummary(); } catch (e) {}
+            try { showTab('dashboard'); } catch (e) {}
+        }, 300);
+
+        return; // Skip R2 download — will be triggered lazily by showTab()
+    }
+
+    // ========================================
     // STEP 1: Check IndexedDB cache first
     // ========================================
     if (!skipCache) {
@@ -32577,6 +32647,11 @@ function resetState() {
     // === CORE CRASH STATE ===
     crashState.loaded = false;
     crashState.totalRows = 0;
+    // Phase 6: reset lazy loader so a new jurisdiction triggers fresh Supabase
+    // summary + deferred R2 load.
+    if (CL.data && CL.data.lazyLoader && CL.data.lazyLoader.reset) {
+        CL.data.lazyLoader.reset();
+    }
     crashState.aggregates = {
         byYear: {}, bySeverity: { K: 0, A: 0, B: 0, C: 0, O: 0 },
         byCollision: {}, byWeather: {}, byLight: {}, byRoute: {}, byNode: {},
@@ -152312,6 +152387,7 @@ function signDef_exportPDF() {
 <!-- CrashLens Supabase Data Client (Phase 1 — foundation only) -->
 <script src="../assets/js/data-client.js"></script>
 <script src="modules/data/supabase-bridge.js"></script>
+<script src="modules/data/lazy-loader.js"></script>
 <script>
   // Initialize Supabase data client after page load
   // This does NOT change any existing data loading — it just makes the client available
