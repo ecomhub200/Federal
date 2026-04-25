@@ -160,55 +160,7 @@
      * @returns {string} One of: 'countyOnly', 'cityOnly', 'countyPlusVDOT', 'allRoads'
      */
     function getDefaultRoadType(jurisdictionId) {
-        // Resolve jurisdiction
-        var jId = jurisdictionId;
-        if (!jId && typeof getActiveJurisdictionId === 'function') {
-            jId = getActiveJurisdictionId();
-        }
-
-        var jurisdictionConfig = getJurisdictionConfig(jId);
-        var stateAbbr = getActiveStateAbbr();
-
-        // ── Layer 1: Jurisdiction-level override ──
-        // If the jurisdiction config explicitly sets maintainsOwnRoads, use it
-        if (jurisdictionConfig) {
-            // Cities/towns always default to cityOnly
-            if (jurisdictionConfig.type === 'city' || jurisdictionConfig.type === 'town') {
-                return 'cityOnly';
-            }
-
-            // Jurisdiction explicitly maintains own roads → countyOnly
-            if (jurisdictionConfig.maintainsOwnRoads === true) {
-                return 'countyOnly';
-            }
-
-            // Jurisdiction explicitly does NOT maintain own roads → countyPlusVDOT
-            if (jurisdictionConfig.maintainsOwnRoads === false) {
-                return 'countyPlusVDOT';
-            }
-        }
-
-        // ── Layer 2: State exception ──
-        if (stateAbbr && jId) {
-            var exceptionOverride = checkException(stateAbbr, jId);
-            if (exceptionOverride) {
-                return exceptionOverride;
-            }
-        }
-
-        // ── Layer 3: State-level pattern ──
-        if (stateAbbr && loaded && stateToPattern[stateAbbr]) {
-            var patternKey = stateToPattern[stateAbbr];
-            var pattern = patterns.patterns[patternKey];
-            if (pattern) {
-                // Determine if this is a county or city context
-                var isCity = jurisdictionConfig && (jurisdictionConfig.type === 'city' || jurisdictionConfig.type === 'town');
-                return isCity ? pattern.cityDefault : pattern.countyDefault;
-            }
-        }
-
-        // ── Layer 4: Fallback ──
-        return 'countyPlusVDOT';
+        return 'allRoads';
     }
 
     /**
