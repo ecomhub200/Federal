@@ -22781,7 +22781,7 @@ const AggregateLoader = (() => {
 // All file paths relative to app/index.html location
 // Update BASE_PATH if app is moved to a different directory
 // ============================================================
-const APP_VERSION = '2.1.0-fix3';  // Added multiple backup autoloaders for reliability
+const APP_VERSION = '2.1.1-dash-load-fix';  // Dashboard re-renders on autoload + lazy/Supabase paths; .parquet-only R2 paths
 console.log(`[App] CRASH LENS v${APP_VERSION} loading...`);
 
 // Shared function to dismiss the loading overlay (called by auth protection or fallback)
@@ -32068,10 +32068,13 @@ async function autoLoadCrashData(skipCache = false) {
         && typeof window.crashLensClient.getSummary === 'function') {
         console.log('[AutoLoad] Lazy mode — deferring R2 download, using Supabase for dashboard');
 
-        // Let supabase-bridge handle dashboard painting from the matview
+        // Let supabase-bridge handle dashboard painting from the matview.
+        // Returns true if KPIs were painted, false on empty/error (which is
+        // common when the matview is missing for a brand-new jurisdiction).
+        let supabasePainted = false;
         try {
             if (CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
-                await CL.data.supabaseBridge.injectFastDashboard({ force: true });
+                supabasePainted = await CL.data.supabaseBridge.injectFastDashboard({ force: true });
             }
         } catch (e) {
             console.warn('[AutoLoad] Supabase bridge paint failed:', e);
@@ -32099,6 +32102,16 @@ async function autoLoadCrashData(skipCache = false) {
             if (prog) prog.style.display = 'none';
             try { if (typeof showUploadSummary === 'function') showUploadSummary(); } catch (e) {}
         }, 300);
+
+        // If Supabase didn't paint, dispatch a 'lazy-empty' event so the
+        // Dashboard banner switches from "loading" to a helpful fallback
+        // message rather than spinning forever. (When Supabase did paint,
+        // supabase-bridge already dispatched 'crashDataLoaded'.)
+        if (!supabasePainted) {
+            document.dispatchEvent(new CustomEvent('crashDataLoaded', {
+                detail: { source: 'lazy-empty' }
+            }));
+        }
 
         return; // Skip R2 download — will be triggered lazily by showTab()
     }
@@ -105362,9 +105375,36 @@ document.addEventListener('crashDataLoaded', () => {
     }
 });
 
-// Refresh Dashboard KPIs as soon as crash data is ready, regardless of which tab
-// the user is on. Without this the user sees stale "0" values until they switch tabs.
-document.addEventListener('crashDataLoaded', () => {
+// Refresh Dashboard as soon as crash data is ready, regardless of active tab.
+// Source-aware: each loader populates the dashboard differently, so we react
+// differently for each one — calling the wrong painter would clobber values.
+//   • 'autoload' / 'cache'  — full crashState.aggregates is populated; let
+//                             updateDashboard() repaint everything.
+//   • 'supabase'            — supabase-bridge already painted KPIs to the DOM
+//                             from the matview; aggregates are still empty,
+//                             so DON'T call updateDashboard() (it would zero
+//                             everything out). Just hide the loading banner.
+//   • 'lazy-empty'          — neither R2 nor Supabase produced data; swap the
+//                             banner for a helpful "open a detail tab" hint
+//                             instead of leaving the spinner up forever.
+document.addEventListener('crashDataLoaded', (evt) => {
+    const source = evt?.detail?.source;
+    if (source === 'supabase') {
+        if (typeof setDashboardLoadingState === 'function') {
+            setDashboardLoadingState(false);
+        }
+        return;
+    }
+    if (source === 'lazy-empty') {
+        if (typeof setDashboardLoadingState === 'function') {
+            setDashboardLoadingState(true, {
+                title: 'Dashboard summary not available for this jurisdiction.',
+                subtitle: 'Open Map, Hot Spots, or another detail tab to load the full crash dataset.'
+            });
+        }
+        return;
+    }
+    // autoload / cache / undefined — full aggregates are ready
     if (crashState.loaded && typeof updateDashboard === 'function') {
         updateDashboard();
     }
