@@ -32082,7 +32082,24 @@ let _autoLoadGeneration = 0;
 
 // Auto-load crash data based on settings and selected road type filter
 // Now with IndexedDB caching for faster repeat loads
-async function autoLoadCrashData(skipCache = false) {
+//
+// Data-source contract (effective 2026-04-25):
+//   PRIMARY  — Supabase matview for ALL tiers (county, city, state, federal,
+//              region, mpo, planning_district). Fast, light, dashboard-only.
+//   FALLBACK — R2 parquet (county/city only — auto-fetched when Supabase
+//              is unreachable, AND lazily fetched by detail tabs that need
+//              row-level data: Analysis, Hotspots, Crash Tree, Grants,
+//              Deep Dive, Safety, Fatal Speeding, Intersection, Pedestrian).
+//   For aggregate tiers (state/federal/region/mpo/planning_district) the
+//   R2 statewide parquet is NEVER auto-fetched — it can OOM the browser.
+//
+// Parameters:
+//   skipCache (default false) — bypass the IndexedDB cache lookup. Used
+//                               when the data context just changed.
+//   forceR2   (default false) — bypass the Supabase-first guard and go
+//                               straight to R2. Set ONLY by the lazy
+//                               loader when a detail tab needs row data.
+async function autoLoadCrashData(skipCache = false, forceR2 = false) {
     // Increment generation counter — any in-flight load with an older generation
     // will detect it has been superseded and bail out at key checkpoints.
     const myGeneration = ++_autoLoadGeneration;
@@ -32141,25 +32158,28 @@ async function autoLoadCrashData(skipCache = false) {
     }
 
     // ========================================
-    // STEP 0: Lazy Load Mode (Phase 6)
+    // STEP 0: Supabase-First Mode (all tiers)
     // ========================================
-    // If Supabase is available and lazy loading is enabled, skip the R2
-    // download entirely. Dashboard renders from Supabase summary; the R2
-    // fetch is triggered lazily by showTab() when the user clicks a tab
-    // that needs full aggregates or sampleRows.
+    // Default behaviour: try Supabase matview FIRST for every tier.
+    //  • If Supabase paints: dashboard is ready, R2 stays deferred.
+    //    Detail tabs (Analysis, Hotspots, Crash Tree, Grants, ...) will
+    //    trigger an on-demand R2 download later via lazyLoader.ensureR2Loaded(),
+    //    which calls back in with forceR2=true to bypass this guard.
+    //  • If Supabase is unreachable AND tier is county/city: fall through
+    //    to the R2 fetch below — that's the documented fallback.
+    //  • If Supabase is unreachable AND tier is aggregate (state, federal,
+    //    region, mpo, planning_district): bail out and surface an error.
+    //    The statewide parquet is too heavy to load in-browser.
     //
-    // When skipCache=true, the lazy loader itself has requested the actual
-    // R2 download, so we bypass this guard and run the normal fetch below.
-    if (!skipCache
+    // forceR2=true bypasses this guard entirely (set by the lazy loader
+    // when a detail tab actually needs row-level data).
+    if (!forceR2
         && CL.data && CL.data.lazyLoader
         && !CL.data.lazyLoader.isR2Loaded()
         && window.crashLensClient
         && typeof window.crashLensClient.getSummary === 'function') {
-        console.log('[AutoLoad] Lazy mode — deferring R2 download, using Supabase for dashboard');
+        console.log('[AutoLoad] Supabase-first mode — painting dashboard from matview');
 
-        // Let supabase-bridge handle dashboard painting from the matview.
-        // Returns true if KPIs were painted, false on empty/error (which is
-        // common when the matview is missing for a brand-new jurisdiction).
         let supabasePainted = false;
         try {
             if (CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
@@ -32169,40 +32189,50 @@ async function autoLoadCrashData(skipCache = false) {
             console.warn('[AutoLoad] Supabase bridge paint failed:', e);
         }
 
-        // Set minimal crashState so Dashboard/Map tabs can function.
-        // crashState.loaded = true signals "we have something to show"; the
-        // actual row-level data will populate when a detail tab triggers R2.
-        if (!crashState.loaded) {
-            crashState.loaded = true;
-            crashState.sampleRows = [];
-            crashState.mapPoints = [];
-            crashState.sampleRowsLoaded = false;
-            if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
+        if (supabasePainted) {
+            // Set minimal crashState so Dashboard/Map tabs can function.
+            // crashState.loaded = true signals "we have something to show";
+            // detail tabs will hydrate sampleRows on demand via lazyLoader.
+            if (!crashState.loaded) {
+                crashState.loaded = true;
+                crashState.sampleRows = [];
+                crashState.mapPoints = [];
+                crashState.sampleRowsLoaded = false;
+                if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
 
-            try { updateDataConnectionStatus('connected'); } catch (e) {}
-            try { logConnectionEvent('supabase_lazy', 'Dashboard loaded from Supabase, R2 deferred'); } catch (e) {}
+                try { updateDataConnectionStatus('connected'); } catch (e) {}
+                try { logConnectionEvent('supabase_lazy', 'Dashboard loaded from Supabase, R2 deferred'); } catch (e) {}
+            }
+
+            if (uploadIcon) uploadIcon.textContent = '✅';
+            if (loadingTitle) loadingTitle.textContent = 'Dashboard Ready';
+            if (loadingSubtitle) loadingSubtitle.textContent = 'Detailed data loads on demand';
+            setTimeout(function () {
+                if (prog) prog.style.display = 'none';
+                try { if (typeof showUploadSummary === 'function') showUploadSummary(); } catch (e) {}
+            }, 300);
+
+            return; // Supabase served the dashboard — done.
         }
 
-        // Update loading UI
-        if (uploadIcon) uploadIcon.textContent = '✅';
-        if (loadingTitle) loadingTitle.textContent = 'Dashboard Ready';
-        if (loadingSubtitle) loadingSubtitle.textContent = 'Detailed data loads on demand';
-        setTimeout(function () {
-            if (prog) prog.style.display = 'none';
-            try { if (typeof showUploadSummary === 'function') showUploadSummary(); } catch (e) {}
-        }, 300);
-
-        // If Supabase didn't paint, dispatch a 'lazy-empty' event so the
-        // Dashboard banner switches from "loading" to a helpful fallback
-        // message rather than spinning forever. (When Supabase did paint,
-        // supabase-bridge already dispatched 'crashDataLoaded'.)
-        if (!supabasePainted) {
+        // Supabase unreachable. Branch by tier:
+        //  • Aggregate tiers — give up; R2 fallback would OOM.
+        //  • County/city — fall through to R2 fetch below.
+        const _aggregateTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
+        if (_aggregateTiers.has(tier)) {
+            console.warn(`[AutoLoad] Supabase unreachable for ${tier} tier and R2 statewide parquet is not auto-fetchable (OOM risk). Dashboard will be empty until Supabase recovers.`);
+            if (uploadIcon) uploadIcon.textContent = '⚠️';
+            if (loadingTitle) loadingTitle.textContent = 'Database unreachable';
+            if (loadingSubtitle) loadingSubtitle.textContent = `${jurisdictionName} aggregates unavailable — Supabase did not respond`;
             document.dispatchEvent(new CustomEvent('crashDataLoaded', {
-                detail: { source: 'lazy-empty' }
+                detail: { source: 'lazy-empty', tier: tier }
             }));
+            setTimeout(function () { if (prog) prog.style.display = 'none'; }, 300);
+            return;
         }
 
-        return; // Skip R2 download — will be triggered lazily by showTab()
+        console.log(`[AutoLoad] Supabase unavailable — falling back to R2 parquet for ${tier} tier`);
+        // Fall through to R2 fetch (STEP 1 cache check, then R2 download).
     }
 
     // ========================================

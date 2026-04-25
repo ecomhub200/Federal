@@ -85,7 +85,11 @@ CL.data.lazyLoader = (function () {
             (async function () {
                 try {
                     if (typeof autoLoadCrashData === 'function') {
-                        await autoLoadCrashData(true); // skipCache=true bypasses the lazy guard
+                        // skipCache=true: bypass IndexedDB cache (we want fresh row data)
+                        // forceR2=true:   bypass the Supabase-first guard so we actually
+                        //                 download the parquet (this is the only call site
+                        //                 that should ever set forceR2=true).
+                        await autoLoadCrashData(true, true);
                     }
                     _r2Loaded = true;
                     resolve(true);

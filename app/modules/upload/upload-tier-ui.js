@@ -7,15 +7,17 @@
  * still bragging "loaded from delaware/kent/all_roads.parquet" — even though
  * the actual data source is now the Supabase statewide matview.
  *
- * Data-source contract:
- *   tier === 'county' || 'city'  → R2 parquet (county/city detail), full rows
- *   any other tier               → Supabase matview (primary)
- *                                  R2 statewide parquet at
- *                                  {state}/_state/{road_type}.parquet
- *                                  remains as a documented fallback, surfaced
- *                                  via getDataFilePath() — not auto-loaded
- *                                  for state/federal because the row count
- *                                  can OOM the browser.
+ * Data-source contract (effective 2026-04-25):
+ *   ALL TIERS (county / city / state / federal / region / mpo /
+ *   planning_district)             → Supabase matview (PRIMARY)
+ *   FALLBACK (county/city only)    → R2 parquet at {state}/{county}/{road_type}.parquet
+ *                                    Auto-fetched when Supabase is unreachable, AND
+ *                                    lazily fetched when a detail tab opens
+ *                                    (Analysis, Hotspots, Crash Tree, Grants, ...).
+ *   FALLBACK (aggregate tiers)     → R2 statewide parquet URL exposed for
+ *                                    debugging/manual access only — NEVER
+ *                                    auto-fetched (statewide parquet can
+ *                                    OOM the browser on large states).
  */
 (function () {
     'use strict';
@@ -268,31 +270,68 @@
         }
     }
 
+    // Cached counts from the most recent Supabase paint. Lets us repaint a
+    // truthful success card after a user flips tiers back and forth without
+    // re-querying.
+    var _lastSupabaseTotal = null;
+    var _lastSupabaseTier = null;
+
     function restoreCountySuccessCard() {
-        // When a user flips State → County and county data is already in
-        // crashState, repaint the county success copy so the card matches
-        // the (county-tier) data that's still loaded. Without this, the
-        // card would keep saying "Statewide aggregates loaded".
+        // When a user flips State → County, repaint the county success copy
+        // so the card matches the active source. Two cases:
+        //   • R2 already loaded (totalRows > 0) → "Data Auto-Loaded! N records loaded from <path>"
+        //   • Supabase-only (R2 deferred)        → "Dashboard ready — <county> · N crashes · source: Supabase matview"
         try {
             if (typeof crashState === 'undefined' || !crashState || !crashState.loaded) return;
-            var rows = (typeof crashState.totalRows === 'number') ? crashState.totalRows : 0;
-            if (rows <= 0) return;
             var titleEl = $('loadingTitle');
             var subtitleEl = $('loadingSubtitle');
             if (!titleEl || !subtitleEl) return;
-            var path = '';
-            try {
-                if (typeof getDataFilePath === 'function') path = getDataFilePath();
-            } catch (e) {}
             var iconHost = (function () {
                 var zone = $('uploadZone');
                 return zone ? zone.querySelector('div') : null;
             })();
-            if (iconHost) iconHost.textContent = '✅';
-            titleEl.textContent = 'Data Auto-Loaded!';
-            subtitleEl.textContent = rows.toLocaleString() + ' crash records loaded' + (path ? ' from ' + path : '');
-            subtitleEl.title = '';
+
+            var rows = (typeof crashState.totalRows === 'number') ? crashState.totalRows : 0;
+            if (rows > 0 && (crashState.sampleRows && crashState.sampleRows.length > 0)) {
+                // R2 has loaded — paint the canonical R2 success copy.
+                var path = '';
+                try {
+                    if (typeof getDataFilePath === 'function') path = getDataFilePath();
+                } catch (e) {}
+                if (iconHost) iconHost.textContent = '✅';
+                titleEl.textContent = 'Data Auto-Loaded!';
+                subtitleEl.textContent = rows.toLocaleString() + ' crash records loaded' + (path ? ' from ' + path : '');
+                subtitleEl.title = '';
+                return;
+            }
+
+            // R2 deferred — paint the Supabase-aware county copy.
+            paintCountySupabaseCard(_lastSupabaseTotal);
         } catch (e) { /* non-fatal */ }
+    }
+
+    function paintCountySupabaseCard(total) {
+        var titleEl = $('loadingTitle');
+        var subtitleEl = $('loadingSubtitle');
+        if (!titleEl || !subtitleEl) return;
+        var iconHost = (function () {
+            var zone = $('uploadZone');
+            return zone ? zone.querySelector('div') : null;
+        })();
+
+        var jurisdictionName = '';
+        try {
+            jurisdictionName = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.jurisdictionName) || '';
+        } catch (e) {}
+
+        if (iconHost) iconHost.textContent = '✅';
+        titleEl.textContent = 'Dashboard ready' + (jurisdictionName ? ' — ' + jurisdictionName : '');
+        var parts = [];
+        if (typeof total === 'number' && total > 0) parts.push(total.toLocaleString() + ' crashes');
+        parts.push('source: Supabase matview');
+        parts.push('detail tabs load full data on demand');
+        subtitleEl.textContent = parts.join(' · ');
+        subtitleEl.title = '';
     }
 
     /**
@@ -323,17 +362,26 @@
 
     // Wire to crashDataLoaded so when the Supabase bridge finishes painting
     // KPIs, the upload card converges to a truthful "loaded" state. Only
-    // react to the Supabase source — the other sources ('autoload', 'cache',
-    // 'lazy-empty') are county-tier R2 events and would mis-label the card
-    // if we caught them after a fast tier flip.
+    // react to the Supabase source — 'autoload' / 'cache' / 'lazy-empty'
+    // are county-tier R2 events with their own copy.
     document.addEventListener('crashDataLoaded', function (evt) {
         var detail = (evt && evt.detail) || {};
         if (detail.source !== 'supabase') return;
         var tier = getActiveTier();
-        if (COUNTY_LIKE[tier] || tier === 'county') return;
+        var total = typeof detail.total === 'number' ? detail.total : null;
+
+        // Stash the most recent Supabase total so a later tier flip can
+        // repaint truthfully without re-querying.
+        _lastSupabaseTotal = total;
+        _lastSupabaseTier = tier;
+
+        if (COUNTY_LIKE[tier] || tier === 'county') {
+            paintCountySupabaseCard(total);
+            return;
+        }
         paintUploadCard(tier, {
             phase: 'success',
-            total: typeof detail.total === 'number' ? detail.total : null,
+            total: total,
             source: 'Supabase matview'
         });
     });
