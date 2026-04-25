@@ -62294,8 +62294,14 @@ function applyPedFilters() {
     const groupBy = document.getElementById('pedGroupBy')?.value || 'route';
     const qf = pedAnalysisState.filters;
 
-    // Start with all pedestrian crashes
-    let crashes = crashState.sampleRows.filter(c => isYes(c[COL.PED]));
+    // Supabase-first: tab-loaders preloads ped/bike crashes. Falls back to
+    // crashState.sampleRows when Supabase isn't available. The .filter() below
+    // narrows to PED only — bike rows in the cache are dropped here and
+    // picked up by applyBikeFilters() further down.
+    const tabRows = (CL.data && CL.data.tabLoaders)
+        ? CL.data.tabLoaders.getTabRows('pedestrian')
+        : (crashState.sampleRows || []);
+    let crashes = tabRows.filter(c => isYes(c[COL.PED]));
 
     // Apply date filter
     if (startDateStr || endDateStr) {
@@ -63072,7 +63078,12 @@ function applyBikeFilters() {
     const groupBy = document.getElementById('bikeGroupBy')?.value || 'route';
     const qf = bikeAnalysisState.filters;
 
-    let crashes = crashState.sampleRows.filter(c => isYes(c[COL.BIKE]));
+    // Supabase-first: shares the 'pedestrian' tab cache (preloader fetches
+    // ped + bike with `pedBike: 'either'`). Falls back to crashState.sampleRows.
+    const tabRows = (CL.data && CL.data.tabLoaders)
+        ? CL.data.tabLoaders.getTabRows('pedestrian')
+        : (crashState.sampleRows || []);
+    let crashes = tabRows.filter(c => isYes(c[COL.BIKE]));
 
     // Apply date filter
     if (startDateStr || endDateStr) {
@@ -102070,12 +102081,18 @@ function generateProfessionalTableRows(node, indent = 0) {
 // ============================================================
 
 function initFatalSpeedingTab() {
-    if (!crashState.loaded || !crashState.sampleRows?.length) {
+    // Supabase-first: data may live in the tab-loaders cache instead of
+    // crashState.sampleRows when Supabase served this tab.
+    const tabRows = (CL.data && CL.data.tabLoaders)
+        ? CL.data.tabLoaders.getTabRows('fatalspeeding')
+        : (crashState.sampleRows || []);
+    if (!crashState.loaded || tabRows.length === 0) {
         console.log('[FS] No crash data loaded');
         return;
     }
 
-    console.log('[FS] Initializing Fatal & Speeding tab');
+    console.log('[FS] Initializing Fatal & Speeding tab (' + tabRows.length.toLocaleString() + ' rows, source: ' +
+        ((CL.data && CL.data.tabLoaders && CL.data.tabLoaders.tabServedBySupabase('fatalspeeding')) ? 'Supabase' : 'R2') + ')');
     fatalSpeedingState.loaded = true;
     processFSData();
     updateFSDisplay();
@@ -102126,7 +102143,13 @@ function clearFSDateFilter() {
 }
 
 function processFSData() {
-    const data = crashState.sampleRows || [];
+    // Supabase-first: tab-loaders preloads K|A crashes into a tab cache so we
+    // never have to download the full R2 parquet just to render this tab.
+    // Falls back to crashState.sampleRows automatically when Supabase isn't
+    // available (offline mode, matview missing, etc.). See app/modules/data/tab-loaders.js
+    const data = (CL.data && CL.data.tabLoaders)
+        ? CL.data.tabLoaders.getTabRows('fatalspeeding')
+        : (crashState.sampleRows || []);
     const filters = fatalSpeedingState.filters;
 
     // Parse date filters
@@ -152814,6 +152837,7 @@ function signDef_exportPDF() {
 <script src="../assets/js/data-client.js"></script>
 <script src="modules/data/supabase-bridge.js"></script>
 <script src="modules/data/lazy-loader.js"></script>
+<script src="modules/data/tab-loaders.js"></script>
 <script>
   // Initialize Supabase data client after page load
   // This does NOT change any existing data loading — it just makes the client available
