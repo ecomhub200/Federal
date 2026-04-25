@@ -4515,6 +4515,7 @@ textarea:focus-visible {
 <script src="modules/upload/road-defaults.js"></script>
 <script src="modules/upload/upload-pipeline.js"></script>
 <script src="modules/upload/api-connector.js"></script>
+<script src="modules/upload/upload-tier-ui.js"></script>
 
 <!-- Worker support: lazy sampleRows loader (csv-worker.js is loaded via new Worker()) -->
 <script src="modules/worker/sample-rows-loader.js"></script>
@@ -20926,6 +20927,13 @@ async function handleTierChange(tier) {
         // ── Update road type filter labels for this tier ──
         if (typeof updateRoadTypeLabels === 'function') updateRoadTypeLabels(tier);
 
+        // ── Repaint upload tab for this tier (hide county dropdown in non-county
+        // views, swap in the scope card, reset stale "loaded from delaware/kent"
+        // success copy) BEFORE any async fetch so the UI never lies. ──
+        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.applyUploadTierUI) {
+            CL.upload.tierUI.applyUploadTierUI(tier);
+        }
+
         // ── Clear previous tier's boundary overlays ──
         if (typeof removeMPOBoundaryLayer === 'function') removeMPOBoundaryLayer();
         if (typeof removeRegionBoundaryLayer === 'function') removeRegionBoundaryLayer();
@@ -21033,13 +21041,14 @@ async function handleTierChange(tier) {
 
         // Load aggregate data for the tier
         if (tier === 'federal' || tier === 'state') {
-            // Use _getActiveStateKey() for full state name (e.g., 'colorado') — NOT abbreviation ('co')
-            // R2 paths require full state key: colorado/_statewide/aggregates.json
-            const stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : (appConfig?.defaultState || 'colorado');
-            const aggData = await AggregateLoader.loadForTier(tier, stateKey, null);
-            if (aggData) {
-                console.log(`[Tier] Loaded ${tier} aggregate data:`, Object.keys(aggData));
-            }
+            // Data-source contract for non-county tiers (effective 2026-04-25):
+            //   PRIMARY  — Supabase matview (injected via supabaseBridge below)
+            //   FALLBACK — R2 parquet at {state}/_state/{road_type}.parquet
+            //              (URL surfaced via getDataFilePath() / fallbackR2Url();
+            //              not auto-loaded because statewide parquets can OOM
+            //              the browser on large states.)
+            // Note: a legacy `{state}/_statewide/aggregates.json` was looked up
+            // here but was never published — removed to stop the noisy 404.
 
             // For state/federal tiers: use Supabase matview (pre-aggregated).
             // Do NOT call autoLoadCrashData() — the statewide R2 parquet file
