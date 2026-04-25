@@ -5581,9 +5581,13 @@ Your data stays private. All processing happens in your browser.
 
 <div id="dashboardLoadingBanner" role="status" aria-live="polite" style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;padding:0.75rem 1rem;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:10px;color:#3730a3;font-size:0.9rem;">
 <div class="dashboard-loading-spinner" aria-hidden="true" style="width:18px;height:18px;border:2px solid #c7d2fe;border-top-color:#4f46e5;border-radius:50%;animation:dashboardSpin 0.9s linear infinite;flex-shrink:0;"></div>
-<div style="flex:1;"><strong id="dashboardLoadingTitle">Loading crash data…</strong> <span id="dashboardLoadingSubtitle" style="opacity:0.8;">Fetching from cloud storage. Counts will appear shortly.</span></div>
+<div style="flex:1;min-width:0;">
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.75rem;"><strong id="dashboardLoadingTitle">Loading crash data…</strong><span id="dashboardLoadingPercent" style="font-weight:700;font-variant-numeric:tabular-nums;color:#4f46e5;">…</span></div>
+<div id="dashboardLoadingBarOuter" style="margin-top:0.4rem;height:6px;background:rgba(99,102,241,0.18);border-radius:999px;overflow:hidden;position:relative;"><div id="dashboardLoadingBarInner" style="height:100%;width:0%;background:linear-gradient(90deg,#6366f1,#8b5cf6);border-radius:999px;transition:width 0.25s ease-out;box-shadow:0 0 8px rgba(99,102,241,0.55);"></div></div>
+<div id="dashboardLoadingSubtitle" style="margin-top:0.35rem;opacity:0.8;font-size:0.8rem;">Fetching from cloud storage. Counts will appear shortly.</div>
 </div>
-<style>@keyframes dashboardSpin { to { transform: rotate(360deg); } }</style>
+</div>
+<style>@keyframes dashboardSpin { to { transform: rotate(360deg); } } #dashboardLoadingBanner.is-indeterminate #dashboardLoadingBarInner { width:35% !important; animation: dashboardLoadingSweep 1.4s ease-in-out infinite; } @keyframes dashboardLoadingSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(285%); } }</style>
 <div class="kpi-grid" id="dashboardKPIs" role="region" aria-label="Key performance indicators" style="opacity:0.55;transition:opacity 250ms ease;">
 <div class="kpi-card total">
 <div class="kpi-value" id="kpiTotal">0</div>
@@ -22792,7 +22796,7 @@ const AggregateLoader = (() => {
 // All file paths relative to app/index.html location
 // Update BASE_PATH if app is moved to a different directory
 // ============================================================
-const APP_VERSION = '2.1.2-stream-progress';  // Real download % via streaming fetch on autoload
+const APP_VERSION = '2.1.3-dash-progress-bar';  // Stream progress mirrored into Dashboard banner
 console.log(`[App] CRASH LENS v${APP_VERSION} loading...`);
 
 // Shared function to dismiss the loading overlay (called by auth protection or fallback)
@@ -33341,20 +33345,40 @@ function setLoadProgress(received, total, label, subtext) {
     const pct = document.getElementById('progressPercent');
     const lbl = document.getElementById('progressLabel');
     const sub = document.getElementById('progressSubtext');
-    if (!bar || !pct) return;
-    if (container) container.classList.remove('is-indeterminate');
-    if (lbl && label) lbl.textContent = label;
+    // Mirror into the Dashboard banner so users on the Dashboard tab also see %
+    const dashBanner = document.getElementById('dashboardLoadingBanner');
+    const dashPct = document.getElementById('dashboardLoadingPercent');
+    const dashBar = document.getElementById('dashboardLoadingBarInner');
+    const dashSub = document.getElementById('dashboardLoadingSubtitle');
+    const dashTitle = document.getElementById('dashboardLoadingTitle');
     if (Number.isFinite(total) && total > 0) {
         const ratio = Math.max(0, Math.min(1, received / total));
         const percent = Math.floor(ratio * 100);
-        bar.style.width = percent + '%';
-        pct.textContent = percent + '%';
-        if (sub) sub.textContent = subtext || (`${_formatBytes(received)} of ${_formatBytes(total)}`);
+        const subMsg = subtext || (`${_formatBytes(received)} of ${_formatBytes(total)}`);
+        if (bar) bar.style.width = percent + '%';
+        if (pct) pct.textContent = percent + '%';
+        if (container) container.classList.remove('is-indeterminate');
+        if (lbl && label) lbl.textContent = label;
+        if (sub) sub.textContent = subMsg;
+        if (dashBanner) dashBanner.classList.remove('is-indeterminate');
+        if (dashBar) dashBar.style.width = percent + '%';
+        if (dashPct) dashPct.textContent = percent + '%';
+        if (dashSub) dashSub.textContent = subMsg;
+        if (dashTitle && label) dashTitle.textContent = label === 'DOWNLOADING' ? 'Downloading crash data…'
+                                                      : label === 'PARSING'    ? 'Parsing crash data…'
+                                                      : 'Loading crash data…';
     } else {
         // Total unknown — show received bytes only, leave bar indeterminate
         if (container) container.classList.add('is-indeterminate');
-        pct.textContent = received > 0 ? _formatBytes(received) : '…';
+        if (lbl && label) lbl.textContent = label;
+        if (pct) pct.textContent = received > 0 ? _formatBytes(received) : '…';
         if (sub) sub.textContent = subtext || 'Downloading… (size unknown)';
+        if (dashBanner) dashBanner.classList.add('is-indeterminate');
+        if (dashPct) dashPct.textContent = received > 0 ? _formatBytes(received) : '…';
+        if (dashSub) dashSub.textContent = subtext || 'Downloading… (size unknown)';
+        if (dashTitle && label) dashTitle.textContent = label === 'DOWNLOADING' ? 'Downloading crash data…'
+                                                      : label === 'PARSING'    ? 'Parsing crash data…'
+                                                      : 'Loading crash data…';
     }
 }
 function setLoadIndeterminate(label, subtext) {
@@ -33363,11 +33387,21 @@ function setLoadIndeterminate(label, subtext) {
     const sub = document.getElementById('progressSubtext');
     const pct = document.getElementById('progressPercent');
     const bar = document.getElementById('progressBar');
+    const dashBanner = document.getElementById('dashboardLoadingBanner');
+    const dashPct = document.getElementById('dashboardLoadingPercent');
+    const dashBar = document.getElementById('dashboardLoadingBarInner');
+    const dashSub = document.getElementById('dashboardLoadingSubtitle');
+    const dashTitle = document.getElementById('dashboardLoadingTitle');
     if (container) container.classList.add('is-indeterminate');
     if (lbl && label) lbl.textContent = label;
     if (sub && subtext) sub.textContent = subtext;
     if (pct) pct.textContent = '…';
     if (bar) bar.style.width = '35%';
+    if (dashBanner) dashBanner.classList.add('is-indeterminate');
+    if (dashPct) dashPct.textContent = '…';
+    if (dashBar) dashBar.style.width = '35%';
+    if (dashSub && subtext) dashSub.textContent = subtext;
+    if (dashTitle && label) dashTitle.textContent = label === 'PARSING' ? 'Parsing crash data…' : 'Loading crash data…';
 }
 function updateProgress(count, startTime) {
     const elapsed = (Date.now() - startTime) / 1000;
@@ -33387,6 +33421,17 @@ function updateProgress(count, startTime) {
     document.getElementById('statRows').textContent = count.toLocaleString();
     document.getElementById('statSpeed').textContent = speed.toLocaleString();
     document.getElementById('statElapsed').textContent = elapsed.toFixed(1) + 's';
+    // Mirror into Dashboard banner so users on Dashboard tab see parse progress too
+    const dashBanner = document.getElementById('dashboardLoadingBanner');
+    const dashBar = document.getElementById('dashboardLoadingBarInner');
+    const dashPct = document.getElementById('dashboardLoadingPercent');
+    const dashSub = document.getElementById('dashboardLoadingSubtitle');
+    const dashTitle = document.getElementById('dashboardLoadingTitle');
+    if (dashBanner) dashBanner.classList.remove('is-indeterminate');
+    if (dashBar) dashBar.style.width = '100%';
+    if (dashPct) dashPct.textContent = '100%';
+    if (dashSub) dashSub.textContent = count.toLocaleString() + ' rows parsed';
+    if (dashTitle) dashTitle.textContent = 'Parsing crash data…';
 }
 
 function showUploadSummary() {
