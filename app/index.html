@@ -214,10 +214,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .btn-toggle-group .btn-toggle.active{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;box-shadow:0 2px 8px rgba(30,64,175,.25)}
 
 .progress-container{margin-top:1.25rem}
-.progress-bar-outer{background:var(--gray-light);border-radius:999px;height:22px;overflow:hidden;position:relative}
-.progress-bar-inner{background:linear-gradient(90deg,var(--primary),var(--secondary));height:100%;width:0;transition:width .1s;border-radius:999px}
+.progress-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.5rem;gap:1rem}
+.progress-label{font-weight:700;letter-spacing:.18em;font-size:.8rem;color:var(--primary);text-transform:uppercase}
+.progress-percent{font-weight:700;font-size:1.6rem;color:var(--primary);font-variant-numeric:tabular-nums;line-height:1}
+.progress-bar-outer{background:var(--gray-light);border-radius:999px;height:18px;overflow:hidden;position:relative;box-shadow:inset 0 1px 2px rgba(0,0,0,.08),0 0 14px rgba(99,102,241,.18)}
+.progress-bar-inner{background:linear-gradient(90deg,var(--primary),var(--secondary));height:100%;width:0;transition:width .25s ease-out;border-radius:999px;box-shadow:0 0 14px rgba(99,102,241,.55)}
 .progress-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-weight:600;font-size:.75rem;color:var(--dark)}
+.progress-subtext{margin-top:.45rem;font-size:.8rem;color:#6b7280;font-variant-numeric:tabular-nums}
 .progress-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-top:.75rem}
+.progress-container.is-indeterminate .progress-bar-inner{width:35% !important;animation:progressIndeterminate 1.4s ease-in-out infinite}
+@keyframes progressIndeterminate{0%{transform:translateX(-100%)}100%{transform:translateX(285%)}}
 .stat-box{background:var(--light);padding:.75rem;border-radius:var(--radius);text-align:center;border:1px solid var(--gray-light)}
 .stat-box .value{font-size:1.1rem;font-weight:700;color:var(--primary)}
 .stat-box .label{font-size:.7rem;color:var(--gray);margin-top:.2rem}
@@ -5003,7 +5009,12 @@ textarea:focus-visible {
 </p>
 </div>
 <div class="progress-container" id="progressContainer" style="display:none">
-<div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar"></div><span class="progress-text" id="progressText">0%</span></div>
+<div class="progress-header">
+<span class="progress-label" id="progressLabel">LOADING</span>
+<span class="progress-percent" id="progressPercent">0%</span>
+</div>
+<div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar"></div><span class="progress-text" id="progressText" style="display:none">0%</span></div>
+<div class="progress-subtext" id="progressSubtext">Connecting to data source…</div>
 <div class="progress-stats">
 <div class="stat-box"><div class="value" id="statRows">0</div><div class="label">Rows Processed</div></div>
 <div class="stat-box"><div class="value" id="statSpeed">0</div><div class="label">Rows/Second</div></div>
@@ -22781,7 +22792,7 @@ const AggregateLoader = (() => {
 // All file paths relative to app/index.html location
 // Update BASE_PATH if app is moved to a different directory
 // ============================================================
-const APP_VERSION = '2.1.1-dash-load-fix';  // Dashboard re-renders on autoload + lazy/Supabase paths; .parquet-only R2 paths
+const APP_VERSION = '2.1.2-stream-progress';  // Real download % via streaming fetch on autoload
 console.log(`[App] CRASH LENS v${APP_VERSION} loading...`);
 
 // Shared function to dismiss the loading overlay (called by auth protection or fallback)
@@ -23297,6 +23308,66 @@ async function fetchCsvWithFallback(url, opts) {
         }
     }
     return lastResp; // Return last failed response
+}
+
+// ============================================================
+// STREAMING DOWNLOAD HELPERS
+// Read a Response body in chunks so we can drive a real progress
+// bar instead of waiting for the whole transfer to complete before
+// the UI shows anything.
+//
+// Notes:
+//  - Content-Length may be missing (e.g. when R2 sends Transfer-
+//    Encoding: chunked or when the browser is decoding gzip on the
+//    fly). In that case we can't compute a true %, so the caller
+//    should switch the bar to indeterminate via setLoadProgress(...).
+//  - For binary data (parquet) use streamResponseToArrayBuffer; for
+//    text (CSV) use streamResponseToText.
+//  - Each call invokes onProgress(received, total) where total is
+//    null when unknown.
+// ============================================================
+async function _streamResponseChunks(response, onProgress) {
+    const total = Number(response.headers.get('content-length')) || null;
+    const body = response.body;
+    if (!body || typeof body.getReader !== 'function') {
+        // No streaming support — fall back to one-shot; no intermediate progress.
+        const buf = await response.arrayBuffer();
+        if (typeof onProgress === 'function') onProgress(buf.byteLength, buf.byteLength);
+        return { chunks: [new Uint8Array(buf)], received: buf.byteLength, total: buf.byteLength };
+    }
+    const reader = body.getReader();
+    const chunks = [];
+    let received = 0;
+    if (typeof onProgress === 'function') onProgress(0, total);
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.byteLength;
+        if (typeof onProgress === 'function') onProgress(received, total);
+    }
+    return { chunks, received, total };
+}
+
+async function streamResponseToArrayBuffer(response, onProgress) {
+    const { chunks, received } = await _streamResponseChunks(response, onProgress);
+    if (chunks.length === 1) return chunks[0].buffer.slice(chunks[0].byteOffset, chunks[0].byteOffset + chunks[0].byteLength);
+    const out = new Uint8Array(received);
+    let offset = 0;
+    for (const c of chunks) { out.set(c, offset); offset += c.byteLength; }
+    return out.buffer;
+}
+
+async function streamResponseToText(response, onProgress) {
+    const { chunks } = await _streamResponseChunks(response, onProgress);
+    // Concatenate chunks then decode once (TextDecoder handles split UTF-8 sequences correctly
+    // when given the full buffer, avoiding the corruption you'd get from per-chunk decoding).
+    let totalLen = 0;
+    for (const c of chunks) totalLen += c.byteLength;
+    const merged = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const c of chunks) { merged.set(c, offset); offset += c.byteLength; }
+    return new TextDecoder('utf-8').decode(merged);
 }
 
 // ============================================================
@@ -32395,16 +32466,25 @@ async function autoLoadCrashData(skipCache = false) {
             if (dataFormat === 'parquet.gz' || dataFormat === 'parquet') {
                 // ── Parquet path: read as ArrayBuffer, parse with hyparquet ──
                 console.log('%c[AutoLoad] Parquet data detected, parsing...', 'color: #8b5cf6; font-weight: bold');
-                return response.arrayBuffer().then(async (arrayBuffer) => {
+                // Reveal the progress card up front so the user sees download
+                // progress accumulate, not a frozen "0%" until parse begins.
+                if (prog) prog.style.display = 'block';
+                if (uploadIcon) uploadIcon.textContent = '🔄';
+                if (loadingTitle) loadingTitle.textContent = 'Auto-Loading Crash Data';
+                if (loadingSubtitle) loadingSubtitle.textContent = `Downloading ${jurisdictionName} parquet…`;
+                setLoadProgress(0, null, 'DOWNLOADING', `Downloading ${jurisdictionName} crash data…`);
+                return streamResponseToArrayBuffer(response, (received, total) => {
+                    setLoadProgress(received, total, 'DOWNLOADING',
+                        total ? `Downloading ${jurisdictionName} crash data — ${_formatBytes(received)} of ${_formatBytes(total)}`
+                              : `Downloading ${jurisdictionName} crash data — ${_formatBytes(received)}`);
+                }).then(async (arrayBuffer) => {
                     if (myGeneration !== _autoLoadGeneration) {
                         console.warn(`[AutoLoad] Generation ${myGeneration} superseded before parquet parse, aborting`);
                         return;
                     }
                     resetState();
-                    if (prog) prog.style.display = 'block';
-                    if (uploadIcon) uploadIcon.textContent = '🔄';
-                    if (loadingTitle) loadingTitle.textContent = 'Auto-Loading Crash Data';
                     if (loadingSubtitle) loadingSubtitle.textContent = `Parsing ${jurisdictionName} parquet data...`;
+                    setLoadIndeterminate('PARSING', `Decoding parquet (${_formatBytes(arrayBuffer.byteLength)})…`);
 
                     const startTime = Date.now();
                     try {
@@ -32492,7 +32572,18 @@ async function autoLoadCrashData(skipCache = false) {
             }
 
             // ── CSV path (csv.gz or csv) ──
-            return response.text();
+            // Reveal the progress card before the body stream starts so the
+            // user sees download progress instead of a frozen UI.
+            if (prog) prog.style.display = 'block';
+            if (uploadIcon) uploadIcon.textContent = '🔄';
+            if (loadingTitle) loadingTitle.textContent = 'Auto-Loading Crash Data';
+            if (loadingSubtitle) loadingSubtitle.textContent = `Downloading ${jurisdictionName} data…`;
+            setLoadProgress(0, null, 'DOWNLOADING', `Downloading ${jurisdictionName} crash data…`);
+            return streamResponseToText(response, (received, total) => {
+                setLoadProgress(received, total, 'DOWNLOADING',
+                    total ? `Downloading ${jurisdictionName} crash data — ${_formatBytes(received)} of ${_formatBytes(total)}`
+                          : `Downloading ${jurisdictionName} crash data — ${_formatBytes(received)}`);
+            });
         })
         .then(csvText => {
             // Parquet path returns undefined from its .then() — skip CSV processing
@@ -32506,10 +32597,8 @@ async function autoLoadCrashData(skipCache = false) {
             // File found - process it
             console.log('[AutoLoad] Data received, parsing CSV...');
             resetState();
-            if (prog) prog.style.display = 'block';
-            if (uploadIcon) uploadIcon.textContent = '🔄';
-            if (loadingTitle) loadingTitle.textContent = 'Auto-Loading Crash Data';
             if (loadingSubtitle) loadingSubtitle.textContent = `Processing ${jurisdictionName} data...`;
+            setLoadIndeterminate('PARSING', `Parsing ${jurisdictionName} CSV…`);
 
             const startTime = Date.now();
 
@@ -33228,11 +33317,73 @@ function finalizeData() {
     console.log('[Grants] County baselines calculated:', grantState.baselines ? 'OK' : 'FAILED');
 }
 
+// ─── Load Progress UI ────────────────────────────────────────
+// Drives the upload card's LOADING + bar + % display.
+//   setLoadProgress(received, total, label?, subtext?)
+//     - received/total in bytes; total may be null when unknown
+//     - omit args to read current state (no-op)
+//   setLoadIndeterminate(label?, subtext?)
+//     - swap to indeterminate animation when total bytes unknown or
+//       during the parse phase
+//   updateProgress(count, startTime)  [legacy]
+//     - row-count updater used during the parse phase; keeps the
+//       bar full and updates the row/speed/elapsed stats
+function _formatBytes(n) {
+    if (!Number.isFinite(n) || n <= 0) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+    return (n / 1073741824).toFixed(2) + ' GB';
+}
+function setLoadProgress(received, total, label, subtext) {
+    const container = document.getElementById('progressContainer');
+    const bar = document.getElementById('progressBar');
+    const pct = document.getElementById('progressPercent');
+    const lbl = document.getElementById('progressLabel');
+    const sub = document.getElementById('progressSubtext');
+    if (!bar || !pct) return;
+    if (container) container.classList.remove('is-indeterminate');
+    if (lbl && label) lbl.textContent = label;
+    if (Number.isFinite(total) && total > 0) {
+        const ratio = Math.max(0, Math.min(1, received / total));
+        const percent = Math.floor(ratio * 100);
+        bar.style.width = percent + '%';
+        pct.textContent = percent + '%';
+        if (sub) sub.textContent = subtext || (`${_formatBytes(received)} of ${_formatBytes(total)}`);
+    } else {
+        // Total unknown — show received bytes only, leave bar indeterminate
+        if (container) container.classList.add('is-indeterminate');
+        pct.textContent = received > 0 ? _formatBytes(received) : '…';
+        if (sub) sub.textContent = subtext || 'Downloading… (size unknown)';
+    }
+}
+function setLoadIndeterminate(label, subtext) {
+    const container = document.getElementById('progressContainer');
+    const lbl = document.getElementById('progressLabel');
+    const sub = document.getElementById('progressSubtext');
+    const pct = document.getElementById('progressPercent');
+    const bar = document.getElementById('progressBar');
+    if (container) container.classList.add('is-indeterminate');
+    if (lbl && label) lbl.textContent = label;
+    if (sub && subtext) sub.textContent = subtext;
+    if (pct) pct.textContent = '…';
+    if (bar) bar.style.width = '35%';
+}
 function updateProgress(count, startTime) {
     const elapsed = (Date.now() - startTime) / 1000;
     const speed = Math.round(count / elapsed);
-    document.getElementById('progressBar').style.width = '100%';
-    document.getElementById('progressText').textContent = count.toLocaleString() + ' rows';
+    const container = document.getElementById('progressContainer');
+    if (container) container.classList.remove('is-indeterminate');
+    const bar = document.getElementById('progressBar');
+    if (bar) bar.style.width = '100%';
+    const pct = document.getElementById('progressPercent');
+    if (pct) pct.textContent = '100%';
+    const lbl = document.getElementById('progressLabel');
+    if (lbl) lbl.textContent = 'PARSING';
+    const sub = document.getElementById('progressSubtext');
+    if (sub) sub.textContent = count.toLocaleString() + ' rows parsed';
+    const txt = document.getElementById('progressText');
+    if (txt) txt.textContent = count.toLocaleString() + ' rows';
     document.getElementById('statRows').textContent = count.toLocaleString();
     document.getElementById('statSpeed').textContent = speed.toLocaleString();
     document.getElementById('statElapsed').textContent = elapsed.toFixed(1) + 's';
