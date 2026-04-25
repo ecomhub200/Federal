@@ -26171,8 +26171,17 @@ function monitorCrashStateChanges() {
             if (crashState.loaded && crashState.totalRows > 0) {
                 updateDataConnectionStatus('connected');
             } else if (!crashState.loaded) {
-                // Only show disconnected if we were previously connected
-                if (connectionState.status === 'connected') {
+                // At aggregate tiers (state/federal/region/mpo/planning_district), KPIs are
+                // painted by supabase-bridge.js. crashState.loaded flips to false during
+                // bridge re-injection — that is expected, NOT a real disconnect.
+                // Skip the disconnected status update and auto-reconnect to avoid
+                // wasted state-level R2 downloads that the aggregate tier guard ignores.
+                var _monTier = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext.viewTier : 'county';
+                if (_monTier === 'state' || _monTier === 'federal' || _monTier === 'region'
+                    || _monTier === 'mpo' || _monTier === 'planning_district') {
+                    console.log('[Connection] crashState.loaded=false at aggregate tier (' + _monTier + ') — bridge handles KPIs, skipping reconnect');
+                } else if (connectionState.status === 'connected') {
+                    // Only show disconnected if we were previously connected
                     updateDataConnectionStatus('disconnected');
                     console.warn('[Connection] Data connection lost - crashState.loaded became false');
 
@@ -46887,6 +46896,16 @@ function updateDashboard() {
     // Phase 1B: Update tier-specific sections (comparison matrices, breadcrumb, scope header)
     if (typeof updateDashboardTierSections === 'function') {
         updateDashboardTierSections();
+    }
+
+    // At aggregate tiers (state/federal/region/mpo/planning_district), the dashboard
+    // KPIs are painted by supabase-bridge.js from the Supabase matview.
+    // Do NOT overwrite them with stale county-level crashState.aggregates.
+    // Tier sections (breadcrumb, comparison tables) are still updated above.
+    var _currentTier = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext.viewTier : 'county';
+    if (_currentTier === 'state' || _currentTier === 'federal' || _currentTier === 'region'
+        || _currentTier === 'mpo' || _currentTier === 'planning_district') {
+        return;
     }
 
     const filtered = getFilteredStats();
