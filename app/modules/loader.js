@@ -15,6 +15,7 @@ CL.data = CL.data || {};
 CL.data.client = null; // Populated by data-client.js init (Phase 1)
 CL.data.supabaseBridge = null; // Populated by supabase-bridge.js (Phase 2)
 CL.data.mapBridge = null;       // Populated by supabase-map-bridge.js (Phase 3)
+CL.data.lazyLoader = null;      // Populated by lazy-loader.js (Phase 6)
 CL.spatial = CL.spatial || {};
 CL.upload = CL.upload || {};
 CL.utils = CL.utils || {};

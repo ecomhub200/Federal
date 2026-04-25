@@ -21451,6 +21451,7 @@ async function loadStatewideCSVForTier(stateKey) {
             complete: function() {
                 crashState.totalRows = rowCount;
                 crashState.loaded = true;
+                if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
                 if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
                 if (typeof finalizeData === 'function') finalizeData();
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -27443,6 +27444,7 @@ function restoreCrashStateFromCache(cached) {
     crashState.nodes = cached.nodes;
     crashState.totalRows = cached.totalRows;
     crashState.loaded = true;
+    if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
     if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
 
     // Track what data was loaded for later verification
@@ -31664,6 +31666,7 @@ function _processRowObjects(fields, rows, uploadZone, prog) {
 
     crashState.totalRows = rowCount;
     crashState.loaded = true;
+    if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
     if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
     finalizeData();
     updateProgress(rowCount, startTime);
@@ -31703,6 +31706,7 @@ function _parseCsvText(csvText, uploadZone, prog) {
         complete: function() {
                 crashState.totalRows = rowCount;
                 crashState.loaded = true;
+                if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
                 if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
                 finalizeData();
                 updateProgress(rowCount, startTime);
@@ -32405,6 +32409,7 @@ async function autoLoadCrashData(skipCache = false) {
 
                         crashState.totalRows = rowCount;
                         crashState.loaded = true;
+                        if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
                         if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
                         finalizeData();
                         updateProgress(rowCount, startTime);
@@ -32560,6 +32565,7 @@ async function autoLoadCrashData(skipCache = false) {
                             crashState.missingGPS = msg.missingGPS;
                             crashState.totalRows = msg.totalRows;
                             crashState.loaded = true;
+                            if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
                             if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
 
                             console.log(`[AutoLoad] Worker complete: ${msg.totalRows.toLocaleString()} rows, ${_pendingMapPoints.length.toLocaleString()} mapPoints (${msg.mapPointChunks} chunks)`);
@@ -32652,6 +32658,7 @@ async function autoLoadCrashData(skipCache = false) {
 function _onAutoLoadComplete(rowCount, startTime, dataFilePath, jurisdictionName, uploadIcon, loadingTitle, loadingSubtitle, prog) {
     crashState.totalRows = rowCount;
     crashState.loaded = true;
+    if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
     if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
 
     // Only call finalizeData if sampleRows were loaded (main-thread path)
@@ -77442,6 +77449,7 @@ function loadSession(event) {
         try {
             const s = JSON.parse(e.target.result);
             crashState.loaded = true;
+            if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
             if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
             crashState.totalRows = s.totalRows;
             crashState.aggregates = s.aggregates;
