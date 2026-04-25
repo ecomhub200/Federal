@@ -30995,19 +30995,20 @@ function showTab(tabId) {
             }
 
             // Also ensure jurisdiction boundary layer is loaded if enabled but not yet displayed (fallback)
-            if (jurisdictionId && crashMap &&
+            const _mapJurisdiction = localStorage.getItem('selectedJurisdiction');
+            if (_mapJurisdiction && crashMap &&
                 builtInLayersState?.jurisdictionBoundary?.enabled &&
                 !builtInLayersState.jurisdictionBoundary.layer &&
                 (activeTier === 'county' || !activeTier)) {
-                addJurisdictionBoundaryLayer(jurisdictionId);
+                addJurisdictionBoundaryLayer(_mapJurisdiction);
             }
 
             // And magisterial districts if enabled but not yet displayed
-            if (jurisdictionId && crashMap &&
+            if (_mapJurisdiction && crashMap &&
                 builtInLayersState?.magisterialDistricts?.enabled &&
                 builtInLayersState.magisterialDistricts.layers?.length === 0) {
                 console.log('[Districts] Map tab shown - loading magisterial districts');
-                loadMagisterialDistricts(jurisdictionId);
+                loadMagisterialDistricts(_mapJurisdiction);
             }
         }, 200);
     }
@@ -65312,15 +65313,221 @@ document.addEventListener('click', function(e) {
 // ============================================================
 // PEOPLE INJURY ANALYSIS
 // ============================================================
+
+// Aggregate-tier path: build the People Analysis charts from mv_safety_categories
+// and mv_analysis_summary when sampleRows is unavailable. Crash counts here are
+// a reasonable proxy for person counts at aggregate scale.
+async function updatePeopleFromMatview(tier) {
+    const dc = (window.CL && CL.data) ? CL.data.client : null;
+    if (!dc) { console.warn('[PedBike] No data client'); return; }
+
+    let tierResolved = { tier: tier, value: null };
+    try {
+        if (CL.data.supabaseBridge && typeof CL.data.supabaseBridge.resolveTier === 'function') {
+            tierResolved = CL.data.supabaseBridge.resolveTier();
+        }
+    } catch (e) { /* fall through */ }
+
+    const filter = document.getElementById('peopleInjuryFilter')?.value || 'all';
+
+    try {
+        const [categories, analysis] = await Promise.all([
+            dc.getSafetyCategories(tierResolved.tier, tierResolved.value),
+            dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value)
+        ]);
+
+        if (!categories && !analysis) {
+            console.warn('[PedBike] No matview data for', tierResolved.tier, tierResolved.value);
+            return;
+        }
+
+        console.log('[PedBike] Building from matviews for tier:', tierResolved.tier, tierResolved.value);
+
+        // Pull category buckets safely
+        const empty = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+        const pedCat = (categories && categories.pedestrian) || empty;
+        const bikeCat = (categories && categories.bicycle) || empty;
+        const motoCat = (categories && categories.motorcycle) || empty;
+        const unrestrainedCat = (categories && categories.unrestrained) || empty;
+        const seniorCat = (categories && categories.senior) || empty;
+        const youngCat = (categories && categories.young) || empty;
+        const speedCat = (categories && categories.speed) || empty;
+        const alcoholCat = (categories && categories.impaired) || empty;
+        const distractedCat = (categories && categories.distracted) || empty;
+
+        // Apply injury filter to a category bucket
+        const getCount = (cat) => {
+            if (filter === 'all') return (cat.K || 0) + (cat.A || 0) + (cat.B || 0) + (cat.C || 0);
+            return cat[filter] || 0;
+        };
+
+        const peopleData = {
+            walking: getCount(pedCat),
+            motorcycle: getCount(motoCat),
+            bike: getCount(bikeCat),
+            noBelt: getCount(unrestrainedCat),
+            seniorBelted: getCount(seniorCat),
+            protected: 0
+        };
+
+        // "Protected" = injured persons not falling into any of the typed buckets above
+        let totalInjured = 0;
+        if (analysis && analysis.bySeverity) {
+            const sev = analysis.bySeverity;
+            totalInjured = filter === 'all'
+                ? ((sev.K || 0) + (sev.A || 0) + (sev.B || 0) + (sev.C || 0))
+                : (sev[filter] || 0);
+        }
+        const typedTotal = peopleData.walking + peopleData.motorcycle + peopleData.bike +
+                           peopleData.noBelt + peopleData.seniorBelted;
+        peopleData.protected = Math.max(0, totalInjured - typedTotal);
+
+        const totalPeople = peopleData.walking + peopleData.motorcycle + peopleData.bike +
+                            peopleData.noBelt + peopleData.protected + peopleData.seniorBelted;
+
+        // ----- People type donut + custom legend -----
+        const totalNumEl = document.getElementById('peopleTotalNum');
+        if (totalNumEl) totalNumEl.textContent = totalPeople.toLocaleString();
+
+        const typeColors = ['#f97316', '#eab308', '#22c55e', '#3b82f6', '#06b6d4', '#8b5cf6'];
+        const typeLabels = ['Walking', 'Riding Motorcycle', 'Riding Bike', 'No Belt', 'Protected (not senior)', 'Senior wearing seatbelt'];
+        const typeData = [peopleData.walking, peopleData.motorcycle, peopleData.bike,
+                          peopleData.noBelt, peopleData.protected, peopleData.seniorBelted];
+
+        const legendEl = document.getElementById('peopleTypeLegend');
+        if (legendEl) {
+            let legendHtml = '';
+            typeLabels.forEach((label, i) => {
+                const val = typeData[i];
+                const pctVal = totalPeople > 0 ? (val / totalPeople * 100).toFixed(1) : 0;
+                legendHtml += `<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem">
+                    <span style="width:14px;height:14px;background:${typeColors[i]};border-radius:3px;flex-shrink:0"></span>
+                    <span style="flex:1">${label}</span>
+                    <span style="font-weight:600;min-width:50px;text-align:right">${val.toLocaleString()}</span>
+                    <span style="color:#64748b;min-width:45px;text-align:right">(${pctVal}%)</span>
+                </div>`;
+            });
+            legendEl.innerHTML = legendHtml;
+        }
+
+        if (typeof createChart === 'function') {
+            createChart('chartPeopleType', 'doughnut', {
+                labels: typeLabels,
+                datasets: [{
+                    data: typeData,
+                    backgroundColor: typeColors,
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            }, { cutout: '65%', plugins: { legend: { display: false } } });
+        }
+
+        // ----- People by year bar chart -----
+        if (analysis && analysis.byYear && typeof createChart === 'function') {
+            const years = Object.keys(analysis.byYear).sort();
+            const yearData = years.map(y => {
+                const counts = analysis.byYear[y] || {};
+                if (filter === 'all') return (counts.K || 0) + (counts.A || 0) + (counts.B || 0) + (counts.C || 0);
+                return counts[filter] || 0;
+            });
+            createChart('chartPeopleYear', 'bar', {
+                labels: years,
+                datasets: [{
+                    label: filter === 'all' ? 'People Injured' : `${filter} Injuries`,
+                    data: yearData,
+                    backgroundColor: '#1e40af',
+                    borderRadius: 4
+                }]
+            }, {
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => `People: ${ctx.raw.toLocaleString()}` } }
+                },
+                scales: {
+                    y: { beginAtZero: true, ticks: { font: { size: 11 } } },
+                    x: { ticks: { font: { size: 11 } } }
+                }
+            });
+        }
+
+        // ----- Contributing factor pies -----
+        // Counts from mv_safety_categories are total crash counts in each factor
+        // bucket, so the "other" complement is total injured minus that bucket.
+        const factorChart = (id, labels, data, colors) => {
+            if (typeof createChart !== 'function') return;
+            const total = data.reduce((a, b) => a + b, 0);
+            createChart(id, 'pie', {
+                labels: labels,
+                datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+            }, { plugins: { legend: { display: false } }, maintainAspectRatio: true });
+            if (typeof buildCustomLegend === 'function') {
+                buildCustomLegend(id.replace('chart', 'legend'), labels, data, colors, total);
+            }
+        };
+
+        const baseTotal = totalInjured;
+        const speedTot = filter === 'all' ? speedCat.total : (speedCat[filter] || 0);
+        const alcTot = filter === 'all' ? alcoholCat.total : (alcoholCat[filter] || 0);
+        const distTot = filter === 'all' ? distractedCat.total : (distractedCat[filter] || 0);
+        const beltTot = filter === 'all' ? unrestrainedCat.total : (unrestrainedCat[filter] || 0);
+        const seniorTot = filter === 'all' ? seniorCat.total : (seniorCat[filter] || 0);
+        const youngTot = filter === 'all' ? youngCat.total : (youngCat[filter] || 0);
+
+        factorChart('chartFactorSpeed',
+            ['Speeding', 'Not Speeding', 'N/A'],
+            [speedTot, Math.max(0, baseTotal - speedTot - peopleData.walking), peopleData.walking],
+            ['#64748b', '#cbd5e1', '#e2e8f0']);
+
+        factorChart('chartFactorBelt',
+            ['Unrestrained', 'Restrained', 'N/A'],
+            [beltTot, Math.max(0, baseTotal - beltTot - peopleData.walking), peopleData.walking],
+            ['#3b82f6', '#cbd5e1', '#e2e8f0']);
+
+        factorChart('chartFactorAlcohol',
+            ['Alcohol', 'Not Alcohol'],
+            [alcTot, Math.max(0, baseTotal - alcTot)],
+            ['#22c55e', '#cbd5e1']);
+
+        factorChart('chartFactorDistracted',
+            ['Distracted', 'Not Distracted'],
+            [distTot, Math.max(0, baseTotal - distTot)],
+            ['#64748b', '#cbd5e1']);
+
+        factorChart('chartFactorAge',
+            ['Young (15-20)', 'Senior (65+)', 'Other'],
+            [youngTot, seniorTot, Math.max(0, baseTotal - youngTot - seniorTot)],
+            ['#3b82f6', '#64748b', '#cbd5e1']);
+
+        // User type breakdown: matview doesn't expose driver/passenger split at aggregate
+        // level, so approximate the same way the per-row path does (70/30 driver/passenger
+        // for non-ped categories) to keep the chart populated.
+        const pedPeople = peopleData.walking;
+        const nonPedPeople = Math.max(0, baseTotal - pedPeople);
+        factorChart('chartFactorUserType',
+            ['Driver', 'Pedestrian', 'Passenger', 'Other'],
+            [Math.round(nonPedPeople * 0.7), pedPeople, Math.round(nonPedPeople * 0.3), 0],
+            ['#3b82f6', '#f97316', '#64748b', '#cbd5e1']);
+    } catch (e) {
+        console.warn('[PedBike] Matview load failed:', e.message);
+    }
+}
+
 function updatePeopleAnalysis() {
     if (!crashState.loaded) return;
-    
+
+    const _ppTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
+
+    // Aggregate tiers: use matview data (no sampleRows available)
+    if (_ppTier !== 'county' && _ppTier !== 'city') {
+        updatePeopleFromMatview(_ppTier);
+        return;
+    }
+
     const filter = document.getElementById('peopleInjuryFilter')?.value || 'all';
     const rows = crashState.sampleRows;
-    
-    // Debug: check if rows exist
+
     if (!rows || rows.length === 0) {
-        console.log('No sample rows available for People Analysis');
+        console.log('[PedBike] No sample rows available for People Analysis');
         return;
     }
     
@@ -86624,7 +86831,7 @@ function displayCrashProfile() {
     }
 
     // Load multi-view imagery panel for CMF location
-    loadCMFImagery();
+    if (typeof loadCMFImagery === 'function') loadCMFImagery();
 
     // Update AI Countermeasure Assistant data badge
     if (typeof updateCMFAIDataBadge === 'function') {
@@ -98659,6 +98866,14 @@ function clearSafetyMapFilter() {
 
 // Initialize Crash Tree tab
 function initCrashTreeTab() {
+    const _ctTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
+
+    // Aggregate tiers: use mv_crash_tree matview via data-client (no sampleRows available)
+    if (_ctTier !== 'county' && _ctTier !== 'city') {
+        initCrashTreeFromMatview(_ctTier);
+        return;
+    }
+
     if (!crashState.loaded || !crashState.sampleRows?.length) {
         console.log('[CrashTree] No crash data loaded');
         document.getElementById('crashTreePlaceholder').style.display = 'block';
@@ -98698,6 +98913,136 @@ function initCrashTreeTab() {
     }
 }
 
+// Aggregate-tier path: build the crash tree from mv_crash_tree.
+// Used when sampleRows is unavailable (state/region/MPO/planning_district).
+async function initCrashTreeFromMatview(tier) {
+    const dc = (window.CL && CL.data) ? CL.data.client : null;
+    const placeholder = document.getElementById('crashTreePlaceholder');
+    const viz = document.getElementById('crashTreeViz');
+    if (!dc) {
+        console.warn('[CrashTree] No data client available');
+        if (placeholder) placeholder.style.display = 'block';
+        if (viz) viz.style.display = 'none';
+        return;
+    }
+
+    // Resolve tier value via supabase-bridge (matches city → county semantics already)
+    let tierResolved = { tier: tier, value: null };
+    try {
+        if (CL.data.supabaseBridge && typeof CL.data.supabaseBridge.resolveTier === 'function') {
+            tierResolved = CL.data.supabaseBridge.resolveTier();
+        }
+    } catch (e) { /* fall through */ }
+
+    const treeType = crashTreeState.treeType || 'facility';
+
+    try {
+        const data = await dc.getCrashTree(tierResolved.tier, tierResolved.value, { treeType });
+        if (!data || data.length === 0) {
+            console.log('[CrashTree] mv_crash_tree returned no rows for', tierResolved.tier, tierResolved.value, treeType);
+            if (placeholder) placeholder.style.display = 'block';
+            if (viz) viz.style.display = 'none';
+            return;
+        }
+
+        console.log('[CrashTree] Loaded', data.length, 'rows from mv_crash_tree (' + treeType + ')');
+
+        // Aggregate matview rows into the {id, name, total, pct, K, A, B, C, O, children:[]}
+        // node tree shape that renderCrashTree() expects.
+        const idSafe = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unknown';
+
+        const rootStats = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+        const l1Map = new Map(); // l1 → { stats, l2Map: Map(l2 → { stats, l3Map: Map(l3 → stats) }) }
+
+        for (const r of data) {
+            const total = r.total || 0;
+            const k = r.k || 0, a = r.a || 0, b = r.b || 0, c = r.c || 0, o = r.o || 0;
+            rootStats.total += total;
+            rootStats.K += k; rootStats.A += a; rootStats.B += b; rootStats.C += c; rootStats.O += o;
+
+            const l1 = (r.level1 || '').trim() || 'Unknown';
+            const l2 = (r.level2 || '').trim();
+            const l3 = (r.level3 || '').trim();
+
+            if (!l1Map.has(l1)) l1Map.set(l1, { stats: { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 }, l2Map: new Map() });
+            const l1Entry = l1Map.get(l1);
+            l1Entry.stats.total += total;
+            l1Entry.stats.K += k; l1Entry.stats.A += a; l1Entry.stats.B += b; l1Entry.stats.C += c; l1Entry.stats.O += o;
+
+            if (l2) {
+                if (!l1Entry.l2Map.has(l2)) l1Entry.l2Map.set(l2, { stats: { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 }, l3Map: new Map() });
+                const l2Entry = l1Entry.l2Map.get(l2);
+                l2Entry.stats.total += total;
+                l2Entry.stats.K += k; l2Entry.stats.A += a; l2Entry.stats.B += b; l2Entry.stats.C += c; l2Entry.stats.O += o;
+
+                if (l3) {
+                    if (!l2Entry.l3Map.has(l3)) l2Entry.l3Map.set(l3, { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 });
+                    const l3Entry = l2Entry.l3Map.get(l3);
+                    l3Entry.total += total;
+                    l3Entry.K += k; l3Entry.A += a; l3Entry.B += b; l3Entry.C += c; l3Entry.O += o;
+                }
+            }
+        }
+
+        const buildNode = (id, name, stats, children) => ({
+            id, name,
+            total: stats.total, K: stats.K, A: stats.A, B: stats.B, C: stats.C, O: stats.O,
+            pct: rootStats.total > 0 ? (stats.total / rootStats.total * 100) : 0,
+            unfilteredTotal: stats.total,
+            unfilteredKA: (stats.K || 0) + (stats.A || 0),
+            children: children || []
+        });
+
+        const l1Children = [];
+        for (const [l1Name, l1Entry] of l1Map.entries()) {
+            const l1Id = idSafe(l1Name);
+            const l2Children = [];
+            for (const [l2Name, l2Entry] of l1Entry.l2Map.entries()) {
+                const l2Id = `${l1Id}-${idSafe(l2Name)}`;
+                const l3Children = [];
+                for (const [l3Name, l3Stats] of l2Entry.l3Map.entries()) {
+                    l3Children.push(buildNode(`${l2Id}-${idSafe(l3Name)}`, l3Name, l3Stats, []));
+                }
+                l3Children.sort((a, b) => b.total - a.total);
+                l2Children.push(buildNode(l2Id, l2Name, l2Entry.stats, l3Children));
+            }
+            l2Children.sort((a, b) => b.total - a.total);
+            l1Children.push(buildNode(l1Id, l1Name, l1Entry.stats, l2Children));
+        }
+        l1Children.sort((a, b) => b.total - a.total);
+
+        const rootNode = buildNode('root', 'All Crashes', rootStats, l1Children);
+
+        crashTreeState.treeData = rootNode;
+        crashTreeState.totalCrashes = rootStats.total;
+        crashTreeState.totalKA = (rootStats.K || 0) + (rootStats.A || 0);
+        crashTreeState.loaded = true;
+        crashTreeState.source = 'supabase';
+
+        if (placeholder) placeholder.style.display = 'none';
+        if (viz) viz.style.display = 'block';
+
+        renderCrashTree();
+        if (typeof updateCrashTreeStats === 'function') updateCrashTreeStats();
+
+        setTimeout(() => {
+            if (typeof autoExpandDominantPath === 'function') autoExpandDominantPath();
+            if (typeof analyzeRiskFactors === 'function') analyzeRiskFactors();
+            if (typeof buildSecondaryTreeAnalysis === 'function') buildSecondaryTreeAnalysis();
+        }, 100);
+
+        // Show Over-Represented Segments panel if Facility tree is active
+        const segmentPanel = document.getElementById('facilitySegmentAnalysis');
+        if (segmentPanel) {
+            segmentPanel.style.display = treeType === 'facility' ? 'block' : 'none';
+        }
+    } catch (e) {
+        console.warn('[CrashTree] Matview load failed:', e.message);
+        if (placeholder) placeholder.style.display = 'block';
+        if (viz) viz.style.display = 'none';
+    }
+}
+
 // Set tree type (facility or crashType)
 function setCrashTreeType(type) {
     crashTreeState.treeType = type;
@@ -98725,6 +99070,19 @@ function setCrashTreeType(type) {
         activeBtn.style.borderColor = '#059669';
         activeBtn.style.background = '#ecfdf5';
         activeBtn.style.color = '#065f46';
+    }
+
+    // Aggregate tiers re-fetch from matview with the new tree type
+    const _ctTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
+    if (_ctTier !== 'county' && _ctTier !== 'city') {
+        crashTreeState.expandedNodes = new Set(['root']);
+        initCrashTreeFromMatview(_ctTier);
+
+        const segmentPanelAgg = document.getElementById('facilitySegmentAnalysis');
+        if (segmentPanelAgg) {
+            segmentPanelAgg.style.display = type === 'facility' ? 'block' : 'none';
+        }
+        return;
     }
 
     // Rebuild tree
@@ -102066,6 +102424,14 @@ function generateProfessionalTableRows(node, indent = 0) {
 // ============================================================
 
 function initFatalSpeedingTab() {
+    const _fsTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
+
+    // Aggregate tiers: use matview data (no sampleRows available)
+    if (_fsTier !== 'county' && _fsTier !== 'city') {
+        initFatalSpeedingFromMatview(_fsTier);
+        return;
+    }
+
     // Supabase-first: data may live in the tab-loaders cache instead of
     // crashState.sampleRows when Supabase served this tab.
     const tabRows = (CL.data && CL.data.tabLoaders)
@@ -102081,6 +102447,146 @@ function initFatalSpeedingTab() {
     fatalSpeedingState.loaded = true;
     processFSData();
     updateFSDisplay();
+}
+
+// Aggregate-tier path: populate fatalSpeedingState from the safety_categories
+// and analysis_summary matviews when sampleRows is unavailable.
+async function initFatalSpeedingFromMatview(tier) {
+    const dc = (window.CL && CL.data) ? CL.data.client : null;
+    if (!dc) { console.warn('[FS] No data client'); return; }
+
+    let tierResolved = { tier: tier, value: null };
+    try {
+        if (CL.data.supabaseBridge && typeof CL.data.supabaseBridge.resolveTier === 'function') {
+            tierResolved = CL.data.supabaseBridge.resolveTier();
+        }
+    } catch (e) { /* fall through */ }
+
+    try {
+        const [categories, analysis] = await Promise.all([
+            dc.getSafetyCategories(tierResolved.tier, tierResolved.value),
+            dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value)
+        ]);
+
+        if (!categories && !analysis) {
+            console.warn('[FS] No matview data available for', tierResolved.tier, tierResolved.value);
+            return;
+        }
+
+        console.log('[FS] Initializing from matviews for tier:', tierResolved.tier, tierResolved.value);
+
+        // Reset state to a clean shape that matches what processFSData() builds
+        fatalSpeedingState.fatalData = {
+            crashes: [], totalFatalities: 0, totalCrashes: 0, aCrashCount: 0,
+            byFactor: {}, byRoute: {}, byYear: {}, byYearFactor: {}, byYearSeverity: {},
+            byHour: {}, severity: { K: 0, A: 0, B: 0, C: 0, O: 0 }
+        };
+        fatalSpeedingState.speedData = {
+            crashes: [], totalCrashes: 0, fatalCount: 0,
+            byFactor: {}, byRoute: {}, byYear: {}, byYearFactor: {}, byYearSeverity: {},
+            byHour: {}, severity: { K: 0, A: 0, B: 0, C: 0, O: 0 }
+        };
+        fatalSpeedingState.combinedData = { fatalOnly: 0, speedOnly: 0, both: 0 };
+
+        // Initialize all factors (matches processFSData() initialization)
+        Object.keys(fsFactorConfig).forEach(factor => {
+            fatalSpeedingState.fatalData.byFactor[factor] = { count: 0, crashes: [], severity: { K: 0, A: 0, B: 0, C: 0, O: 0 } };
+            fatalSpeedingState.speedData.byFactor[factor] = { count: 0, crashes: [], severity: { K: 0, A: 0, B: 0, C: 0, O: 0 } };
+        });
+
+        // ---- From mv_analysis_summary ----
+        if (analysis) {
+            const sev = analysis.bySeverity || {};
+            fatalSpeedingState.fatalData.totalCrashes = sev.K || 0;
+            fatalSpeedingState.fatalData.totalFatalities = sev.K || 0;  // Approximate: 1 fatality per K crash
+            fatalSpeedingState.fatalData.aCrashCount = sev.A || 0;
+            fatalSpeedingState.fatalData.severity = {
+                K: sev.K || 0, A: sev.A || 0, B: sev.B || 0, C: sev.C || 0, O: sev.O || 0
+            };
+
+            // Total filtered = total crashes across all severities (denominator for KPI %)
+            fatalSpeedingState.totalFilteredCrashes =
+                (sev.K || 0) + (sev.A || 0) + (sev.B || 0) + (sev.C || 0) + (sev.O || 0);
+
+            // Yearly K counts
+            const byYear = analysis.byYear || {};
+            for (const [yr, counts] of Object.entries(byYear)) {
+                const y = parseInt(yr);
+                if (y >= 2000) {
+                    fatalSpeedingState.fatalData.byYear[y] = counts.K || 0;
+                    fatalSpeedingState.fatalData.byYearSeverity[y] = {
+                        crashes: counts.K || 0,
+                        fatalities: counts.K || 0
+                    };
+                    fatalSpeedingState.fatalData.byYearFactor[y] = {};
+                }
+            }
+
+            const byHour = analysis.byHour || {};
+            fatalSpeedingState.fatalData.byHour = { ...byHour };
+        }
+
+        // ---- From mv_safety_categories ----
+        // Map matview category names to fsFactorConfig keys (most match 1:1)
+        const categoryToFactor = {
+            'impaired': 'impaired', 'speed': 'speed', 'distracted': 'distracted',
+            'drowsy': 'drowsy', 'unrestrained': 'unrestrained', 'hitrun': 'hitrun',
+            'young': 'young', 'senior': 'senior',
+            'pedestrian': 'pedestrian', 'bicycle': 'bicycle', 'motorcycle': 'motorcycle',
+            'lgtruck': 'lgtruck',
+            'nighttime': 'nighttime', 'weather': 'weather',
+            'curves': 'curves', 'intersection': 'intersection',
+            'roaddeparture': 'roaddeparture', 'workzone': 'workzone',
+            'school': 'school', 'guardrail': 'guardrail'
+        };
+
+        if (categories) {
+            for (const [catName, catData] of Object.entries(categories)) {
+                const factorKey = categoryToFactor[catName];
+
+                // Fatal view: K-severity count for this factor
+                if (factorKey && fatalSpeedingState.fatalData.byFactor[factorKey]) {
+                    fatalSpeedingState.fatalData.byFactor[factorKey].count = catData.K || 0;
+                    fatalSpeedingState.fatalData.byFactor[factorKey].severity = {
+                        K: catData.K || 0, A: catData.A || 0, B: catData.B || 0,
+                        C: catData.C || 0, O: catData.O || 0
+                    };
+                }
+
+                // Speed view: populate top-level speed totals
+                if (catName === 'speed') {
+                    fatalSpeedingState.speedData.totalCrashes = catData.total || 0;
+                    fatalSpeedingState.speedData.fatalCount = catData.K || 0;
+                    fatalSpeedingState.speedData.severity = {
+                        K: catData.K || 0, A: catData.A || 0, B: catData.B || 0,
+                        C: catData.C || 0, O: catData.O || 0
+                    };
+                }
+
+                // Speed view: factor counts (all severities) for speed-related crashes
+                if (factorKey && fatalSpeedingState.speedData.byFactor[factorKey]) {
+                    fatalSpeedingState.speedData.byFactor[factorKey].count = catData.total || 0;
+                    fatalSpeedingState.speedData.byFactor[factorKey].severity = {
+                        K: catData.K || 0, A: catData.A || 0, B: catData.B || 0,
+                        C: catData.C || 0, O: catData.O || 0
+                    };
+                }
+            }
+
+            // Combined Venn approximation
+            const speedCat = categories['speed'] || {};
+            fatalSpeedingState.combinedData.both = speedCat.K || 0;
+            fatalSpeedingState.combinedData.fatalOnly = (fatalSpeedingState.fatalData.totalCrashes || 0) - (speedCat.K || 0);
+            fatalSpeedingState.combinedData.speedOnly = (speedCat.total || 0) - (speedCat.K || 0);
+        }
+
+        fatalSpeedingState.loaded = true;
+        fatalSpeedingState.source = 'supabase';
+
+        if (typeof updateFSDisplay === 'function') updateFSDisplay();
+    } catch (e) {
+        console.warn('[FS] Matview initialization failed:', e.message);
+    }
 }
 
 function applyFSFilters() {
@@ -106861,22 +107367,24 @@ function autoPopulateWarrantForm() {
     // Populate Signal Warrant Analyzer W7 section with crash data
     signal_autoPopulateWarrant7();
 
-    if (props.postedSpeed) document.getElementById('sigMajorSpeed').value = props.postedSpeed;
+    const sigSpeed = document.getElementById('sigMajorSpeed');
+    if (props.postedSpeed && sigSpeed) sigSpeed.value = props.postedSpeed;
 
     // Set AADT if available
     if (aadt) {
-        document.getElementById('sigMajorAADT').value = aadt;
+        const sigMajAADT = document.getElementById('sigMajorAADT');
+        const sigMinAADT = document.getElementById('sigMinorAADT');
+        if (sigMajAADT) sigMajAADT.value = aadt;
         // Estimate minor street at 30% of major
-        document.getElementById('sigMinorAADT').value = Math.round(aadt * 0.3);
+        if (sigMinAADT) sigMinAADT.value = Math.round(aadt * 0.3);
     }
 
     // Set approach count based on intersection type
     if (props.intType) {
         const intType = props.intType.toLowerCase();
-        if (intType.includes('3') || intType.includes('three') || intType.includes('t-')) {
-            document.getElementById('sigApproaches').value = '3';
-        } else {
-            document.getElementById('sigApproaches').value = '4';
+        const sigAppr = document.getElementById('sigApproaches');
+        if (sigAppr) {
+            sigAppr.value = intType.includes('3') || intType.includes('three') || intType.includes('t-') ? '3' : '4';
         }
     }
 
