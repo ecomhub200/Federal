@@ -215,11 +215,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 .progress-container{margin-top:1.25rem}
 .progress-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.5rem;gap:1rem}
-.progress-label{font-weight:700;letter-spacing:.18em;font-size:.8rem;color:var(--primary);text-transform:uppercase}
-.progress-percent{font-weight:700;font-size:1.6rem;color:var(--primary);font-variant-numeric:tabular-nums;line-height:1}
-.progress-bar-outer{background:var(--gray-light);border-radius:999px;height:18px;overflow:hidden;position:relative;box-shadow:inset 0 1px 2px rgba(0,0,0,.08),0 0 14px rgba(99,102,241,.18)}
-.progress-bar-inner{background:linear-gradient(90deg,var(--primary),var(--secondary));height:100%;width:0;transition:width .25s ease-out;border-radius:999px;box-shadow:0 0 14px rgba(99,102,241,.55)}
-.progress-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-weight:600;font-size:.75rem;color:var(--dark)}
+.progress-label{font-weight:700;letter-spacing:.18em;font-size:.8rem;color:#16a34a;text-transform:uppercase}
+.progress-percent{font-weight:700;font-size:1.6rem;color:#16a34a;font-variant-numeric:tabular-nums;line-height:1}
+.progress-bar-outer{background:#e5e7eb;border-radius:999px;height:46px;overflow:hidden;position:relative;box-shadow:inset 0 1px 3px rgba(0,0,0,.08),0 0 14px rgba(34,197,94,.18)}
+.progress-bar-inner{background:linear-gradient(90deg,#22c55e 0%,#16a34a 50%,#86efac 100%);height:100%;width:0;transition:width .35s ease-out;border-radius:999px;box-shadow:0 0 18px rgba(34,197,94,.55),inset 0 1px 0 rgba(255,255,255,.45),inset 0 -2px 4px rgba(0,0,0,.08);position:relative;overflow:hidden}
+.progress-bar-inner::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.15) 45%,rgba(255,255,255,0) 55%,rgba(255,255,255,.10) 100%);pointer-events:none;border-radius:999px}
+.progress-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-weight:700;font-size:1.15rem;color:#fff;letter-spacing:.04em;text-shadow:0 1px 2px rgba(0,0,0,.25);font-variant-numeric:tabular-nums;z-index:2;pointer-events:none}
 .progress-subtext{margin-top:.45rem;font-size:.8rem;color:#6b7280;font-variant-numeric:tabular-nums}
 .progress-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-top:.75rem}
 .progress-container.is-indeterminate .progress-bar-inner{width:35% !important;animation:progressIndeterminate 1.4s ease-in-out infinite}
@@ -5013,7 +5014,7 @@ textarea:focus-visible {
 <span class="progress-label" id="progressLabel">LOADING</span>
 <span class="progress-percent" id="progressPercent">0%</span>
 </div>
-<div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar"></div><span class="progress-text" id="progressText" style="display:none">0%</span></div>
+<div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar"></div><span class="progress-text" id="progressText">0%</span></div>
 <div class="progress-subtext" id="progressSubtext">Connecting to data source…</div>
 <div class="progress-stats">
 <div class="stat-box"><div class="value" id="statRows">0</div><div class="label">Rows Processed</div></div>
@@ -23800,36 +23801,10 @@ const userDataReadyPromise = new Promise(resolve => { _userDataReadyResolve = re
 // Safety timeout: don't block startup forever if auth is slow or disabled
 setTimeout(() => { _userDataReadyResolve(null); }, 3000);
 
-// Initial landing tab: Dashboard if user has a saved jurisdiction (localStorage first,
-// then Firestore profile). Falls back to Upload (the HTML default) for brand-new users.
-(function setInitialLandingTab() {
-    let _landingApplied = false;
-    function goToDashboard() {
-        if (_landingApplied) return;
-        _landingApplied = true;
-        const apply = () => {
-            if (typeof showTab === 'function') {
-                try { showTab('dashboard'); } catch (e) { console.warn('[LandingTab] showTab failed:', e); }
-            }
-        };
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', apply, { once: true });
-        } else {
-            apply();
-        }
-    }
-
-    // Priority 1: localStorage preferences
-    if (localStorage.getItem('selectedJurisdiction')) {
-        goToDashboard();
-        return;
-    }
-
-    // Priority 2: Firestore user profile (resolves via userDataReadyPromise)
-    userDataReadyPromise.then(userData => {
-        if (userData && userData.userJurisdiction) goToDashboard();
-    }).catch(() => { /* stay on Upload */ });
-})();
+// Initial landing tab: always Upload Data (the HTML default). The user has
+// asked that Upload remain the first tab on login so they can see the data
+// fetch / upload progress before being routed elsewhere. Tab navigation
+// remains user-driven from there.
 
 async function loadAppConfig() {
     const select = document.getElementById('jurisdictionSelect');
@@ -32247,6 +32222,10 @@ async function autoLoadCrashData(skipCache = false) {
             if (uploadIcon) uploadIcon.textContent = '🔄';
             if (loadingTitle) loadingTitle.textContent = 'Checking cache...';
             if (loadingSubtitle) loadingSubtitle.textContent = 'Looking for cached data';
+            // Reveal the progress card from the very start so the user sees a
+            // live fetching/upload status (not a frozen idle screen).
+            if (prog) prog.style.display = 'block';
+            setLoadIndeterminate('CHECKING CACHE', 'Looking for cached data…');
 
             const cached = await crashCacheLoad();
 
@@ -33350,6 +33329,7 @@ function setLoadProgress(received, total, label, subtext) {
     const pct = document.getElementById('progressPercent');
     const lbl = document.getElementById('progressLabel');
     const sub = document.getElementById('progressSubtext');
+    const txt = document.getElementById('progressText');
     if (!bar || !pct) return;
     if (container) container.classList.remove('is-indeterminate');
     if (lbl && label) lbl.textContent = label;
@@ -33358,11 +33338,13 @@ function setLoadProgress(received, total, label, subtext) {
         const percent = Math.floor(ratio * 100);
         bar.style.width = percent + '%';
         pct.textContent = percent + '%';
+        if (txt) txt.textContent = percent + '%';
         if (sub) sub.textContent = subtext || (`${_formatBytes(received)} of ${_formatBytes(total)}`);
     } else {
         // Total unknown — show received bytes only, leave bar indeterminate
         if (container) container.classList.add('is-indeterminate');
         pct.textContent = received > 0 ? _formatBytes(received) : '…';
+        if (txt) txt.textContent = received > 0 ? _formatBytes(received) : '…';
         if (sub) sub.textContent = subtext || 'Downloading… (size unknown)';
     }
 }
@@ -33372,10 +33354,12 @@ function setLoadIndeterminate(label, subtext) {
     const sub = document.getElementById('progressSubtext');
     const pct = document.getElementById('progressPercent');
     const bar = document.getElementById('progressBar');
+    const txt = document.getElementById('progressText');
     if (container) container.classList.add('is-indeterminate');
     if (lbl && label) lbl.textContent = label;
     if (sub && subtext) sub.textContent = subtext;
     if (pct) pct.textContent = '…';
+    if (txt) txt.textContent = '…';
     if (bar) bar.style.width = '35%';
 }
 function updateProgress(count, startTime) {
@@ -33392,7 +33376,7 @@ function updateProgress(count, startTime) {
     const sub = document.getElementById('progressSubtext');
     if (sub) sub.textContent = count.toLocaleString() + ' rows parsed';
     const txt = document.getElementById('progressText');
-    if (txt) txt.textContent = count.toLocaleString() + ' rows';
+    if (txt) txt.textContent = '100%';
     document.getElementById('statRows').textContent = count.toLocaleString();
     document.getElementById('statSpeed').textContent = speed.toLocaleString();
     document.getElementById('statElapsed').textContent = elapsed.toFixed(1) + 's';
