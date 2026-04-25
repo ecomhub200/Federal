@@ -10,14 +10,19 @@
  * Data-source contract (effective 2026-04-25):
  *   ALL TIERS (county / city / state / federal / region / mpo /
  *   planning_district)             → Supabase matview (PRIMARY)
- *   FALLBACK (county/city only)    → R2 parquet at {state}/{county}/{road_type}.parquet
- *                                    Auto-fetched when Supabase is unreachable, AND
- *                                    lazily fetched when a detail tab opens
- *                                    (Analysis, Hotspots, Crash Tree, Grants, ...).
- *   FALLBACK (aggregate tiers)     → R2 statewide parquet URL exposed for
- *                                    debugging/manual access only — NEVER
- *                                    auto-fetched (statewide parquet can
- *                                    OOM the browser on large states).
+ *   FALLBACK (all tiers)           → R2 parquet auto-fetched when Supabase
+ *                                    is unreachable. County/city use the
+ *                                    county-level parquet; aggregate tiers
+ *                                    use {state}/_state/{road_type}.parquet.
+ *                                    A console warning is logged for
+ *                                    aggregate tiers because the statewide
+ *                                    file can be large enough to stress
+ *                                    in-browser parsing.
+ *   ALSO LAZY (county/city + 9 detail tabs) → R2 parquet auto-fetched when
+ *                                    Analysis / Hotspots / Crash Tree /
+ *                                    Grants / Deep Dive / Safety / Fatal
+ *                                    Speeding / Intersection / Pedestrian
+ *                                    opens (these need row-level data).
  */
 (function () {
     'use strict';

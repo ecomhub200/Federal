@@ -32086,12 +32086,15 @@ let _autoLoadGeneration = 0;
 // Data-source contract (effective 2026-04-25):
 //   PRIMARY  — Supabase matview for ALL tiers (county, city, state, federal,
 //              region, mpo, planning_district). Fast, light, dashboard-only.
-//   FALLBACK — R2 parquet (county/city only — auto-fetched when Supabase
-//              is unreachable, AND lazily fetched by detail tabs that need
-//              row-level data: Analysis, Hotspots, Crash Tree, Grants,
-//              Deep Dive, Safety, Fatal Speeding, Intersection, Pedestrian).
-//   For aggregate tiers (state/federal/region/mpo/planning_district) the
-//   R2 statewide parquet is NEVER auto-fetched — it can OOM the browser.
+//   FALLBACK — R2 parquet, auto-fetched when Supabase is unreachable for
+//              ANY tier. County/city load {state}/{county}/{road_type}.parquet;
+//              aggregate tiers load {state}/_state/{road_type}.parquet
+//              (large statewide files may stress the browser — warning
+//              logged but the fetch is honored).
+//   ALSO     — R2 parquet lazily fetched on county/city when a detail tab
+//              that needs row-level data opens (Analysis, Hotspots, Crash
+//              Tree, Grants, Deep Dive, Safety, Fatal Speeding,
+//              Intersection, Pedestrian) — see lazy-loader.js.
 //
 // Parameters:
 //   skipCache (default false) — bypass the IndexedDB cache lookup. Used
@@ -32215,68 +32218,25 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
             return; // Supabase served the dashboard — done.
         }
 
-        // Supabase unreachable. Branch by tier:
-        //  • Aggregate tiers — give up; R2 fallback would OOM.
-        //  • County/city — fall through to R2 fetch below.
+        // Supabase unreachable — fall through to R2 parquet for ALL tiers.
+        // For aggregate tiers (state/federal/region/mpo/planning_district) the
+        // file can be large enough to OOM the browser; surface a clear warning
+        // but honor the fallback rather than leaving the user stranded.
         const _aggregateTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
         if (_aggregateTiers.has(tier)) {
-            console.warn(`[AutoLoad] Supabase unreachable for ${tier} tier and R2 statewide parquet is not auto-fetchable (OOM risk). Dashboard will be empty until Supabase recovers.`);
-            if (uploadIcon) uploadIcon.textContent = '⚠️';
-            if (loadingTitle) loadingTitle.textContent = 'Database unreachable';
-            if (loadingSubtitle) loadingSubtitle.textContent = `${jurisdictionName} aggregates unavailable — Supabase did not respond`;
-            document.dispatchEvent(new CustomEvent('crashDataLoaded', {
-                detail: { source: 'lazy-empty', tier: tier }
-            }));
-            setTimeout(function () { if (prog) prog.style.display = 'none'; }, 300);
-            return;
+            console.warn(`[AutoLoad] Supabase unreachable for ${tier} tier — falling back to R2 statewide parquet. WARNING: large statewide files (multi-million rows) may OOM the browser.`);
+        } else {
+            console.log(`[AutoLoad] Supabase unavailable — falling back to R2 parquet for ${tier} tier`);
         }
-
-        console.log(`[AutoLoad] Supabase unavailable — falling back to R2 parquet for ${tier} tier`);
         // Fall through to R2 fetch (STEP 1 cache check, then R2 download).
     }
 
-    // ========================================
-    // STEP 0b: Aggregate-Tier Guard
-    // ========================================
-    // State/Federal/Region/MPO/PD tiers should NEVER download R2 data —
-    // the statewide parquet (569K+ rows × 550 cols) causes browser OOM.
-    // These tiers use Supabase matview data exclusively.
-    // Only county and city tiers are small enough for in-browser R2 parsing.
-    const AGGREGATE_TIERS = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
-    if (AGGREGATE_TIERS.has(tier)) {
-        console.log(`[AutoLoad] Tier "${tier}" uses Supabase matview — skipping R2 download (OOM prevention)`);
-        try {
-            // Reset stale R2 state before Supabase fetch
-            if (typeof crashState !== 'undefined') {
-                crashState.loaded = false;
-                crashState.sampleRows = [];
-                crashState.mapPoints = [];
-            }
-            if (window.crashLensClient
-                && typeof window.crashLensClient.getSummary === 'function'
-                && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
-                await CL.data.supabaseBridge.injectFastDashboard({ force: true });
-            } else {
-                console.warn(`[AutoLoad] Tier "${tier}" needs Supabase but client not available — dashboard will be empty`);
-            }
-            if (typeof crashState !== 'undefined') {
-                crashState.loaded = true;
-                crashState.sampleRowsLoaded = false;
-                if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
-            }
-            try { updateDataConnectionStatus('connected'); } catch (e) {}
-            if (uploadIcon) uploadIcon.textContent = '✅';
-            if (loadingTitle) loadingTitle.textContent = 'Dashboard Ready';
-            if (loadingSubtitle) loadingSubtitle.textContent = `${jurisdictionName} — aggregated view`;
-            setTimeout(function () {
-                if (prog) prog.style.display = 'none';
-                try { if (typeof showUploadSummary === 'function') showUploadSummary(); } catch (e) {}
-            }, 300);
-        } catch (e) {
-            console.warn('[AutoLoad] Supabase bridge for aggregate tier failed:', e);
-        }
-        return;
-    }
+    // STEP 0b removed (2026-04-25): the prior aggregate-tier guard hard-blocked
+    // R2 downloads for state/federal/region/mpo/planning_district tiers as an
+    // OOM safeguard. With Supabase-first now the default for ALL tiers (STEP 0
+    // above), that guard prevented the explicit R2 fallback the user wants
+    // when Supabase is unreachable. R2 fetches for aggregate tiers now proceed
+    // — the warning above is the only safety net.
 
     // ========================================
     // STEP 1: Check IndexedDB cache first
