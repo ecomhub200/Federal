@@ -4915,7 +4915,7 @@ textarea:focus-visible {
 </label>
 <div style="display:flex;flex-direction:column;gap:.5rem">
 <label class="radio-item" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;padding:.4rem .6rem;background:white;border-radius:var(--radius);border:1px solid #e2e8f0">
-<input type="radio" name="roadTypeFilter" id="filterCountyOnly" value="countyOnly" checked onchange="saveFilterProfile()" style="accent-color:#0ea5e9">
+<input type="radio" name="roadTypeFilter" id="filterCountyOnly" value="countyOnly" onchange="saveFilterProfile()" style="accent-color:#0ea5e9">
 <span id="filterLabelCountyOnly" style="font-size:.85rem"><strong>County Roads Only</strong> - County-maintained roads</span>
 </label>
 <label class="radio-item" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;padding:.4rem .6rem;background:white;border-radius:var(--radius);border:1px solid #e2e8f0">
@@ -4927,7 +4927,7 @@ textarea:focus-visible {
 <span id="filterLabelCountyPlusVDOT" style="font-size:.85rem"><strong>All Roads (No Interstate)</strong> - Includes state routes</span>
 </label>
 <label class="radio-item" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;padding:.4rem .6rem;background:white;border-radius:var(--radius);border:1px solid #e2e8f0">
-<input type="radio" name="roadTypeFilter" id="filterAllRoads" value="allRoads" onchange="saveFilterProfile()" style="accent-color:#0ea5e9">
+<input type="radio" name="roadTypeFilter" id="filterAllRoads" value="allRoads" checked onchange="saveFilterProfile()" style="accent-color:#0ea5e9">
 <span id="filterLabelAllRoads" style="font-size:.85rem"><strong>All Roads</strong> - Including interstates</span>
 </label>
 </div>
@@ -23718,6 +23718,37 @@ const userDataReadyPromise = new Promise(resolve => { _userDataReadyResolve = re
 // Safety timeout: don't block startup forever if auth is slow or disabled
 setTimeout(() => { _userDataReadyResolve(null); }, 3000);
 
+// Initial landing tab: Dashboard if user has a saved jurisdiction (localStorage first,
+// then Firestore profile). Falls back to Upload (the HTML default) for brand-new users.
+(function setInitialLandingTab() {
+    let _landingApplied = false;
+    function goToDashboard() {
+        if (_landingApplied) return;
+        _landingApplied = true;
+        const apply = () => {
+            if (typeof showTab === 'function') {
+                try { showTab('dashboard'); } catch (e) { console.warn('[LandingTab] showTab failed:', e); }
+            }
+        };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', apply, { once: true });
+        } else {
+            apply();
+        }
+    }
+
+    // Priority 1: localStorage preferences
+    if (localStorage.getItem('selectedJurisdiction')) {
+        goToDashboard();
+        return;
+    }
+
+    // Priority 2: Firestore user profile (resolves via userDataReadyPromise)
+    userDataReadyPromise.then(userData => {
+        if (userData && userData.userJurisdiction) goToDashboard();
+    }).catch(() => { /* stay on Upload */ });
+})();
+
 async function loadAppConfig() {
     const select = document.getElementById('jurisdictionSelect');
     updateJurisdictionDropdownStatus('loading');
@@ -31717,7 +31748,6 @@ function _onUploadComplete(rowCount, uploadZone, prog) {
         showFilterLoadingState(false);
         showRefreshButton();
         loadValidatorIframe();
-        showTab('dashboard');
     }, 500);
 }
 
@@ -32053,7 +32083,6 @@ async function autoLoadCrashData(skipCache = false) {
         setTimeout(function () {
             if (prog) prog.style.display = 'none';
             try { if (typeof showUploadSummary === 'function') showUploadSummary(); } catch (e) {}
-            try { showTab('dashboard'); } catch (e) {}
         }, 300);
 
         return; // Skip R2 download — will be triggered lazily by showTab()
@@ -32095,7 +32124,6 @@ async function autoLoadCrashData(skipCache = false) {
             setTimeout(function () {
                 if (prog) prog.style.display = 'none';
                 try { if (typeof showUploadSummary === 'function') showUploadSummary(); } catch (e) {}
-                try { showTab('dashboard'); } catch (e) {}
             }, 300);
         } catch (e) {
             console.warn('[AutoLoad] Supabase bridge for aggregate tier failed:', e);
@@ -32150,7 +32178,6 @@ async function autoLoadCrashData(skipCache = false) {
                     showFilterLoadingState(false);
                     showRefreshButton();
                     updateCacheStatusUI();
-                    showTab('dashboard');
 
                     // Show toast notification
                     showToast(`Loaded from cache (${cachedDate.toLocaleDateString()})`, 'success');
@@ -32683,7 +32710,6 @@ function _onAutoLoadComplete(rowCount, startTime, dataFilePath, jurisdictionName
         if (crashMap && typeof updateMapDisplay === 'function') {
             updateMapDisplay();
         }
-        showTab('dashboard');
     }, 500);
 }
 
