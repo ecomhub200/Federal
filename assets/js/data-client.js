@@ -488,6 +488,196 @@ class CrashLensDataClient {
   }
 
   // ─────────────────────────────────────────────────────────
+  //  TAB-AWARE SUPABASE METHODS (added 2026-04-25)
+  //
+  //  Each detail tab that previously required the full R2 parquet now has
+  //  a dedicated client method here. Methods try the corresponding Supabase
+  //  matview/RPC first and return null on failure — callers MUST treat null
+  //  as "fall back to R2 sampleRows". This lets the frontend ship before
+  //  the backend matviews are deployed (see docs/SUPABASE_BACKEND_COWORK_PROMPT.md).
+  //
+  //  Backend artefacts expected (see Cowork prompt for full SQL):
+  //    mv_hotspots         — top intersections + segments per tier
+  //    mv_crash_tree       — hierarchical severity → factor → location counts
+  //    mv_grants_baseline  — per-location totals + EPDO + K/A counts
+  //    mv_safety_categories — per-category counts (curves, ped, speed, ...)
+  //    mv_analysis_summary — yearly/monthly/severity/collision-type breakdown
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * Top crash locations (intersections + segments) for the Hot Spots tab.
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { roadType, limit (default 100) }
+   * @returns {Promise<{intersections: Array, segments: Array}|null>}
+   */
+  async getHotspots(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const allFilters = { ...tierFilters, limit_n: `eq.${opts.limit || 100}` };
+      if (opts.roadType) allFilters.road_type = `eq.${opts.roadType}`;
+      const data = await this._supabaseQuery('mv_hotspots', {
+        filters: allFilters,
+        order: 'epdo.desc',
+        limit: (opts.limit || 100) * 2,  // intersections + segments
+      });
+      this._source = 'supabase';
+      // Group by location_type into the shape the Hot Spots tab expects
+      const intersections = [], segments = [];
+      (data || []).forEach(r => {
+        const row = this._pgToFrontend(r);
+        if (r.location_type === 'intersection') intersections.push(row);
+        else if (r.location_type === 'segment') segments.push(row);
+      });
+      return { intersections, segments };
+    } catch (e) {
+      console.warn('[DataClient] getHotspots failed (matview missing?):', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Hierarchical crash counts for the Crash Tree tab.
+   * Returns counts grouped by severity → contributing factor → location.
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { treeType: 'facility'|'crashType'|'contributing' }
+   * @returns {Promise<Array|null>} Each row: { level1, level2, level3, count, K, A, B, C, O }
+   */
+  async getCrashTree(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const allFilters = { ...tierFilters };
+      if (opts.treeType) allFilters.tree_type = `eq.${opts.treeType}`;
+      const data = await this._supabaseQuery('mv_crash_tree', {
+        filters: allFilters,
+        limit: 50000,
+      });
+      this._source = 'supabase';
+      return (data || []).map(r => this._pgToFrontend(r));
+    } catch (e) {
+      console.warn('[DataClient] getCrashTree failed (matview missing?):', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Per-location baseline totals for the Grants tab (HSIP scoring).
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { roadType, yearFrom, yearTo }
+   * @returns {Promise<Array|null>} Each row: { location_name, location_type,
+   *           total_crashes, K, A, B, C, O, epdo, ped, bike }
+   */
+  async getGrantsBaseline(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const allFilters = { ...tierFilters };
+      if (opts.roadType) allFilters.road_type = `eq.${opts.roadType}`;
+      if (opts.yearFrom && opts.yearTo) {
+        allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
+      }
+      const data = await this._supabaseQuery('mv_grants_baseline', {
+        filters: allFilters,
+        order: 'epdo.desc',
+        limit: 5000,
+      });
+      this._source = 'supabase';
+      return (data || []).map(r => this._pgToFrontend(r));
+    } catch (e) {
+      console.warn('[DataClient] getGrantsBaseline failed (matview missing?):', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Per-category counts for the Safety Focus tab (curves, work zones, ped, etc.).
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { yearFrom, yearTo }
+   * @returns {Promise<object|null>} { categoryName: { total, K, A, B, C, O, crashes: [] }, ... }
+   *           Note: crashes[] is empty when served by Supabase (counts only);
+   *           tab must request individual crashes via getCrashes() on demand.
+   */
+  async getSafetyCategories(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const allFilters = { ...tierFilters };
+      if (opts.yearFrom && opts.yearTo) {
+        allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
+      }
+      const data = await this._supabaseQuery('mv_safety_categories', {
+        filters: allFilters,
+        limit: 100,
+      });
+      this._source = 'supabase';
+      // Pivot rows ({category, total, K, A, ...}) into a category-keyed object
+      const out = {};
+      (data || []).forEach(r => {
+        out[r.category] = {
+          total: r.total || 0,
+          K: r.k || 0, A: r.a || 0, B: r.b || 0, C: r.c || 0, O: r.o || 0,
+          crashes: [],  // Lazily fetched if tab needs row detail
+        };
+      });
+      return out;
+    } catch (e) {
+      console.warn('[DataClient] getSafetyCategories failed (matview missing?):', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Yearly / monthly / severity / collision-type breakdowns for the Analysis tab.
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { yearFrom, yearTo }
+   * @returns {Promise<object|null>} {
+   *           byYear: { 2020: {total,K,A,B,C,O}, ... },
+   *           byMonth: { 1: {total,K,A,...}, ... },
+   *           bySeverity: { K, A, B, C, O },
+   *           byCollision: { 'Rear End': N, 'Angle': N, ... },
+   *           byHour: { 0: N, 1: N, ... }
+   *         }
+   */
+  async getAnalysisBreakdown(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const allFilters = { ...tierFilters };
+      if (opts.yearFrom && opts.yearTo) {
+        allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
+      }
+      const data = await this._supabaseQuery('mv_analysis_summary', {
+        filters: allFilters,
+        limit: 1000,
+      });
+      this._source = 'supabase';
+      // Server returns long-form rows ({dimension, dim_value, total, K, A,...});
+      // pivot into the shape the Analysis tab expects.
+      const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byHour: {} };
+      (data || []).forEach(r => {
+        const sev = { K: r.k||0, A: r.a||0, B: r.b||0, C: r.c||0, O: r.o||0, total: r.total||0 };
+        if (r.dimension === 'year')      out.byYear[r.dim_value] = sev;
+        else if (r.dimension === 'month') out.byMonth[r.dim_value] = sev;
+        else if (r.dimension === 'severity') {
+          if (sev[r.dim_value] !== undefined) out.bySeverity[r.dim_value] = r.total || 0;
+        }
+        else if (r.dimension === 'collision') out.byCollision[r.dim_value] = r.total || 0;
+        else if (r.dimension === 'hour')      out.byHour[r.dim_value] = r.total || 0;
+      });
+      return out;
+    } catch (e) {
+      console.warn('[DataClient] getAnalysisBreakdown failed (matview missing?):', e.message);
+      return null;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
   //  SUPABASE INTERNALS
   // ─────────────────────────────────────────────────────────
 

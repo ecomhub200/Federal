@@ -48,7 +48,17 @@ CL.data.lazyLoader = (function () {
     ]);
 
     function tabNeedsR2(tabId) {
-        return R2_REQUIRED_TABS.has(tabId);
+        if (!R2_REQUIRED_TABS.has(tabId)) return false;
+        // If a Supabase preloader has already served this tab for the
+        // current tier+jurisdiction, the showTab gate should let it open
+        // directly — re-running ensureR2Loaded would loop. The preloader
+        // cache invalidates on tier/jurisdiction change.
+        if (CL.data && CL.data.tabLoaders
+            && typeof CL.data.tabLoaders.tabServedBySupabase === 'function'
+            && CL.data.tabLoaders.tabServedBySupabase(tabId)) {
+            return false;
+        }
+        return true;
     }
 
     function isR2Loaded() {
@@ -61,9 +71,17 @@ CL.data.lazyLoader = (function () {
     }
 
     /**
-     * Trigger lazy R2 download if not already loaded/loading.
-     * Returns a promise that resolves when the data is ready.
-     * Shows a loading overlay on the requesting tab while downloading.
+     * Ensure data for the requesting tab is loaded.
+     *
+     * Strategy:
+     *   1. If a per-tab Supabase preloader is registered (see tab-loaders.js),
+     *      try it first. On success, the tab gets its rows from Supabase
+     *      without ever downloading the R2 parquet.
+     *   2. On preloader failure (matview missing, network error, empty result
+     *      with no fallback), fall through to the legacy R2 download.
+     *   3. If neither path works, the tab renders its empty state.
+     *
+     * Returns a promise that resolves to true on success, false on hard failure.
      */
     function ensureR2Loaded(requestingTabId) {
         if (_r2Loaded || !_enabled) return Promise.resolve(true);
@@ -78,14 +96,36 @@ CL.data.lazyLoader = (function () {
             });
         }
 
-        console.log('[LazyLoader] Tab "' + requestingTabId + '" requires R2 data — triggering download');
         _showTabLoadingOverlay(requestingTabId);
 
         _r2LoadPromise = new Promise(function (resolve) {
             (async function () {
                 try {
+                    // ── STAGE 1: try the per-tab Supabase preloader ──
+                    if (CL.data && CL.data.tabLoaders && CL.data.tabLoaders.hasPreloader(requestingTabId)) {
+                        try {
+                            var supabaseOk = await CL.data.tabLoaders.tryPreload(requestingTabId);
+                            if (supabaseOk) {
+                                console.log('[LazyLoader] Tab "' + requestingTabId + '" served by Supabase — skipping R2 download');
+                                // Note: we do NOT set _r2Loaded=true here — other tabs
+                                // may still need the full R2 dataset and they'll trigger
+                                // their own preloader (or this download) on demand.
+                                resolve(true);
+                                return;
+                            }
+                        } catch (e) {
+                            console.warn('[LazyLoader] Supabase preloader for "' + requestingTabId + '" threw:', e && e.message);
+                        }
+                    }
+
+                    // ── STAGE 2: fall back to R2 parquet download ──
+                    console.log('[LazyLoader] Tab "' + requestingTabId + '" requires R2 data — triggering download');
                     if (typeof autoLoadCrashData === 'function') {
-                        await autoLoadCrashData(true); // skipCache=true bypasses the lazy guard
+                        // skipCache=true: bypass IndexedDB cache (we want fresh row data)
+                        // forceR2=true:   bypass the Supabase-first dashboard guard so we
+                        //                 actually download the parquet (this is the only
+                        //                 call site that should ever set forceR2=true).
+                        await autoLoadCrashData(true, true);
                     }
                     _r2Loaded = true;
                     resolve(true);
