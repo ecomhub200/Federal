@@ -515,20 +515,54 @@ class CrashLensDataClient {
     if (!this.preferSupabase || !this.supabaseKey) return null;
     try {
       const tierFilters = this._tierFilter(tier, value);
-      const allFilters = { ...tierFilters, limit_n: `eq.${opts.limit || 100}` };
+      const allFilters = { ...tierFilters };
       if (opts.roadType) allFilters.road_type = `eq.${opts.roadType}`;
+      const limit = opts.limit || 100;
+      // When no roadType filter is applied, the same location may appear up to
+      // 3 times (dot_roads / non_dot_roads / all_roads bucket), so over-fetch
+      // and merge below. With a roadType filter we still over-fetch a bit to
+      // cover the intersections + segments split.
+      const fetchLimit = opts.roadType ? limit * 2 : limit * 6;
       const data = await this._supabaseQuery('mv_hotspots', {
         filters: allFilters,
         order: 'epdo.desc',
-        limit: (opts.limit || 100) * 2,  // intersections + segments
+        limit: fetchLimit,
       });
       this._source = 'supabase';
-      // Group by location_type into the shape the Hot Spots tab expects
+
+      // When no roadType filter is applied, rows for the same physical location
+      // arrive once per road_type bucket. Merge them so totals/EPDO aren't split.
+      let rows;
+      if (opts.roadType) {
+        rows = data || [];
+      } else {
+        const merged = new Map();
+        (data || []).forEach(r => {
+          const key = `${r.location_type}|${r.location_name}|${r.rte_name}`;
+          if (!merged.has(key)) {
+            merged.set(key, { ...r, total_crashes: 0, k: 0, a: 0, b: 0, c: 0, o: 0, epdo: 0, ped_count: 0, bike_count: 0 });
+          }
+          const m = merged.get(key);
+          m.total_crashes += (r.total_crashes || 0);
+          m.k += (r.k || 0);
+          m.a += (r.a || 0);
+          m.b += (r.b || 0);
+          m.c += (r.c || 0);
+          m.o += (r.o || 0);
+          m.epdo += (r.epdo || 0);
+          m.ped_count += (r.ped_count || 0);
+          m.bike_count += (r.bike_count || 0);
+        });
+        rows = [...merged.values()].sort((a, b) => (b.epdo || 0) - (a.epdo || 0));
+      }
+
+      // Group by location_type into the shape the Hot Spots tab expects,
+      // applying the requested limit per group.
       const intersections = [], segments = [];
-      (data || []).forEach(r => {
+      rows.forEach(r => {
         const row = this._pgToFrontend(r);
-        if (r.location_type === 'intersection') intersections.push(row);
-        else if (r.location_type === 'segment') segments.push(row);
+        if (r.location_type === 'intersection' && intersections.length < limit) intersections.push(row);
+        else if (r.location_type === 'segment' && segments.length < limit) segments.push(row);
       });
       return { intersections, segments };
     } catch (e) {
@@ -583,9 +617,37 @@ class CrashLensDataClient {
       const data = await this._supabaseQuery('mv_grants_baseline', {
         filters: allFilters,
         order: 'epdo.desc',
-        limit: 5000,
+        // When merging across road_type buckets we may pull up to ~3x the rows.
+        limit: opts.roadType ? 5000 : 15000,
       });
       this._source = 'supabase';
+
+      // When no roadType filter, the same (location, year) appears once per
+      // road_type bucket. Merge them so EPDO ranking isn't split.
+      if (!opts.roadType) {
+        const merged = new Map();
+        (data || []).forEach(r => {
+          const key = `${r.location_type}|${r.location_name}|${r.rte_name}|${r.crash_year}`;
+          if (!merged.has(key)) {
+            merged.set(key, { ...r, total_crashes: 0, k: 0, a: 0, b: 0, c: 0, o: 0, epdo: 0, ped: 0, bike: 0 });
+          }
+          const m = merged.get(key);
+          m.total_crashes += (r.total_crashes || 0);
+          m.k += (r.k || 0);
+          m.a += (r.a || 0);
+          m.b += (r.b || 0);
+          m.c += (r.c || 0);
+          m.o += (r.o || 0);
+          m.epdo += (r.epdo || 0);
+          m.ped += (r.ped || 0);
+          m.bike += (r.bike || 0);
+        });
+        const sorted = [...merged.values()]
+          .sort((a, b) => (b.epdo || 0) - (a.epdo || 0))
+          .slice(0, 5000);
+        return sorted.map(r => this._pgToFrontend(r));
+      }
+
       return (data || []).map(r => this._pgToFrontend(r));
     } catch (e) {
       console.warn('[DataClient] getGrantsBaseline failed (matview missing?):', e.message);
@@ -607,22 +669,31 @@ class CrashLensDataClient {
     try {
       const tierFilters = this._tierFilter(tier, value);
       const allFilters = { ...tierFilters };
-      if (opts.yearFrom && opts.yearTo) {
-        allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
-      }
+      // NOTE: mv_safety_categories has no crash_year column — it aggregates all
+      // years by design. Year filtering is not supported for this matview.
       const data = await this._supabaseQuery('mv_safety_categories', {
         filters: allFilters,
-        limit: 100,
+        limit: 2000,
       });
       this._source = 'supabase';
-      // Pivot rows ({category, total, K, A, ...}) into a category-keyed object
+      // Rows are grouped by (state, county, district, mpo, planning_district,
+      // category). At any aggregate tier (state/region/MPO/PD) the same
+      // category appears once per county — accumulate instead of overwrite.
       const out = {};
       (data || []).forEach(r => {
-        out[r.category] = {
-          total: r.total || 0,
-          K: r.k || 0, A: r.a || 0, B: r.b || 0, C: r.c || 0, O: r.o || 0,
-          crashes: [],  // Lazily fetched if tab needs row detail
-        };
+        if (!out[r.category]) {
+          out[r.category] = {
+            total: 0, K: 0, A: 0, B: 0, C: 0, O: 0,
+            crashes: [],  // Lazily fetched if tab needs row detail
+          };
+        }
+        const cat = out[r.category];
+        cat.total += (r.total || 0);
+        cat.K += (r.k || 0);
+        cat.A += (r.a || 0);
+        cat.B += (r.b || 0);
+        cat.C += (r.c || 0);
+        cat.O += (r.o || 0);
       });
       return out;
     } catch (e) {
@@ -649,26 +720,34 @@ class CrashLensDataClient {
     try {
       const tierFilters = this._tierFilter(tier, value);
       const allFilters = { ...tierFilters };
-      if (opts.yearFrom && opts.yearTo) {
-        allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
-      }
+      // NOTE: mv_analysis_summary has no crash_year column — 'year' is already
+      // a breakdown axis (rows with dimension='year'), not a filter.
       const data = await this._supabaseQuery('mv_analysis_summary', {
         filters: allFilters,
-        limit: 1000,
+        limit: 10000,
       });
       this._source = 'supabase';
-      // Server returns long-form rows ({dimension, dim_value, total, K, A,...});
-      // pivot into the shape the Analysis tab expects.
+      // Rows are grouped by (state, county, district, mpo, planning_district,
+      // dimension, dim_value). At any aggregate tier each (dimension, dim_value)
+      // appears once per county — accumulate instead of overwrite.
       const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byHour: {} };
       (data || []).forEach(r => {
-        const sev = { K: r.k||0, A: r.a||0, B: r.b||0, C: r.c||0, O: r.o||0, total: r.total||0 };
-        if (r.dimension === 'year')      out.byYear[r.dim_value] = sev;
-        else if (r.dimension === 'month') out.byMonth[r.dim_value] = sev;
-        else if (r.dimension === 'severity') {
-          if (sev[r.dim_value] !== undefined) out.bySeverity[r.dim_value] = r.total || 0;
+        const k = r.k || 0, a = r.a || 0, b = r.b || 0, c = r.c || 0, o = r.o || 0, total = r.total || 0;
+        if (r.dimension === 'year') {
+          if (!out.byYear[r.dim_value]) out.byYear[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+          const y = out.byYear[r.dim_value];
+          y.K += k; y.A += a; y.B += b; y.C += c; y.O += o; y.total += total;
+        } else if (r.dimension === 'month') {
+          if (!out.byMonth[r.dim_value]) out.byMonth[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+          const m = out.byMonth[r.dim_value];
+          m.K += k; m.A += a; m.B += b; m.C += c; m.O += o; m.total += total;
+        } else if (r.dimension === 'severity') {
+          if (out.bySeverity[r.dim_value] !== undefined) out.bySeverity[r.dim_value] += total;
+        } else if (r.dimension === 'collision') {
+          out.byCollision[r.dim_value] = (out.byCollision[r.dim_value] || 0) + total;
+        } else if (r.dimension === 'hour') {
+          out.byHour[r.dim_value] = (out.byHour[r.dim_value] || 0) + total;
         }
-        else if (r.dimension === 'collision') out.byCollision[r.dim_value] = r.total || 0;
-        else if (r.dimension === 'hour')      out.byHour[r.dim_value] = r.total || 0;
       });
       return out;
     } catch (e) {
