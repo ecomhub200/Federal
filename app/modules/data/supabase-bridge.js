@@ -314,7 +314,7 @@ CL.data.supabaseBridge = (function () {
                 console.log('[Phase2] R2 won the race (' + fetchMs + 'ms fetch, but R2 finished first), discarding');
                 return;
             }
-            if (!Array.isArray(rows) || rows.length === 0) return;
+            if (!Array.isArray(rows) || rows.length === 0) return false;
 
             var agg = aggregate(rows);
             paintKPIs(agg);
@@ -326,9 +326,22 @@ CL.data.supabaseBridge = (function () {
             console.log('[Phase2] Supabase bridge injected', {
                 tier: t.tier, value: t.value, rows: rows.length, total: agg.total
             });
+
+            // Notify the Dashboard / loading banner that real KPI values are now
+            // painted to the DOM. The 'supabase' source tells the listener NOT
+            // to call updateDashboard() (which would overwrite our values with
+            // zeros, since crashState.aggregates is empty in lazy mode).
+            try {
+                document.dispatchEvent(new CustomEvent('crashDataLoaded', {
+                    detail: { source: 'supabase', total: agg.total, rows: rows.length }
+                }));
+            } catch (evtErr) { /* non-fatal */ }
+
+            return true;
         } catch (e) {
             console.warn('[Phase2] Supabase bridge failed (non-fatal):', e && e.message);
         }
+        return false;
     }
 
     function onR2LoadComplete() {
