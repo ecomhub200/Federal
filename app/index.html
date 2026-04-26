@@ -24709,6 +24709,18 @@ async function handleStateSelection() {
                 console.log('[StateSelector] Auto-loading data for new state:', geoConfig.stateName);
                 showFilterLoadingState(true);
                 window._autoLoadTriggered = true; // Prevent duplicate load from startup scheduler
+
+                // CRITICAL: Reset crashState and lazyLoader before loading the new state.
+                // Without this, _r2Loaded stays true from the previous state's R2 load,
+                // which causes the Supabase-first guard in autoLoadCrashData to be SKIPPED.
+                if (typeof resetState === 'function') resetState();
+
+                // Sync crashLensClient.state to the new state BEFORE the Supabase query
+                if (window.crashLensClient) {
+                    const newStateKey = geoConfig.stateKey || geoConfig.stateName?.toLowerCase().replace(/\s+/g, '_');
+                    if (newStateKey) window.crashLensClient.state = newStateKey;
+                }
+
                 autoLoadCrashData(true); // skipCache = true since cache was just invalidated
 
                 // Reload hierarchy for the new state and refresh Region/MPO dropdowns
@@ -25199,6 +25211,20 @@ function saveJurisdictionSelection() {
     console.log('[Config] Auto-loading data for new jurisdiction:', jurisdictionId);
     showFilterLoadingState(true);
     window._autoLoadTriggered = true; // Prevent duplicate load from startup scheduler
+
+    // CRITICAL: Reset crashState and lazyLoader before loading new jurisdiction.
+    if (typeof resetState === 'function') resetState();
+
+    // Sync crashLensClient.state to match the current state selection
+    if (window.crashLensClient) {
+        var stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
+        if (!stateKey) {
+            var stSel = document.getElementById('stateSelect');
+            if (stSel && stSel.value) stateKey = stSel.value.toLowerCase().replace(/\s+/g, '_');
+        }
+        if (stateKey) window.crashLensClient.state = stateKey;
+    }
+
     autoLoadCrashData(true); // skipCache = true since cache was just invalidated
 }
 

@@ -17,16 +17,14 @@ CL.data.mapBridge = (function () {
     'use strict';
 
     // ── Config ──────────────────────────────────────────────
-    var DEBOUNCE_MS = 400;          // ms after last pan/zoom before firing query
-    var CLUSTER_BUBBLE_MIN = 16;    // min bubble size (px) for cluster markers
-    var CLUSTER_BUBBLE_MAX = 60;    // max bubble size (px)
-    var _enabled = false;           // set true when Supabase client is available
+    var DEBOUNCE_MS = 400;              // ms after last pan/zoom before firing query
+    var MAX_SYNTH_PER_CLUSTER = 200;    // cap synthetic markers per server-cluster
+    var _enabled = false;               // set true when Supabase client is available
     var _debounceTimer = null;
-    var _abortController = null;    // abort in-flight fetch on new pan/zoom
-    var _clusterLayer = null;       // L.layerGroup for cluster bubbles
+    var _abortController = null;        // abort in-flight fetch on new pan/zoom
     var _lastZoom = null;
     var _lastBounds = null;
-    var _totalInViewport = 0;       // total crash count from clusters (for stats overlay)
+    var _totalInViewport = 0;           // total crash count from clusters (for stats overlay)
 
     // ── Severity colors (match createMarker) ────────────────
     var SEV_COLORS = { K: '#dc2626', A: '#ea580c', B: '#eab308', C: '#22c55e', O: '#64748b' };
@@ -47,8 +45,13 @@ CL.data.mapBridge = (function () {
             return;
         }
 
+        // Guard: detach first to prevent duplicate event listeners
+        if (_enabled) {
+            crashMap.off('moveend', _onMapMove);
+            crashMap.off('zoomend', _onMapMove);
+        }
+
         _enabled = true;
-        _clusterLayer = L.layerGroup().addTo(crashMap);
 
         crashMap.on('moveend', _onMapMove);
         crashMap.on('zoomend', _onMapMove);
@@ -67,7 +70,6 @@ CL.data.mapBridge = (function () {
         }
         if (_debounceTimer) clearTimeout(_debounceTimer);
         if (_abortController) _abortController.abort();
-        if (_clusterLayer) { _clusterLayer.clearLayers(); _clusterLayer = null; }
         _enabled = false;
         _lastZoom = null;
         _lastBounds = null;
@@ -185,9 +187,76 @@ CL.data.mapBridge = (function () {
 
     // ── Rendering ───────────────────────────────────────────
 
+    /**
+     * Seeded pseudo-random for deterministic jitter (same cluster always
+     * produces the same marker spread so the map doesn't flicker on pan).
+     */
+    function _seededRandom(seed) {
+        var x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+    }
+
+    /**
+     * For a server-side cluster, create N synthetic lightweight markers
+     * spread around the cluster center with small random jitter.
+     * These get fed into the standard L.markerClusterGroup so the user
+     * sees the familiar green/yellow/red Leaflet cluster bubbles —
+     * identical to city/town tier map display.
+     *
+     * N is capped at MAX_SYNTH_PER_CLUSTER (200) to keep the DOM light.
+     * The markerCluster's iconCreateFunction counts children and picks
+     * small/medium/large automatically, so we just supply the points.
+     */
+    function _synthMarkersForCluster(cluster) {
+        var n = Math.min(cluster.n || 1, MAX_SYNTH_PER_CLUSTER);
+        var markers = [];
+        // Jitter radius scales with zoom — wider spread at low zoom so
+        // markerCluster doesn't collapse everything into one mega-bubble
+        var jitterDeg = 0.008;
+        if (typeof crashMap !== 'undefined' && crashMap) {
+            var z = crashMap.getZoom();
+            if (z >= 12) jitterDeg = 0.001;
+            else if (z >= 9) jitterDeg = 0.004;
+        }
+
+        // Distribute severity proportionally so cluster color reflects KA ratio
+        var sevPool = [];
+        var fatals = cluster.fatals || 0;
+        var serious = cluster.serious || 0;
+        var rest = n - fatals - serious;
+        if (rest < 0) { fatals = Math.round(n * 0.5); serious = n - fatals; rest = 0; }
+        for (var f = 0; f < fatals; f++) sevPool.push('K');
+        for (var a = 0; a < serious; a++) sevPool.push('A');
+        for (var r = 0; r < rest; r++) sevPool.push('O');
+
+        for (var i = 0; i < n; i++) {
+            var seed = cluster.cy * 1000 + cluster.cx * 1000 + i;
+            var dLat = ((_seededRandom(seed) - 0.5) * 2) * jitterDeg;
+            var dLng = ((_seededRandom(seed + 999) - 0.5) * 2) * jitterDeg;
+            var lat = cluster.cy + dLat;
+            var lng = cluster.cx + dLng;
+            var sev = sevPool[i] || 'O';
+            var color = SEV_COLORS[sev] || SEV_COLORS.O;
+            var sz = sev === 'K' ? 14 : sev === 'A' ? 12 : 10;
+
+            var icon = L.divIcon({
+                html: '<div style="background:' + color + ';width:' + sz + 'px;height:' + sz +
+                    'px;border-radius:50%;border:2px solid #fff;' +
+                    'box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>',
+                className: '',
+                iconSize: [sz, sz],
+                iconAnchor: [sz / 2, sz / 2]
+            });
+
+            var m = L.marker([lat, lng], { icon: icon });
+            m.crashData = { crash_severity: sev, cy: lat, cx: lng };
+            markers.push(m);
+        }
+        return markers;
+    }
+
     function _renderResults(rows, zoom) {
-        // Clear all existing crash layers
-        if (_clusterLayer) _clusterLayer.clearLayers();
+        // Clear all existing crash layers — we'll repopulate markerCluster
         if (typeof markerCluster !== 'undefined' && markerCluster) markerCluster.clearLayers();
         if (typeof markersLayer !== 'undefined' && markersLayer) markersLayer.clearLayers();
         if (typeof heatLayer !== 'undefined' && heatLayer && crashMap) {
@@ -195,124 +264,49 @@ CL.data.mapBridge = (function () {
             heatLayer = null;
         }
 
-        var hasClusters = false;
-        var hasPoints = false;
-        var clusterMarkers = [];
-        var pointMarkers = [];
+        var allMarkers = [];
+        var heatData = [];
+        var isHeat = (typeof currentMapMode !== 'undefined' && currentMapMode === 'heat');
 
         for (var i = 0; i < rows.length; i++) {
             var r = rows[i];
             if (r.is_cluster) {
-                hasClusters = true;
-                clusterMarkers.push(r);
+                if (isHeat) {
+                    var intensity = ((r.fatals || 0) + (r.serious || 0)) / Math.max(r.n, 1);
+                    heatData.push([r.cy, r.cx, Math.max(intensity, 0.3)]);
+                } else {
+                    var synth = _synthMarkersForCluster(r);
+                    for (var s = 0; s < synth.length; s++) allMarkers.push(synth[s]);
+                }
             } else {
-                hasPoints = true;
-                pointMarkers.push(r);
+                if (isHeat) {
+                    var ptIntensity = r.crash_severity === 'K' ? 1.0 :
+                                      r.crash_severity === 'A' ? 0.8 :
+                                      r.crash_severity === 'B' ? 0.5 : 0.3;
+                    heatData.push([r.cy, r.cx, ptIntensity]);
+                } else {
+                    allMarkers.push(_createPointMarker(r));
+                }
             }
         }
 
-        // Render cluster bubbles
-        if (hasClusters) {
-            var maxN = 1;
-            for (var j = 0; j < clusterMarkers.length; j++) {
-                if (clusterMarkers[j].n > maxN) maxN = clusterMarkers[j].n;
+        if (isHeat && heatData.length > 0) {
+            if (typeof L !== 'undefined' && L.heatLayer) {
+                heatLayer = L.heatLayer(heatData, {
+                    radius: 20, blur: 15, maxZoom: 17,
+                    gradient: { 0.2: '#22c55e', 0.4: '#eab308', 0.6: '#f97316', 0.8: '#ef4444', 1.0: '#dc2626' }
+                }).addTo(crashMap);
             }
-            for (var k = 0; k < clusterMarkers.length; k++) {
-                var c = clusterMarkers[k];
-                var marker = _createClusterBubble(c, maxN);
-                _clusterLayer.addLayer(marker);
-            }
-        }
-
-        // Render individual points (use MarkerCluster for density management)
-        if (hasPoints) {
-            if (typeof currentMapMode !== 'undefined' && currentMapMode === 'heat') {
-                var heatData = pointMarkers.map(function(r) {
-                    var intensity = r.crash_severity === 'K' ? 1.0 :
-                                    r.crash_severity === 'A' ? 0.8 :
-                                    r.crash_severity === 'B' ? 0.5 : 0.3;
-                    return [r.cy, r.cx, intensity];
-                });
-                if (typeof L !== 'undefined' && L.heatLayer) {
-                    heatLayer = L.heatLayer(heatData, {
-                        radius: 20, blur: 15, maxZoom: 17,
-                        gradient: { 0.2: '#22c55e', 0.4: '#eab308', 0.6: '#f97316', 0.8: '#ef4444', 1.0: '#dc2626' }
-                    }).addTo(crashMap);
-                }
-            } else {
-                for (var m = 0; m < pointMarkers.length; m++) {
-                    var pm = pointMarkers[m];
-                    var ptMarker = _createPointMarker(pm);
-                    markerCluster.addLayer(ptMarker);
-                }
+        } else if (allMarkers.length > 0 && typeof markerCluster !== 'undefined' && markerCluster) {
+            // Feed everything into the STANDARD L.markerClusterGroup.
+            // Its iconCreateFunction (defined in index.html initMap) picks
+            // small/medium/large CSS classes → green/yellow/red bubbles
+            // identical to city/town tier.
+            markerCluster.addLayers(allMarkers);
+            if (!crashMap.hasLayer(markerCluster)) {
                 crashMap.addLayer(markerCluster);
             }
         }
-    }
-
-    /**
-     * Create a cluster marker styled to match Leaflet.markercluster's visual
-     * language (concentric translucent ring + solid inner disc with a count
-     * label). This keeps the aggregate-tier viewport renderer consistent with
-     * the county-tier markerCluster bubbles, so users see the same look across
-     * all tiers. Color tracks KA ratio (severity) instead of raw count buckets
-     * because the underlying cells are server-side aggregations.
-     */
-    function _createClusterBubble(cluster, maxN) {
-        var n = cluster.n;
-        // Match Leaflet.markercluster sizing thresholds (small/medium/large)
-        var size, sizeClass;
-        if (n < 10)        { size = 40; sizeClass = 'marker-cluster-small'; }
-        else if (n < 100)  { size = 50; sizeClass = 'marker-cluster-medium'; }
-        else               { size = 60; sizeClass = 'marker-cluster-large'; }
-
-        // Color based on severity ratio (markerCluster-style translucent palette)
-        var kaRatio = (cluster.fatals + cluster.serious) / Math.max(n, 1);
-        var bgColor, ringColor;
-        if (kaRatio > 0.15)      { bgColor = 'rgba(241, 128, 23, 0.7)'; ringColor = 'rgba(241, 128, 23, 0.3)'; }
-        else if (kaRatio > 0.05) { bgColor = 'rgba(240, 194, 12, 0.7)'; ringColor = 'rgba(240, 194, 12, 0.3)'; }
-        else                     { bgColor = 'rgba(110, 204, 57, 0.7)'; ringColor = 'rgba(110, 204, 57, 0.3)'; }
-
-        var label = n >= 1000 ? Math.round(n / 1000) + 'K' : String(n);
-        var inner = size - 12;
-
-        var icon = L.divIcon({
-            html: '<div style="' +
-                'background:' + ringColor + ';border-radius:50%;padding:6px;' +
-                'box-shadow:0 1px 3px rgba(0,0,0,0.2);cursor:pointer;' +
-                '">' +
-                '<div style="' +
-                'background:' + bgColor + ';width:' + inner + 'px;height:' + inner + 'px;' +
-                'border-radius:50%;display:flex;align-items:center;justify-content:center;' +
-                'color:#1f2937;font-size:12px;font-weight:700;' +
-                '">' + label + '</div>' +
-                '</div>',
-            className: 'marker-cluster ' + sizeClass,
-            iconSize: [size, size],
-            iconAnchor: [size / 2, size / 2]
-        });
-
-        var marker = L.marker([cluster.cy, cluster.cx], { icon: icon });
-
-        // Popup with cluster stats
-        var popupHtml =
-            '<div style="font-size:12px;min-width:180px">' +
-            '<strong style="font-size:14px">' + cluster.n.toLocaleString() + ' Crashes</strong><br>' +
-            '<span style="color:#dc2626">Fatal: ' + cluster.fatals + '</span> · ' +
-            '<span style="color:#ea580c">Serious: ' + cluster.serious + '</span><br>' +
-            '<strong>EPDO:</strong> ' + cluster.epdo.toLocaleString() + '<br>' +
-            '<em style="color:#64748b;font-size:11px">Zoom in for individual crashes</em>' +
-            '</div>';
-        marker.bindPopup(popupHtml);
-
-        // Click-to-zoom: zoom in 2 levels centered on this cluster
-        marker.on('click', function(e) {
-            if (crashMap.getZoom() < 13) {
-                crashMap.setView([cluster.cy, cluster.cx], crashMap.getZoom() + 2);
-            }
-        });
-
-        return marker;
     }
 
     /**
