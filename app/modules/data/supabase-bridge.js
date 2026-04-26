@@ -38,6 +38,24 @@ CL.data.supabaseBridge = (function () {
         return { K: 883, A: 94, B: 21, C: 11, O: 1 };
     }
 
+    // Map a jurisdictionContext key (e.g. 'de_kent') to the database-matching
+    // short name (e.g. 'Kent'). Reads `appConfig.jurisdictions[key].namePatterns[0]`
+    // — by convention the first pattern is the form that matches the
+    // `physical_juris_name` column in the matviews. Returns null if the
+    // config can't resolve the key.
+    function jurisdictionDbName(key) {
+        if (!key) return null;
+        try {
+            if (typeof appConfig !== 'undefined' && appConfig && appConfig.jurisdictions) {
+                var jur = appConfig.jurisdictions[key];
+                if (jur && Array.isArray(jur.namePatterns) && jur.namePatterns.length > 0) {
+                    return jur.namePatterns[0];
+                }
+            }
+        } catch (e) { /* fall through */ }
+        return null;
+    }
+
     function resolveTier() {
         var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
         if (!ctx) return { tier: 'state', value: null };
@@ -47,8 +65,22 @@ CL.data.supabaseBridge = (function () {
         if (t === 'region') return { tier: 'region', value: ctx.tierRegion && ctx.tierRegion.name };
         if (t === 'mpo')    return { tier: 'mpo',    value: ctx.tierMpo && ctx.tierMpo.name };
         if (t === 'planning_district') return { tier: 'planning_district', value: ctx.tierPlanningDistrict && ctx.tierPlanningDistrict.name };
-        if (t === 'city') return { tier: 'county', value: (ctx.tierCity && ctx.tierCity.name) || ctx.jurisdictionName || null };
-        if (t === 'county') return { tier: 'county', value: ctx.jurisdictionName || null };
+        if (t === 'city') {
+            // Primary: the city dropdown's name (matches database for cities/CDPs).
+            // Fallback: namePatterns[0] from the active jurisdiction so we send
+            // 'Kent' instead of 'Kent County' when no city is selected.
+            var cityVal = (ctx.tierCity && ctx.tierCity.name) || null;
+            if (!cityVal) cityVal = jurisdictionDbName(ctx.jurisdictionKey);
+            if (!cityVal) cityVal = ctx.jurisdictionName || null;
+            return { tier: 'county', value: cityVal };
+        }
+        if (t === 'county') {
+            // jurisdictionName is the display form ('Kent County'); the matview
+            // column physical_juris_name stores the short form ('Kent'). Pull
+            // the database-matching value from namePatterns[0] when available.
+            var countyVal = jurisdictionDbName(ctx.jurisdictionKey) || ctx.jurisdictionName || null;
+            return { tier: 'county', value: countyVal };
+        }
         return { tier: 'state', value: null };
     }
 

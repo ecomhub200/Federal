@@ -22827,6 +22827,12 @@ window.addEventListener('load', function() {
     setTimeout(async function() {
         // Only trigger if crashState exists and data hasn't loaded yet
         if (typeof crashState !== 'undefined' && !crashState.loaded && typeof autoLoadCrashData === 'function') {
+            // Skip if any autoLoadCrashData() call has already started — bumping
+            // the generation counter would abort the in-flight load.
+            if (typeof _autoLoadGeneration !== 'undefined' && _autoLoadGeneration > 0) {
+                console.log('[UltraFailsafe] Autoload already attempted (generation ' + _autoLoadGeneration + '), skipping');
+                return;
+            }
             console.warn('[UltraFailsafe] Data not loaded after window.load - triggering autoload');
             // Wait for appConfig to be available (max 5s) before loading data.
             // Without appConfig, _getActiveStateKey() cannot determine the correct state,
@@ -147554,6 +147560,12 @@ async function assetExportPDF() {
         }
         if (crashState.loaded) {
             console.log('[FinalGuarantee] Data already loaded, skipping');
+            return true;
+        }
+        // Skip if any autoLoadCrashData() call has already started — re-running
+        // it bumps the generation counter and aborts whatever is in flight.
+        if (typeof _autoLoadGeneration !== 'undefined' && _autoLoadGeneration > 0) {
+            console.log('[FinalGuarantee] Autoload already attempted (generation ' + _autoLoadGeneration + '), skipping');
             return true;
         }
         if (typeof autoLoadCrashData !== 'function') {
