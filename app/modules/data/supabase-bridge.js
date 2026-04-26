@@ -98,14 +98,26 @@ CL.data.supabaseBridge = (function () {
             // 'Kent' instead of 'Kent County' when no city is selected.
             var cityVal = (ctx.tierCity && ctx.tierCity.name) || null;
             if (!cityVal) cityVal = jurisdictionDbName(ctx.jurisdictionKey);
-            if (!cityVal) cityVal = ctx.jurisdictionName || null;
+            if (!cityVal) {
+                // jurisdictionDbName failed (key format mismatch after state switch).
+                // Strip " County" suffix from display name to match matview format.
+                var rawCity = ctx.jurisdictionName || '';
+                cityVal = rawCity.replace(/\s+County$/i, '') || null;
+            }
             return { tier: 'county', value: cityVal };
         }
         if (t === 'county') {
             // jurisdictionName is the display form ('Kent County'); the matview
             // column physical_juris_name stores the short form ('Kent'). Pull
             // the database-matching value from namePatterns[0] when available.
-            var countyVal = jurisdictionDbName(ctx.jurisdictionKey) || ctx.jurisdictionName || null;
+            var countyVal = jurisdictionDbName(ctx.jurisdictionKey);
+            if (!countyVal) {
+                // jurisdictionDbName failed (key format mismatch after state switch).
+                // Strip " County" suffix from display name to match matview format.
+                // e.g. "New Castle County" → "New Castle", "Kent County" → "Kent"
+                var rawCounty = ctx.jurisdictionName || '';
+                countyVal = rawCounty.replace(/\s+County$/i, '') || null;
+            }
             return { tier: 'county', value: countyVal };
         }
         return { tier: 'state', value: null };
