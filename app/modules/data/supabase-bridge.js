@@ -94,16 +94,27 @@ CL.data.supabaseBridge = (function () {
         }
         if (t === 'city') {
             // Primary: city dropdown name (matches DB for cities/CDPs).
-            // Fallback: physicalJurisName from context (parent county DB name).
+            // Fallback chain: physicalJurisName (DB-matching short form from
+            // namePatterns[0], 50-state safe) → jurisdictionDbName lookup →
+            // suffix-stripped display name as final defense.
             var cityVal = (ctx.tierCity && ctx.tierCity.name) || null;
-            if (!cityVal) cityVal = ctx.physicalJurisName || jurisdictionDbName(ctx.jurisdictionKey) || ctx.jurisdictionName || null;
+            if (!cityVal) cityVal = ctx.physicalJurisName || jurisdictionDbName(ctx.jurisdictionKey) || null;
+            if (!cityVal) {
+                var rawCity = ctx.jurisdictionName || '';
+                cityVal = rawCity.replace(/\s+County$/i, '') || null;
+            }
             return { tier: 'county', value: cityVal };
         }
         if (t === 'county') {
             // physicalJurisName is the DB-matching short form stored at selection time
             // (e.g. "New Castle" not "New Castle County"). 50-state safe — sourced from
-            // config.json namePatterns[0]. Falls back to config lookup, then display name.
-            var countyVal = ctx.physicalJurisName || jurisdictionDbName(ctx.jurisdictionKey) || ctx.jurisdictionName || null;
+            // config.json namePatterns[0]. Falls back to config lookup, then a
+            // suffix-stripped display name to match the matview format.
+            var countyVal = ctx.physicalJurisName || jurisdictionDbName(ctx.jurisdictionKey) || null;
+            if (!countyVal) {
+                var rawCounty = ctx.jurisdictionName || '';
+                countyVal = rawCounty.replace(/\s+County$/i, '') || null;
+            }
             return { tier: 'county', value: countyVal };
         }
         return { tier: 'state', value: null };
