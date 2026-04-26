@@ -270,9 +270,39 @@
         if (opts.phase === 'reset') {
             if (iconHost) iconHost.textContent = '📁';
             titleEl.textContent = 'Switching to ' + (TIER_LABELS[tier] || tier) + ' view…';
-            subtitleEl.textContent = 'Aggregates will load from Supabase.';
+            subtitleEl.textContent = 'Loading from Supabase…';
+
+            // Add a progress bar below the subtitle so the user has feedback
+            // during the multi-second tier switch.
+            var progressContainer = document.getElementById('tierSwitchProgress');
+            if (!progressContainer) {
+                progressContainer = document.createElement('div');
+                progressContainer.id = 'tierSwitchProgress';
+                progressContainer.style.cssText = 'margin-top:12px;width:100%;max-width:400px;';
+                progressContainer.innerHTML = [
+                    '<div style="background:rgba(255,255,255,0.15);border-radius:6px;height:8px;overflow:hidden;position:relative;">',
+                    '  <div id="tierSwitchProgressBar" style="height:100%;width:5%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:6px;transition:width 0.3s ease;"></div>',
+                    '</div>',
+                    '<div id="tierSwitchProgressLabel" style="margin-top:6px;font-size:0.8rem;color:#94a3b8;text-align:center;">Connecting to Supabase…</div>'
+                ].join('');
+                if (subtitleEl.parentNode) {
+                    subtitleEl.parentNode.insertBefore(progressContainer, subtitleEl.nextSibling);
+                }
+            }
             return;
         }
+    }
+
+    function updateTierSwitchProgress(pct, label) {
+        var bar = document.getElementById('tierSwitchProgressBar');
+        var lbl = document.getElementById('tierSwitchProgressLabel');
+        if (bar) bar.style.width = Math.min(100, Math.max(0, pct)) + '%';
+        if (lbl && label) lbl.textContent = label;
+    }
+
+    function removeTierSwitchProgress() {
+        var el = document.getElementById('tierSwitchProgress');
+        if (el) el.remove();
     }
 
     // Cached counts from the most recent Supabase paint. Lets us repaint a
@@ -395,7 +425,9 @@
         applyUploadTierUI: applyUploadTierUI,
         paintUploadCard: paintUploadCard,
         renderTierScopeCard: renderTierScopeCard,
-        fallbackR2Url: fallbackR2Url
+        fallbackR2Url: fallbackR2Url,
+        updateTierSwitchProgress: updateTierSwitchProgress,
+        removeTierSwitchProgress: removeTierSwitchProgress
     };
 
     if (typeof CL._registerModule === 'function') {

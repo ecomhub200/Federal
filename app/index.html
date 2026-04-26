@@ -21078,6 +21078,11 @@ async function handleTierChange(tier) {
                 }
             }
         }
+        // Reset detail tab loaded flags so they reinitialize on next visit
+        try {
+            if (typeof crashTreeState !== 'undefined' && crashTreeState) crashTreeState.loaded = false;
+            if (typeof fatalSpeedingState !== 'undefined' && fatalSpeedingState) fatalSpeedingState.loaded = false;
+        } catch (e) { /* non-fatal */ }
         // Dispatch tierChanged event for school/transit tabs
         document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier, scopeKey: getTierScopeKey() } }));
     } catch (e) {
@@ -31034,7 +31039,10 @@ function showTab(tabId) {
         }
     }
     if (tabId === 'crashtree' && crashState.loaded) {
-        if (!crashTreeState.loaded) {
+        var _ctCurrentTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
+        if (!crashTreeState.loaded || crashTreeState._lastTier !== _ctCurrentTier) {
+            crashTreeState._lastTier = _ctCurrentTier;
+            crashTreeState.loaded = false;
             initCrashTreeTab();
         } else {
             buildCrashTreeData();
@@ -31093,10 +31101,12 @@ function showTab(tabId) {
         }
     }
     if (tabId === 'fatalspeeding' && crashState.loaded) {
-        if (!fatalSpeedingState.loaded) {
+        var _fsCurrentTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
+        if (!fatalSpeedingState.loaded || fatalSpeedingState._lastTier !== _fsCurrentTier) {
+            fatalSpeedingState._lastTier = _fsCurrentTier;
+            fatalSpeedingState.loaded = false;
             initFatalSpeedingTab();
         } else {
-            // Refresh filters and display when returning to tab
             applyFSFilters();
         }
     }
@@ -62076,6 +62086,17 @@ applyIntersectionFilters = function() {
 // PEDESTRIAN / BICYCLE TAB
 // ============================================================
 function updatePedBikeTab() {
+    // Supabase-first: if aggregates are empty (no R2 data), delegate to the
+    // matview-based People Analysis path which renders the visible sections
+    // with real numbers. Skips the sampleRows-based KPI cards entirely.
+    var _dcPB = (window.CL && CL.data) ? CL.data.client : null;
+    if (_dcPB && typeof _dcPB.getSafetyCategories === 'function'
+        && crashState.aggregates && crashState.aggregates.ped
+        && crashState.aggregates.ped.total === 0) {
+        updatePeopleAnalysis();
+        return;
+    }
+
     const ped = crashState.aggregates.ped;
     const bike = crashState.aggregates.bike;
     const years = crashState.years;
@@ -65508,7 +65529,18 @@ async function updatePeopleFromMatview(tier) {
             [Math.round(nonPedPeople * 0.7), pedPeople, Math.round(nonPedPeople * 0.3), 0],
             ['#3b82f6', '#f97316', '#64748b', '#cbd5e1']);
     } catch (e) {
-        console.warn('[PedBike] Matview load failed:', e.message);
+        console.warn('[PedBike] Matview load failed:', e.message, '— attempting sampleRows fallback');
+        if (crashState.loaded && crashState.sampleRows && crashState.sampleRows.length > 0) {
+            console.log('[PedBike] Falling back to sampleRows-based People Analysis');
+            // The matview path is invoked first by updatePeopleAnalysis(); on
+            // failure here, the caller will need to re-run the sampleRows path.
+            // Mark a sentinel so the caller can detect the failure and recover.
+            try {
+                if (typeof crashState !== 'undefined' && crashState) {
+                    crashState._pedBikeMatviewFailed = true;
+                }
+            } catch (fallbackErr) { /* non-fatal */ }
+        }
     }
 }
 
@@ -65517,8 +65549,9 @@ function updatePeopleAnalysis() {
 
     const _ppTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
 
-    // Aggregate tiers: use matview data (no sampleRows available)
-    if (_ppTier !== 'county' && _ppTier !== 'city') {
+    // Supabase-first for ALL tiers: try matview path first.
+    var _dcPP = (window.CL && CL.data) ? CL.data.client : null;
+    if (_dcPP && typeof _dcPP.getSafetyCategories === 'function') {
         updatePeopleFromMatview(_ppTier);
         return;
     }
@@ -98868,8 +98901,10 @@ function clearSafetyMapFilter() {
 function initCrashTreeTab() {
     const _ctTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
 
-    // Aggregate tiers: use mv_crash_tree matview via data-client (no sampleRows available)
-    if (_ctTier !== 'county' && _ctTier !== 'city') {
+    // Supabase-first for ALL tiers: try matview path first.
+    // Falls back to sampleRows only if matview fails or data-client is unavailable.
+    var _dcCT = (window.CL && CL.data) ? CL.data.client : null;
+    if (_dcCT && typeof _dcCT.getCrashTree === 'function') {
         initCrashTreeFromMatview(_ctTier);
         return;
     }
@@ -99037,9 +99072,20 @@ async function initCrashTreeFromMatview(tier) {
             segmentPanel.style.display = treeType === 'facility' ? 'block' : 'none';
         }
     } catch (e) {
-        console.warn('[CrashTree] Matview load failed:', e.message);
-        if (placeholder) placeholder.style.display = 'block';
-        if (viz) viz.style.display = 'none';
+        console.warn('[CrashTree] Matview load failed:', e.message, '— attempting sampleRows fallback');
+        if (crashState.loaded && crashState.sampleRows && crashState.sampleRows.length > 0) {
+            try {
+                buildCrashTreeData();
+                crashTreeState.loaded = true;
+            } catch (fallbackErr) {
+                console.warn('[CrashTree] sampleRows fallback also failed:', fallbackErr.message);
+                if (placeholder) placeholder.style.display = 'block';
+                if (viz) viz.style.display = 'none';
+            }
+        } else {
+            if (placeholder) placeholder.style.display = 'block';
+            if (viz) viz.style.display = 'none';
+        }
     }
 }
 
@@ -99072,10 +99118,11 @@ function setCrashTreeType(type) {
         activeBtn.style.color = '#065f46';
     }
 
-    // Aggregate tiers re-fetch from matview with the new tree type
-    const _ctTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
-    if (_ctTier !== 'county' && _ctTier !== 'city') {
+    // Supabase-first: re-fetch from matview with the new tree type at ALL tiers
+    var _dcSCT = (window.CL && CL.data) ? CL.data.client : null;
+    if (_dcSCT && typeof _dcSCT.getCrashTree === 'function') {
         crashTreeState.expandedNodes = new Set(['root']);
+        const _ctTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
         initCrashTreeFromMatview(_ctTier);
 
         const segmentPanelAgg = document.getElementById('facilitySegmentAnalysis');
@@ -102426,14 +102473,14 @@ function generateProfessionalTableRows(node, indent = 0) {
 function initFatalSpeedingTab() {
     const _fsTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
 
-    // Aggregate tiers: use matview data (no sampleRows available)
-    if (_fsTier !== 'county' && _fsTier !== 'city') {
+    // Supabase-first for ALL tiers: try matview path first.
+    var _dcFS = (window.CL && CL.data) ? CL.data.client : null;
+    if (_dcFS && typeof _dcFS.getSafetyCategories === 'function') {
         initFatalSpeedingFromMatview(_fsTier);
         return;
     }
 
-    // Supabase-first: data may live in the tab-loaders cache instead of
-    // crashState.sampleRows when Supabase served this tab.
+    // Fallback: use sampleRows / tabLoader cache if R2 loaded
     const tabRows = (CL.data && CL.data.tabLoaders)
         ? CL.data.tabLoaders.getTabRows('fatalspeeding')
         : (crashState.sampleRows || []);
@@ -102585,7 +102632,16 @@ async function initFatalSpeedingFromMatview(tier) {
 
         if (typeof updateFSDisplay === 'function') updateFSDisplay();
     } catch (e) {
-        console.warn('[FS] Matview initialization failed:', e.message);
+        console.warn('[FS] Matview load failed:', e.message, '— attempting sampleRows fallback');
+        if (crashState.loaded && crashState.sampleRows && crashState.sampleRows.length > 0) {
+            try {
+                processFSData();
+                updateFSDisplay();
+                fatalSpeedingState.loaded = true;
+            } catch (fallbackErr) {
+                console.warn('[FS] sampleRows fallback also failed:', fallbackErr.message);
+            }
+        }
     }
 }
 

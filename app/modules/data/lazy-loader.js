@@ -22,29 +22,31 @@ CL.data.lazyLoader = (function () {
     let _r2Loaded = false;       // True once full R2 data is available
     let _enabled = true;         // Feature flag — can be disabled for debugging
 
-    // Tabs that require full R2 dataset (sampleRows + full aggregates)
+    // Only tabs that need individual crash rows (sampleRows) require R2.
+    // All aggregate/matview-powered tabs handle their own Supabase loading
+    // internally and must NOT be blocked behind R2 downloads.
     const R2_REQUIRED_TABS = new Set([
-        'analysis',
-        'intersection',
-        'pedestrian',
-        'hotspots',
-        'crashtree',
-        'grants',
-        'deepdive',
-        'safety',
-        'fatalspeeding',
-        'domain-knowledge'
+        'intersection',    // Needs individual crash rows for intersection table
+        'deepdive',        // Drills into individual crash records
+        'domain-knowledge' // Needs full dataset for knowledge extraction
     ]);
 
-    // Tabs that work with Supabase alone (no R2 needed)
+    // Tabs that work without R2 — either Supabase matview-powered or UI-only
     const SUPABASE_ONLY_TABS = new Set([
-        'dashboard',
-        'map',        // Map works partially — boundary/tier UI works, markers need R2
-        'upload',
-        'ai',
-        'prediction',
-        'cmf',        // Has Supabase getCrashesByLocation() path
-        'warrants'    // Has Supabase getCrashesByLocation() path
+        'dashboard',      // Supabase bridge paints KPIs directly
+        'map',            // Boundary/tier UI works, markers need R2 but deferred
+        'upload',         // UI only
+        'ai',             // Uses its own data sources
+        'prediction',     // UI only
+        'cmf',            // Has Supabase getCrashesByLocation() path
+        'warrants',       // Has Supabase getCrashesByLocation() path
+        'analysis',       // mv_analysis_summary matview
+        'crashtree',      // mv_crash_tree matview
+        'fatalspeeding',  // mv_safety_categories + mv_analysis_summary
+        'pedestrian',     // mv_safety_categories matview
+        'safety',         // mv_safety_categories matview
+        'hotspots',       // mv_hotspots matview
+        'grants'          // mv_grants_baseline matview
     ]);
 
     function tabNeedsR2(tabId) {
