@@ -23599,6 +23599,11 @@ function buildJurisdictionContextFromSelection(jurisdictionId) {
         stateCode,
         stateFips,
         stateName,
+        // stateKey: lowercase state key matching appConfig.states keys and matview
+        // 'state' column (e.g. 'delaware', 'colorado', 'new_york').
+        // Stored at selection time so supabase-bridge can sync crashLensClient.state
+        // without relying on _getActiveStateKey() which races during boot/switch.
+        stateKey: activeStateKey,
         jurisdictionKey: jurisdictionId,
         jurisdictionName: jurisdiction.name,
         // physicalJurisName: DB-matching short name from namePatterns[0].
