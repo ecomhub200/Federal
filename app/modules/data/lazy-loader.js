@@ -22,13 +22,17 @@ CL.data.lazyLoader = (function () {
     let _r2Loaded = false;       // True once full R2 data is available
     let _enabled = true;         // Feature flag — can be disabled for debugging
 
-    // Only tabs that need individual crash rows (sampleRows) require R2.
-    // All aggregate/matview-powered tabs handle their own Supabase loading
-    // internally and must NOT be blocked behind R2 downloads.
+    // Tabs that need individual crash rows (sampleRows) require R2.
+    // analyzeHotspots / rankLocationsForGrants / processSafetyData all do
+    // per-row aggregation that the existing matview shapes can't replace,
+    // so they stay behind the R2 gate until matview-backed init paths exist.
     const R2_REQUIRED_TABS = new Set([
         'intersection',    // Needs individual crash rows for intersection table
         'deepdive',        // Drills into individual crash records
-        'domain-knowledge' // Needs full dataset for knowledge extraction
+        'domain-knowledge',// Needs full dataset for knowledge extraction
+        'hotspots',        // analyzeHotspots() needs sampleRows for per-row hotspot scoring
+        'grants',          // rankLocationsForGrants() needs sampleRows for location aggregation
+        'safety'           // initSafetyFocus() needs sampleRows for processSafetyData()
     ]);
 
     // Tabs that work without R2 — either Supabase matview-powered or UI-only
@@ -43,10 +47,7 @@ CL.data.lazyLoader = (function () {
         'analysis',       // mv_analysis_summary matview
         'crashtree',      // mv_crash_tree matview
         'fatalspeeding',  // mv_safety_categories + mv_analysis_summary
-        'pedestrian',     // mv_safety_categories matview
-        'safety',         // mv_safety_categories matview
-        'hotspots',       // mv_hotspots matview
-        'grants'          // mv_grants_baseline matview
+        'pedestrian'      // mv_safety_categories matview
     ]);
 
     function tabNeedsR2(tabId) {
