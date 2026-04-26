@@ -6087,10 +6087,11 @@ Your data stays private. All processing happens in your browser.
 <!-- Stats Overlay -->
 <div class="map-overlay collapsed" id="mapOverlay">
 <div class="map-overlay-header" onclick="toggleMapOverlay()">
-<span>📊 Stats</span>
+<span>📊 Stats <span id="mapScopeLabel" style="font-weight:500;color:var(--gray);font-size:.75rem;margin-left:.25rem"></span></span>
 <span class="toggle-icon">▼</span>
 </div>
 <div class="map-overlay-body" id="mapOverlayBody">
+<div class="map-stat"><span>Scope:</span><span class="val" id="mapScope" style="font-weight:500">—</span></div>
 <div class="map-stat"><span>Showing:</span><span class="val"><span id="mapCount">0</span> <span id="mapOfTotal" style="color:var(--gray);font-weight:400;font-size:.75rem"></span></span></div>
 <div class="map-stat" id="mapMissingRow" style="display:none;font-size:.7rem;color:var(--warning)"><span id="mapMissingInfo"></span></div>
 <div class="map-stat"><span>Fatal:</span><span class="val" id="mapFatal">0</span></div>
@@ -21092,6 +21093,16 @@ async function handleTierChange(tier) {
             if (typeof crashTreeState !== 'undefined' && crashTreeState) crashTreeState.loaded = false;
             if (typeof fatalSpeedingState !== 'undefined' && fatalSpeedingState) fatalSpeedingState.loaded = false;
         } catch (e) { /* non-fatal */ }
+        // Refresh subtitle, search bar, and map stats scope label so they
+        // reflect the new tier (federal/state/region/mpo/pd/city). The
+        // per-tier selection handlers fire their own refresh once a scope
+        // is picked from the secondary dropdown, but we also need the
+        // initial transition (e.g. county → state) to repaint headers.
+        try {
+            if (typeof updateAppSubtitle === 'function') updateAppSubtitle(getJurisdictionLabel());
+            if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
+            if (typeof updateMapScopeLabel === 'function') updateMapScopeLabel();
+        } catch (e) { /* non-fatal */ }
         // Dispatch tierChanged event for school/transit tabs
         document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier, scopeKey: getTierScopeKey() } }));
     } catch (e) {
@@ -21315,6 +21326,9 @@ async function handlePlanningDistrictSelection() {
             : { id: pdId, name: pdName };
 
         if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI('planning_district');
+        if (typeof updateAppSubtitle === 'function') updateAppSubtitle(getJurisdictionLabel());
+        if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
+        if (typeof updateMapScopeLabel === 'function') updateMapScopeLabel();
 
         // Clear competing boundaries — PD takes precedence while selected
         if (typeof removeRegionBoundaryLayer === 'function') removeRegionBoundaryLayer();
@@ -21402,6 +21416,11 @@ async function handleCitySelection() {
 
         if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI('city');
         if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
+        // Page subtitle (".jurisdiction-subtitle"), map stats scope label and
+        // any header reading getJurisdictionLabel() should now reflect the
+        // city — county dropdown stays locked at the parent county.
+        if (typeof updateAppSubtitle === 'function') updateAppSubtitle(displayName);
+        if (typeof updateMapScopeLabel === 'function') updateMapScopeLabel();
 
         // Clear competing boundaries — city takes precedence while selected
         if (typeof removeRegionBoundaryLayer === 'function') removeRegionBoundaryLayer();
@@ -21570,6 +21589,9 @@ async function handleRegionSelection() {
 
         jurisdictionContext.tierRegion = { id: regionId, ...region };
         updateTierSelectorUI('region');
+        if (typeof updateAppSubtitle === 'function') updateAppSubtitle(getJurisdictionLabel());
+        if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
+        if (typeof updateMapScopeLabel === 'function') updateMapScopeLabel();
 
         // Clear MPO boundary if any
         if (typeof removeMPOBoundaryLayer === 'function') removeMPOBoundaryLayer();
@@ -21646,6 +21668,9 @@ async function handleMPOSelection() {
 
         jurisdictionContext.tierMpo = { id: mpoId, ...mpo };
         updateTierSelectorUI('mpo');
+        if (typeof updateAppSubtitle === 'function') updateAppSubtitle(getJurisdictionLabel());
+        if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
+        if (typeof updateMapScopeLabel === 'function') updateMapScopeLabel();
 
         // Clear previous region boundary if any
         if (typeof removeRegionBoundaryLayer === 'function') removeRegionBoundaryLayer();
@@ -23583,10 +23608,40 @@ function buildJurisdictionContextFromSelection(jurisdictionId) {
 }
 
 /**
- * Get the current jurisdiction display name (e.g., "Douglas County").
- * Falls back through multiple sources for resilience.
+ * Get the current jurisdiction display name (e.g., "Douglas County",
+ * "Bridgeville town", "Colorado", "Capital Region").
+ *
+ * Tier-aware: when the user has selected a non-county tier (city, mpo,
+ * region, planning_district, state, federal), reports/headers/subtitles
+ * read the matching scope name instead of falling back to the locked
+ * county dropdown value.
  */
 function getJurisdictionLabel() {
+    const tier = jurisdictionContext.viewTier || 'county';
+    if (tier === 'city' && jurisdictionContext.tierCity?.name) {
+        return jurisdictionContext.tierCity.name;
+    }
+    if (tier === 'mpo' && jurisdictionContext.tierMpo) {
+        return jurisdictionContext.tierMpo.shortName
+            || jurisdictionContext.tierMpo.name
+            || 'MPO';
+    }
+    if (tier === 'region' && jurisdictionContext.tierRegion) {
+        return jurisdictionContext.tierRegion.shortName
+            || jurisdictionContext.tierRegion.name
+            || 'Region';
+    }
+    if (tier === 'planning_district' && jurisdictionContext.tierPlanningDistrict) {
+        return jurisdictionContext.tierPlanningDistrict.shortName
+            || jurisdictionContext.tierPlanningDistrict.name
+            || 'Planning District';
+    }
+    if (tier === 'state') {
+        return jurisdictionContext.stateName || 'State';
+    }
+    if (tier === 'federal') {
+        return 'United States';
+    }
     return jurisdictionContext.jurisdictionName
         || appConfig?.jurisdictions?.[appConfig?.defaults?.jurisdiction]?.name
         || 'County';
@@ -25218,8 +25273,10 @@ function applyJurisdictionSelection(jurisdictionId) {
     MAP_CENTER = jurisdiction.mapCenter;
     MAP_ZOOM = jurisdiction.mapZoom || 11;
 
-    // Update page subtitle if needed
+    // Update page subtitle and map stats scope label so headers/overlay
+    // reflect the selected county.
     updateAppSubtitle(jurisdiction.name);
+    if (typeof updateMapScopeLabel === 'function') updateMapScopeLabel();
 
     // If map exists and is initialized, fly to the new jurisdiction and refresh display
     const mapRef = (typeof crashMap !== 'undefined' && crashMap) ? crashMap : null;
@@ -49282,6 +49339,11 @@ function getActiveMapFilters() {
 function updateMapDisplay() {
     if (!crashMap) return;
 
+    // Keep the Stats overlay scope label in sync with the active tier
+    // (city/region/county/etc.) every time the map repaints, regardless of
+    // whether MapBridge or the local renderer ends up drawing the markers.
+    if (typeof updateMapScopeLabel === 'function') updateMapScopeLabel();
+
     // When the Supabase viewport map bridge is active (aggregate tiers, no
     // R2 sampleRows), it owns the cluster/marker/heat layers — running our
     // own clearLayers + render here would wipe mapBridge's just-drawn markers.
@@ -49294,7 +49356,7 @@ function updateMapDisplay() {
     }
 
     const filtered = getFilteredMapPoints();
-    
+
     // Calculate stats
     const stats = { total: filtered.length, fatal: 0, serious: 0, epdo: 0 };
     filtered.forEach(p => {
@@ -49302,7 +49364,7 @@ function updateMapDisplay() {
         if (p.sev === 'A') stats.serious++;
         stats.epdo += EPDO_WEIGHTS[p.sev] || 0;
     });
-    
+
     // Update overlay
     document.getElementById('mapCount').textContent = stats.total.toLocaleString();
     document.getElementById('mapFatal').textContent = stats.fatal;
@@ -50351,6 +50413,22 @@ function updateMapSearchPlaceholder() {
     } else {
         input.placeholder = '\u{1F50D} Search addresses, places, or landmarks...';
     }
+}
+
+/**
+ * Update the Stats overlay scope label so users see the active jurisdiction
+ * (e.g. "Bridgeville town" at city tier, "Capital Region" at region tier,
+ * "Delaware" at state tier) without having to look at the upload tab.
+ * Reads from getJurisdictionLabel() so the label tracks tier changes.
+ */
+function updateMapScopeLabel() {
+    const label = (typeof getJurisdictionLabel === 'function')
+        ? getJurisdictionLabel()
+        : (jurisdictionContext?.jurisdictionName || '');
+    const headerEl = document.getElementById('mapScopeLabel');
+    const bodyEl = document.getElementById('mapScope');
+    if (headerEl) headerEl.textContent = label ? `· ${label}` : '';
+    if (bodyEl) bodyEl.textContent = label || '—';
 }
 
 // Mapbox Geocoding API call - state/jurisdiction-aware search
