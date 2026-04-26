@@ -24443,11 +24443,15 @@ function getDataFilePath() {
     }
 
     // ── City / Town tier (merged) ──
+    // City-level R2 parquets are not published — every prior city tier load
+    // exhausted the .parquet → .parquet.gz → .csv.gz → .csv chain (3 retries
+    // each) before falling back to the parent county anyway. Skip that round
+    // trip and resolve straight to the county file. The map filters by city
+    // boundary client-side, so the wider-scoped data is fine for rendering.
     if (tier === 'city') {
-        const cityId = jurisdictionContext.tierCity?.id;
-        if (cityId) {
-            // All cities and towns use the _city/ prefix on R2
-            return `${r2Prefix}/_city/${cityId.toLowerCase()}/${roadType}.parquet`;
+        const countySlug = getActiveJurisdictionId();
+        if (countySlug) {
+            return `${r2Prefix}/${countySlug}/${roadType}.parquet`;
         }
     }
 
@@ -32205,6 +32209,29 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
     //
     // forceR2=true bypasses this guard entirely (set by the lazy loader
     // when a detail tab actually needs row-level data).
+
+    // Sync crashLensClient.state before the Supabase-first guard runs.
+    // The StateSelector triggers autoLoadCrashData immediately after applying
+    // a new state, but StateAdapter's manual FIPS may not be propagated yet —
+    // _getActiveStateKey() then briefly returns the previous state, the bridge
+    // queries Supabase with the wrong state key, gets 0 rows, and falls back
+    // to R2 unnecessarily. Reading the stateSelect <select> value directly
+    // closes that race window.
+    try {
+        if (window.crashLensClient) {
+            var _activeState = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
+            var _bootDefault = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
+            if (!_activeState || _activeState === _bootDefault) {
+                var _stSel = document.getElementById('stateSelect');
+                if (_stSel && _stSel.value && typeof _fipsToStateKey === 'function') {
+                    var _fromFips = _fipsToStateKey(_stSel.value);
+                    if (_fromFips) _activeState = _fromFips;
+                }
+            }
+            if (_activeState) window.crashLensClient.state = _activeState;
+        }
+    } catch (e) { /* non-fatal */ }
+
     if (!forceR2
         && CL.data && CL.data.lazyLoader
         && !CL.data.lazyLoader.isR2Loaded()

@@ -331,8 +331,13 @@ class CrashLensDataClient {
     }
 
     const tierCol = opts.tier ? CrashLensDataClient.TIER_COLUMNS[opts.tier] : null;
+    // Federal tier should query across all states. The map_viewport_crashes
+    // RPC now treats p_state=NULL as "no state filter" (server-side patch);
+    // pinning p_state to this.state at federal would silently restrict the
+    // viewport to a single state.
+    const pState = (opts.tier === 'federal') ? null : this.state;
     const body = {
-      p_state:    this.state,
+      p_state:    pState,
       p_bbox:     `SRID=4326;POLYGON((${bounds.west} ${bounds.south},${bounds.east} ${bounds.south},${bounds.east} ${bounds.north},${bounds.west} ${bounds.north},${bounds.west} ${bounds.south}))`,
       p_zoom:     zoom,
       p_tier_col: tierCol || null,

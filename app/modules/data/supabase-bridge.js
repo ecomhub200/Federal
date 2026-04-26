@@ -348,10 +348,39 @@ CL.data.supabaseBridge = (function () {
     async function injectFastDashboard(opts) {
         var force = !!(opts && opts.force);
 
-        // Ensure Supabase client uses the currently active state
+        // Ensure Supabase client uses the currently active state.
+        // During boot the StateSelector dispatches "Auto-loading data for new
+        // state: …" *before* StateAdapter has fully propagated the new FIPS,
+        // so _getActiveStateKey() can briefly return the previous state
+        // ('colorado'). Falling back to the stateSelect <select> value
+        // (translated via _fipsToStateKey) and appConfig.currentState catches
+        // that window — without these, a getSummary() call fires with the
+        // stale state and Supabase returns 0 rows for the new jurisdiction.
         try {
             if (window.crashLensClient) {
-                var stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
+                var stateKey = null;
+
+                if (typeof _getActiveStateKey === 'function') {
+                    stateKey = _getActiveStateKey();
+                }
+
+                var bootDefault = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
+                if (!stateKey || stateKey === bootDefault) {
+                    try {
+                        var stateSelect = document.getElementById('stateSelect');
+                        if (stateSelect && stateSelect.value && typeof _fipsToStateKey === 'function') {
+                            var fromFips = _fipsToStateKey(stateSelect.value);
+                            if (fromFips) stateKey = fromFips;
+                        }
+                    } catch (e2) { /* non-fatal */ }
+                }
+
+                if (!stateKey || stateKey === bootDefault) {
+                    if (typeof appConfig !== 'undefined' && appConfig && appConfig.currentState) {
+                        stateKey = appConfig.currentState;
+                    }
+                }
+
                 if (stateKey) window.crashLensClient.state = stateKey;
             }
         } catch (e) { /* non-fatal */ }
