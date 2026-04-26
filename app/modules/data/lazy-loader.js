@@ -27,6 +27,7 @@ CL.data.lazyLoader = (function () {
     // per-row aggregation that the existing matview shapes can't replace,
     // so they stay behind the R2 gate until matview-backed init paths exist.
     const R2_REQUIRED_TABS = new Set([
+        'map',             // Markers/clusters/heatmap read crashState.mapPoints
         'intersection',    // Needs individual crash rows for intersection table
         'deepdive',        // Drills into individual crash records
         'domain-knowledge',// Needs full dataset for knowledge extraction
@@ -38,7 +39,6 @@ CL.data.lazyLoader = (function () {
     // Tabs that work without R2 — either Supabase matview-powered or UI-only
     const SUPABASE_ONLY_TABS = new Set([
         'dashboard',      // Supabase bridge paints KPIs directly
-        'map',            // Boundary/tier UI works, markers need R2 but deferred
         'upload',         // UI only
         'ai',             // Uses its own data sources
         'prediction',     // UI only
