@@ -458,6 +458,14 @@ CL.data.supabaseBridge = (function () {
                 CL.data.lazyLoader.markR2Loaded();
             }
         } catch (e) { /* non-fatal */ }
+        // Hand the map back to the R2-fed updateMapDisplay() — mapBridge would
+        // otherwise clobber R2 markers on every pan/zoom by clearing layers.
+        try {
+            if (CL.data && CL.data.mapBridge && CL.data.mapBridge.detach
+                && CL.data.mapBridge.isActive && CL.data.mapBridge.isActive()) {
+                CL.data.mapBridge.detach();
+            }
+        } catch (e) { /* non-fatal */ }
     }
 
     function refresh() {
