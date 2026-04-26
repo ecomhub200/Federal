@@ -349,13 +349,10 @@ CL.data.supabaseBridge = (function () {
         var force = !!(opts && opts.force);
 
         // Ensure Supabase client uses the currently active state.
-        // During boot the StateSelector dispatches "Auto-loading data for new
-        // state: …" *before* StateAdapter has fully propagated the new FIPS,
-        // so _getActiveStateKey() can briefly return the previous state
-        // ('colorado'). Falling back to the stateSelect <select> value
-        // (translated via _fipsToStateKey) and appConfig.currentState catches
-        // that window — without these, a getSummary() call fires with the
-        // stale state and Supabase returns 0 rows for the new jurisdiction.
+        // _getActiveStateKey() can return a stale value during boot (e.g.
+        // 'colorado' from appConfig.defaultState) before the state dropdown
+        // has been observed. Cross-check against the dropdown directly so
+        // we never query Supabase with the wrong state.
         try {
             if (window.crashLensClient) {
                 var stateKey = null;
@@ -375,13 +372,9 @@ CL.data.supabaseBridge = (function () {
                     } catch (e2) { /* non-fatal */ }
                 }
 
-                if (!stateKey || stateKey === bootDefault) {
-                    if (typeof appConfig !== 'undefined' && appConfig && appConfig.currentState) {
-                        stateKey = appConfig.currentState;
-                    }
+                if (stateKey) {
+                    window.crashLensClient.state = stateKey;
                 }
-
-                if (stateKey) window.crashLensClient.state = stateKey;
             }
         } catch (e) { /* non-fatal */ }
 
@@ -504,6 +497,16 @@ CL.data.supabaseBridge = (function () {
             try {
                 if (window.crashLensClient) {
                     var key = _activeStateKey();
+                    var bootDefault = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
+                    if (!key || key === bootDefault) {
+                        try {
+                            var sel = document.getElementById('stateSelect');
+                            if (sel && sel.value && typeof _fipsToStateKey === 'function') {
+                                var fromFips = _fipsToStateKey(sel.value);
+                                if (fromFips) key = fromFips;
+                            }
+                        } catch (e2) { /* non-fatal */ }
+                    }
                     if (key) window.crashLensClient.state = key;
                 }
                 _injected = false;
