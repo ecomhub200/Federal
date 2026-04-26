@@ -387,6 +387,23 @@ CL.data.supabaseBridge = (function () {
             }
         } catch (e) { /* non-fatal */ }
 
+        // Final defense: derive state from jurisdictionContext which is ALWAYS correct
+        // after buildJurisdictionContextFromSelection(). The _getActiveStateKey() path
+        // above can return the boot default ('colorado') during initial load or rapid
+        // state switch because the dropdown/StateAdapter haven't propagated yet.
+        try {
+            var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
+            if (ctx && window.crashLensClient) {
+                // Prefer stateKey (exact match for matview 'state' column).
+                // Fallback: derive from stateName (e.g. "New York" → "new_york").
+                var ctxState = ctx.stateKey || (ctx.stateName ? ctx.stateName.toLowerCase().replace(/\s+/g, '_') : null);
+                if (ctxState && ctxState !== window.crashLensClient.state) {
+                    console.log('[Phase2] State corrected from jurisdictionContext: ' + window.crashLensClient.state + ' → ' + ctxState);
+                    window.crashLensClient.state = ctxState;
+                }
+            }
+        } catch (e) { /* non-fatal */ }
+
         try {
             if (!force && typeof crashState !== 'undefined' && crashState && crashState.loaded) {
                 console.log('[Phase2] R2 already loaded before bridge started, skipping');
