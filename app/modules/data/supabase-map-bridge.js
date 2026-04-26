@@ -160,7 +160,8 @@ CL.data.mapBridge = (function () {
         } else if (typeof jurisdictionContext !== 'undefined' && jurisdictionContext) {
             var ctx = jurisdictionContext;
             var vt = ctx.viewTier || 'county';
-            if (vt === 'state' || vt === 'federal') { tier = 'state'; tierValue = null; }
+            if (vt === 'federal') { tier = 'federal'; tierValue = null; }
+            else if (vt === 'state') { tier = 'state'; tierValue = null; }
             else if (vt === 'region') { tier = 'region'; tierValue = ctx.tierRegion && ctx.tierRegion.name; }
             else if (vt === 'mpo') { tier = 'mpo'; tierValue = ctx.tierMpo && ctx.tierMpo.name; }
             else if (vt === 'planning_district') { tier = 'planning_district'; tierValue = ctx.tierPlanningDistrict && ctx.tierPlanningDistrict.name; }
@@ -250,34 +251,43 @@ CL.data.mapBridge = (function () {
     }
 
     /**
-     * Create a proportional circle marker for a cluster cell.
-     * Size is proportional to crash count; color is based on KA ratio.
+     * Create a cluster marker styled to match Leaflet.markercluster's visual
+     * language (concentric translucent ring + solid inner disc with a count
+     * label). This keeps the aggregate-tier viewport renderer consistent with
+     * the county-tier markerCluster bubbles, so users see the same look across
+     * all tiers. Color tracks KA ratio (severity) instead of raw count buckets
+     * because the underlying cells are server-side aggregations.
      */
     function _createClusterBubble(cluster, maxN) {
-        var ratio = Math.sqrt(cluster.n / maxN);  // sqrt scale for perceptual accuracy
-        var size = Math.max(CLUSTER_BUBBLE_MIN, Math.round(ratio * CLUSTER_BUBBLE_MAX));
+        var n = cluster.n;
+        // Match Leaflet.markercluster sizing thresholds (small/medium/large)
+        var size, sizeClass;
+        if (n < 10)        { size = 40; sizeClass = 'marker-cluster-small'; }
+        else if (n < 100)  { size = 50; sizeClass = 'marker-cluster-medium'; }
+        else               { size = 60; sizeClass = 'marker-cluster-large'; }
 
-        // Color: proportion of fatal+serious
-        var kaRatio = (cluster.fatals + cluster.serious) / Math.max(cluster.n, 1);
-        var color;
-        if (kaRatio > 0.15)      color = '#dc2626'; // red — high severity
-        else if (kaRatio > 0.08) color = '#ea580c'; // orange
-        else if (kaRatio > 0.03) color = '#eab308'; // yellow
-        else                     color = '#22c55e'; // green — low severity
+        // Color based on severity ratio (markerCluster-style translucent palette)
+        var kaRatio = (cluster.fatals + cluster.serious) / Math.max(n, 1);
+        var bgColor, ringColor;
+        if (kaRatio > 0.15)      { bgColor = 'rgba(241, 128, 23, 0.7)'; ringColor = 'rgba(241, 128, 23, 0.3)'; }
+        else if (kaRatio > 0.05) { bgColor = 'rgba(240, 194, 12, 0.7)'; ringColor = 'rgba(240, 194, 12, 0.3)'; }
+        else                     { bgColor = 'rgba(110, 204, 57, 0.7)'; ringColor = 'rgba(110, 204, 57, 0.3)'; }
 
-        var label = cluster.n >= 1000 ? Math.round(cluster.n / 1000) + 'K' : String(cluster.n);
+        var label = n >= 1000 ? Math.round(n / 1000) + 'K' : String(n);
+        var inner = size - 12;
 
         var icon = L.divIcon({
             html: '<div style="' +
-                'width:' + size + 'px;height:' + size + 'px;' +
-                'background:' + color + ';opacity:0.8;' +
-                'border-radius:50%;border:2px solid #fff;' +
-                'display:flex;align-items:center;justify-content:center;' +
-                'color:#fff;font-size:' + Math.max(10, size / 4) + 'px;font-weight:700;' +
-                'box-shadow:0 2px 6px rgba(0,0,0,0.3);' +
-                'cursor:pointer;' +
-                '">' + label + '</div>',
-            className: '',
+                'background:' + ringColor + ';border-radius:50%;padding:6px;' +
+                'box-shadow:0 1px 3px rgba(0,0,0,0.2);cursor:pointer;' +
+                '">' +
+                '<div style="' +
+                'background:' + bgColor + ';width:' + inner + 'px;height:' + inner + 'px;' +
+                'border-radius:50%;display:flex;align-items:center;justify-content:center;' +
+                'color:#1f2937;font-size:12px;font-weight:700;' +
+                '">' + label + '</div>' +
+                '</div>',
+            className: 'marker-cluster ' + sizeClass,
             iconSize: [size, size],
             iconAnchor: [size / 2, size / 2]
         });
