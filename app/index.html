@@ -32217,6 +32217,15 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
                 try { if (typeof showUploadSummary === 'function') showUploadSummary(); } catch (e) {}
             }, 300);
 
+            // Start background R2 download so the Map tab (and any other
+            // tab needing per-row data) hydrates without a separate click-
+            // triggered fetch. processSampleRowsFromText/Objects calls
+            // refreshMapAfterBackgroundLoad() once mapPoints are populated,
+            // so the markers appear automatically if the Map tab is open.
+            loadSampleRowsInBackground(myGeneration).catch(function (err) {
+                console.warn('[AutoLoad] Background sampleRows load failed:', err);
+            });
+
             return; // Supabase served the dashboard — done.
         }
 
