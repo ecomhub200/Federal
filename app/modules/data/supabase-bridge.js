@@ -9,8 +9,11 @@
  *
  * Rules this module follows:
  *   - Writes ONLY to HTML element IDs via textContent / innerHTML / style.
- *   - Never mutates crashState or any state object.
- *   - Never sets crashState.loaded = true.
+ *   - Never mutates crashState aggregates or any state object beyond the
+ *     loaded flag.
+ *   - Sets crashState.loaded = true after a successful dashboard paint so
+ *     detail tabs (which all gate on this flag) don't bail before their
+ *     matview path runs.
  *   - All failures are swallowed (non-fatal try/catch).
  *   - Skips entirely if crashState.loaded is already true.
  */
