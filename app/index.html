@@ -26388,6 +26388,10 @@ function monitorCrashStateChanges() {
                 if (_monTier === 'state' || _monTier === 'federal' || _monTier === 'region'
                     || _monTier === 'mpo' || _monTier === 'planning_district') {
                     console.log('[Connection] crashState.loaded=false at aggregate tier (' + _monTier + ') — bridge handles KPIs, skipping reconnect');
+                } else if (window._autoLoadTriggered) {
+                    // An autoLoad is already in progress (state/jurisdiction change triggered it).
+                    // Don't fire a duplicate reconnect — let the active autoLoad finish.
+                    console.log('[Connection] crashState.loaded=false but autoLoad in progress — skipping reconnect');
                 } else if (connectionState.status === 'connected') {
                     // Only show disconnected if we were previously connected
                     updateDataConnectionStatus('disconnected');
