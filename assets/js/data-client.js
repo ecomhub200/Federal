@@ -331,8 +331,11 @@ class CrashLensDataClient {
     }
 
     const tierCol = opts.tier ? CrashLensDataClient.TIER_COLUMNS[opts.tier] : null;
+    // Federal tier spans every state — pass NULL so the RPC skips its
+    // `AND state = $p_state` filter (verified backend behavior 2026-04-26).
+    // All other tiers stay scoped to the active state.
     const body = {
-      p_state:    this.state,
+      p_state:    opts.tier === 'federal' ? null : this.state,
       p_bbox:     `SRID=4326;POLYGON((${bounds.west} ${bounds.south},${bounds.east} ${bounds.south},${bounds.east} ${bounds.north},${bounds.west} ${bounds.north},${bounds.west} ${bounds.south}))`,
       p_zoom:     zoom,
       p_tier_col: tierCol || null,

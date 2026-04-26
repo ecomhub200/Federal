@@ -21401,6 +21401,7 @@ async function handleCitySelection() {
         jurisdictionContext.tierCity = { id: slug, name: displayName, type: placeType };
 
         if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI('city');
+        if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
 
         // Clear competing boundaries — city takes precedence while selected
         if (typeof removeRegionBoundaryLayer === 'function') removeRegionBoundaryLayer();
@@ -24443,11 +24444,21 @@ function getDataFilePath() {
     }
 
     // ── City / Town tier (merged) ──
+    // City-level R2 files don't exist (publishing crash data per-city would
+    // explode the bucket). Use the parent county's parquet — the county
+    // dropdown is locked to the parent county at this tier, so
+    // getActiveJurisdictionId() already returns the right slug. The map
+    // boundary filter handles the in-browser city clipping (see
+    // updateMapDisplay / city boundary handler).
     if (tier === 'city') {
-        const cityId = jurisdictionContext.tierCity?.id;
-        if (cityId) {
-            // All cities and towns use the _city/ prefix on R2
-            return `${r2Prefix}/_city/${cityId.toLowerCase()}/${roadType}.parquet`;
+        const parentJurisdiction = getActiveJurisdictionId();
+        let cityCountySlug = parentJurisdiction;
+        const cityStateAbbr = appConfig?.states?.[stateKey]?.abbreviation?.toLowerCase();
+        if (cityStateAbbr && cityCountySlug && cityCountySlug.startsWith(cityStateAbbr + '_')) {
+            cityCountySlug = cityCountySlug.substring(cityStateAbbr.length + 1);
+        }
+        if (cityCountySlug) {
+            return `${r2Prefix}/${cityCountySlug.toLowerCase()}/${roadType}.parquet`;
         }
     }
 
@@ -32205,6 +32216,27 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
     //
     // forceR2=true bypasses this guard entirely (set by the lazy loader
     // when a detail tab actually needs row-level data).
+
+    // Ensure crashLensClient.state is synced with the active state BEFORE the
+    // Supabase-first query fires. Without this, autoLoadCrashData can race the
+    // state-change propagation: _getActiveStateKey() returns the boot default
+    // (e.g. 'colorado'), the Supabase query runs against the wrong state,
+    // returns 0 rows, supabasePainted = false, and we fall through to R2.
+    try {
+        if (window.crashLensClient) {
+            let _activeState = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
+            const _bootDefault = (typeof appConfig !== 'undefined' && appConfig?.defaultState) || null;
+            if (!_activeState || _activeState === _bootDefault) {
+                const _stSel = document.getElementById('stateSelect');
+                if (_stSel && _stSel.value && typeof _fipsToStateKey === 'function') {
+                    const _fromFips = _fipsToStateKey(_stSel.value);
+                    if (_fromFips) _activeState = _fromFips;
+                }
+            }
+            if (_activeState) window.crashLensClient.state = _activeState;
+        }
+    } catch (e) { /* non-fatal */ }
+
     if (!forceR2
         && CL.data && CL.data.lazyLoader
         && !CL.data.lazyLoader.isR2Loaded()
@@ -49084,9 +49116,57 @@ function getFilteredMapPoints() {
     // Cache bounds for this filter pass (avoid re-computing per point)
     const coordBounds = getMapCoordinateBounds();
 
+    // City-tier boundary clip: at city tier the R2 file is the parent county's
+    // parquet, so we'd otherwise paint county-wide markers on a city-scoped
+    // map. Pre-compute a bbox + (optional) polygon for an in-place spatial
+    // filter so the displayed dots match the city scope shown by the boundary.
+    let cityBboxFilter = null;
+    let cityPolyFilter = null;
+    try {
+        const _tier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext)
+            ? jurisdictionContext.viewTier : null;
+        const _cityLayer = (typeof builtInLayersState !== 'undefined'
+            && builtInLayersState?.cityBoundary?.layer) || null;
+        if (_tier === 'city' && _cityLayer) {
+            const _b = _cityLayer.getBounds();
+            if (_b && _b.isValid && _b.isValid()) {
+                cityBboxFilter = {
+                    south: _b.getSouth(), west: _b.getWest(),
+                    north: _b.getNorth(), east: _b.getEast()
+                };
+            }
+            // Best-effort: build a turf polygon from the layer's GeoJSON for
+            // pixel-accurate clipping inside the bbox.
+            if (typeof turf !== 'undefined' && typeof _cityLayer.toGeoJSON === 'function') {
+                try {
+                    const _gj = _cityLayer.toGeoJSON();
+                    if (_gj && _gj.features && _gj.features.length) {
+                        cityPolyFilter = _gj;
+                    }
+                } catch (_e) { /* fall back to bbox */ }
+            }
+        }
+    } catch (_e) { /* non-fatal — skip city clip */ }
+
     return crashState.mapPoints.filter(p => {
         // Validate coordinates using dynamic state-aware bounds
         if (!p.lat || !p.lng || p.lat < coordBounds.latMin || p.lat > coordBounds.latMax || p.lng < coordBounds.lonMin || p.lng > coordBounds.lonMax) return false;
+
+        // City boundary clip (cheap bbox first, then optional polygon)
+        if (cityBboxFilter) {
+            if (p.lat < cityBboxFilter.south || p.lat > cityBboxFilter.north ||
+                p.lng < cityBboxFilter.west  || p.lng > cityBboxFilter.east) return false;
+            if (cityPolyFilter) {
+                try {
+                    const pt = turf.point([p.lng, p.lat]);
+                    let inside = false;
+                    for (const f of cityPolyFilter.features) {
+                        if (turf.booleanPointInPolygon(pt, f)) { inside = true; break; }
+                    }
+                    if (!inside) return false;
+                } catch (_e) { /* fall through using bbox match */ }
+            }
+        }
 
         // Year filter
         // Note: p.date is a Unix timestamp in milliseconds stored as string
@@ -50237,16 +50317,33 @@ function updateMapSearchPlaceholder() {
     if (!input) return;
 
     const stateName = appConfig?.stateName || '';
-    const jurisdictionId = document.getElementById('jurisdictionSelect')?.value;
-    const jurisdictionName = appConfig?.jurisdictions?.[jurisdictionId]?.name || '';
+    const tier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext)
+        ? jurisdictionContext.viewTier : 'county';
+
+    // At city tier the County dropdown is locked to the parent county, so
+    // reading jurisdictionSelect would mis-label the search. Prefer the
+    // selected city's display name instead.
+    let scopeName = '';
+    if (tier === 'city' && jurisdictionContext.tierCity?.name) {
+        scopeName = jurisdictionContext.tierCity.name;
+    } else if (tier === 'region' && jurisdictionContext.tierRegion) {
+        scopeName = jurisdictionContext.tierRegion.shortName || jurisdictionContext.tierRegion.name || '';
+    } else if (tier === 'mpo' && jurisdictionContext.tierMpo) {
+        scopeName = jurisdictionContext.tierMpo.shortName || jurisdictionContext.tierMpo.name || '';
+    } else if (tier === 'planning_district' && jurisdictionContext.tierPlanningDistrict) {
+        scopeName = jurisdictionContext.tierPlanningDistrict.shortName || jurisdictionContext.tierPlanningDistrict.name || '';
+    } else {
+        const jurisdictionId = document.getElementById('jurisdictionSelect')?.value;
+        scopeName = appConfig?.jurisdictions?.[jurisdictionId]?.name || '';
+    }
 
     let locationLabel = '';
-    if (jurisdictionName && stateName) {
-        locationLabel = `${jurisdictionName}, ${stateName}`;
+    if (scopeName && stateName) {
+        locationLabel = `${scopeName}, ${stateName}`;
     } else if (stateName) {
         locationLabel = stateName;
-    } else if (jurisdictionName) {
-        locationLabel = jurisdictionName;
+    } else if (scopeName) {
+        locationLabel = scopeName;
     }
 
     if (locationLabel) {
@@ -135601,6 +135698,13 @@ async function displayCityBoundary(citySlug, displayName, placeType) {
     builtInLayersState.cityBoundary.enabled = true;
 
     if (typeof updateMapAssetPanel === 'function') updateMapAssetPanel();
+
+    // Re-render map markers with the new boundary so the dots are clipped
+    // to the city scope (getFilteredMapPoints reads cityBoundary.layer).
+    try {
+        if (typeof updateMapDisplay === 'function') updateMapDisplay();
+    } catch (_e) { /* non-fatal */ }
+
     console.log(`[CityBoundary] Displayed boundary for ${displayName || citySlug}`);
 }
 
@@ -135612,6 +135716,13 @@ function removeCityBoundaryLayer() {
     builtInLayersState.cityBoundary.status = 'ready';
     builtInLayersState.cityBoundary.currentCitySlug = null;
     builtInLayersState.cityBoundary.enabled = false;
+
+    // Re-render so any stale city-clipped markers expand back out.
+    try {
+        if (typeof updateMapDisplay === 'function' && typeof crashMap !== 'undefined' && crashMap) {
+            updateMapDisplay();
+        }
+    } catch (_e) { /* non-fatal */ }
 }
 
 function addBTSMPOAttribution() {
