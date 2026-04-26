@@ -93,28 +93,25 @@ CL.data.supabaseBridge = (function () {
             return { tier: 'planning_district', value: pdObj.dbName || pdObj.name };
         }
         if (t === 'city') {
-            // Primary: the city dropdown's name (matches database for cities/CDPs).
-            // Fallback: namePatterns[0] from the active jurisdiction so we send
-            // 'Kent' instead of 'Kent County' when no city is selected.
+            // Primary: city dropdown name (matches DB for cities/CDPs).
+            // Fallback chain: physicalJurisName (DB-matching short form from
+            // namePatterns[0], 50-state safe) → jurisdictionDbName lookup →
+            // suffix-stripped display name as final defense.
             var cityVal = (ctx.tierCity && ctx.tierCity.name) || null;
-            if (!cityVal) cityVal = jurisdictionDbName(ctx.jurisdictionKey);
+            if (!cityVal) cityVal = ctx.physicalJurisName || jurisdictionDbName(ctx.jurisdictionKey) || null;
             if (!cityVal) {
-                // jurisdictionDbName failed (key format mismatch after state switch).
-                // Strip " County" suffix from display name to match matview format.
                 var rawCity = ctx.jurisdictionName || '';
                 cityVal = rawCity.replace(/\s+County$/i, '') || null;
             }
             return { tier: 'county', value: cityVal };
         }
         if (t === 'county') {
-            // jurisdictionName is the display form ('Kent County'); the matview
-            // column physical_juris_name stores the short form ('Kent'). Pull
-            // the database-matching value from namePatterns[0] when available.
-            var countyVal = jurisdictionDbName(ctx.jurisdictionKey);
+            // physicalJurisName is the DB-matching short form stored at selection time
+            // (e.g. "New Castle" not "New Castle County"). 50-state safe — sourced from
+            // config.json namePatterns[0]. Falls back to config lookup, then a
+            // suffix-stripped display name to match the matview format.
+            var countyVal = ctx.physicalJurisName || jurisdictionDbName(ctx.jurisdictionKey) || null;
             if (!countyVal) {
-                // jurisdictionDbName failed (key format mismatch after state switch).
-                // Strip " County" suffix from display name to match matview format.
-                // e.g. "New Castle County" → "New Castle", "Kent County" → "Kent"
                 var rawCounty = ctx.jurisdictionName || '';
                 countyVal = rawCounty.replace(/\s+County$/i, '') || null;
             }

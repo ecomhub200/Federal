@@ -23601,6 +23601,10 @@ function buildJurisdictionContextFromSelection(jurisdictionId) {
         stateName,
         jurisdictionKey: jurisdictionId,
         jurisdictionName: jurisdiction.name,
+        // physicalJurisName: DB-matching short name from namePatterns[0].
+        // Matches matview column physical_juris_name exactly across all 50 states
+        // (County, Parish, Borough, Census Area, independent cities, etc.).
+        physicalJurisName: (Array.isArray(jurisdiction.namePatterns) && jurisdiction.namePatterns[0]) || jurisdiction.name,
         countyFips,
         fullFips: stateFips + countyFips,
         type: jurisdiction.type || 'county'
