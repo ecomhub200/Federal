@@ -590,7 +590,13 @@ class CrashLensDataClient {
         limit: 50000,
       });
       this._source = 'supabase';
-      return (data || []).map(r => this._pgToFrontend(r));
+      return (data || []).map(r => {
+        const out = this._pgToFrontend(r);
+        // mv_crash_tree column is `total`; frontend callers read `count`
+        // (the R2/local-aggregation convention). Alias it here.
+        out.count = parseInt(r.total != null ? r.total : r.count, 10) || 0;
+        return out;
+      });
     } catch (e) {
       console.warn('[DataClient] getCrashTree failed (matview missing?):', e.message);
       return null;

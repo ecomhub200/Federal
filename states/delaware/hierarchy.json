@@ -105,6 +105,7 @@
     "wilmapcowapc": {
       "name": "WILMAPCO (Wilmington Area Planning Council)",
       "shortName": "Wilmington Area Planning Council",
+      "dbName": "Wilmington Area Planning Council",
       "type": "mpo",
       "center": [
         -75.5398,
@@ -132,6 +133,7 @@
     "dkcmpo": {
       "name": "Dover/Kent County MPO",
       "shortName": "Dover/Kent County",
+      "dbName": "Dover / Kent County MPO",
       "type": "mpo",
       "center": [
         -75.5244,
@@ -159,6 +161,7 @@
     "swmpo": {
       "name": "Salisbury-Wicomico MPO",
       "shortName": "Salisbury-Wicomico",
+      "dbName": "Salisbury-Wicomico MPO",
       "type": "mpo",
       "center": [
         -75.5994,
@@ -186,6 +189,7 @@
     "dover_kent_county_mpo": {
       "name": "Dover / Kent County MPO",
       "shortName": "Dover / Kent County",
+      "dbName": "Dover / Kent County MPO",
       "type": "mpo",
       "btsMpoId": "10199000",
       "source": "BTS/USDOT NTAD",
@@ -196,6 +200,23 @@
         39.109793
       ],
       "zoom": 10
+    },
+    "dvrpc": {
+      "name": "Delaware Valley Regional Planning Commission",
+      "shortName": "DVRPC",
+      "dbName": "Delaware Valley Regional Planning Commission",
+      "type": "mpo",
+      "center": [
+        -75.16,
+        39.95
+      ],
+      "zoom": 10,
+      "counties": [
+        "003"
+      ],
+      "countyNames": {
+        "003": "New Castle"
+      }
     }
   },
   "allCounties": {

@@ -62,9 +62,36 @@ CL.data.supabaseBridge = (function () {
         var t = ctx.viewTier || 'county';
         if (t === 'federal') return { tier: 'federal', value: null };
         if (t === 'state')   return { tier: 'state', value: null };
-        if (t === 'region') return { tier: 'region', value: ctx.tierRegion && ctx.tierRegion.name };
-        if (t === 'mpo')    return { tier: 'mpo',    value: ctx.tierMpo && ctx.tierMpo.name };
-        if (t === 'planning_district') return { tier: 'planning_district', value: ctx.tierPlanningDistrict && ctx.tierPlanningDistrict.name };
+        if (t === 'region') {
+            // Prefer dbName (exact DB match) → name (hierarchy display name).
+            // No selection → fall back to state instead of letting an undefined
+            // value silently strip the dot_district filter.
+            var regionObj = ctx.tierRegion;
+            if (!regionObj) {
+                console.log('[resolveTier] No region selected, falling back to state tier');
+                return { tier: 'state', value: null };
+            }
+            return { tier: 'region', value: regionObj.dbName || regionObj.name };
+        }
+        if (t === 'mpo') {
+            // Hierarchy stores long display names (e.g. "WILMAPCO (Wilmington
+            // Area Planning Council)") but mpo_name in the matviews stores
+            // shorter values. Prefer dbName → shortName → name.
+            var mpoObj = ctx.tierMpo;
+            if (!mpoObj) {
+                console.log('[resolveTier] No MPO selected, falling back to state tier');
+                return { tier: 'state', value: null };
+            }
+            return { tier: 'mpo', value: mpoObj.dbName || mpoObj.shortName || mpoObj.name };
+        }
+        if (t === 'planning_district') {
+            var pdObj = ctx.tierPlanningDistrict;
+            if (!pdObj) {
+                console.log('[resolveTier] No planning district selected, falling back to state tier');
+                return { tier: 'state', value: null };
+            }
+            return { tier: 'planning_district', value: pdObj.dbName || pdObj.name };
+        }
         if (t === 'city') {
             // Primary: the city dropdown's name (matches database for cities/CDPs).
             // Fallback: namePatterns[0] from the active jurisdiction so we send
