@@ -306,6 +306,11 @@ CL.data.supabaseBridge = (function () {
 
             var t = resolveTier();
             console.log('[Phase2] Fetching summary from Supabase...', { tier: t.tier, value: t.value });
+            try {
+                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
+                    CL.upload.tierUI.updateTierSwitchProgress(15, 'Fetching dashboard summary…');
+                }
+            } catch (e) { /* non-fatal */ }
             var startTime = Date.now();
             var rows = await window.crashLensClient.getSummary(t.tier, t.value);
             var fetchMs = Date.now() - startTime;
@@ -316,8 +321,21 @@ CL.data.supabaseBridge = (function () {
             }
             if (!Array.isArray(rows) || rows.length === 0) return false;
 
+            try {
+                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
+                    CL.upload.tierUI.updateTierSwitchProgress(50, 'Processing ' + rows.length.toLocaleString() + ' summary rows…');
+                }
+            } catch (e) { /* non-fatal */ }
+
             var agg = aggregate(rows);
             paintKPIs(agg);
+
+            try {
+                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
+                    CL.upload.tierUI.updateTierSwitchProgress(85, 'Painting dashboard…');
+                }
+            } catch (e) { /* non-fatal */ }
+
             paintYearlyTable(agg);
             paintFuncClassTable(agg);
             showBanner();
@@ -326,6 +344,15 @@ CL.data.supabaseBridge = (function () {
             console.log('[Phase2] Supabase bridge injected', {
                 tier: t.tier, value: t.value, rows: rows.length, total: agg.total
             });
+
+            // Bug G: ensure crashState.loaded = true so detail tabs (which all
+            // gate on this flag) don't bail before their matview path runs.
+            try {
+                if (typeof crashState !== 'undefined' && crashState && !crashState.loaded) {
+                    crashState.loaded = true;
+                    if (!Array.isArray(crashState.sampleRows)) crashState.sampleRows = [];
+                }
+            } catch (gErr) { /* non-fatal */ }
 
             // Notify the Dashboard / loading banner that real KPI values are now
             // painted to the DOM. The 'supabase' source tells the listener NOT
@@ -337,9 +364,25 @@ CL.data.supabaseBridge = (function () {
                 }));
             } catch (evtErr) { /* non-fatal */ }
 
+            try {
+                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
+                    CL.upload.tierUI.updateTierSwitchProgress(100, 'Ready');
+                }
+                setTimeout(function () {
+                    if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.removeTierSwitchProgress) {
+                        CL.upload.tierUI.removeTierSwitchProgress();
+                    }
+                }, 500);
+            } catch (e) { /* non-fatal */ }
+
             return true;
         } catch (e) {
             console.warn('[Phase2] Supabase bridge failed (non-fatal):', e && e.message);
+            try {
+                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.removeTierSwitchProgress) {
+                    CL.upload.tierUI.removeTierSwitchProgress();
+                }
+            } catch (e2) { /* non-fatal */ }
         }
         return false;
     }

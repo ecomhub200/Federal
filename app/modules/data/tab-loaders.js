@@ -69,62 +69,13 @@
         return !!(window.crashLensClient && window.crashLensClient.supabaseKey);
     }
 
-    /**
-     * Preloader registry. Each entry is an async function:
-     *   (client, tier, value) → Promise<Array<row>|null>
-     *
-     * Return null to signal "Supabase did not serve this tab; fall back to R2."
-     * Return [] to signal "Supabase served, but the result is genuinely empty"
-     * (the tab will render its empty state without triggering an R2 download).
-     */
+    // Preloader registry for tabs that still need row-level Supabase data
+    // before they can render. Most tabs now use matviews directly (loaded
+    // inside their own init functions) and don't need preloaders.
     var PRELOADERS = {
-        /**
-         * Fatal & Speeding: K + A severity crashes.
-         * Typically <5% of total volume → fits comfortably in a single page.
-         */
-        fatalspeeding: async function (client, tier, value) {
-            var result = await client.getCrashes(tier, value, {
-                severity: ['K', 'A'],
-                all: true,
-                maxRows: 50000
-            });
-            return (result && Array.isArray(result.rows)) ? result.rows : null;
-        },
-
-        /**
-         * Pedestrian: ped or bike involved.
-         * Typically 1-3% of total → very small subset.
-         */
-        pedestrian: async function (client, tier, value) {
-            var result = await client.getCrashes(tier, value, {
-                pedBike: 'either',
-                all: true,
-                maxRows: 50000
-            });
-            return (result && Array.isArray(result.rows)) ? result.rows : null;
-        }
-
-        // To add a Supabase-first preloader for another tab:
-        //   1. Pick a query shape from data-client.js (getCrashes with a
-        //      filter, or one of the new mv_* methods like getHotspots).
-        //   2. Add an entry here that returns rows in COL.* shape.
-        //   3. Replace `crashState.sampleRows` with
-        //      `CL.data.tabLoaders.getTabRows('<tabId>')` in the tab's
-        //      processing code (one or two lines per tab).
-        //   4. The tab stays in R2_REQUIRED_TABS — that flag now means
-        //      "needs preload before opening", and the lazy-loader will
-        //      try this Supabase preloader before any R2 download.
-        //
-        // Tabs that need NEW Supabase matviews before they can be added:
-        //   hotspots      — needs mv_hotspots
-        //   crashtree     — needs mv_crash_tree
-        //   grants        — needs mv_grants_baseline
-        //   safety        — needs mv_safety_categories
-        //   analysis      — needs mv_analysis_summary
-        //   intersection  — needs mv_intersection_summary (or trgm index
-        //                   on `node` so server-side filter is fast)
-        //   deepdive      — stays R2 (drills into individual crash rows)
-        // See docs/SUPABASE_BACKEND_COWORK_PROMPT.md for the SQL specs.
+        // Currently empty — all former preloaders (fatalspeeding, pedestrian)
+        // have been replaced by direct matview calls inside the tab init
+        // functions. intersection and deepdive still fall through to R2.
     };
 
     /**
