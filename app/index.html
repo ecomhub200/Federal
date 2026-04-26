@@ -21072,6 +21072,15 @@ async function handleTierChange(tier) {
                         if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
                     }
                     try { updateDataConnectionStatus('connected'); } catch (e2) {}
+                    // Re-activate Supabase viewport map bridge: mapPoints are
+                    // empty at aggregate tiers, so updateMapDisplay would render
+                    // nothing without it.
+                    try {
+                        if (CL.data && CL.data.mapBridge && CL.data.mapBridge.attach) {
+                            CL.data.mapBridge.attach();
+                            CL.data.mapBridge.refresh();
+                        }
+                    } catch (mb) { /* non-fatal */ }
                     console.log(`[Tier] ${tier} view using Supabase matview (R2 download skipped)`);
                 } catch (e) {
                     console.warn(`[Tier] Supabase bridge for ${tier} failed:`, e.message);
@@ -21347,6 +21356,12 @@ async function handlePlanningDistrictSelection() {
                 crashState.sampleRowsLoaded = false;
             }
             try { updateDataConnectionStatus('connected'); } catch (e2) {}
+            try {
+                if (CL.data && CL.data.mapBridge && CL.data.mapBridge.attach) {
+                    CL.data.mapBridge.attach();
+                    CL.data.mapBridge.refresh();
+                }
+            } catch (mb) { /* non-fatal */ }
             console.log('[Tier] PD view using Supabase matview (R2 download skipped)');
         } catch (e) {
             console.warn('[Tier] PD Supabase bridge failed:', e.message);
@@ -21596,6 +21611,12 @@ async function handleRegionSelection() {
                 crashState.sampleRowsLoaded = false;
             }
             try { updateDataConnectionStatus('connected'); } catch (e2) {}
+            try {
+                if (CL.data && CL.data.mapBridge && CL.data.mapBridge.attach) {
+                    CL.data.mapBridge.attach();
+                    CL.data.mapBridge.refresh();
+                }
+            } catch (mb) { /* non-fatal */ }
             console.log('[Tier] Region view using Supabase matview (R2 download skipped)');
         } catch (e) {
             console.warn('[Tier] Region Supabase bridge failed:', e.message);
@@ -21755,6 +21776,12 @@ async function handleMPOSelection() {
                 crashState.sampleRowsLoaded = false;
             }
             try { updateDataConnectionStatus('connected'); } catch (e2) {}
+            try {
+                if (CL.data && CL.data.mapBridge && CL.data.mapBridge.attach) {
+                    CL.data.mapBridge.attach();
+                    CL.data.mapBridge.refresh();
+                }
+            } catch (mb) { /* non-fatal */ }
             console.log('[Tier] MPO view using Supabase matview (R2 download skipped)');
         } catch (e) {
             console.warn('[Tier] MPO Supabase bridge failed:', e.message);
@@ -48996,6 +49023,20 @@ function initMap() {
 
     // Fit bounds to data using dynamic state-aware coordinate validation
     fitMapToData();
+
+    // ── Supabase viewport map bridge ──
+    // For aggregate tiers (state/federal/region/MPO/PD) we don't download the
+    // R2 parquet (would OOM on big states). When crashState has no mapPoints,
+    // hand rendering off to mapBridge — it queries Supabase for crashes inside
+    // the visible viewport on every pan/zoom. Detached automatically when
+    // county/city R2 data loads (see supabase-bridge.onR2LoadComplete).
+    try {
+        if (CL.data && CL.data.mapBridge && CL.data.mapBridge.attach
+            && (!crashState.mapPoints || crashState.mapPoints.length === 0)) {
+            CL.data.mapBridge.attach();
+            CL.data.mapBridge.refresh();
+        }
+    } catch (e) { /* non-fatal */ }
 }
 
 /**
@@ -49160,7 +49201,18 @@ function getActiveMapFilters() {
 
 function updateMapDisplay() {
     if (!crashMap) return;
-    
+
+    // When the Supabase viewport map bridge is active (aggregate tiers, no
+    // R2 sampleRows), it owns the cluster/marker/heat layers — running our
+    // own clearLayers + render here would wipe mapBridge's just-drawn markers.
+    // Skip rendering and let mapBridge.refresh() (fired on tier change and
+    // on map pan/zoom) keep the layers up to date.
+    if (CL.data && CL.data.mapBridge && CL.data.mapBridge.isActive
+        && CL.data.mapBridge.isActive()) {
+        try { CL.data.mapBridge.refresh(); } catch (e) { /* non-fatal */ }
+        return;
+    }
+
     const filtered = getFilteredMapPoints();
     
     // Calculate stats
@@ -153408,6 +153460,7 @@ function signDef_exportPDF() {
 <script src="modules/data/supabase-bridge.js"></script>
 <script src="modules/data/lazy-loader.js"></script>
 <script src="modules/data/tab-loaders.js"></script>
+<script src="modules/data/supabase-map-bridge.js"></script>
 <script>
   // Initialize Supabase data client after page load
   // This does NOT change any existing data loading — it just makes the client available
