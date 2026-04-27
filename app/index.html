@@ -21516,6 +21516,7 @@ async function loadStatewideCSVForTier(stateKey) {
 
     const loadingTitle = document.getElementById('loadingTitle');
     const loadingSubtitle = document.getElementById('loadingSubtitle');
+    if (CL.upload?.tierUI?.setUploadZoneCompact) CL.upload.tierUI.setUploadZoneCompact(false);
     if (loadingTitle) loadingTitle.textContent = `Loading Statewide Data...`;
     if (loadingSubtitle) loadingSubtitle.textContent = `Parsing ${stateKey} statewide crash records...`;
 
@@ -32465,6 +32466,7 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
     if (!skipCache) {
         try {
             if (uploadIcon) uploadIcon.textContent = '🔄';
+            if (CL.upload?.tierUI?.setUploadZoneCompact) CL.upload.tierUI.setUploadZoneCompact(false);
             if (loadingTitle) loadingTitle.textContent = 'Checking cache...';
             if (loadingSubtitle) loadingSubtitle.textContent = 'Looking for cached data';
 
@@ -32606,6 +32608,7 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
 
     // Show loading state
     if (uploadIcon) uploadIcon.textContent = '🔄';
+    if (CL.upload?.tierUI?.setUploadZoneCompact) CL.upload.tierUI.setUploadZoneCompact(false);
     if (loadingTitle) loadingTitle.textContent = 'Loading Fresh Data...';
     if (loadingSubtitle) loadingSubtitle.textContent = `Fetching ${jurisdictionName} data...`;
 
@@ -32699,6 +32702,7 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
                 // progress accumulate, not a frozen "0%" until parse begins.
                 if (prog) prog.style.display = 'block';
                 if (uploadIcon) uploadIcon.textContent = '🔄';
+                if (CL.upload?.tierUI?.setUploadZoneCompact) CL.upload.tierUI.setUploadZoneCompact(false);
                 if (loadingTitle) loadingTitle.textContent = 'Auto-Loading Crash Data';
                 if (loadingSubtitle) loadingSubtitle.textContent = `Downloading ${jurisdictionName} parquet…`;
                 setLoadProgress(0, null, 'DOWNLOADING', `Downloading ${jurisdictionName} crash data…`);
@@ -32805,6 +32809,7 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
             // user sees download progress instead of a frozen UI.
             if (prog) prog.style.display = 'block';
             if (uploadIcon) uploadIcon.textContent = '🔄';
+            if (CL.upload?.tierUI?.setUploadZoneCompact) CL.upload.tierUI.setUploadZoneCompact(false);
             if (loadingTitle) loadingTitle.textContent = 'Auto-Loading Crash Data';
             if (loadingSubtitle) loadingSubtitle.textContent = `Downloading ${jurisdictionName} data…`;
             setLoadProgress(0, null, 'DOWNLOADING', `Downloading ${jurisdictionName} crash data…`);
@@ -33115,6 +33120,7 @@ function showAutoLoadFallback(errorMsg) {
     const progressContainer = document.getElementById('progressContainer');
 
     if (uploadIcon) uploadIcon.textContent = '📁';
+    if (CL.upload?.tierUI?.setUploadZoneCompact) CL.upload.tierUI.setUploadZoneCompact(false);
     if (loadingTitle) loadingTitle.textContent = 'Drop CSV File Here or Click to Browse';
     if (loadingSubtitle) {
         loadingSubtitle.textContent = errorMsg
