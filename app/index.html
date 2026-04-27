@@ -163,6 +163,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .upload-zone:hover,.upload-zone.dragover{border-color:var(--primary);background:var(--primary-light)}
 .upload-zone h2{font-size:1.3rem;margin-bottom:.4rem;color:var(--dark)}
 .upload-zone p{color:var(--gray);margin-bottom:.75rem;font-size:.9rem}
+/* Compact-success mode: collapses the upload-zone to a slim, left-aligned
+   confirmation bar after data has loaded. Drops vertical footprint from
+   ~200px to ~50px, keeps the dashed surface so the area still reads as the
+   data drop zone, and softens the hover affordance since clicking does
+   nothing useful in this state. */
+.upload-zone.compact-success{padding:.55rem .9rem;text-align:left;cursor:default;border-style:solid;border-color:#86efac;background:#f0fdf4;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+.upload-zone.compact-success:hover,.upload-zone.compact-success.dragover{transform:none;box-shadow:none;border-color:#86efac;background:#f0fdf4}
+.upload-zone.compact-success>div:first-child{font-size:1.25rem!important;margin:0!important;line-height:1}
+.upload-zone.compact-success h2{font-size:.95rem;margin:0;font-weight:600;color:#14532d}
+.upload-zone.compact-success p{font-size:.8rem;margin:0;color:#475569;flex:1 1 200px}
 .btn{padding:.55rem 1.1rem;border-radius:var(--radius);border:none;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem;font-size:.85rem;transition:all .2s}
 .btn-primary{background:var(--primary);color:var(--white)}.btn-primary:hover{background:var(--primary-dark)}
 .btn-success{background:var(--success);color:var(--white)}.btn-success:hover{background:#047857}
@@ -5009,11 +5019,6 @@ textarea:focus-visible {
 <div style="font-size:2.5rem;margin-bottom:.5rem" aria-hidden="true">📁</div>
 <h2 id="loadingTitle">Drop Your Data File Here or Click to Browse</h2>
 <p id="loadingSubtitle">Upload your crash data file</p>
-<p style="margin-top:1rem;font-size:.8rem;color:#6b7280">
-<span aria-hidden="true">✓</span> Handles large files (millions of rows)
-<span aria-hidden="true">•</span> Multi-state format supported
-<span aria-hidden="true">•</span> Supports CSV, CSV.GZ, and Parquet.GZ
-</p>
 </div>
 <div class="progress-container" id="progressContainer" style="display:none">
 <div class="progress-header">
