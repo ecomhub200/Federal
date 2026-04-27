@@ -514,12 +514,19 @@
         return 'county';
     }
 
-    // Wire to crashDataLoaded so when the Supabase bridge finishes painting
-    // KPIs, the upload card converges to a truthful "loaded" state. Only
-    // react to the Supabase source — 'autoload' / 'cache' / 'lazy-empty'
-    // are county-tier R2 events with their own copy.
+    // Wire to crashDataLoaded so the upload card converges to a truthful
+    // "loaded" state. Universal: every source (supabase / autoload / cache)
+    // collapses the upload-zone to the compact green confirmation bar so
+    // County and City/Town views match the aggregate views. The
+    // Supabase-only branch below additionally repaints the headline +
+    // crash-count subtitle, since autoload/cache/lazy-empty paint their
+    // own copy directly into loadingTitle/Subtitle from index.html.
     document.addEventListener('crashDataLoaded', function (evt) {
         var detail = (evt && evt.detail) || {};
+
+        // Universal compact treatment for any successful load.
+        setUploadZoneCompact(true);
+
         if (detail.source !== 'supabase') return;
         var tier = getActiveTier();
         var total = typeof detail.total === 'number' ? detail.total : null;
@@ -546,7 +553,8 @@
         renderTierScopeCard: renderTierScopeCard,
         fallbackR2Url: fallbackR2Url,
         updateTierSwitchProgress: updateTierSwitchProgress,
-        removeTierSwitchProgress: removeTierSwitchProgress
+        removeTierSwitchProgress: removeTierSwitchProgress,
+        setUploadZoneCompact: setUploadZoneCompact
     };
 
     if (typeof CL._registerModule === 'function') {
