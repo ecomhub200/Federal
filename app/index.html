@@ -25153,6 +25153,31 @@ function loadSavedSelections() {
 
     console.log('[Config] Road type default:', filterProfile, '(smart:', smartDefault, ', saved:', savedFilterProfile, ')');
     updateCurrentSelectionDisplay();
+
+    // ── View Level UI bootstrap ──
+    // handleTierChange() is the only place that fires updateTierSelectorUI /
+    // applyUploadTierUI, but it's user-click-driven — it never runs at initial
+    // page load. Without this, the default 'county' tier renders with the
+    // legacy bottom dropdown visible, no top-card County dropdown, and no
+    // Active Scope card. Run it once here, after the saved jurisdiction has
+    // been restored, so the read-only Active Scope text reflects the real
+    // jurisdictionContext.jurisdictionName instead of "Select a county above".
+    try {
+        const activeTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+        if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI(activeTier);
+        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.applyUploadTierUI) {
+            CL.upload.tierUI.applyUploadTierUI(activeTier);
+        }
+        // Sync the top-card County dropdown with the (now-restored) value of
+        // the canonical bottom jurisdictionSelect. populateJurisdictionDropdown
+        // mirrors the option list, but it runs before loadSavedSelections, so
+        // the top dropdown still points at the first county at this point.
+        const tcs = document.getElementById('tierCountySelect');
+        const js = document.getElementById('jurisdictionSelect');
+        if (tcs && js && js.value) tcs.value = js.value;
+    } catch (e) {
+        console.warn('[Config] View Level UI bootstrap failed:', e && e.message);
+    }
 }
 
 function saveJurisdictionSelection() {
@@ -25918,22 +25943,13 @@ function getSelectedFilterProfile() {
 }
 
 function updateCurrentSelectionDisplay() {
+    // The legacy "Current: <jurisdiction> | <filter>" panel is now superseded
+    // by the unified Active Scope card painted by upload-tier-ui.js for every
+    // tier. Keep this function as a no-op for backward compatibility with the
+    // ~8 callers, but also force-hide the panel in case earlier code paths
+    // showed it before the View Level bootstrap ran.
     const display = document.getElementById('currentJurisdictionDisplay');
-    const nameSpan = document.getElementById('currentJurisdictionName');
-    const filterSpan = document.getElementById('currentFilterName');
-
-    if (!display || !nameSpan || !filterSpan) return;
-
-    // Use the active jurisdiction from UI dropdown (not hardcoded settings)
-    const jurisdictionId = getActiveJurisdictionId();
-    const jurisdiction = appConfig?.jurisdictions[jurisdictionId];
-    const filterProfile = getSelectedFilterProfile();
-
-    if (jurisdiction && filterProfile) {
-        nameSpan.textContent = jurisdiction.name;
-        filterSpan.textContent = filterProfile.name;
-        display.style.display = 'block';
-    }
+    if (display) display.style.display = 'none';
 }
 
 function updateAppSubtitle(jurisdictionName) {
