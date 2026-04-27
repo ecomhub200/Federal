@@ -4863,6 +4863,12 @@ textarea:focus-visible {
 <option value="">Select a planning district...</option>
 </select>
 </div>
+<div id="tierCountyRow" style="display:none;margin-top:.6rem">
+<label style="font-size:.8rem;font-weight:600;color:#5b21b6;margin-bottom:.3rem;display:block">County</label>
+<select id="tierCountySelect" onchange="handleCountySelection()" style="width:100%;padding:.5rem .6rem;border-radius:var(--radius);border:1px solid #c4b5fd;font-size:.85rem">
+<option value="">Select a county...</option>
+</select>
+</div>
 <div id="tierCityRow" style="display:none;margin-top:.6rem">
 <label style="font-size:.8rem;font-weight:600;color:#5b21b6;margin-bottom:.3rem;display:block">City / Town</label>
 <select id="tierCitySelect" onchange="handleCitySelection()" style="width:100%;padding:.5rem .6rem;border-radius:var(--radius);border:1px solid #c4b5fd;font-size:.85rem">
@@ -20856,10 +20862,12 @@ function updateTierSelectorUI(tier) {
     const regionRow = document.getElementById('tierRegionRow');
     const mpoRow = document.getElementById('tierMPORow');
     const pdRow = document.getElementById('tierPlanningDistrictRow');
+    const countyRow = document.getElementById('tierCountyRow');
     const cityRow = document.getElementById('tierCityRow');
     if (regionRow) regionRow.style.display = (tier === 'region') ? '' : 'none';
     if (mpoRow) mpoRow.style.display = (tier === 'mpo') ? '' : 'none';
     if (pdRow) pdRow.style.display = (tier === 'planning_district') ? '' : 'none';
+    if (countyRow) countyRow.style.display = (tier === 'county') ? '' : 'none';
     if (cityRow) cityRow.style.display = (tier === 'city') ? '' : 'none';
 
     // Update scope indicator
@@ -20882,43 +20890,20 @@ function updateTierSelectorUI(tier) {
         }
     }
 
-    // ── Enable/disable jurisdiction settings based on view tier ──
-    // Lock jurisdiction dropdown ONLY for state, mpo, region views.
-    // County and Federal views keep everything unlocked.
-    const shouldLockJurisdiction = (tier === 'state' || tier === 'mpo' || tier === 'region' || tier === 'planning_district' || tier === 'city');
-    const jurisdictionSettings = document.querySelector('.jurisdiction-settings');
+    // The bottom-card "Select County/Jurisdiction" filter-group is hidden in
+    // every tier now (replaced by the read-only Active Scope card painted by
+    // upload-tier-ui.js). Keep the underlying <select> enabled so programmatic
+    // .value writes from handleCountySelection() still fire change listeners,
+    // and hide the legacy lock badge / "Current: X | Y" panel unconditionally.
     const jurisdictionSelect = document.getElementById('jurisdictionSelect');
-    const stateSelect = document.getElementById('stateSelect');
     const lockBadge = document.getElementById('jurisdictionLockBadge');
-
+    const currentJurisdictionDisplay = document.getElementById('currentJurisdictionDisplay');
     if (jurisdictionSelect) {
-        jurisdictionSelect.disabled = shouldLockJurisdiction;
-        // Keep full opacity — no greying. Use lock badge and border color to indicate locked state.
-        jurisdictionSelect.style.opacity = '1';
-        jurisdictionSelect.style.cursor = shouldLockJurisdiction ? 'not-allowed' : 'pointer';
-        jurisdictionSelect.style.borderColor = shouldLockJurisdiction ? '#f59e0b' : '#0ea5e9';
-        jurisdictionSelect.style.background = shouldLockJurisdiction ? '#fffbeb' : 'white';
-        jurisdictionSelect.title = shouldLockJurisdiction ? `County selection is locked at ${tier.charAt(0).toUpperCase() + tier.slice(1)} view — switch to County view to change` : '';
+        jurisdictionSelect.disabled = false;
+        jurisdictionSelect.title = '';
     }
-    if (lockBadge) {
-        lockBadge.style.display = shouldLockJurisdiction ? 'inline-flex' : 'none';
-        lockBadge.textContent = shouldLockJurisdiction ? '\u{1F512} Locked \u2014 ' + tier.charAt(0).toUpperCase() + tier.slice(1) + ' view' : '';
-    }
-    if (stateSelect) {
-        // State dropdown stays enabled for all views (no locking)
-        stateSelect.disabled = false;
-        stateSelect.style.opacity = '1';
-        stateSelect.style.cursor = 'pointer';
-        stateSelect.style.borderColor = '#0ea5e9';
-        stateSelect.style.background = 'white';
-        stateSelect.title = '';
-    }
-    if (jurisdictionSettings) {
-        // Keep full opacity — never dim the panel so other elements remain clearly active
-        jurisdictionSettings.style.opacity = '1';
-        jurisdictionSettings.style.transition = 'opacity 0.2s ease';
-    }
-    console.log(`[Tier] Jurisdiction controls: county dropdown ${shouldLockJurisdiction ? 'locked' : 'enabled'}`);
+    if (lockBadge) lockBadge.style.display = 'none';
+    if (currentJurisdictionDisplay) currentJurisdictionDisplay.style.display = 'none';
 }
 
 async function handleTierChange(tier) {
@@ -20978,6 +20963,17 @@ async function handleTierChange(tier) {
         // If switching to city/town, populate merged dropdown from geography JSON
         if (tier === 'city') {
             await populateGeoTierDropdown('city');
+        }
+
+        // If switching to county, sync the top-card County dropdown with the
+        // current (possibly localStorage-restored) value of the canonical
+        // jurisdictionSelect so the user sees their saved county.
+        if (tier === 'county') {
+            const tierCountySelect = document.getElementById('tierCountySelect');
+            const jurisdictionSelect = document.getElementById('jurisdictionSelect');
+            if (tierCountySelect && jurisdictionSelect && jurisdictionSelect.value) {
+                tierCountySelect.value = jurisdictionSelect.value;
+            }
         }
 
         // ── Tier-specific boundary and map actions ──
@@ -21393,6 +21389,33 @@ async function handlePlanningDistrictSelection() {
 }
 
 /**
+ * Handle county selection from the top-card County dropdown. Mirrors the
+ * picked value into the canonical bottom-card jurisdictionSelect (kept in
+ * the DOM but visually hidden so the ~30 existing read sites still work),
+ * then defers to saveJurisdictionSelection() for the persistence + reload
+ * pipeline. Finally re-renders the Active Scope card so the read-only text
+ * reflects the new county.
+ */
+function handleCountySelection() {
+    try {
+        const top = document.getElementById('tierCountySelect');
+        const bottom = document.getElementById('jurisdictionSelect');
+        if (!top) return;
+        if (bottom && bottom.value !== top.value) {
+            bottom.value = top.value;
+        }
+        if (typeof saveJurisdictionSelection === 'function') {
+            saveJurisdictionSelection();
+        }
+        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.renderTierScopeCard) {
+            CL.upload.tierUI.renderTierScopeCard('county');
+        }
+    } catch (e) {
+        console.error('[Tier] handleCountySelection failed:', e);
+    }
+}
+
+/**
  * Handle city / town selection from the merged dropdown.
  * Mirrors handleMPOSelection: updates context, toggles UI, fetches and draws a
  * TIGERweb boundary, loads aggregates, triggers CSV load, and dispatches a
@@ -21415,6 +21438,9 @@ async function handleCitySelection() {
         jurisdictionContext.tierCity = { id: slug, name: displayName, type: placeType };
 
         if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI('city');
+        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.renderTierScopeCard) {
+            CL.upload.tierUI.renderTierScopeCard('city');
+        }
         if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
         // Page subtitle (".jurisdiction-subtitle"), map stats scope label and
         // any header reading getJurisdictionLabel() should now reflect the
@@ -25062,6 +25088,14 @@ function populateJurisdictionDropdown() {
 
     console.log('[Config] Dropdown populated with', counties.length, 'counties and', cities.length, 'cities');
 
+    // Mirror the same option set into the top-card County dropdown so the
+    // uniform View Level UI stays in sync with the canonical jurisdictionSelect.
+    const tierCountySelect = document.getElementById('tierCountySelect');
+    if (tierCountySelect) {
+        tierCountySelect.innerHTML = '<option value="">Select a county...</option>' + select.innerHTML;
+        if (select.value) tierCountySelect.value = select.value;
+    }
+
     // Update version indicator to confirm latest code is running
     const versionEl = document.getElementById('appVersionIndicator');
     if (versionEl) {
@@ -25119,6 +25153,31 @@ function loadSavedSelections() {
 
     console.log('[Config] Road type default:', filterProfile, '(smart:', smartDefault, ', saved:', savedFilterProfile, ')');
     updateCurrentSelectionDisplay();
+
+    // ── View Level UI bootstrap ──
+    // handleTierChange() is the only place that fires updateTierSelectorUI /
+    // applyUploadTierUI, but it's user-click-driven — it never runs at initial
+    // page load. Without this, the default 'county' tier renders with the
+    // legacy bottom dropdown visible, no top-card County dropdown, and no
+    // Active Scope card. Run it once here, after the saved jurisdiction has
+    // been restored, so the read-only Active Scope text reflects the real
+    // jurisdictionContext.jurisdictionName instead of "Select a county above".
+    try {
+        const activeTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+        if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI(activeTier);
+        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.applyUploadTierUI) {
+            CL.upload.tierUI.applyUploadTierUI(activeTier);
+        }
+        // Sync the top-card County dropdown with the (now-restored) value of
+        // the canonical bottom jurisdictionSelect. populateJurisdictionDropdown
+        // mirrors the option list, but it runs before loadSavedSelections, so
+        // the top dropdown still points at the first county at this point.
+        const tcs = document.getElementById('tierCountySelect');
+        const js = document.getElementById('jurisdictionSelect');
+        if (tcs && js && js.value) tcs.value = js.value;
+    } catch (e) {
+        console.warn('[Config] View Level UI bootstrap failed:', e && e.message);
+    }
 }
 
 function saveJurisdictionSelection() {
@@ -25884,22 +25943,13 @@ function getSelectedFilterProfile() {
 }
 
 function updateCurrentSelectionDisplay() {
+    // The legacy "Current: <jurisdiction> | <filter>" panel is now superseded
+    // by the unified Active Scope card painted by upload-tier-ui.js for every
+    // tier. Keep this function as a no-op for backward compatibility with the
+    // ~8 callers, but also force-hide the panel in case earlier code paths
+    // showed it before the View Level bootstrap ran.
     const display = document.getElementById('currentJurisdictionDisplay');
-    const nameSpan = document.getElementById('currentJurisdictionName');
-    const filterSpan = document.getElementById('currentFilterName');
-
-    if (!display || !nameSpan || !filterSpan) return;
-
-    // Use the active jurisdiction from UI dropdown (not hardcoded settings)
-    const jurisdictionId = getActiveJurisdictionId();
-    const jurisdiction = appConfig?.jurisdictions[jurisdictionId];
-    const filterProfile = getSelectedFilterProfile();
-
-    if (jurisdiction && filterProfile) {
-        nameSpan.textContent = jurisdiction.name;
-        filterSpan.textContent = filterProfile.name;
-        display.style.display = 'block';
-    }
+    if (display) display.style.display = 'none';
 }
 
 function updateAppSubtitle(jurisdictionName) {

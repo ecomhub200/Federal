@@ -120,36 +120,29 @@
             return sel ? sel.closest('.filter-group') : null;
         })();
 
-        var isCountyLike = !!COUNTY_LIKE[tier];
-
-        if (dropdownGroup) {
-            dropdownGroup.style.display = isCountyLike ? '' : 'none';
-        }
-
-        // The "Current: <jurisdiction> | <road type>" panel is only meaningful
-        // when a jurisdiction is selected. In non-county tiers we replace it
-        // with a tier scope card.
+        // The bottom-card "Select County/Jurisdiction" filter-group is hidden
+        // for ALL tiers now — county/city pick their scope from the top-card
+        // dropdown (tierCountySelect / tierCitySelect) and the lower card
+        // shows the read-only Active Scope card. The legacy
+        // "Current: <jurisdiction> | <road type>" panel is also redundant.
+        if (dropdownGroup) dropdownGroup.style.display = 'none';
         var currentPanel = $('currentJurisdictionDisplay');
-        if (currentPanel) {
-            currentPanel.style.display = isCountyLike ? '' : 'none';
-        }
+        if (currentPanel) currentPanel.style.display = 'none';
 
         renderTierScopeCard(tier);
     }
 
     /**
-     * Tier scope card that replaces the locked county dropdown for
-     * federal / state / region / mpo / planning_district views.
+     * Tier scope card that replaces the bottom-card jurisdiction dropdown
+     * for every tier (federal / state / region / mpo / planning_district /
+     * county / city). The active scope is picked from the matching top-card
+     * dropdown in the View Level section; this card just mirrors it as
+     * read-only text so the layout is uniform across all seven tiers.
      */
     function renderTierScopeCard(tier) {
         var settings = document.querySelector('.jurisdiction-settings');
         if (!settings) return;
         var existing = $('tierScopeCard');
-
-        if (COUNTY_LIKE[tier] || tier === 'county') {
-            if (existing) existing.remove();
-            return;
-        }
 
         var stateName = activeStateName() || 'Selected state';
         var tierLabel = TIER_LABELS[tier] || tier;
@@ -173,6 +166,28 @@
             var pname = (jurisdictionContext.tierPlanningDistrict && jurisdictionContext.tierPlanningDistrict.name) || 'Select a planning district above';
             scopeText = stateName + ' — Planning District: ' + pname;
             helperText = 'Pre-aggregated planning-district totals from Supabase.';
+        } else if (tier === 'county') {
+            var jurName = '';
+            try {
+                jurName = (typeof jurisdictionContext !== 'undefined' &&
+                           jurisdictionContext.jurisdictionName) || '';
+            } catch (e) {}
+            if (!jurName) {
+                var jSel = $('jurisdictionSelect');
+                if (jSel && jSel.options[jSel.selectedIndex]) {
+                    jurName = jSel.options[jSel.selectedIndex].text || '';
+                }
+            }
+            scopeText = stateName + ' — County: ' + (jurName || 'Select a county above');
+            helperText = 'County-level crash data from Supabase (R2 parquet on demand for detail tabs).';
+        } else if (tier === 'city') {
+            var cname = '';
+            try {
+                cname = (typeof jurisdictionContext !== 'undefined' &&
+                         jurisdictionContext.tierCity && jurisdictionContext.tierCity.name) || '';
+            } catch (e) {}
+            scopeText = stateName + ' — City / Town: ' + (cname || 'Select a city / town above');
+            helperText = 'City/town crash data from Supabase (R2 parquet on demand for detail tabs).';
         } else {
             scopeText = tierLabel;
             helperText = '';
