@@ -252,6 +252,7 @@
         var fallback = fallbackR2Url(tier);
 
         if (opts.phase === 'loading') {
+            setUploadZoneCompact(false);
             if (iconHost) iconHost.textContent = '⏳';
             titleEl.textContent = 'Loading ' + (TIER_LABELS[tier] || tier) + ' aggregates…';
             subtitleEl.textContent = 'Source: Supabase matview' + (stateName ? ' — ' + stateName : '');
@@ -266,6 +267,7 @@
             // they get in county view.
             removeTierLoadingCard();
             showUploadZone();
+            setUploadZoneCompact(true);
             if (iconHost) iconHost.textContent = '✅';
             var total = (typeof opts.total === 'number') ? opts.total : null;
             var source = opts.source || 'Supabase';
@@ -295,10 +297,17 @@
             // tierLoadingCard takes its place with a stage-segmented progress
             // bar, large % readout, and stage label so the user sees clearly
             // where the multi-second load is in its lifecycle.
+            setUploadZoneCompact(false);
             hideUploadZone();
             renderTierLoadingCard(tier, stateName);
             return;
         }
+    }
+
+    function setUploadZoneCompact(on) {
+        var zone = $('uploadZone');
+        if (!zone) return;
+        zone.classList.toggle('compact-success', !!on);
     }
 
     // ── Stage-segmented loading card (Connect → Query → Aggregate → Render) ──
@@ -445,6 +454,7 @@
                 titleEl.textContent = 'Data Auto-Loaded!';
                 subtitleEl.textContent = rows.toLocaleString() + ' crash records loaded' + (path ? ' from ' + path : '');
                 subtitleEl.title = '';
+                setUploadZoneCompact(true);
                 return;
             }
 
@@ -475,6 +485,7 @@
         parts.push('detail tabs load full data on demand');
         subtitleEl.textContent = parts.join(' · ');
         subtitleEl.title = '';
+        setUploadZoneCompact(true);
     }
 
     /**
