@@ -259,6 +259,13 @@
         }
 
         if (opts.phase === 'success') {
+            // Hide the rich loading card and restore the upload-zone for the
+            // success copy. The dashed CSV affordance is still meaningless
+            // for aggregate views, but the headline + crash-count subtitle
+            // belong here so the user gets the same "loaded" confirmation
+            // they get in county view.
+            removeTierLoadingCard();
+            showUploadZone();
             if (iconHost) iconHost.textContent = '✅';
             var total = (typeof opts.total === 'number') ? opts.total : null;
             var source = opts.source || 'Supabase';
@@ -283,41 +290,127 @@
         }
 
         if (opts.phase === 'reset') {
-            if (iconHost) iconHost.textContent = '📁';
-            titleEl.textContent = 'Switching to ' + (TIER_LABELS[tier] || tier) + ' view…';
-            subtitleEl.textContent = 'Loading from Supabase…';
-
-            // Add a progress bar below the subtitle so the user has feedback
-            // during the multi-second tier switch.
-            var progressContainer = document.getElementById('tierSwitchProgress');
-            if (!progressContainer) {
-                progressContainer = document.createElement('div');
-                progressContainer.id = 'tierSwitchProgress';
-                progressContainer.style.cssText = 'margin-top:12px;width:100%;max-width:400px;';
-                progressContainer.innerHTML = [
-                    '<div style="background:rgba(255,255,255,0.15);border-radius:6px;height:8px;overflow:hidden;position:relative;">',
-                    '  <div id="tierSwitchProgressBar" style="height:100%;width:5%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:6px;transition:width 0.3s ease;"></div>',
-                    '</div>',
-                    '<div id="tierSwitchProgressLabel" style="margin-top:6px;font-size:0.8rem;color:#94a3b8;text-align:center;">Connecting to Supabase…</div>'
-                ].join('');
-                if (subtitleEl.parentNode) {
-                    subtitleEl.parentNode.insertBefore(progressContainer, subtitleEl.nextSibling);
-                }
-            }
+            // Hide the dashed CSV upload-zone — its "Drop CSV here" cue is
+            // misleading for aggregate views, which load from Supabase. The
+            // tierLoadingCard takes its place with a stage-segmented progress
+            // bar, large % readout, and stage label so the user sees clearly
+            // where the multi-second load is in its lifecycle.
+            hideUploadZone();
+            renderTierLoadingCard(tier, stateName);
             return;
         }
     }
 
+    // ── Stage-segmented loading card (Connect → Query → Aggregate → Render) ──
+    var STAGES = [
+        { key: 'connect',   label: 'Connect',   defaultText: 'Connecting to Supabase…' },
+        { key: 'query',     label: 'Query',     defaultText: 'Querying matview…' },
+        { key: 'aggregate', label: 'Aggregate', defaultText: 'Aggregating crashes…' },
+        { key: 'render',    label: 'Render',    defaultText: 'Rendering dashboard…' }
+    ];
+
+    function activeStageIndex(pct) {
+        if (pct < 25) return 0;
+        if (pct < 50) return 1;
+        if (pct < 75) return 2;
+        return 3;
+    }
+
+    function defaultStageText(pct) {
+        return STAGES[activeStageIndex(pct)].defaultText;
+    }
+
+    function hideUploadZone() {
+        var zone = $('uploadZone');
+        if (zone) {
+            zone.dataset._prevDisplay = zone.style.display || '';
+            zone.style.display = 'none';
+        }
+    }
+
+    function showUploadZone() {
+        var zone = $('uploadZone');
+        if (zone) {
+            zone.style.display = zone.dataset._prevDisplay || '';
+            delete zone.dataset._prevDisplay;
+        }
+    }
+
+    function removeTierLoadingCard() {
+        var el = $('tierLoadingCard');
+        if (el) el.remove();
+    }
+
+    function renderTierLoadingCard(tier, stateName) {
+        removeTierLoadingCard();
+        var tierLabel = TIER_LABELS[tier] || tier;
+        var subtitle = 'Loading from Supabase' + (stateName ? ' — ' + escapeHtml(stateName) : '');
+
+        var segmentsHtml = STAGES.map(function (s, i) {
+            return [
+                '<div class="tier-stage" data-stage="' + i + '" style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center">',
+                  '<div class="tier-stage-track" style="width:100%;height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden">',
+                    '<div class="tier-stage-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:5px;transition:width .3s ease"></div>',
+                  '</div>',
+                  '<div class="tier-stage-label" style="font-size:.7rem;font-weight:600;color:#94a3b8;letter-spacing:.02em;text-transform:uppercase">' + s.label + '</div>',
+                '</div>'
+            ].join('');
+        }).join('');
+
+        var html = [
+            '<div id="tierLoadingCard" style="margin:1rem auto;max-width:560px;padding:1.5rem 1.75rem;background:white;border-radius:var(--radius,8px);border:1px solid #e2e8f0;box-shadow:0 4px 12px rgba(15,23,42,.06)">',
+              '<div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.25rem">',
+                '<span aria-hidden="true" style="font-size:1.4rem">📂</span>',
+                '<div style="font-size:1.05rem;font-weight:700;color:#0f172a">Switching to ' + escapeHtml(tierLabel) + ' view…</div>',
+              '</div>',
+              '<div style="font-size:.85rem;color:#64748b;margin-bottom:1.1rem">' + subtitle + '</div>',
+              '<div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:1.1rem">' + segmentsHtml + '</div>',
+              '<div style="display:flex;align-items:baseline;justify-content:center;gap:.85rem">',
+                '<div id="tierLoadingPct" style="font-size:2.75rem;font-weight:800;color:#0ea5e9;line-height:1;font-variant-numeric:tabular-nums">0%</div>',
+                '<div id="tierLoadingStageText" style="font-size:.95rem;color:#475569;font-weight:500">' + escapeHtml(STAGES[0].defaultText) + '</div>',
+              '</div>',
+            '</div>'
+        ].join('');
+
+        var zone = $('uploadZone');
+        if (zone && zone.parentNode) {
+            zone.insertAdjacentHTML('beforebegin', html);
+        } else {
+            // Fallback: drop it at the end of the upload card body
+            var card = document.querySelector('.card-body') || document.body;
+            card.insertAdjacentHTML('beforeend', html);
+        }
+    }
+
     function updateTierSwitchProgress(pct, label) {
-        var bar = document.getElementById('tierSwitchProgressBar');
-        var lbl = document.getElementById('tierSwitchProgressLabel');
-        if (bar) bar.style.width = Math.min(100, Math.max(0, pct)) + '%';
-        if (lbl && label) lbl.textContent = label;
+        pct = Math.min(100, Math.max(0, Number(pct) || 0));
+        var pctEl = $('tierLoadingPct');
+        var stageTextEl = $('tierLoadingStageText');
+        var fills = document.querySelectorAll('#tierLoadingCard .tier-stage-fill');
+        var labels = document.querySelectorAll('#tierLoadingCard .tier-stage-label');
+
+        if (pctEl) pctEl.textContent = Math.round(pct) + '%';
+        if (stageTextEl) stageTextEl.textContent = label || defaultStageText(pct);
+
+        // Each segment owns a 25-point slice of the overall progress.
+        for (var i = 0; i < fills.length; i++) {
+            var lo = i * 25, hi = lo + 25;
+            var segPct;
+            if (pct >= hi) segPct = 100;
+            else if (pct <= lo) segPct = 0;
+            else segPct = ((pct - lo) / 25) * 100;
+            fills[i].style.width = segPct + '%';
+            // Light up the active/completed stage labels in the brand color so
+            // the user can tell at a glance which stage is in progress.
+            if (labels[i]) {
+                labels[i].style.color = (pct >= lo) ? '#0369a1' : '#94a3b8';
+            }
+        }
     }
 
     function removeTierSwitchProgress() {
-        var el = document.getElementById('tierSwitchProgress');
-        if (el) el.remove();
+        removeTierLoadingCard();
+        showUploadZone();
     }
 
     // Cached counts from the most recent Supabase paint. Lets us repaint a
