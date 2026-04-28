@@ -23390,6 +23390,7 @@ async function fetchCsvWithFallback(url, opts) {
     } else if (url.endsWith('.csv')) {
         candidates.push({ url: url.slice(0, -4) + '.parquet',    format: 'parquet' });
         candidates.push({ url: url.slice(0, -4) + '.parquet.gz', format: 'parquet.gz' });
+        candidates.push({ url: url + '.gz',                      format: 'csv.gz' });
         candidates.push({ url: url,                              format: 'csv' });
     } else {
         // Unknown extension — try as-is
@@ -31817,11 +31818,18 @@ async function _parseParquetGz(arrayBuffer) {
     var pqBuf;
     // Check for gzip magic bytes (0x1f 0x8b) before decompressing
     if (gzBytes.length >= 2 && gzBytes[0] === 0x1f && gzBytes[1] === 0x8b) {
-        var pqBytes = pako.ungzip(gzBytes);
-        pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
+        if (typeof pako !== 'undefined' && pako.ungzip) {
+            var pqBytes = pako.ungzip(gzBytes);
+            pqBuf = pqBytes.buffer.slice(pqBytes.byteOffset, pqBytes.byteOffset + pqBytes.byteLength);
+            console.log('[Parquet] Decompressed gzip:', (gzBytes.length/1024).toFixed(0) + 'KB →',
+                (pqBuf.byteLength/1024).toFixed(0) + 'KB');
+        } else {
+            console.error('[Parquet] File is gzip-compressed but pako is not loaded — cannot decompress');
+            throw new Error('pako library required for .parquet.gz decompression');
+        }
     } else {
         // Data is not gzip-compressed — likely raw parquet (browser may have auto-decompressed)
-        console.warn('[Parquet] Data is not gzip-compressed, trying as raw parquet');
+        console.log('[Parquet] Raw parquet (not gzip), size:', (arrayBuffer.byteLength/1024).toFixed(0) + 'KB');
         pqBuf = arrayBuffer;
     }
     var hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
