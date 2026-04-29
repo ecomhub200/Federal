@@ -22696,11 +22696,18 @@ const FederalBoundaries = (() => {
     // (Colorado, Delaware, Virginia — currently onboarded states).
     const FALLBACK_FIPS = ['08', '10', '51'];
 
-    function _colorForFips(fips) {
-        const f = String(fips || '0');
-        let h = 0;
-        for (let i = 0; i < f.length; i++) h = (h * 31 + f.charCodeAt(i)) >>> 0;
-        return FILL_PALETTE[h % FILL_PALETTE.length];
+    /**
+     * Map a FIPS code to a palette color via index in the sorted active set.
+     * Guarantees distinct colors for the first FILL_PALETTE.length (10) states
+     * and stable assignment across reloads (sort key = FIPS string).
+     */
+    function _buildColorMap(fipsArray) {
+        const sorted = [...new Set(fipsArray.map(String))].sort();
+        const map = {};
+        sorted.forEach((fips, i) => {
+            map[fips] = FILL_PALETTE[i % FILL_PALETTE.length];
+        });
+        return map;
     }
 
     /**
@@ -22757,6 +22764,7 @@ const FederalBoundaries = (() => {
 
         const fipsList = activeStates.map(s => s.fips);
         const stateMeta = Object.fromEntries(activeStates.map(s => [s.fips, s]));
+        const colorMap = _buildColorMap(fipsList);
 
         let geojson;
         try {
@@ -22777,7 +22785,7 @@ const FederalBoundaries = (() => {
                 return {
                     color: '#1e40af',
                     weight: 2,
-                    fillColor: _colorForFips(fips),
+                    fillColor: colorMap[fips] || FILL_PALETTE[0],
                     fillOpacity: 0.08,
                     opacity: 0.9
                 };
