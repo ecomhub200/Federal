@@ -20935,6 +20935,10 @@ async function handleTierChange(tier) {
             crashMap.removeLayer(builtInLayersState._stateOutlineLayer);
             builtInLayersState._stateOutlineLayer = null;
         }
+        // Remove federal-tier multi-state outlines when leaving federal view
+        if (tier !== 'federal' && typeof FederalBoundaries !== 'undefined') {
+            FederalBoundaries.remove();
+        }
         // Remove county jurisdiction boundary when switching to any non-county tier
         if (tier !== 'county' && typeof removeJurisdictionBoundaryLayer === 'function') {
             removeJurisdictionBoundaryLayer();
@@ -20988,9 +20992,22 @@ async function handleTierChange(tier) {
             ? FIPSDatabase.getState(stateFips) : null;
 
         if (tier === 'federal') {
-            // Zoom to continental US overview
+            // Federal tier: draw outlines for every state with onboarded crash data.
+            // FederalBoundaries.render() handles its own fly-to-bounds; only fall
+            // back to the continental-US flyTo if rendering fails.
             if (crashMap) {
-                crashMap.flyTo([39.5, -98.35], 4, { duration: 1.2 });
+                if (typeof FederalBoundaries !== 'undefined') {
+                    FederalBoundaries.render().then(layer => {
+                        if (!layer) {
+                            crashMap.flyTo([39.5, -98.35], 4, { duration: 1.2 });
+                        }
+                    }).catch(e => {
+                        console.warn('[Tier] Federal boundaries render failed:', e.message);
+                        crashMap.flyTo([39.5, -98.35], 4, { duration: 1.2 });
+                    });
+                } else {
+                    crashMap.flyTo([39.5, -98.35], 4, { duration: 1.2 });
+                }
             }
         } else if (tier === 'state') {
             // Load state outline from TIGERweb and display it
@@ -22515,6 +22532,20 @@ const BoundaryService = (() => {
             return _queryTigerWeb(LAYERS.states, `STATE='${stateFips}'`, 'NAME,STATE,GEOID');
         },
 
+        /**
+         * Fetch outlines for multiple states in a single TIGERweb query.
+         * Used by the federal tier to draw all active-state boundaries at once.
+         * @param {string[]} fipsArray - Array of 2-digit state FIPS codes (e.g. ['08','10','51'])
+         */
+        async getMultipleStateOutlines(fipsArray) {
+            if (!Array.isArray(fipsArray) || fipsArray.length === 0) {
+                return { type: 'FeatureCollection', features: [] };
+            }
+            const sorted = [...new Set(fipsArray.map(String))].sort();
+            const inClause = sorted.map(f => `'${f}'`).join(',');
+            return _queryTigerWeb(LAYERS.states, `STATE IN (${inClause})`, 'NAME,STATE,GEOID');
+        },
+
         async getCounties(stateFips) {
             return _queryTigerWeb(LAYERS.counties, `STATE='${stateFips}'`, 'NAME,COUNTY,STATE,GEOID');
         },
@@ -22645,6 +22676,150 @@ const BoundaryService = (() => {
             console.log('[Boundary] In-memory cache cleared');
         }
     };
+})();
+
+// ============================================================
+// FEDERAL TIER MULTI-STATE BOUNDARIES
+// Draws outlines for every state with onboarded crash data so the
+// federal view can visually distinguish per-state crash points.
+// Other tiers (state/county/region/MPO/PD/city) are unaffected.
+// ============================================================
+const FederalBoundaries = (() => {
+    'use strict';
+
+    // Stable categorical palette — keeps each state's tint consistent across reloads.
+    const FILL_PALETTE = [
+        '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6',
+        '#06b6d4', '#ef4444', '#84cc16', '#f97316', '#14b8a6'
+    ];
+    // Hard-coded fallback if _national/state_comparison.json is unavailable
+    // (Colorado, Delaware, Virginia — currently onboarded states).
+    const FALLBACK_FIPS = ['08', '10', '51'];
+
+    function _colorForFips(fips) {
+        const f = String(fips || '0');
+        let h = 0;
+        for (let i = 0; i < f.length; i++) h = (h * 31 + f.charCodeAt(i)) >>> 0;
+        return FILL_PALETTE[h % FILL_PALETTE.length];
+    }
+
+    /**
+     * Resolve the list of states with onboarded crash data.
+     * Tries _national/state_comparison.json first; falls back to a hard-coded
+     * list. Returns an array of { fips, name, crashTotal } objects.
+     */
+    async function getActiveStates() {
+        let comparison = null;
+        try {
+            if (typeof AggregateLoader !== 'undefined' && AggregateLoader.loadNational) {
+                comparison = await AggregateLoader.loadNational();
+            }
+        } catch (e) {
+            console.warn('[FederalBoundaries] state_comparison.json unavailable:', e.message);
+        }
+
+        const states = [];
+        if (comparison?.states && Array.isArray(comparison.states)) {
+            comparison.states.forEach(s => {
+                const fips = String(s.fips || s.FIPS || '').padStart(2, '0');
+                if (!fips || fips === '00') return;
+                states.push({
+                    fips,
+                    name: s.name || s.NAME || '',
+                    crashTotal: s.total || s.crashTotal || s.totalCrashes || null
+                });
+            });
+        }
+
+        if (states.length === 0) {
+            FALLBACK_FIPS.forEach(fips => states.push({ fips, name: '', crashTotal: null }));
+        }
+        return states;
+    }
+
+    /**
+     * Fetch and render multi-state outlines on the federal tier.
+     * Idempotent — clears any existing federal layer before redraw.
+     */
+    async function render() {
+        if (typeof crashMap === 'undefined' || !crashMap) return null;
+        if (typeof BoundaryService === 'undefined') return null;
+        if (typeof L === 'undefined') return null;
+
+        // Clear any prior federal layer first.
+        remove();
+
+        const activeStates = await getActiveStates();
+        if (!activeStates.length) {
+            console.warn('[FederalBoundaries] No active states resolved');
+            return null;
+        }
+
+        const fipsList = activeStates.map(s => s.fips);
+        const stateMeta = Object.fromEntries(activeStates.map(s => [s.fips, s]));
+
+        let geojson;
+        try {
+            geojson = await BoundaryService.getMultipleStateOutlines(fipsList);
+        } catch (e) {
+            console.error('[FederalBoundaries] TIGERweb fetch failed:', e);
+            return null;
+        }
+        if (!geojson?.features?.length) {
+            console.warn('[FederalBoundaries] TIGERweb returned no features for', fipsList);
+            return null;
+        }
+
+        const layer = L.geoJSON(geojson, {
+            pane: 'jurisdictionBoundaryPane',
+            style: (feature) => {
+                const fips = feature?.properties?.STATE || feature?.properties?.GEOID || '';
+                return {
+                    color: '#1e40af',
+                    weight: 2,
+                    fillColor: _colorForFips(fips),
+                    fillOpacity: 0.08,
+                    opacity: 0.9
+                };
+            },
+            onEachFeature: (feature, lyr) => {
+                const props = feature.properties || {};
+                const fips = props.STATE || props.GEOID || '';
+                const name = props.NAME || stateMeta[fips]?.name || 'State';
+                const meta = stateMeta[fips];
+                const crashLine = (meta && meta.crashTotal != null)
+                    ? `<div style="font-size:0.8rem;color:#444;margin-top:0.25rem;">${Number(meta.crashTotal).toLocaleString()} crashes</div>`
+                    : '';
+                lyr.bindPopup(`
+                    <div style="text-align:center;padding:0.5rem;min-width:160px;">
+                        <div style="font-weight:600;font-size:0.95rem;">${name}</div>
+                        <div style="font-size:0.75rem;color:#666;">FIPS ${fips}</div>
+                        ${crashLine}
+                        <div style="font-size:0.7rem;color:#888;margin-top:0.25rem;">Source: US Census TIGERweb</div>
+                    </div>
+                `);
+            }
+        });
+        layer.addTo(crashMap);
+        builtInLayersState._federalStatesLayer = layer;
+
+        try {
+            crashMap.flyToBounds(layer.getBounds(), { padding: [40, 40], duration: 1.2, maxZoom: 6 });
+        } catch (e) {
+            crashMap.flyTo([39.5, -98.35], 4, { duration: 1.2 });
+        }
+        console.log(`[FederalBoundaries] Rendered ${geojson.features.length} state outline(s) for FIPS:`, fipsList);
+        return layer;
+    }
+
+    function remove() {
+        if (builtInLayersState._federalStatesLayer && typeof crashMap !== 'undefined' && crashMap) {
+            try { crashMap.removeLayer(builtInLayersState._federalStatesLayer); } catch (e) { /* noop */ }
+            builtInLayersState._federalStatesLayer = null;
+        }
+    }
+
+    return { render, remove, getActiveStates };
 })();
 
 // ============================================================
@@ -31121,6 +31296,12 @@ function showTab(tabId) {
                 // County tier: restore TIGERweb jurisdiction boundary (idempotent — handles missing, detached, or already-showing layers)
                 if (typeof ensureJurisdictionBoundary === 'function') {
                     ensureJurisdictionBoundary();
+                }
+            } else if (activeTier === 'federal') {
+                // Federal tier: restore multi-state outlines if not currently displayed
+                if (crashMap && !builtInLayersState._federalStatesLayer && typeof FederalBoundaries !== 'undefined') {
+                    console.log('[FederalBoundaries] Map tab shown - restoring multi-state outlines');
+                    FederalBoundaries.render().catch(e => console.warn('[FederalBoundaries] restore failed:', e.message));
                 }
             } else if (activeTier === 'state') {
                 // State tier: restore state outline if not displayed
