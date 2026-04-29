@@ -22334,17 +22334,27 @@ const BoundaryService = (() => {
         } catch (e) { console.warn('[BoundaryDB] Save failed:', e); }
     }
 
-    async function _queryTigerWeb(layerId, where, outFields = 'NAME,GEOID,STATE,COUNTY') {
-        const cacheKey = `tw_${layerId}_${where}`;
+    async function _queryTigerWeb(layerId, where, outFields = 'NAME,GEOID,STATE,COUNTY', extraParams = null) {
+        // Build cache-key suffix from extraParams so simplified queries don't
+        // collide with full-detail queries.
+        const paramsSuffix = extraParams
+            ? '_' + Object.keys(extraParams).sort().map(k => `${k}=${extraParams[k]}`).join('&')
+            : '';
+        const cacheKey = `tw_${layerId}_${where}${paramsSuffix}`;
         if (_cache[cacheKey]) return _cache[cacheKey];
 
         // Check IndexedDB
         const cached = await _getFromDB(cacheKey);
         if (cached) { _cache[cacheKey] = cached; return cached; }
 
-        const url = `${TIGERWEB_BASE}/${layerId}/query?` +
+        let url = `${TIGERWEB_BASE}/${layerId}/query?` +
             `where=${encodeURIComponent(where)}` +
             `&outFields=${encodeURIComponent(outFields)}&returnGeometry=true&outSR=4326&f=geojson`;
+        if (extraParams) {
+            for (const [k, v] of Object.entries(extraParams)) {
+                url += `&${encodeURIComponent(k)}=${encodeURIComponent(v)}`;
+            }
+        }
 
         try {
             const resp = await fetch(url);
@@ -22534,8 +22544,12 @@ const BoundaryService = (() => {
 
         /**
          * Fetch outlines for multiple states in a single TIGERweb query.
-         * Used by the federal tier to draw all active-state boundaries at once.
-         * @param {string[]} fipsArray - Array of 2-digit state FIPS codes (e.g. ['08','10','51'])
+         * Used by the federal tier to draw all 50 states + DC at once.
+         * Geometry is simplified server-side via maxAllowableOffset (~1 km
+         * tolerance) and geometryPrecision (4 decimal places, ~11 m) so the
+         * payload stays small enough for mobile Safari — full-detail TIGER
+         * polygons for 51 states OOM iPhones.
+         * @param {string[]} fipsArray - Array of 2-digit state FIPS codes
          */
         async getMultipleStateOutlines(fipsArray) {
             if (!Array.isArray(fipsArray) || fipsArray.length === 0) {
@@ -22543,7 +22557,12 @@ const BoundaryService = (() => {
             }
             const sorted = [...new Set(fipsArray.map(String))].sort();
             const inClause = sorted.map(f => `'${f}'`).join(',');
-            return _queryTigerWeb(LAYERS.states, `STATE IN (${inClause})`, 'NAME,STATE,GEOID');
+            return _queryTigerWeb(
+                LAYERS.states,
+                `STATE IN (${inClause})`,
+                'NAME,STATE,GEOID',
+                { maxAllowableOffset: 0.01, geometryPrecision: 4 }
+            );
         },
 
         async getCounties(stateFips) {
@@ -22795,47 +22814,53 @@ const FederalBoundaries = (() => {
             return null;
         }
 
-        const layer = L.geoJSON(geojson, {
-            pane: 'jurisdictionBoundaryPane',
-            style: (feature) => {
-                const fips = feature?.properties?.STATE || feature?.properties?.GEOID || '';
-                if (activeFipsSet.has(fips)) {
-                    return {
-                        color: '#1e40af',
-                        weight: 2,
-                        fillColor: colorMap[fips] || FILL_PALETTE[0],
-                        fillOpacity: 0.18,
-                        opacity: 0.95
-                    };
-                }
-                return INACTIVE_STYLE;
-            },
-            onEachFeature: (feature, lyr) => {
-                const props = feature.properties || {};
-                const fips = props.STATE || props.GEOID || '';
-                const name = props.NAME || stateMeta[fips]?.name || 'State';
-                const isActive = activeFipsSet.has(fips);
-                const meta = stateMeta[fips];
+        let layer;
+        try {
+            layer = L.geoJSON(geojson, {
+                pane: 'jurisdictionBoundaryPane',
+                style: (feature) => {
+                    const fips = feature?.properties?.STATE || feature?.properties?.GEOID || '';
+                    if (activeFipsSet.has(fips)) {
+                        return {
+                            color: '#1e40af',
+                            weight: 2,
+                            fillColor: colorMap[fips] || FILL_PALETTE[0],
+                            fillOpacity: 0.18,
+                            opacity: 0.95
+                        };
+                    }
+                    return INACTIVE_STYLE;
+                },
+                onEachFeature: (feature, lyr) => {
+                    const props = feature.properties || {};
+                    const fips = props.STATE || props.GEOID || '';
+                    const name = props.NAME || stateMeta[fips]?.name || 'State';
+                    const isActive = activeFipsSet.has(fips);
+                    const meta = stateMeta[fips];
 
-                const statusLine = isActive
-                    ? `<div style="font-size:0.75rem;color:#1e40af;font-weight:600;margin-top:0.15rem;">Crash data available</div>`
-                    : `<div style="font-size:0.75rem;color:#94a3b8;margin-top:0.15rem;">No crash data</div>`;
-                const crashLine = (isActive && meta && meta.crashTotal != null)
-                    ? `<div style="font-size:0.8rem;color:#444;margin-top:0.25rem;">${Number(meta.crashTotal).toLocaleString()} crashes</div>`
-                    : '';
-                lyr.bindPopup(`
-                    <div style="text-align:center;padding:0.5rem;min-width:160px;">
-                        <div style="font-weight:600;font-size:0.95rem;">${name}</div>
-                        <div style="font-size:0.75rem;color:#666;">FIPS ${fips}</div>
-                        ${statusLine}
-                        ${crashLine}
-                        <div style="font-size:0.7rem;color:#888;margin-top:0.35rem;">Source: US Census TIGERweb</div>
-                    </div>
-                `);
-            }
-        });
-        layer.addTo(crashMap);
-        builtInLayersState._federalStatesLayer = layer;
+                    const statusLine = isActive
+                        ? `<div style="font-size:0.75rem;color:#1e40af;font-weight:600;margin-top:0.15rem;">Crash data available</div>`
+                        : `<div style="font-size:0.75rem;color:#94a3b8;margin-top:0.15rem;">No crash data</div>`;
+                    const crashLine = (isActive && meta && meta.crashTotal != null)
+                        ? `<div style="font-size:0.8rem;color:#444;margin-top:0.25rem;">${Number(meta.crashTotal).toLocaleString()} crashes</div>`
+                        : '';
+                    lyr.bindPopup(`
+                        <div style="text-align:center;padding:0.5rem;min-width:160px;">
+                            <div style="font-weight:600;font-size:0.95rem;">${name}</div>
+                            <div style="font-size:0.75rem;color:#666;">FIPS ${fips}</div>
+                            ${statusLine}
+                            ${crashLine}
+                            <div style="font-size:0.7rem;color:#888;margin-top:0.35rem;">Source: US Census TIGERweb</div>
+                        </div>
+                    `);
+                }
+            });
+            layer.addTo(crashMap);
+            builtInLayersState._federalStatesLayer = layer;
+        } catch (e) {
+            console.error('[FederalBoundaries] Layer construction failed:', e);
+            return null;
+        }
 
         try {
             crashMap.flyToBounds(layer.getBounds(), { padding: [40, 40], duration: 1.2, maxZoom: 5 });
