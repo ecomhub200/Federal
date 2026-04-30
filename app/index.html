@@ -22543,26 +22543,49 @@ const BoundaryService = (() => {
         },
 
         /**
-         * Fetch outlines for multiple states in a single TIGERweb query.
-         * Used by the federal tier to draw all 50 states + DC at once.
-         * Geometry is simplified server-side via maxAllowableOffset (~1 km
-         * tolerance) and geometryPrecision (4 decimal places, ~11 m) so the
-         * payload stays small enough for mobile Safari — full-detail TIGER
-         * polygons for 51 states OOM iPhones.
+         * Fetch outlines for multiple states. Used by the federal tier to draw
+         * all 50 states + DC.
+         *
+         * Implementation: N parallel single-state queries (one per FIPS),
+         * NOT a batched `STATE IN (...)` query. The batched form was hitting
+         * net::ERR_FAILED + missing CORS header against TIGERweb on real
+         * deployments, while the single-state form (already used by the State
+         * tier) is proven reliable. Per-state results are also individually
+         * cached in IndexedDB, so this reuses any State-tier-warmed cache.
+         *
+         * Each per-state query asks for simplified geometry (~1 km tolerance,
+         * ~11 m precision) so the merged payload stays mobile-safe.
+         *
          * @param {string[]} fipsArray - Array of 2-digit state FIPS codes
+         * @returns {Promise<Object>} merged GeoJSON FeatureCollection
          */
         async getMultipleStateOutlines(fipsArray) {
             if (!Array.isArray(fipsArray) || fipsArray.length === 0) {
                 return { type: 'FeatureCollection', features: [] };
             }
             const sorted = [...new Set(fipsArray.map(String))].sort();
-            const inClause = sorted.map(f => `'${f}'`).join(',');
-            return _queryTigerWeb(
-                LAYERS.states,
-                `STATE IN (${inClause})`,
-                'NAME,STATE,GEOID',
-                { maxAllowableOffset: 0.01, geometryPrecision: 4 }
-            );
+            const extraParams = { maxAllowableOffset: 0.01, geometryPrecision: 4 };
+
+            const results = await Promise.all(sorted.map(async fips => {
+                try {
+                    return await _queryTigerWeb(
+                        LAYERS.states,
+                        `STATE='${fips}'`,
+                        'NAME,STATE,GEOID',
+                        extraParams
+                    );
+                } catch (e) {
+                    console.warn(`[Boundary] State ${fips} fetch failed:`, e?.message || e);
+                    return null;
+                }
+            }));
+
+            const features = results
+                .filter(r => r && Array.isArray(r.features))
+                .flatMap(r => r.features);
+
+            console.log(`[Boundary] Multi-state outlines: ${features.length}/${sorted.length} states resolved`);
+            return { type: 'FeatureCollection', features };
         },
 
         async getCounties(stateFips) {
