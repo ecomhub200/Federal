@@ -26108,6 +26108,22 @@ function saveFilterProfile() {
     // If data is already loaded, reload with new filter.
     // If data is currently loading (_autoLoadGeneration > 0), restart the load
     // with the correct filter — the generation counter ensures the stale load aborts.
+    //
+    // ── Aggregate tier guard ──
+    // At federal/state tiers the Supabase matview is the primary data source
+    // and the R2 parquet is too large to download. Just refresh the matview
+    // instead of triggering autoLoadCrashData which would attempt the 118 MB+
+    // national or statewide parquet and OOM the browser.
+    const _filterTier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
+    const _aggTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
+    if (_aggTiers.has(_filterTier)) {
+        console.log(`[Config] Filter changed at ${_filterTier} tier — refreshing Supabase matview (R2 skipped)`);
+        if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+            CL.data.supabaseBridge.injectFastDashboard({ force: true });
+        }
+        showFilterLoadingState(false);
+        return;
+    }
     if (crashState.loaded || _autoLoadGeneration > 0) {
         const dataFilePath = getDataFilePath();
         console.log('[Config] Reloading data from:', dataFilePath);
@@ -28102,6 +28118,20 @@ function restoreCrashStateFromCache(cached) {
  * switches jurisdictions while the background fetch is in flight.
  */
 async function loadSampleRowsInBackground(loadGeneration) {
+    // ── Aggregate tier guard ──
+    // At federal/state/region/mpo/planning_district tiers the R2 parquet is
+    // far too large for in-browser use (118 MB+ for _national/).  Skip the
+    // background download entirely — the dashboard already painted from the
+    // Supabase matview, and detail tabs will lazy-load the *county-level*
+    // file when needed.
+    const _bgTier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
+    const _skipTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
+    if (_skipTiers.has(_bgTier)) {
+        console.log(`[CrashCache] Skipping background R2 download for ${_bgTier} tier (too large, Supabase matview is primary)`);
+        showBackgroundLoadingIndicator(false);
+        return;
+    }
+
     // Snapshot the current selection at the moment this is called
     const snapshotJurisdiction = getActiveJurisdictionId();
     const snapshotState = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
