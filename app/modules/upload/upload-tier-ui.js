@@ -147,25 +147,33 @@
         var stateName = activeStateName() || 'Selected state';
         var tierLabel = TIER_LABELS[tier] || tier;
         var scopeText, helperText;
+        // Helper text reflects the active road-type selection: Supabase
+        // is the documented primary, but R2 parquet (with client-side
+        // filtering when the split file is missing) is the actual source
+        // most often hit today. Keep the language honest about both.
+        var rtSuffix = activeRoadTypeSuffix(tier);
+        var supabaseLabel = 'Supabase (' + rtSuffix + ' bucket)';
         if (tier === 'state') {
             scopeText = 'Statewide — ' + stateName;
-            helperText = 'Pre-aggregated KPIs from Supabase. R2 parquet fallback: ' +
-                stateName + '/_state/' + activeRoadTypeSuffix(tier) + '.parquet';
+            helperText = 'Pre-aggregated KPIs from ' + supabaseLabel + '. ' +
+                'R2 parquet fallback: ' + stateName + '/_state/' + rtSuffix + '.parquet ' +
+                '(falls back to all_roads.parquet with client-side filter if the split file is missing).';
         } else if (tier === 'federal') {
             scopeText = 'Federal — all states with data';
-            helperText = 'Pre-aggregated nationwide totals from Supabase.';
+            helperText = 'Pre-aggregated nationwide totals from ' + supabaseLabel +
+                '. R2 parquet fallback: _national/' + rtSuffix + '.parquet.';
         } else if (tier === 'region') {
             var rname = (jurisdictionContext.tierRegion && jurisdictionContext.tierRegion.name) || 'Select a region above';
             scopeText = stateName + ' — Region: ' + rname;
-            helperText = 'Pre-aggregated regional totals from Supabase.';
+            helperText = 'Pre-aggregated regional totals from ' + supabaseLabel + '.';
         } else if (tier === 'mpo') {
             var mname = (jurisdictionContext.tierMpo && jurisdictionContext.tierMpo.name) || 'Select an MPO above';
             scopeText = stateName + ' — MPO: ' + mname;
-            helperText = 'Pre-aggregated MPO totals from Supabase.';
+            helperText = 'Pre-aggregated MPO totals from ' + supabaseLabel + '.';
         } else if (tier === 'planning_district') {
             var pname = (jurisdictionContext.tierPlanningDistrict && jurisdictionContext.tierPlanningDistrict.name) || 'Select a planning district above';
             scopeText = stateName + ' — Planning District: ' + pname;
-            helperText = 'Pre-aggregated planning-district totals from Supabase.';
+            helperText = 'Pre-aggregated planning-district totals from ' + supabaseLabel + '.';
         } else if (tier === 'county') {
             var jurName = '';
             try {

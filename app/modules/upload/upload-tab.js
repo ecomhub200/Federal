@@ -112,27 +112,29 @@ CL.upload = CL.upload || {};
         var r2Prefix = (appConfig && appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].r2Prefix) || stateKey;
         var roadType = getActiveRoadTypeSuffix(tier);
 
-        if (tier === 'federal') return '_national/' + roadType + '.csv.gz';
-        if (tier === 'state') return r2Prefix + '/_state/' + roadType + '.csv.gz';
+        // R2 policy (effective 2026-04-23): all crash data is published as
+        // uncompressed .parquet — no .parquet.gz, no .csv, no .csv.gz.
+        if (tier === 'federal') return '_national/' + roadType + '.parquet';
+        if (tier === 'state') return r2Prefix + '/_state/' + roadType + '.parquet';
 
         if (tier === 'region') {
             var regionId = jurisdictionContext.tierRegion && jurisdictionContext.tierRegion.id;
-            if (regionId) return r2Prefix + '/_region/' + regionId + '/' + roadType + '.csv.gz';
+            if (regionId) return r2Prefix + '/_region/' + regionId + '/' + roadType + '.parquet';
         }
 
         if (tier === 'mpo') {
             var mpoId = jurisdictionContext.tierMpo && jurisdictionContext.tierMpo.id;
-            if (mpoId) return r2Prefix + '/_mpo/' + mpoId + '/' + roadType + '.csv.gz';
+            if (mpoId) return r2Prefix + '/_mpo/' + mpoId + '/' + roadType + '.parquet';
         }
 
         if (tier === 'planning_district') {
             var pdId = jurisdictionContext.tierPlanningDistrict && jurisdictionContext.tierPlanningDistrict.id;
-            if (pdId) return r2Prefix + '/_planning_district/' + pdId.toLowerCase() + '/' + roadType + '.csv.gz';
+            if (pdId) return r2Prefix + '/_planning_district/' + pdId.toLowerCase() + '/' + roadType + '.parquet';
         }
 
         if (tier === 'city') {
             var cityId = jurisdictionContext.tierCity && jurisdictionContext.tierCity.id;
-            if (cityId) return r2Prefix + '/_city/' + cityId.toLowerCase() + '/' + roadType + '.csv.gz';
+            if (cityId) return r2Prefix + '/_city/' + cityId.toLowerCase() + '/' + roadType + '.parquet';
         }
 
         // County tier (default)
@@ -146,7 +148,7 @@ CL.upload = CL.upload || {};
         // Normalize to lowercase for R2 case-sensitive paths
         r2Jurisdiction = r2Jurisdiction.toLowerCase();
 
-        return r2Prefix + '/' + r2Jurisdiction + '/' + roadType + '.csv.gz';
+        return r2Prefix + '/' + r2Jurisdiction + '/' + roadType + '.parquet';
     }
 
     /**

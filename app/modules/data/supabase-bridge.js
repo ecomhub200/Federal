@@ -120,6 +120,28 @@ CL.data.supabaseBridge = (function () {
         return { tier: 'state', value: null };
     }
 
+    /**
+     * Map the active "Road Type" radio button to the matview road_type bucket.
+     * Returns null when the user picked "All Roads" so the dashboard_summary
+     * query is unfiltered and the caller aggregates across all buckets.
+     *
+     * Bucket names mirror the file-suffix taxonomy used by mv_hotspots and
+     * the R2 split parquets (dot_roads / city_roads / non_dot_roads). If the
+     * matview schema uses a different column or value set, the query simply
+     * returns 0 rows and injectFastDashboard() falls through to the R2 path.
+     */
+    function activeRoadTypeForSupabase() {
+        var radio = document.querySelector('input[name="roadTypeFilter"]:checked');
+        var val = radio ? radio.value : (localStorage.getItem('selectedFilterProfile') || 'allRoads');
+        var map = {
+            countyOnly:     'dot_roads',
+            cityOnly:       'city_roads',
+            countyPlusVDOT: 'non_dot_roads',
+            allRoads:       null
+        };
+        return Object.prototype.hasOwnProperty.call(map, val) ? map[val] : null;
+    }
+
     function aggregate(rows) {
         var agg = {
             total: 0,
@@ -415,14 +437,17 @@ CL.data.supabaseBridge = (function () {
             }
 
             var t = resolveTier();
-            console.log('[Phase2] Fetching summary from Supabase...', { tier: t.tier, value: t.value });
+            var roadType = activeRoadTypeForSupabase();
+            console.log('[Phase2] Fetching summary from Supabase...', { tier: t.tier, value: t.value, roadType: roadType });
             try {
                 if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
                     CL.upload.tierUI.updateTierSwitchProgress(15, 'Fetching dashboard summary…');
                 }
             } catch (e) { /* non-fatal */ }
             var startTime = Date.now();
-            var rows = await window.crashLensClient.getSummary(t.tier, t.value);
+            var summaryFilters = {};
+            if (roadType) summaryFilters.roadType = roadType;
+            var rows = await window.crashLensClient.getSummary(t.tier, t.value, summaryFilters);
             var fetchMs = Date.now() - startTime;
 
             if (!force && typeof crashState !== 'undefined' && crashState && crashState.loaded) {
