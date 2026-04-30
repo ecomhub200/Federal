@@ -133,9 +133,19 @@ CL.data.supabaseBridge = (function () {
     function activeRoadTypeForSupabase() {
         var radio = document.querySelector('input[name="roadTypeFilter"]:checked');
         var val = radio ? radio.value : (localStorage.getItem('selectedFilterProfile') || 'allRoads');
+        // Matview road_type buckets are derived from crashes.system:
+        //   dot_roads     = DOT Primary / DOT Secondary / DOT Interstate
+        //   non_dot_roads = Non-DOT primary / Non-DOT secondary
+        //   all_roads     = everything else (including NULL system)
+        //
+        // 'city_roads' has no matview bucket — crashes.system doesn't
+        // distinguish city-maintained roads.  Map it to null (= no filter,
+        // aggregate across all buckets) so the query returns data instead
+        // of 0 rows.  The exact "city roads only" slicing only works
+        // with R2 split parquets at county/city tiers.
         var map = {
             countyOnly:     'dot_roads',
-            cityOnly:       'city_roads',
+            cityOnly:       null,
             countyPlusVDOT: 'non_dot_roads',
             allRoads:       null
         };

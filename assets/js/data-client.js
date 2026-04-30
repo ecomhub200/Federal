@@ -558,7 +558,7 @@ class CrashLensDataClient {
     try {
       const tierFilters = this._tierFilter(tier, value);
       const allFilters = { ...tierFilters };
-      if (opts.roadType) allFilters.road_type = `eq.${opts.roadType}`;
+      if (opts.roadType && opts.roadType !== 'city_roads') allFilters.road_type = `eq.${opts.roadType}`;
       const limit = opts.limit || 100;
       // When no roadType filter is applied, the same location may appear up to
       // 3 times (dot_roads / non_dot_roads / all_roads bucket), so over-fetch
@@ -658,7 +658,7 @@ class CrashLensDataClient {
     try {
       const tierFilters = this._tierFilter(tier, value);
       const allFilters = { ...tierFilters };
-      if (opts.roadType) allFilters.road_type = `eq.${opts.roadType}`;
+      if (opts.roadType && opts.roadType !== 'city_roads') allFilters.road_type = `eq.${opts.roadType}`;
       if (opts.yearFrom && opts.yearTo) {
         allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
       }
@@ -843,7 +843,15 @@ class CrashLensDataClient {
     // road_type bucket filter — same column convention used by mv_hotspots /
     // mv_grants_baseline. When omitted, dashboard_summary returns all buckets
     // and the caller aggregates across them (= "all roads").
-    if (filters.roadType) allFilters.road_type = `eq.${filters.roadType}`;
+    //
+    // The 'city_roads' UI bucket has no corresponding matview bucket — the
+    // `system` column on `crashes` doesn't distinguish city-maintained roads.
+    // Map it to null (= no filter, fetch all buckets) so the query doesn't
+    // return 0 rows.  The R2 parquet path handles city_roads via separate
+    // per-jurisdiction split files, so this mismatch only affects the matview.
+    if (filters.roadType && filters.roadType !== 'city_roads') {
+        allFilters.road_type = `eq.${filters.roadType}`;
+    }
 
     return this._supabaseQuery('dashboard_summary', {
       filters: allFilters,
