@@ -8271,43 +8271,71 @@ Schools with <strong>documented pedestrian/bicycle crashes</strong> and supporti
 <div id="assetPagination" class="pagination" style="margin-top:.75rem"></div>
 </div>
 
-<!-- Coordinate Format Modal -->
+<!-- Column Mapping Modal -->
 <div id="assetCoordModal" class="asset-modal" style="display:none">
-<div class="asset-modal-content">
+<div class="asset-modal-content" style="max-width:760px;max-height:92vh;overflow-y:auto">
 <div class="asset-modal-header">
-<h3>Select Coordinate Columns</h3>
+<h3>Map Your Columns</h3>
 <button class="asset-modal-close" onclick="assetCloseCoordModal()">&times;</button>
 </div>
 <div class="asset-modal-body">
-<p style="margin-bottom:1rem;color:var(--gray)">Could not auto-detect coordinate columns. Please select the columns containing latitude and longitude:</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+<p id="assetMapHelpText" style="margin-bottom:.85rem;color:var(--gray);font-size:.85rem">Confirm which columns from your file map to the required and optional fields. We've pre-filled best guesses where possible — review and adjust as needed.</p>
+
+<!-- Required: Coordinates -->
+<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:var(--radius);padding:.75rem;margin-bottom:.85rem">
+<div style="font-weight:600;color:#92400e;margin-bottom:.5rem;font-size:.85rem">⚠️ Required — Coordinates</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
 <div>
-<label style="font-weight:500;display:block;margin-bottom:.25rem">Latitude Column:</label>
-<select id="assetLatColumn" class="asset-select"></select>
+<label style="font-weight:500;display:block;margin-bottom:.25rem;font-size:.8rem">Latitude Column:</label>
+<select id="assetLatColumn" class="asset-select" onchange="assetUpdatePreviewHighlight()"></select>
 </div>
 <div>
-<label style="font-weight:500;display:block;margin-bottom:.25rem">Longitude Column:</label>
-<select id="assetLngColumn" class="asset-select"></select>
+<label style="font-weight:500;display:block;margin-bottom:.25rem;font-size:.8rem">Longitude Column:</label>
+<select id="assetLngColumn" class="asset-select" onchange="assetUpdatePreviewHighlight()"></select>
 </div>
 </div>
-<div style="margin-top:1rem">
-<label style="font-weight:500;display:block;margin-bottom:.25rem">Coordinate Format:</label>
+<div style="margin-top:.75rem">
+<label style="font-weight:500;display:block;margin-bottom:.25rem;font-size:.8rem">Coordinate Format:</label>
 <select id="assetCoordFormat" class="asset-select">
 <option value="decimal">Decimal Degrees (e.g., 37.5407, -77.4360)</option>
 <option value="dms">DMS (e.g., 37°32'26.5"N, 77°26'9.6"W)</option>
 <option value="ddm">DDM (e.g., 37°32.442'N, 77°26.160'W)</option>
 </select>
 </div>
-<div style="margin-top:1rem">
-<label style="font-weight:500;display:block;margin-bottom:.25rem">Name/ID Column (optional):</label>
-<select id="assetNameColumn" class="asset-select">
+</div>
+
+<!-- Recommended: Name -->
+<div style="background:#dbeafe;border:1px solid #3b82f6;border-radius:var(--radius);padding:.75rem;margin-bottom:.85rem">
+<div style="font-weight:600;color:#1e40af;margin-bottom:.5rem;font-size:.85rem">⭐ Recommended — Asset Name / ID</div>
+<select id="assetNameColumn" class="asset-select" onchange="assetUpdatePreviewHighlight()">
 <option value="">-- Auto-generate IDs --</option>
 </select>
+<div style="font-size:.72rem;color:#1e40af;margin-top:.35rem">Identifies each asset in results (e.g., signal ID, pole number, intersection name).</div>
 </div>
+
+<!-- Additional Columns -->
+<div style="background:#f0fdf4;border:1px solid #22c55e;border-radius:var(--radius);padding:.75rem;margin-bottom:.85rem">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
+<div style="font-weight:600;color:#166534;font-size:.85rem">📋 Additional Columns <span style="font-weight:400;color:#15803d;font-size:.75rem">(optional)</span></div>
+<button type="button" class="btn-soft btn-soft-success btn-soft-sm" onclick="assetAddAdditionalColumnRow()" style="font-size:.75rem;padding:.25rem .6rem">+ Add Column</button>
+</div>
+<div style="font-size:.72rem;color:#15803d;margin-bottom:.5rem">Map any extra columns you want to keep with each asset (comments, installation date, condition, agency, etc.). They'll appear in the results table and CSV export.</div>
+<div id="assetAdditionalColsContainer"></div>
+<div id="assetAdditionalColsEmpty" style="font-size:.72rem;color:#15803d;font-style:italic;padding:.35rem 0">No additional columns mapped. Click "+ Add Column" to include extra fields.</div>
+</div>
+
+<!-- Data Preview -->
+<div style="margin-top:.5rem">
+<div style="font-weight:600;font-size:.85rem;margin-bottom:.35rem">📄 Data Preview <span style="font-weight:400;color:var(--gray);font-size:.75rem">(first 3 rows)</span></div>
+<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);max-height:200px;overflow-y:auto">
+<table id="assetPreviewTable" style="width:100%;font-size:.72rem;border-collapse:collapse"></table>
+</div>
+</div>
+
 </div>
 <div class="asset-modal-footer">
 <button class="btn-soft btn-soft-secondary" onclick="assetCloseCoordModal()">Cancel</button>
-<button class="btn-soft btn-soft-primary" onclick="assetConfirmColumns()">Confirm</button>
+<button class="btn-soft btn-soft-primary" onclick="assetConfirmColumns()">Confirm & Process</button>
 </div>
 </div>
 </div>
@@ -133557,18 +133585,34 @@ function assetLoadSettings() {
 // ============================================================
 
 function assetDetectCoordinateColumns(headers) {
-    const latPatterns = ['lat', 'latitude', 'y', 'y_coord', 'ycoord', 'lat_dd', 'latitude_dd'];
-    const lngPatterns = ['lon', 'lng', 'long', 'longitude', 'x', 'x_coord', 'xcoord', 'lon_dd', 'lng_dd', 'longitude_dd'];
-    const namePatterns = ['name', 'id', 'asset_id', 'location', 'location_id', 'signal_id', 'sign_id', 'pole_id', 'intersection'];
+    // Short tokens (1-2 chars like 'x', 'y', 'id') need exact or word-boundary match
+    // to avoid false positives like 'agency' matching 'y' or 'index' matching 'x'.
+    const matchesPattern = (lower, pattern) => {
+        if (lower === pattern) return true;
+        if (pattern.length <= 2) {
+            return new RegExp(`(^|[_\\s\\-])${pattern}([_\\s\\-]|$)`).test(lower);
+        }
+        return lower.includes(pattern);
+    };
+
+    const latPatterns = ['latitude', 'lat_dd', 'latitude_dd', 'point_y', 'pointy', 'y_coord', 'ycoord', 'coord_y', 'lat', 'y'];
+    const lngPatterns = ['longitude', 'lng_dd', 'lon_dd', 'longitude_dd', 'point_x', 'pointx', 'x_coord', 'xcoord', 'coord_x', 'lon', 'lng', 'long', 'x'];
+    const namePatterns = ['asset_id', 'location_id', 'signal_id', 'sign_id', 'pole_id', 'intersection', 'asset_name', 'location', 'name', 'id'];
 
     let latCol = null, lngCol = null, nameCol = null;
 
     headers.forEach((h, idx) => {
-        const lower = h.toLowerCase().trim();
-        if (!latCol && latPatterns.some(p => lower === p || lower.includes(p))) latCol = idx;
-        if (!lngCol && lngPatterns.some(p => lower === p || lower.includes(p))) lngCol = idx;
-        if (!nameCol && namePatterns.some(p => lower === p || lower.includes(p))) nameCol = idx;
+        const lower = String(h || '').toLowerCase().trim();
+        if (!lower) return;
+        if (latCol === null && latPatterns.some(p => matchesPattern(lower, p))) latCol = idx;
+        if (lngCol === null && lngPatterns.some(p => matchesPattern(lower, p))) lngCol = idx;
+        if (nameCol === null && namePatterns.some(p => matchesPattern(lower, p))) nameCol = idx;
     });
+
+    // Don't let lat and lng map to the same column
+    if (latCol !== null && latCol === lngCol) lngCol = null;
+    // Don't let the name column collide with coordinate columns
+    if (nameCol !== null && (nameCol === latCol || nameCol === lngCol)) nameCol = null;
 
     return { latCol, lngCol, nameCol };
 }
@@ -133986,25 +134030,14 @@ function assetProcessParsedData(data, filename) {
     const detected = assetDetectCoordinateColumns(headers);
     console.log('[Asset] Column detection result:', detected);
 
-    if (detected.latCol === null || detected.lngCol === null) {
-        // Show column selection modal
-        assetState.pendingUpload = { headers, rows, filename };
-        assetShowColumnModal(headers);
-        assetShowLoading(false);
-        return;
-    }
-
-    // Detect coordinate format from first valid row
-    const sampleLat = rows[0]?.[detected.latCol];
-    const sampleLng = rows[0]?.[detected.lngCol];
-    const format = assetDetectCoordinateFormat(sampleLat);
-
-    console.log(`[Asset] Auto-detected: lat=${headers[detected.latCol]}, lng=${headers[detected.lngCol]}, format=${format}`);
-
-    assetFinalizeUpload(headers, rows, detected.latCol, detected.lngCol, detected.nameCol, format, filename);
+    // Always show the mapping modal so the user can review and adjust
+    // (and map any additional columns they want to keep with each asset).
+    assetState.pendingUpload = { headers, rows, filename };
+    assetShowColumnModal(headers, rows, detected);
+    assetShowLoading(false);
 }
 
-function assetShowColumnModal(headers) {
+function assetShowColumnModal(headers, rows, detected) {
     const modal = document.getElementById('assetCoordModal');
     const latSelect = document.getElementById('assetLatColumn');
     const lngSelect = document.getElementById('assetLngColumn');
@@ -134018,13 +134051,121 @@ function assetShowColumnModal(headers) {
         return `<option value="${i}">${esc(String(headerName))}</option>`;
     }).join('');
 
-    console.log('[Asset] Generated options:', options ? `${headers.length} options` : 'EMPTY');
-
     latSelect.innerHTML = '<option value="">-- Select --</option>' + options;
     lngSelect.innerHTML = '<option value="">-- Select --</option>' + options;
     nameSelect.innerHTML = '<option value="">-- Auto-generate IDs --</option>' + options;
 
+    // Pre-fill auto-detected values where available
+    if (detected) {
+        if (detected.latCol !== null && detected.latCol !== undefined) latSelect.value = String(detected.latCol);
+        if (detected.lngCol !== null && detected.lngCol !== undefined) lngSelect.value = String(detected.lngCol);
+        if (detected.nameCol !== null && detected.nameCol !== undefined) nameSelect.value = String(detected.nameCol);
+
+        // Detect coordinate format from a sample row and pre-select it
+        if (detected.latCol !== null && rows && rows.length > 0) {
+            const sample = rows[0]?.[detected.latCol];
+            const fmt = assetDetectCoordinateFormat(sample);
+            if (fmt && fmt !== 'unknown') {
+                document.getElementById('assetCoordFormat').value = fmt;
+            }
+        }
+    }
+
+    // Reset additional columns to empty list
+    document.getElementById('assetAdditionalColsContainer').innerHTML = '';
+    assetUpdateAdditionalColsEmptyState();
+
+    // Render data preview (first 3 rows)
+    assetRenderColumnPreview(headers, rows);
+    assetUpdatePreviewHighlight();
+
     modal.style.display = 'flex';
+}
+
+function assetRenderColumnPreview(headers, rows) {
+    const table = document.getElementById('assetPreviewTable');
+    if (!table) return;
+    const sample = (rows || []).slice(0, 3);
+    const headerHtml = '<thead><tr>' + headers.map((h, i) =>
+        `<th data-col-idx="${i}" style="padding:.35rem .5rem;background:var(--light);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;font-weight:600">${esc(String(h || `Column ${i + 1}`))}</th>`
+    ).join('') + '</tr></thead>';
+    const bodyHtml = '<tbody>' + sample.map(row =>
+        '<tr>' + headers.map((_, i) =>
+            `<td data-col-idx="${i}" style="padding:.3rem .5rem;border-bottom:1px solid var(--border);white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${esc(String(row?.[i] ?? ''))}">${esc(String(row?.[i] ?? ''))}</td>`
+        ).join('') + '</tr>'
+    ).join('') + '</tbody>';
+    table.innerHTML = headerHtml + bodyHtml;
+}
+
+function assetUpdatePreviewHighlight() {
+    const table = document.getElementById('assetPreviewTable');
+    if (!table) return;
+    const latIdx = document.getElementById('assetLatColumn')?.value;
+    const lngIdx = document.getElementById('assetLngColumn')?.value;
+    const nameIdx = document.getElementById('assetNameColumn')?.value;
+    const addlIdxs = Array.from(document.querySelectorAll('.asset-addl-col-select'))
+        .map(s => s.value).filter(v => v !== '');
+
+    table.querySelectorAll('th[data-col-idx], td[data-col-idx]').forEach(cell => {
+        const idx = cell.getAttribute('data-col-idx');
+        cell.style.background = '';
+        cell.style.outline = '';
+        if (idx === latIdx) cell.style.background = '#fef3c7';
+        else if (idx === lngIdx) cell.style.background = '#fde68a';
+        else if (idx === nameIdx && nameIdx !== '') cell.style.background = '#dbeafe';
+        else if (addlIdxs.includes(idx)) cell.style.background = '#dcfce7';
+    });
+}
+
+function assetAddAdditionalColumnRow(preselectIdx, preselectLabel) {
+    const container = document.getElementById('assetAdditionalColsContainer');
+    if (!container) return;
+    const headers = assetState.pendingUpload?.headers || [];
+    const rowId = 'addl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+
+    const options = '<option value="">-- Select column --</option>' + headers.map((h, i) =>
+        `<option value="${i}">${esc(String(h || `Column ${i + 1}`))}</option>`
+    ).join('');
+
+    const div = document.createElement('div');
+    div.className = 'asset-addl-col-row';
+    div.id = rowId;
+    div.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 36px;gap:.5rem;margin-bottom:.4rem;align-items:center';
+    div.innerHTML = `
+        <select class="asset-select asset-addl-col-select" onchange="assetOnAdditionalColumnChange(this); assetUpdatePreviewHighlight()">${options}</select>
+        <input type="text" class="asset-addl-col-label" placeholder="Label (e.g., Comments)" style="padding:.4rem .55rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.8rem">
+        <button type="button" onclick="document.getElementById('${rowId}').remove(); assetUpdateAdditionalColsEmptyState(); assetUpdatePreviewHighlight()" title="Remove" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:var(--radius);cursor:pointer;font-weight:700;padding:.35rem 0">×</button>
+    `;
+    container.appendChild(div);
+
+    if (preselectIdx !== undefined && preselectIdx !== null) {
+        div.querySelector('.asset-addl-col-select').value = String(preselectIdx);
+    }
+    if (preselectLabel) {
+        div.querySelector('.asset-addl-col-label').value = preselectLabel;
+    }
+    assetUpdateAdditionalColsEmptyState();
+}
+
+function assetOnAdditionalColumnChange(selectEl) {
+    // Auto-fill the label with the column header if label is empty
+    const row = selectEl.closest('.asset-addl-col-row');
+    if (!row) return;
+    const labelInput = row.querySelector('.asset-addl-col-label');
+    if (labelInput && !labelInput.value.trim()) {
+        const headers = assetState.pendingUpload?.headers || [];
+        const idx = parseInt(selectEl.value);
+        if (!isNaN(idx) && headers[idx]) {
+            labelInput.value = String(headers[idx]).trim();
+        }
+    }
+}
+
+function assetUpdateAdditionalColsEmptyState() {
+    const container = document.getElementById('assetAdditionalColsContainer');
+    const empty = document.getElementById('assetAdditionalColsEmpty');
+    if (!container || !empty) return;
+    empty.style.display = container.children.length === 0 ? 'block' : 'none';
 }
 
 function assetCloseCoordModal() {
@@ -134039,22 +134180,60 @@ function assetConfirmColumns() {
     const format = document.getElementById('assetCoordFormat').value;
 
     if (isNaN(latCol) || isNaN(lngCol)) {
-        assetShowNotification('Please select both latitude and longitude columns', 'error');
+        assetShowNotification('Please select both Latitude and Longitude columns', 'error');
+        return;
+    }
+    if (latCol === lngCol) {
+        assetShowNotification('Latitude and Longitude must be different columns', 'error');
         return;
     }
 
-    const { headers, rows, filename } = assetState.pendingUpload;
+    // Collect additional column mappings: { idx: number, label: string }
+    const additionalCols = [];
+    const usedLabels = new Set();
+    const rows = document.querySelectorAll('#assetAdditionalColsContainer .asset-addl-col-row');
+    for (const row of rows) {
+        const idxRaw = row.querySelector('.asset-addl-col-select').value;
+        if (idxRaw === '') continue;
+        const idx = parseInt(idxRaw);
+        if (isNaN(idx) || idx === latCol || idx === lngCol) continue;
+        let label = (row.querySelector('.asset-addl-col-label').value || '').trim();
+        if (!label) {
+            const headers = assetState.pendingUpload?.headers || [];
+            label = String(headers[idx] || `Column ${idx + 1}`).trim();
+        }
+        // Ensure unique labels
+        let unique = label;
+        let n = 2;
+        while (usedLabels.has(unique.toLowerCase())) {
+            unique = `${label} (${n++})`;
+        }
+        usedLabels.add(unique.toLowerCase());
+        additionalCols.push({ idx, label: unique });
+    }
+
+    const { headers, rows: dataRows, filename } = assetState.pendingUpload;
     assetCloseCoordModal();
     assetShowLoading(true, 'Processing coordinates...');
 
-    assetFinalizeUpload(headers, rows, latCol, lngCol, nameCol === '' ? null : parseInt(nameCol), format, filename);
+    assetFinalizeUpload(
+        headers,
+        dataRows,
+        latCol,
+        lngCol,
+        nameCol === '' ? null : parseInt(nameCol),
+        format,
+        filename,
+        additionalCols
+    );
 }
 
-async function assetFinalizeUpload(headers, rows, latCol, lngCol, nameCol, format, filename) {
+async function assetFinalizeUpload(headers, rows, latCol, lngCol, nameCol, format, filename, additionalCols) {
     assetShowLoading(true, 'Converting coordinates...');
 
     const locations = [];
     let outOfBounds = 0;
+    const mappedCols = Array.isArray(additionalCols) ? additionalCols : [];
 
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
@@ -134068,13 +134247,12 @@ async function assetFinalizeUpload(headers, rows, latCol, lngCol, nameCol, forma
 
         const name = nameCol !== null ? row[nameCol] : `Location ${i + 1}`;
 
-        // Store all metadata
+        // Store only user-mapped additional columns under their custom labels
         const metadata = {};
-        headers.forEach((h, idx) => {
-            if (idx !== latCol && idx !== lngCol) {
-                metadata[h] = row[idx];
-            }
-        });
+        for (const { idx, label } of mappedCols) {
+            const val = row[idx];
+            metadata[label] = (val === undefined || val === null) ? '' : String(val);
+        }
 
         locations.push({
             id: `loc_${i}`,
@@ -134429,10 +134607,14 @@ function assetRenderResults() {
         assetUpdateTableHeaders(hasSchools);
     }
 
+    // Determine which dynamic additional columns are active (none in school mode)
+    const additionalLabels = hasSchools ? [] : assetGetActiveAdditionalLabels();
+
     if (results.length === 0) {
         summary.style.display = 'none';
         if (demoWarning) demoWarning.style.display = 'none';
-        tbody.innerHTML = '<tr><td colspan="' + (hasSchools ? '16' : '12') + '" style="text-align:center;color:var(--gray);padding:2rem">No active assets or no results. Upload an asset file and ensure it is enabled.</td></tr>';
+        const baseCols = hasSchools ? 16 : 12;
+        tbody.innerHTML = '<tr><td colspan="' + (baseCols + additionalLabels.length) + '" style="text-align:center;color:var(--gray);padding:2rem">No active assets or no results. Upload an asset file and ensure it is enabled.</td></tr>';
         pagination.innerHTML = '';
         return;
     }
@@ -134528,6 +134710,15 @@ function assetRenderResults() {
                 <td style="text-align:right">${enrollment.toLocaleString()}</td>
                 <td style="text-align:right;color:${parseFloat(crashRate) > 5 ? '#dc2626' : parseFloat(crashRate) > 2 ? '#ea580c' : 'inherit'}">${crashRate}</td>
                 <td style="text-align:right;font-weight:600;color:#7c3aed">${vulnEpdo.toLocaleString()}</td>`;
+        } else if (additionalLabels.length > 0) {
+            // User-mapped additional columns (after Location/ID)
+            const md = r.location.metadata || {};
+            for (const label of additionalLabels) {
+                const raw = md[label];
+                const val = (raw === undefined || raw === null) ? '' : String(raw);
+                const display = val.length > 40 ? val.substring(0, 40) + '…' : val;
+                rowHtml += `<td style="font-size:.8rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(val)}">${esc(display)}</td>`;
+            }
         }
 
         rowHtml += `
@@ -134581,14 +134772,51 @@ function assetRenderResults() {
 }
 
 /**
- * Update table headers based on whether schools are present
+ * Collect the union of user-mapped "additional column" labels across active assets,
+ * preserving the order in which they were first seen. Skips reserved school keys.
  */
-let assetTableHasSchoolHeaders = false; // Track current state
+function assetGetActiveAdditionalLabels() {
+    const reserved = new Set(['enrollment', 'level', 'vulnerability_factor', 'agency']);
+    const seen = new Set();
+    const ordered = [];
+    const activeAssets = assetState.assets.filter(a => assetState.activeAssetIds.includes(a.id));
+    for (const asset of activeAssets) {
+        // Skip schools — they have their own dedicated columns
+        if (asset.type === 'school') continue;
+        for (const loc of (asset.locations || [])) {
+            const md = loc.metadata || {};
+            for (const key of Object.keys(md)) {
+                if (!key || reserved.has(key.toLowerCase())) continue;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    ordered.push(key);
+                }
+            }
+        }
+    }
+    return ordered;
+}
+
+/**
+ * Update table headers based on whether schools are present and which
+ * additional user-mapped columns exist on the active assets.
+ */
+let assetTableHasSchoolHeaders = false; // Track current school-mode state
+let assetTableAdditionalLabels = [];     // Track currently rendered additional cols
 function assetUpdateTableHeaders(hasSchools) {
-    if (hasSchools === assetTableHasSchoolHeaders) return; // No change needed
+    const additionalLabels = hasSchools ? [] : assetGetActiveAdditionalLabels();
+    const sameSchool = hasSchools === assetTableHasSchoolHeaders;
+    const sameAdditional =
+        additionalLabels.length === assetTableAdditionalLabels.length &&
+        additionalLabels.every((l, i) => l === assetTableAdditionalLabels[i]);
+    if (sameSchool && sameAdditional) return; // No change needed
 
     const thead = document.querySelector('#assetResultsTable thead tr');
     if (!thead) return;
+
+    const additionalTh = additionalLabels.map(label =>
+        `<th title="${esc(label)}" style="font-weight:600">${esc(label)}</th>`
+    ).join('');
 
     if (hasSchools) {
         // Add school-specific headers after "Location/ID"
@@ -134611,11 +134839,12 @@ function assetUpdateTableHeaders(hasSchools) {
             <th style="width:60px">Actions</th>
         `;
     } else {
-        // Restore standard headers
+        // Standard headers + dynamic user-mapped additional columns (after Location/ID)
         thead.innerHTML = `
             <th style="width:50px" onclick="assetSortTable('rank')" class="sortable">Rank</th>
             <th onclick="assetSortTable('type')" class="sortable">Asset Type</th>
             <th onclick="assetSortTable('name')" class="sortable">Location/ID</th>
+            ${additionalTh}
             <th onclick="assetSortTable('lat')" class="sortable">Lat</th>
             <th onclick="assetSortTable('lng')" class="sortable">Lng</th>
             <th onclick="assetSortTable('crashes')" class="sortable">Crashes</th>
@@ -134629,6 +134858,7 @@ function assetUpdateTableHeaders(hasSchools) {
     }
 
     assetTableHasSchoolHeaders = hasSchools;
+    assetTableAdditionalLabels = additionalLabels;
 }
 
 function assetGoToPage(page) {
@@ -134813,19 +135043,27 @@ function assetExportCSV() {
         return direction === 'asc' ? valA - valB : valB - valA;
     });
 
+    // Pull user-mapped additional columns (skipped in school mode — schools have their own)
+    const additionalLabels = hasSchools ? [] : assetGetActiveAdditionalLabels();
+    const csvEscape = (v) => {
+        const s = (v === undefined || v === null) ? '' : String(v);
+        return `"${s.replace(/"/g, '""')}"`;
+    };
+
     // Build headers (with school columns if schools are present)
     let headers = ['Rank', 'Asset Type', 'Location Name'];
     if (hasSchools) {
         headers.push('Level', 'Enrollment', 'Crash Rate/1K', 'Vuln EPDO');
     }
+    headers.push(...additionalLabels);
     headers.push('Latitude', 'Longitude', 'Crashes', 'Pedestrian', 'Bicycle', 'EPDO', 'Fatal (K)', 'Serious (A)', 'Injury (B+C)', 'PDO (O)', 'Agency', 'Radius (ft)');
 
     // Build rows
     const rows = results.map((r, idx) => {
         let row = [
             idx + 1,
-            getAssetIconInfo(r.asset).label,
-            `"${r.location.name.replace(/"/g, '""')}"`
+            csvEscape(getAssetIconInfo(r.asset).label),
+            csvEscape(r.location.name)
         ];
 
         if (hasSchools) {
@@ -134835,6 +135073,11 @@ function assetExportCSV() {
                 r.crashRate || '0.00',
                 r.vulnEpdo || r.epdo
             );
+        }
+
+        // User-mapped additional columns (in same order as headers)
+        for (const label of additionalLabels) {
+            row.push(csvEscape(r.location.metadata?.[label] ?? ''));
         }
 
         row.push(
@@ -134848,7 +135091,7 @@ function assetExportCSV() {
             r.A,
             (r.B || 0) + (r.C || 0),
             r.O,
-            `"${(r.location.metadata?.agency || 'N/A').replace(/"/g, '""')}"`,
+            csvEscape(r.location.metadata?.agency || 'N/A'),
             assetState.radiusFeet
         );
 
