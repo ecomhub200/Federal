@@ -4786,6 +4786,16 @@ textarea:focus-visible {
 </ul>
 </div>
 
+<!-- Safety Scorecard - Standalone item -->
+<div class="sidebar-standalone-item" data-tab="scorecard" data-tooltip="Safety Scorecard" onclick="navigateTo('scorecard')">
+<span class="icon">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/>
+</svg>
+</span>
+<span class="nav-label">Safety Scorecard</span>
+</div>
+
 <!-- Grants - Standalone item (was single-item section) -->
 <div class="sidebar-standalone-item" data-tab="grants" data-tooltip="Grants" onclick="navigateTo('grants')">
 <span class="icon">
@@ -20529,6 +20539,83 @@ Developed by CRASH LENS | <a href="mailto:support@aicreatesai.com" style="color:
 </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SAFETY SCORECARD TAB                          -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="tab-scorecard" class="tab-content" role="tabpanel" aria-labelledby="tab-scorecard-btn">
+<div class="card">
+<div class="card-title"><span aria-hidden="true">📋</span> Safety Scorecard — Jurisdiction Comparison</div>
+
+<!-- Filters Bar -->
+<div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end;margin-bottom:1rem;padding:.75rem 1rem;background:#f8fafc;border-radius:var(--radius);border:1px solid var(--gray-light)">
+
+<div style="display:flex;flex-direction:column;gap:.25rem">
+<label style="font-size:.75rem;font-weight:600;color:#475569">Year</label>
+<select id="scorecard-year" onchange="loadScorecardData()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem;min-width:80px">
+</select>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:.25rem">
+<label style="font-size:.75rem;font-weight:600;color:#475569">Mode</label>
+<select id="scorecard-year-mode" onchange="onScorecardModeChange()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem">
+<option value="single">Single Year</option>
+<option value="compare">Compare</option>
+<option value="rolling">3-Year Rolling</option>
+</select>
+</div>
+
+<div id="scorecard-compare-wrap" style="display:none;flex-direction:column;gap:.25rem">
+<label style="font-size:.75rem;font-weight:600;color:#475569">Compare To</label>
+<select id="scorecard-compare-year" onchange="loadScorecardData()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem;min-width:80px">
+</select>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:.25rem">
+<label style="font-size:.75rem;font-weight:600;color:#475569">Scorecard</label>
+<select id="scorecard-type" onchange="loadScorecardData()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem">
+<option value="volume">Volume &amp; Severity</option>
+<option value="vulnerable">Vulnerable Users</option>
+<option value="factors">Contributing Factors</option>
+<option value="infrastructure">Infrastructure</option>
+</select>
+</div>
+
+<div style="margin-left:auto;font-size:.8rem;color:#64748b" id="scorecard-status"></div>
+</div>
+
+<!-- Scorecard Table -->
+<div style="max-height:520px;overflow-y:auto;border:1px solid var(--gray-light);border-radius:var(--radius)">
+<table class="data-table" id="scorecardTable">
+<thead id="scorecardHead"><tr><th>Loading...</th></tr></thead>
+<tbody id="scorecardBody"></tbody>
+</table>
+</div>
+</div>
+
+<!-- Bar Chart Card -->
+<div class="card" style="margin-top:1rem">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+<div class="card-title" style="margin:0"><span aria-hidden="true">📊</span> Metric Comparison</div>
+<div style="display:flex;align-items:center;gap:.5rem">
+<label style="font-size:.75rem;font-weight:600;color:#475569">Metric</label>
+<select id="scorecard-chart-metric" onchange="updateScorecardChart()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem">
+<option value="total_crashes">Total Crashes</option>
+<option value="fatal_crashes">Fatal Crashes</option>
+<option value="ksi_crashes">KSI (K+A)</option>
+<option value="total_epdo">EPDO Score</option>
+<option value="ped_crashes">Pedestrian</option>
+<option value="impaired_crashes">Impaired</option>
+<option value="speed_crashes">Speed</option>
+<option value="night_crashes">Night</option>
+</select>
+</div>
+</div>
+<div style="position:relative;height:400px">
+<canvas id="scorecardChart"></canvas>
+</div>
+</div>
+</div><!-- END tab-scorecard -->
+
 </main>
 </div><!-- /.main-content-wrapper -->
 </div><!-- /.app-layout -->
@@ -31569,6 +31656,9 @@ function showTab(tabId) {
         } else {
             applyFSFilters();
         }
+    }
+    if (tabId === 'scorecard') {
+        initScorecardTab();
     }
 }
 
@@ -154156,6 +154246,454 @@ function signDef_exportPDF() {
 <script src="modules/data/lazy-loader.js"></script>
 <script src="modules/data/tab-loaders.js"></script>
 <script src="modules/data/supabase-map-bridge.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SAFETY SCORECARD MODULE                                        -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<script>
+// ================================================================
+// Safety Scorecard — Jurisdiction Comparison & Ranking
+// ================================================================
+
+/** Column configs for each scorecard type */
+const SCORECARD_COLUMNS = {
+  volume: {
+    label: 'Volume & Severity',
+    cols: [
+      { key: 'total_crashes',   label: 'Total',   rank: 'rank_total_crashes' },
+      { key: 'fatal_crashes',   label: 'Fatal',   rank: 'rank_fatal' },
+      { key: 'ksi_crashes',     label: 'KSI',     rank: 'rank_ksi' },
+      { key: 'total_epdo',      label: 'EPDO',    rank: 'rank_epdo' },
+      { key: 'total_injured',   label: 'Injured' },
+      { key: 'total_killed',    label: 'Killed' },
+      { key: 'fatality_rate',   label: 'Fatal %', pct: true },
+      { key: 'ksi_rate',        label: 'KSI %',   pct: true },
+    ]
+  },
+  vulnerable: {
+    label: 'Vulnerable Users',
+    cols: [
+      { key: 'total_crashes',       label: 'Total',       rank: 'rank_total_crashes' },
+      { key: 'ped_crashes',         label: 'Pedestrian',  rank: 'rank_ped' },
+      { key: 'bike_crashes',        label: 'Bicycle',     rank: 'rank_bike' },
+      { key: 'motorcycle_crashes',  label: 'Motorcycle' },
+      { key: 'ped_killed',          label: 'Ped Killed' },
+      { key: 'ped_injured',         label: 'Ped Injured' },
+      { key: 'senior_crashes',      label: 'Senior' },
+      { key: 'young_crashes',       label: 'Young' },
+      { key: 'ped_rate',            label: 'Ped %', pct: true },
+    ]
+  },
+  factors: {
+    label: 'Contributing Factors',
+    cols: [
+      { key: 'total_crashes',        label: 'Total',       rank: 'rank_total_crashes' },
+      { key: 'impaired_crashes',     label: 'Impaired',    rank: 'rank_impaired' },
+      { key: 'speed_crashes',        label: 'Speed',       rank: 'rank_speed' },
+      { key: 'distracted_crashes',   label: 'Distracted' },
+      { key: 'unrestrained_crashes', label: 'Unrestrained' },
+      { key: 'night_crashes',        label: 'Night',       rank: 'rank_night' },
+      { key: 'impaired_rate',        label: 'Impaired %',  pct: true },
+      { key: 'speed_rate',           label: 'Speed %',     pct: true },
+      { key: 'night_rate',           label: 'Night %',     pct: true },
+    ]
+  },
+  infrastructure: {
+    label: 'Infrastructure',
+    cols: [
+      { key: 'total_crashes',          label: 'Total',        rank: 'rank_total_crashes' },
+      { key: 'intersection_crashes',   label: 'Intersection' },
+      { key: 'road_departure_crashes', label: 'Road Depart.' },
+      { key: 'workzone_crashes',       label: 'Work Zone' },
+      { key: 'school_zone_crashes',    label: 'School Zone' },
+      { key: 'near_school_crashes',    label: 'Near School' },
+      { key: 'near_bridge_crashes',    label: 'Near Bridge' },
+      { key: 'near_rail_crashes',      label: 'Near Rail' },
+      { key: 'near_transit_crashes',   label: 'Near Transit' },
+    ]
+  }
+};
+
+let _scorecardChart = null;   // Chart.js instance
+let _scorecardData  = [];     // latest fetched rows
+let _scorecardSortCol  = 'rank_total_crashes';
+let _scorecardSortAsc  = true;
+let _scorecardInited   = false;
+
+/**
+ * Initialize the scorecard tab — populate year dropdowns, load data.
+ * Called once on first tab visit via showTab().
+ */
+function initScorecardTab() {
+  if (_scorecardInited) { loadScorecardData(); return; }
+  _scorecardInited = true;
+
+  const yearSel     = document.getElementById('scorecard-year');
+  const compareSel  = document.getElementById('scorecard-compare-year');
+  if (!yearSel) return;
+
+  // Build year options 2025 → 2009
+  for (let y = 2025; y >= 2009; y--) {
+    yearSel.add(new Option(y, y));
+    compareSel.add(new Option(y, y));
+  }
+  yearSel.value    = '2023';   // default to most-complete year
+  compareSel.value = '2022';
+
+  loadScorecardData();
+}
+
+/**
+ * Toggle compare-year dropdown visibility based on mode.
+ */
+function onScorecardModeChange() {
+  const mode = document.getElementById('scorecard-year-mode').value;
+  const wrap = document.getElementById('scorecard-compare-wrap');
+  wrap.style.display = (mode === 'compare') ? 'flex' : 'none';
+  loadScorecardData();
+}
+
+/**
+ * Fetch scorecard data from Supabase and render.
+ */
+async function loadScorecardData() {
+  const statusEl = document.getElementById('scorecard-status');
+  const yearSel  = document.getElementById('scorecard-year');
+  const modeSel  = document.getElementById('scorecard-year-mode');
+  if (!yearSel) return;
+
+  const year = parseInt(yearSel.value, 10);
+  const mode = modeSel ? modeSel.value : 'single';
+  if (statusEl) statusEl.textContent = 'Loading…';
+
+  // Resolve tier context (state / county / city etc.)
+  let opts = {};
+  if (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier) {
+    const tier = CL.data.supabaseBridge.resolveTier();
+    if (tier && tier.tier && tier.tier !== 'state') {
+      if (tier.tier === 'dot_district')      opts.dotDistrict      = tier.value;
+      if (tier.tier === 'planning_district') opts.planningDistrict = tier.value;
+      if (tier.tier === 'mpo')               opts.mpoName          = tier.value;
+      if (tier.tier === 'county' || tier.tier === 'city') opts.jurisdiction = tier.value;
+    }
+  }
+
+  const client = window.crashLensClient;
+  if (!client || !client.getScorecard) {
+    if (statusEl) statusEl.textContent = 'Data client not available';
+    return;
+  }
+
+  try {
+    let data;
+    if (mode === 'rolling') {
+      // 3-year rolling: fetch year-2 → year
+      opts.yearEnd = year;
+      data = await client.getScorecard(null, year - 2, opts);
+      // Aggregate across the 3 years per jurisdiction
+      data = _aggregateRolling(data);
+    } else {
+      data = await client.getScorecard(null, year, opts);
+    }
+
+    _scorecardData = data || [];
+
+    if (mode === 'compare') {
+      const compareYear = parseInt(document.getElementById('scorecard-compare-year').value, 10);
+      const opts2 = Object.assign({}, opts);
+      const compareData = await client.getScorecard(null, compareYear, opts2);
+      renderComparisonTable(_scorecardData, compareData || [], year, compareYear);
+    } else {
+      renderScorecardTable(_scorecardData);
+    }
+
+    updateScorecardChart();
+    if (statusEl) statusEl.textContent = `${_scorecardData.length} jurisdictions · ${mode === 'rolling' ? (year-2)+'–'+year : year}`;
+  } catch (e) {
+    console.error('[Scorecard] load failed:', e);
+    if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+  }
+}
+
+/**
+ * Aggregate multi-year rows into single row per jurisdiction (for rolling mode).
+ */
+function _aggregateRolling(rows) {
+  if (!rows || !rows.length) return [];
+  const map = {};
+  const sumKeys = [
+    'total_crashes','fatal_crashes','ksi_crashes','total_epdo','total_injured','total_killed',
+    'ped_crashes','bike_crashes','ped_killed','ped_injured','school_zone_crashes',
+    'senior_crashes','young_crashes','motorcycle_crashes','impaired_crashes','speed_crashes',
+    'distracted_crashes','unrestrained_crashes','night_crashes','workzone_crashes',
+    'intersection_crashes','road_departure_crashes','near_school_crashes','near_bridge_crashes',
+    'near_rail_crashes','near_transit_crashes'
+  ];
+  rows.forEach(r => {
+    const j = r.jurisdiction;
+    if (!map[j]) {
+      map[j] = Object.assign({}, r);
+      sumKeys.forEach(k => map[j][k] = Number(r[k]) || 0);
+    } else {
+      sumKeys.forEach(k => map[j][k] += Number(r[k]) || 0);
+    }
+  });
+
+  // Recalc rates and ranks
+  const agg = Object.values(map);
+  agg.forEach(r => {
+    const t = r.total_crashes || 1;
+    r.fatality_rate = ((r.fatal_crashes / t) * 100).toFixed(2);
+    r.ksi_rate      = ((r.ksi_crashes / t) * 100).toFixed(2);
+    r.ped_rate      = ((r.ped_crashes / t) * 100).toFixed(2);
+    r.night_rate    = ((r.night_crashes / t) * 100).toFixed(2);
+    r.impaired_rate = ((r.impaired_crashes / t) * 100).toFixed(2);
+    r.speed_rate    = ((r.speed_crashes / t) * 100).toFixed(2);
+  });
+  // Re-rank
+  _rerank(agg, 'total_crashes', 'rank_total_crashes');
+  _rerank(agg, 'fatal_crashes', 'rank_fatal');
+  _rerank(agg, 'ksi_crashes',   'rank_ksi');
+  _rerank(agg, 'total_epdo',    'rank_epdo');
+  _rerank(agg, 'ped_crashes',   'rank_ped');
+  _rerank(agg, 'bike_crashes',  'rank_bike');
+  _rerank(agg, 'impaired_crashes','rank_impaired');
+  _rerank(agg, 'speed_crashes', 'rank_speed');
+  _rerank(agg, 'night_crashes', 'rank_night');
+  return agg;
+}
+
+/** Assign descending ranks (most crashes = rank 1). */
+function _rerank(rows, valKey, rankKey) {
+  const sorted = rows.slice().sort((a, b) => (Number(b[valKey]) || 0) - (Number(a[valKey]) || 0));
+  sorted.forEach((r, i) => r[rankKey] = i + 1);
+}
+
+/**
+ * Render the main scorecard table (single year or rolling).
+ */
+function renderScorecardTable(data) {
+  const type = document.getElementById('scorecard-type').value;
+  const cfg  = SCORECARD_COLUMNS[type] || SCORECARD_COLUMNS.volume;
+  const thead = document.getElementById('scorecardHead');
+  const tbody = document.getElementById('scorecardBody');
+  if (!thead || !tbody) return;
+
+  // Sort data
+  const sorted = data.slice().sort((a, b) => {
+    let av = a[_scorecardSortCol], bv = b[_scorecardSortCol];
+    av = (av === null || av === undefined) ? Infinity : Number(av);
+    bv = (bv === null || bv === undefined) ? Infinity : Number(bv);
+    return _scorecardSortAsc ? av - bv : bv - av;
+  });
+
+  const maxRank = data.length || 1;
+
+  // Build header
+  let hdr = '<tr><th style="cursor:pointer;min-width:60px" onclick="scorecardSort(\'rank_total_crashes\')">#</th>';
+  hdr += '<th style="cursor:pointer;min-width:140px" onclick="scorecardSort(\'jurisdiction\')">Jurisdiction</th>';
+  cfg.cols.forEach(c => {
+    const arrow = _scorecardSortCol === c.key ? (_scorecardSortAsc ? ' ▲' : ' ▼') : '';
+    hdr += `<th style="cursor:pointer;text-align:right;min-width:80px" onclick="scorecardSort('${c.key}')">${c.label}${arrow}</th>`;
+  });
+  hdr += '</tr>';
+  thead.innerHTML = hdr;
+
+  // Build rows
+  let html = '';
+  sorted.forEach(r => {
+    const rank = Number(r.rank_total_crashes) || 999;
+    const rankColor = _rankColor(rank, maxRank);
+    html += `<tr style="cursor:pointer" onclick="scorecardDrillDown('${(r.jurisdiction||'').replace(/'/g,"\\'")}')">`;
+    html += `<td style="text-align:center"><span style="display:inline-block;width:28px;height:28px;line-height:28px;border-radius:50%;font-weight:700;font-size:.8rem;color:#fff;background:${rankColor}">${rank}</span></td>`;
+    html += `<td style="font-weight:600">${r.jurisdiction || '—'}</td>`;
+    cfg.cols.forEach(c => {
+      let val = r[c.key];
+      if (val === null || val === undefined) val = '—';
+      else if (c.pct) val = parseFloat(val).toFixed(1) + '%';
+      else val = Number(val).toLocaleString();
+      // Mini rank badge if column has a rank key
+      let badge = '';
+      if (c.rank && r[c.rank] !== undefined) {
+        const cr = Number(r[c.rank]);
+        badge = ` <span style="font-size:.65rem;color:${_rankColor(cr, maxRank)};font-weight:700">#${cr}</span>`;
+      }
+      html += `<td style="text-align:right">${val}${badge}</td>`;
+    });
+    html += '</tr>';
+  });
+  tbody.innerHTML = html || '<tr><td colspan="99" style="text-align:center;padding:2rem;color:#94a3b8">No data for this selection</td></tr>';
+}
+
+/**
+ * Render comparison table showing deltas between two years.
+ */
+function renderComparisonTable(current, compare, yearA, yearB) {
+  const type = document.getElementById('scorecard-type').value;
+  const cfg  = SCORECARD_COLUMNS[type] || SCORECARD_COLUMNS.volume;
+  const thead = document.getElementById('scorecardHead');
+  const tbody = document.getElementById('scorecardBody');
+  if (!thead || !tbody) return;
+
+  // Index compare data by jurisdiction
+  const compMap = {};
+  (compare || []).forEach(r => compMap[r.jurisdiction] = r);
+
+  const maxRank = current.length || 1;
+
+  // Header with year labels
+  let hdr = '<tr><th>#</th><th>Jurisdiction</th>';
+  cfg.cols.forEach(c => {
+    hdr += `<th style="text-align:right">${c.label}<br><span style="font-size:.65rem;color:#94a3b8">${yearA} vs ${yearB}</span></th>`;
+  });
+  hdr += '</tr>';
+  thead.innerHTML = hdr;
+
+  // Sort by rank
+  const sorted = current.slice().sort((a, b) => (Number(a.rank_total_crashes)||999) - (Number(b.rank_total_crashes)||999));
+
+  let html = '';
+  sorted.forEach(r => {
+    const rank = Number(r.rank_total_crashes) || 999;
+    const comp = compMap[r.jurisdiction] || {};
+    html += '<tr>';
+    html += `<td style="text-align:center"><span style="display:inline-block;width:28px;height:28px;line-height:28px;border-radius:50%;font-weight:700;font-size:.8rem;color:#fff;background:${_rankColor(rank, maxRank)}">${rank}</span></td>`;
+    html += `<td style="font-weight:600">${r.jurisdiction || '—'}</td>`;
+    cfg.cols.forEach(c => {
+      const curVal  = Number(r[c.key]) || 0;
+      const prevVal = Number(comp[c.key]) || 0;
+      const delta   = curVal - prevVal;
+      const arrow   = delta > 0 ? '↑' : delta < 0 ? '↓' : '→';
+      const color   = delta > 0 ? '#ef4444' : delta < 0 ? '#22c55e' : '#94a3b8';
+      let display   = c.pct ? parseFloat(r[c.key]).toFixed(1) + '%' : curVal.toLocaleString();
+      html += `<td style="text-align:right">${display} <span style="font-size:.75rem;color:${color};font-weight:600">${arrow}${Math.abs(delta).toLocaleString()}</span></td>`;
+    });
+    html += '</tr>';
+  });
+  tbody.innerHTML = html || '<tr><td colspan="99" style="text-align:center;padding:2rem;color:#94a3b8">No data</td></tr>';
+}
+
+/**
+ * Return a hex colour for a rank: red (worst/highest) → amber → green (best/lowest).
+ */
+function _rankColor(rank, total) {
+  if (total <= 1) return '#64748b';
+  const pct = (rank - 1) / (total - 1);  // 0 = rank #1 (worst), 1 = last (best)
+  if (pct <= 0.15) return '#ef4444';       // red — top 15%
+  if (pct <= 0.35) return '#f97316';       // orange
+  if (pct <= 0.55) return '#eab308';       // amber
+  if (pct <= 0.75) return '#22c55e';       // green
+  return '#16a34a';                        // dark green — best
+}
+
+/**
+ * Sort handler — toggle direction if same column clicked again.
+ */
+function scorecardSort(col) {
+  if (_scorecardSortCol === col) {
+    _scorecardSortAsc = !_scorecardSortAsc;
+  } else {
+    _scorecardSortCol = col;
+    _scorecardSortAsc = true;
+  }
+  renderScorecardTable(_scorecardData);
+}
+
+/**
+ * Drill down: clicking a jurisdiction row sets the tier context and goes to Dashboard.
+ */
+function scorecardDrillDown(jurisdiction) {
+  // Try to set jurisdiction context
+  if (typeof updateJurisdictionContext === 'function') {
+    const tierSel = document.getElementById('upload-tier-select');
+    if (tierSel) {
+      tierSel.value = 'city';
+      tierSel.dispatchEvent(new Event('change'));
+    }
+    const jurisSel = document.getElementById('jurisdictionSelect');
+    if (jurisSel) {
+      for (let i = 0; i < jurisSel.options.length; i++) {
+        if (jurisSel.options[i].text === jurisdiction || jurisSel.options[i].value === jurisdiction) {
+          jurisSel.selectedIndex = i;
+          break;
+        }
+      }
+    }
+  }
+  // Navigate to dashboard
+  if (typeof navigateTo === 'function') navigateTo('dashboard');
+}
+
+/**
+ * Update the horizontal bar chart with the selected metric.
+ */
+function updateScorecardChart() {
+  const canvas = document.getElementById('scorecardChart');
+  const metricSel = document.getElementById('scorecard-chart-metric');
+  if (!canvas || !metricSel || !_scorecardData.length) return;
+
+  const metric = metricSel.value;
+  const metricLabel = metricSel.options[metricSel.selectedIndex]?.text || metric;
+
+  // Sort by metric descending, take top 20
+  const sorted = _scorecardData.slice()
+    .sort((a, b) => (Number(b[metric]) || 0) - (Number(a[metric]) || 0))
+    .slice(0, 20);
+
+  const labels = sorted.map(r => r.jurisdiction || '?');
+  const values = sorted.map(r => Number(r[metric]) || 0);
+  const maxRank = _scorecardData.length;
+  const colors = sorted.map(r => {
+    const rank = Number(r.rank_total_crashes) || maxRank;
+    return _rankColor(rank, maxRank);
+  });
+
+  if (_scorecardChart) _scorecardChart.destroy();
+
+  _scorecardChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: metricLabel,
+        data: values,
+        backgroundColor: colors,
+        borderRadius: 4,
+        barThickness: 16,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${metricLabel}: ${ctx.parsed.x.toLocaleString()}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,.06)' },
+          ticks: { callback: v => v.toLocaleString() }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// ================================================================
+// END SAFETY SCORECARD MODULE
+// ================================================================
+</script>
+
 <script>
   // Initialize Supabase data client after page load
   // This does NOT change any existing data loading — it just makes the client available

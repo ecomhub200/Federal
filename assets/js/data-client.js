@@ -473,6 +473,43 @@ class CrashLensDataClient {
   }
 
   /**
+   * Get scorecard rankings from scorecard_rankings matview.
+   * @param {string} state - State key (e.g. 'delaware')
+   * @param {number} year - Crash year
+   * @param {Object} options - Optional filters
+   * @returns {Promise<Array>} Ranked jurisdiction rows
+   */
+  async getScorecard(state, year, options = {}) {
+    state = state || this.state;
+    if (this.preferSupabase && this.supabaseKey) {
+      try {
+        const filters = { state: `eq.${state}` };
+        if (year) {
+          if (options.yearEnd) {
+            filters.and = `(crash_year.gte.${year},crash_year.lte.${options.yearEnd})`;
+          } else {
+            filters.crash_year = `eq.${year}`;
+          }
+        }
+        if (options.dotDistrict) filters.dot_district = `eq.${options.dotDistrict}`;
+        if (options.planningDistrict) filters.planning_district = `eq.${options.planningDistrict}`;
+        if (options.mpoName) filters.mpo_name = `eq.${options.mpoName}`;
+        if (options.jurisdiction) filters.jurisdiction = `eq.${options.jurisdiction}`;
+        const data = await this._supabaseQuery('scorecard_rankings', {
+          filters: filters,
+          order: 'rank_total_crashes.asc',
+          limit: 5000,
+        });
+        this._source = 'supabase';
+        return data;
+      } catch (e) {
+        console.warn('[DataClient] Scorecard failed:', e.message);
+      }
+    }
+    return [];
+  }
+
+  /**
    * Get available states from states table.
    * @returns {Promise<Array>} [{abbr, name, display_name, total_crashes, ...}]
    */
