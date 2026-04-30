@@ -150,7 +150,9 @@ class CrashLensDataClient {
    *
    * @param {string} tier - 'federal'|'state'|'region'|'planning_district'|'mpo'|'county'|'city'
    * @param {string} value - Jurisdiction name (e.g. 'Kent', 'North District')
-   * @param {object} filters - { yearFrom, yearTo, severity, fc, areaType }
+   * @param {object} filters - { yearFrom, yearTo, severity, fc, areaType, roadType }
+   *                           roadType: matview road_type bucket ('dot_roads', 'city_roads',
+   *                           'non_dot_roads', etc.). Omit for all-roads (no filter).
    * @returns {Promise<Array>} Summary rows with crash_count, fatals, ped_crashes, etc.
    */
   async getSummary(tier, value, filters = {}) {
@@ -801,6 +803,10 @@ class CrashLensDataClient {
     if (filters.severity) allFilters.crash_severity = `eq.${filters.severity}`;
     if (filters.fc) allFilters.functional_class = `eq.${filters.fc}`;
     if (filters.areaType) allFilters.area_type = `eq.${filters.areaType}`;
+    // road_type bucket filter — same column convention used by mv_hotspots /
+    // mv_grants_baseline. When omitted, dashboard_summary returns all buckets
+    // and the caller aggregates across them (= "all roads").
+    if (filters.roadType) allFilters.road_type = `eq.${filters.roadType}`;
 
     return this._supabaseQuery('dashboard_summary', {
       filters: allFilters,

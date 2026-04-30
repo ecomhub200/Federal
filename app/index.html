@@ -32559,6 +32559,103 @@ let _autoLoadGeneration = 0;
 //              Tree, Grants, Deep Dive, Safety, Fatal Speeding,
 //              Intersection, Pedestrian) — see lazy-loader.js.
 //
+// ── R2 parquet split-fallback helpers ─────────────────────────────────
+// Only `all_roads.parquet` is consistently published per tier folder; the
+// dot_roads / city_roads / non_dot_roads splits exist for a subset of
+// tiers/states. When a split parquet 404s we retry with the same-tier
+// all_roads file and filter rows in-browser using the SYSTEM column.
+//
+// SYSTEM column values per the project's DOT-neutral taxonomy
+// (see CLAUDE.md → DOT-Neutral Column Naming Convention):
+//   "DOT Interstate" / "DOT Primary" / "DOT Secondary"  → DOT-maintained
+//   "Non-DOT primary" / "Non-DOT secondary" / "Non-DOT" → non-DOT
+// City roads aren't reliably encoded in SYSTEM (they're typically
+// distinguished by Ownership = "3. City or Town Hwy Agency" or by an
+// agency-id column). When we can't filter confidently we log a warning
+// and load the file unfiltered.
+
+function _r2RoadTypeIsAllRoads(suffix) {
+    return suffix === 'all_roads' || suffix === 'statewide_all_roads';
+}
+
+// Build the same R2 path as getDataFilePath() but with the road-type
+// suffix forced to all_roads / statewide_all_roads. Used for the
+// split-parquet fallback so we always have a tier-correct file to load.
+function _r2AllRoadsPathForActiveTier() {
+    const tier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
+    const stateKey = (typeof _getActiveStateKey === 'function')
+        ? _getActiveStateKey()
+        : ((typeof appConfig !== 'undefined' && appConfig?.defaultState) || 'colorado');
+    const r2Prefix = appConfig?.states?.[stateKey]?.r2Prefix || stateKey;
+    const allRoadsSuffix = (tier === 'state') ? 'statewide_all_roads' : 'all_roads';
+
+    if (tier === 'federal') return `_national/${allRoadsSuffix}.parquet`;
+    if (tier === 'state')   return `${r2Prefix}/_state/${allRoadsSuffix}.parquet`;
+    if (tier === 'region') {
+        const regionId = jurisdictionContext.tierRegion?.id;
+        if (regionId) return `${r2Prefix}/_region/${regionId}/${allRoadsSuffix}.parquet`;
+    }
+    if (tier === 'mpo') {
+        const mpoId = jurisdictionContext.tierMpo?.id;
+        if (mpoId) return `${r2Prefix}/_mpo/${mpoId}/${allRoadsSuffix}.parquet`;
+    }
+    if (tier === 'planning_district') {
+        const pdId = jurisdictionContext.tierPlanningDistrict?.id;
+        if (pdId) return `${r2Prefix}/_planning_district/${pdId.toLowerCase()}/${allRoadsSuffix}.parquet`;
+    }
+    if (tier === 'city') {
+        const parentJurisdiction = getActiveJurisdictionId();
+        let cityCountySlug = parentJurisdiction;
+        const cityStateAbbr = appConfig?.states?.[stateKey]?.abbreviation?.toLowerCase();
+        if (cityStateAbbr && cityCountySlug?.startsWith(cityStateAbbr + '_')) {
+            cityCountySlug = cityCountySlug.substring(cityStateAbbr.length + 1);
+        }
+        if (cityCountySlug) return `${r2Prefix}/${cityCountySlug.toLowerCase()}/${allRoadsSuffix}.parquet`;
+    }
+    // County tier (default)
+    const jurisdiction = getActiveJurisdictionId();
+    let r2Jurisdiction = jurisdiction;
+    const stAbbr = appConfig?.states?.[stateKey]?.abbreviation?.toLowerCase();
+    if (stAbbr && jurisdiction.startsWith(stAbbr + '_')) {
+        r2Jurisdiction = jurisdiction.substring(stAbbr.length + 1);
+    }
+    return `${r2Prefix}/${r2Jurisdiction.toLowerCase()}/${allRoadsSuffix}.parquet`;
+}
+
+// Decide whether a row passes the in-browser road-type filter.
+// requestedRoadType is the suffix from getActiveRoadTypeSuffix() at the
+// moment the load was kicked off (e.g. 'dot_roads', 'city_roads',
+// 'non_dot_roads', 'county_roads', 'no_interstate'). Returns true to keep,
+// false to skip. `null`/all_roads suffixes never reach this function.
+function _r2RowMatchesRoadType(row, requestedRoadType) {
+    if (!row || !requestedRoadType) return true;
+    const sysRaw = row[COL.ROAD_SYSTEM] || row['SYSTEM'] || '';
+    const sys = String(sysRaw).trim().toUpperCase();
+    if (requestedRoadType === 'dot_roads') {
+        return sys.startsWith('DOT ');                 // DOT Interstate/Primary/Secondary
+    }
+    if (requestedRoadType === 'non_dot_roads') {
+        return sys.startsWith('NON-DOT');              // Non-DOT (primary/secondary/generic)
+    }
+    if (requestedRoadType === 'no_interstate') {
+        return sys !== 'DOT INTERSTATE';               // everything except interstates
+    }
+    if (requestedRoadType === 'county_roads') {
+        // Best-effort: county-maintained roads typically map to Ownership
+        // "2. County Hwy Agency". Fall through unfiltered if Ownership
+        // missing — caller already logged the loose-match warning.
+        const ownership = String(row[COL.OWNERSHIP] || row['Ownership'] || '').trim();
+        if (!ownership) return true;
+        return /county/i.test(ownership);
+    }
+    if (requestedRoadType === 'city_roads') {
+        const ownership = String(row[COL.OWNERSHIP] || row['Ownership'] || '').trim();
+        if (!ownership) return true;
+        return /city|town/i.test(ownership);
+    }
+    return true; // unknown suffix → don't drop rows
+}
+
 // Parameters:
 //   skipCache (default false) — bypass the IndexedDB cache lookup. Used
 //                               when the data context just changed.
@@ -32904,6 +33001,13 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
         }
     }
 
+    // Capture the road type the user asked for at load-start, so the parquet
+    // processing block can filter rows in-browser if the split file 404s and
+    // we fall back to all_roads.parquet.
+    const _requestedRoadTypeSuffix = (typeof getActiveRoadTypeSuffix === 'function')
+        ? getActiveRoadTypeSuffix(tier) : 'all_roads';
+    let _appliedClientSideRoadFilter = false;
+
     // Try the dynamic path first, then R2 fallback, then local fallback paths
     // Network errors (CORS, DNS, timeout) throw exceptions instead of returning
     // non-ok responses, so we catch them and create synthetic error responses
@@ -32915,7 +33019,21 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
         })
         .then(response => {
             if (!response.ok) {
-                // Try R2 fallback (all_roads for this jurisdiction)
+                // First fallback: if the user asked for a split parquet
+                // (dot/city/non_dot/etc.) that's missing on R2, retry with
+                // the same-tier all_roads file and filter client-side after
+                // parsing. all_roads.parquet is the only suffix consistently
+                // published across every tier folder.
+                if (!_r2RoadTypeIsAllRoads(_requestedRoadTypeSuffix)) {
+                    const splitFallbackPath = _r2AllRoadsPathForActiveTier();
+                    console.warn(`[AutoLoad] ${dataFilePath} failed (HTTP ${response.status}); split parquet not found — falling back to ${splitFallbackPath} with client-side filter for ${_requestedRoadTypeSuffix}.`);
+                    _appliedClientSideRoadFilter = true;
+                    return fetchWithR2Retry(resolveDataUrl(splitFallbackPath)).catch(networkErr => {
+                        console.warn(`[AutoLoad] Network error on split→all_roads fallback:`, networkErr.message);
+                        return new Response('', { status: 0, statusText: 'Network Error' });
+                    });
+                }
+                // User already asked for all_roads — try R2 fallback (legacy path).
                 const fallbackPath = APP_PATHS.getFallbackData();
                 console.log(`[AutoLoad] ${dataFilePath} failed (HTTP ${response.status}), trying R2 fallback: ${fallbackPath}`);
                 return fetchWithR2Retry(resolveDataUrl(fallbackPath)).catch(networkErr => {
@@ -33007,17 +33125,25 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
                         }
 
                         const needsNormalization = typeof StateAdapter !== 'undefined' && StateAdapter.needsNormalization();
-                        let rowCount = 0, lastUpdate = startTime;
+                        let rowCount = 0, skippedByRoadFilter = 0, lastUpdate = startTime;
                         for (let i = 0; i < result.rows.length; i++) {
                             try {
                                 const normalized = needsNormalization ? StateAdapter.normalizeRow(result.rows[i]) : result.rows[i];
-                                processRow(normalized);
-                                rowCount++;
+                                if (_appliedClientSideRoadFilter &&
+                                    !_r2RowMatchesRoadType(normalized, _requestedRoadTypeSuffix)) {
+                                    skippedByRoadFilter++;
+                                } else {
+                                    processRow(normalized);
+                                    rowCount++;
+                                }
                             } catch (e) {
                                 console.warn('[AutoLoad] Skipping malformed row:', e.message);
                             }
                             const now = Date.now();
                             if (now - lastUpdate > 100) { updateProgress(rowCount, startTime); lastUpdate = now; }
+                        }
+                        if (_appliedClientSideRoadFilter) {
+                            console.log(`[AutoLoad] Client-side road filter (${_requestedRoadTypeSuffix}) kept ${rowCount} rows, dropped ${skippedByRoadFilter}.`);
                         }
 
                         crashState.totalRows = rowCount;
@@ -33116,9 +33242,11 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
 
             // If state needs JS-side normalization (rare — only raw non-Virginia uploads),
             // fall back to main-thread parsing since StateAdapter can't run in a Worker.
+            // Same goes for the client-side road-type filter: the Worker doesn't
+            // know about it and would aggregate every row.
             const needsNormalization = typeof StateAdapter !== 'undefined' && StateAdapter.needsNormalization();
 
-            if (needsNormalization || typeof Worker === 'undefined') {
+            if (needsNormalization || _appliedClientSideRoadFilter || typeof Worker === 'undefined') {
                 // ── Main-thread fallback (original behavior) ──
                 console.log('[AutoLoad] Using main-thread parse', needsNormalization ? '(state normalization needed)' : '(Worker unavailable)');
                 let rowCount = 0, lastUpdate = startTime;
@@ -33129,6 +33257,10 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
                         results.data.forEach(row => {
                             try {
                                 const normalized = needsNormalization ? StateAdapter.normalizeRow(row) : row;
+                                if (_appliedClientSideRoadFilter &&
+                                    !_r2RowMatchesRoadType(normalized, _requestedRoadTypeSuffix)) {
+                                    return; // dropped by client-side road-type filter
+                                }
                                 processRow(normalized);
                                 rowCount++;
                             } catch (e) {
@@ -33139,6 +33271,9 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
                         if (now - lastUpdate > 100) { updateProgress(rowCount, startTime); lastUpdate = now; }
                     },
                     complete: function() {
+                        if (_appliedClientSideRoadFilter) {
+                            console.log(`[AutoLoad] Client-side road filter (${_requestedRoadTypeSuffix}) kept ${rowCount} rows.`);
+                        }
                         _onAutoLoadComplete(rowCount, startTime, dataFilePath, jurisdictionName, uploadIcon, loadingTitle, loadingSubtitle, prog);
                     },
                     error: function(e) {
