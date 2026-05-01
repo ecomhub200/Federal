@@ -1,23 +1,24 @@
 /**
- * Phase 5 — live API smoke matrix (Delaware).
+ * Phase 5 — live API smoke matrix (Delaware), exact-numeric edition.
  *
  * Hits the real self-hosted Supabase at srv1503081.hstgr.cloud and walks the
- * (tier × value × radio) matrix using values verified against the live
- * dashboard_summary matview on 2026-04-30. Catches hierarchy.json dbName
- * drift and matview rebuild regressions early.
+ * (tier × value × radio) matrix using totals verified against the live
+ * dashboard_summary matview on 2026-04-30. Every cell must match the
+ * recorded crash count exactly — non-empty arrays are NOT enough because a
+ * wrong slice (e.g. dot_roads served under the "County Roads Only" radio
+ * label) is still non-empty.
  *
  * Run:   node tests/test_phase5_live_matrix.js
  * Skip:  CRASHLENS_SKIP_LIVE=1 node tests/test_phase5_live_matrix.js
  *
- * The unit suite (tests/test_phase5_road_types.js) covers the same wire-
- * format rules with stubFetch and runs offline. This file is the canary
- * that proves the wire format actually matches the matview shape.
+ * The unit suite (tests/test_phase5_road_types.js) covers the same wire
+ * format with stubFetch and runs offline. This file proves the wire
+ * format actually matches the matview shape AND volume.
  *
- * Each (tier, value, radio) combination must return at least one row for
- * Delaware's 2018-2024 dataset. If any returns zero, that's the bug — read
- * the failure detail to see whether the bucket spec is wrong, the
- * hierarchy.json dbName drifted, or the matview row count itself is empty
- * for that filter.
+ * If a cell drifts: regenerate by running each radioToBucket spec against
+ * the matview directly and replacing the value below. Drift is expected
+ * after every nightly matview refresh on a state with active uploads — see
+ * docs/PHASE2_WIRING_MAP.md §9.
  */
 
 const vm = require('vm');
@@ -29,26 +30,45 @@ if (process.env.CRASHLENS_SKIP_LIVE === '1') {
     process.exit(0);
 }
 
-// Verified live values — see handoff §1 (and the curl smoke commands at the
-// bottom of the follow-up prompt). DO NOT swap to acronyms (WILMAPCO) or
-// prose names ("Wilmington Area Planning Council MPO") — the matview stores
-// the exact strings below, no more no less.
-const VALUES = {
-    federal: [null],
-    state:   [null],
-    region:  ['North District', 'South District', 'Central District'],
-    planning_district: ['North District', 'South District', 'Central District'],
-    mpo: [
-        'Wilmington Area Planning Council',
-        'Dover / Kent County MPO',
-        'Salisbury-Wicomico MPO',
-        'Delaware Valley Regional Planning Commission'
-    ],
-    county: ['New Castle', 'Sussex', 'Kent'],
-    city:   ['Dover', 'Wilmington', 'Newark', 'Middletown', 'Smyrna']
-};
+// ─────────────────────────────────────────────────────────
+// Verified against live Supabase 2026-04-30 — Delaware-only data,
+// regenerate after onboarding additional states. Each value is
+// sum(crash_count) for the (tier, value, radio) cell after
+// radioToBucket → PostgREST round-trip.
+//
+// Pipe-delimited keys: '<tier>|<value or "null">|<radio>'
+// ─────────────────────────────────────────────────────────
+const EXPECTED_DELAWARE = {
+    'state|null|allRoads':          569829,
+    'state|null|countyOnly':        438501,   // dot_roads (aggregate-tier semantics)
+    'state|null|cityOnly':           81315,
+    'state|null|countyPlusVDOT':     39885,   // county_roads (state/region semantics)
 
-const RADIOS = ['allRoads', 'countyOnly', 'cityOnly', 'countyPlusVDOT'];
+    'federal|null|allRoads':        569829,
+    'federal|null|countyOnly':      438501,
+    'federal|null|cityOnly':         81315,
+    'federal|null|countyPlusVDOT':  131328,   // roadTypes IN (county,city,other) — Federal "Non-DOT"
+
+    'region|North District|allRoads':         337469,
+    'region|North District|countyOnly':       262292,
+    'region|North District|cityOnly':          52183,
+    'region|North District|countyPlusVDOT':    17712,
+
+    'mpo|Wilmington Area Planning Council|allRoads':         335962,
+    'mpo|Wilmington Area Planning Council|countyOnly':        17546,   // county_roads — would be ~256K under the pre-fix bug
+    'mpo|Wilmington Area Planning Council|cityOnly':          52167,
+    'mpo|Wilmington Area Planning Council|countyPlusVDOT':   295576,   // is_interstate=false
+
+    'county|Kent|allRoads':         38614,
+    'county|Kent|countyOnly':        4121,    // county_roads — would be ~28K under the pre-fix bug
+    'county|Kent|cityOnly':          2047,
+    'county|Kent|countyPlusVDOT':   38380,    // is_interstate=false
+
+    'city|Dover|allRoads':          33583,
+    'city|Dover|countyOnly':         2884,    // county_roads — would be ~22K under the pre-fix bug
+    'city|Dover|cityOnly':           5972,
+    'city|Dover|countyPlusVDOT':    33507,    // is_interstate=false
+};
 
 // Load the data-client class into a sandbox with real fetch.
 function loadClient() {
@@ -98,40 +118,36 @@ async function runMatrix() {
         process.exit(3);
     }
 
-    for (const tier of Object.keys(VALUES)) {
-        const values = VALUES[tier];
-        for (const value of values) {
-            for (const radio of RADIOS) {
-                const spec = C.radioToBucket(radio, tier);
-                const filters = {};
-                if (spec.roadType) filters.roadType = spec.roadType;
-                if (spec.roadTypes) filters.roadTypes = spec.roadTypes;
-                if (spec.noInterstate) filters.noInterstate = true;
-
-                const label = `[${tier}/${value === null ? '∅' : value}/${radio}]`;
-                let rows = null;
-                let errMsg = null;
-                try {
-                    rows = await client.getSummary(tier, value, filters);
-                } catch (e) {
-                    errMsg = e.message;
-                }
-                if (errMsg) {
-                    record(false, `${label} fetched`, `error: ${errMsg}`);
-                    continue;
-                }
-                const ok = Array.isArray(rows) && rows.length > 0;
-                record(ok, `${label} returned non-empty array`,
-                    ok ? null : `got ${Array.isArray(rows) ? `${rows.length} rows` : typeof rows} (filters=${JSON.stringify(filters)})`);
+    console.log('\n── 24-cell exact-numeric matrix ──');
+    for (const [key, expected] of Object.entries(EXPECTED_DELAWARE)) {
+        const [tier, valueRaw, radio] = key.split('|');
+        const value = valueRaw === 'null' ? null : valueRaw;
+        const spec = C.radioToBucket(radio, tier);
+        let total = null;
+        let errMsg = null;
+        try {
+            const rows = await client.getSummary(tier, value, spec);
+            if (!Array.isArray(rows)) {
+                errMsg = `expected array, got ${typeof rows}`;
+            } else {
+                total = rows.reduce((s, r) => s + (parseInt(r.crash_count, 10) || 0), 0);
             }
+        } catch (e) {
+            errMsg = e.message;
         }
+        if (errMsg) {
+            record(false, `[${key}]`, `error: ${errMsg} (spec=${JSON.stringify(spec)})`);
+            continue;
+        }
+        record(total === expected, `[${key}] = ${expected}`,
+            total === expected ? null
+                : `got ${total} (Δ ${total - expected}, spec=${JSON.stringify(spec)})`);
     }
 
     // Targeted RPC sanity checks — same matrix the handoff §5 lists.
     console.log('\n── map_viewport_crashes RPC sanity ──');
     const bbox = { south: 38, west: -76, north: 40, east: -75 };
 
-    // Federal Non-DOT array — should return clusters covering ~131K crashes
     let rpcRows = null;
     try {
         rpcRows = await client.getViewportCrashes(bbox, 9, {
@@ -146,7 +162,6 @@ async function runMatrix() {
             rpcRows.length === 0 ? 'RPC returned empty array' : null);
     }
 
-    // County Kent No-Interstate — should drop interstate crashes
     let kentNoI = null, kentAll = null;
     try {
         kentNoI = await client.getViewportCrashes(bbox, 9, {
@@ -168,7 +183,7 @@ async function runMatrix() {
 
 (async () => {
     console.log('═══════════════════════════════════════════════');
-    console.log(' Phase 5 — LIVE matrix (Delaware) ');
+    console.log(' Phase 5 — LIVE matrix (Delaware), exact-numeric');
     console.log(' Target: srv1503081.hstgr.cloud/rest/v1');
     console.log('═══════════════════════════════════════════════');
 
