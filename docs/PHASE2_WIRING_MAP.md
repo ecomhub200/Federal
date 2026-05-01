@@ -257,4 +257,89 @@ The Phase 2 bridge module is **already fully implemented** with:
 
 3. **State key default** is hardcoded to `'delaware'` at line 151603. For Federal deployment, this should use `_getActiveStateKey()` which must be defined before the DOMContentLoaded listener fires.
 
+---
+
+## 9. 2026-04-30 — `road_type` is now `ownership`-derived (4-bucket model)
+
+The 6 matviews and the `map_viewport_crashes` RPC were rebuilt to derive
+`road_type` from `crashes.ownership` instead of `crashes.system`. This widened
+the bucket list and introduced a separate `is_interstate` boolean.
+
+### 9.1 Bucket contract
+
+`road_type ∈ {dot_roads, county_roads, city_roads, other_roads}` —
+**not** the previous 3-bucket `{dot_roads, non_dot_roads, all_roads}`.
+`is_interstate` is a boolean that is `true` only on the interstate subset of
+`dot_roads`. Every other bucket has `is_interstate = false`.
+
+Verified live row counts (Delaware-only baseline):
+
+| Bucket | dashboard_summary | mv_hotspots | mv_grants_baseline |
+|---|---|---|---|
+| city_roads | 81,315 | 81,315 | 31,007 |
+| county_roads | 39,885 | 39,885 | 19,883 |
+| dot_roads | 438,501 | 438,501 | 326,697 |
+| other_roads | 10,128 | 533 | 413 |
+| `is_interstate=true` | 40,760 (subset of dot_roads) | – | – |
+
+### 9.2 New `is_interstate` column
+
+Present on every matview and on `map_viewport_crashes` results. Used by the
+County / City "All Roads (No Interstate)" radio (`countyPlusVDOT` in
+that tier sends `noInterstate=true`, which becomes `is_interstate=eq.false`
+on the matview query and `p_no_interstate=true` on the RPC).
+
+### 9.3 New `map_viewport_crashes` RPC params
+
+The RPC is now 11-arg (was 8-arg). New params, all NULL = unfiltered:
+
+- `p_road_type` — single bucket, e.g. `'city_roads'`
+- `p_road_types` — array of buckets, e.g. `ARRAY['county_roads','city_roads','other_roads']`
+- `p_no_interstate` — boolean; when `true`, RPC adds `AND is_interstate = false`
+
+`p_road_types` takes precedence over `p_road_type` when both are supplied.
+The original 8-arg signature body is saved at
+`docs/rollback/map_viewport_crashes.pre.sql` for emergency rollback.
+
+### 9.4 Tier-aware radio mapping (frontend)
+
+`CrashLensDataClient.radioToBucket(radioValue, tier)` is the canonical mapper.
+The Phase 2 bridge's `roadTypeSpec()` mirrors it for DOM-aware contexts.
+
+| Radio | State / Region / MPO / PD | Federal | County / City |
+|---|---|---|---|
+| `countyOnly` | `dot_roads` | `dot_roads` | `dot_roads` |
+| `cityOnly` | `city_roads` | `city_roads` | `city_roads` |
+| `countyPlusVDOT` | `county_roads` | `[county_roads, city_roads, other_roads]` | `noInterstate=true` |
+| `allRoads` | (no filter) | (no filter) | (no filter) |
+
+The previous `'city_roads' → null` short-circuit is gone — `cityOnly` now
+returns a real `road_type=eq.city_roads` filter at every tier.
+
+### 9.5 Performance contract
+
+- All Supabase responses go out with `Prefer: count=estimated` (§6.2).
+  Pagination totals are now planner-stat estimates, accurate within ~5% on
+  freshly-VACUUM'd tables.
+- `getSummary()` is wrapped in a 60-second stale-while-revalidate cache
+  (`CrashLensDataClient._swrCache`). Cache key includes state + tier +
+  value + filter spec — toggling road type evicts cleanly.
+- `prefetchTier(tier, value, opts)` exposes a fire-and-forget cache warmer
+  used by `handleCitySelection()` to make navigation up to the parent
+  county feel instant.
+- `aggregate(rows)` runs in a Web Worker (`assets/js/agg-worker.js`) when
+  `Worker` is available, falling back to the synchronous path otherwise.
+
+### 9.6 PostgREST cache headers (dormant)
+
+`public.add_cache_headers()` is installed but inert until the user sets
+`PGRST_DB_PRE_REQUEST=public.add_cache_headers` and restarts PostgREST. Until
+then, the client-side SWR cache is the only HTTP-cache-equivalent in play.
+
+### 9.7 Rollback
+
+JS: every change is < 60 lines per file — revert the diff. DB: see
+`docs/rollback/map_viewport_crashes.pre.sql` and the matview definitions
+in git history (handoff §6).
+
 4. **Charts are NOT pre-painted** — the bridge only paints KPI cards, yearly table, and funcClass table. Chart.js canvases (`chartYoY`, `chartKAYear`, `chartDOW`, etc.) are left empty until R2 data arrives and `updateDashboard()` → `updateCharts()` runs.

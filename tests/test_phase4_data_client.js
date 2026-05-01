@@ -222,7 +222,9 @@ async function testPaginationHeaders() {
     const result = await c.getCrashes('county', 'Kent', { page: 3, pageSize: 50 });
     const req = calls[0];
     assertEq(req.headers['Range'], '100-149', 'Range header for page 3, size 50');
-    assertEq(req.headers['Prefer'], 'count=exact', 'Prefer: count=exact header set');
+    // Phase 5 §6.2 — switched count=exact → count=estimated for ~50–80%
+    // latency reduction on multi-million-row crashes table queries.
+    assertEq(req.headers['Prefer'], 'count=estimated', 'Prefer: count=estimated header set');
     assertEq(result.total, 5123, 'total parsed from Content-Range');
     assertEq(result.page, 3, 'echoes page number');
     assertEq(result.pageSize, 50, 'echoes pageSize');

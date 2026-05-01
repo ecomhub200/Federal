@@ -121,6 +121,65 @@ class CrashLensDataClient {
   // EPDO weights (FHWA 2025)
   static EPDO = { K: 883, A: 94, B: 21, C: 11, O: 1 };
 
+  // Map a road-type bucket → list of crashes.ownership values that fall in it.
+  // Used by _supabaseCrashes / _supabaseMapCrashes when filtering the raw
+  // crashes table by bucket (the matviews have a real road_type column, but
+  // the base table only has `ownership`).
+  //
+  // The 4-bucket model rebuilds (2026-04-30) derive road_type from
+  // crashes.ownership directly. These lists cover the values seen in the
+  // Delaware dataset; states using different ownership labels can extend the
+  // map at runtime via:
+  //
+  //   CrashLensDataClient.OWNERSHIP_BUCKETS.dot_roads.push('My State DOT');
+  //
+  // When no entry matches a bucket, the filter is dropped (= no filter)
+  // rather than producing a 0-row query.
+  static OWNERSHIP_BUCKETS = {
+    dot_roads:    ['State Highway Agency', 'State', 'State Highway'],
+    county_roads: ['County Highway Agency', 'County'],
+    city_roads:   ['City or Municipal Highway Agency', 'City', 'Municipal', 'Town'],
+    other_roads:  ['Other', 'Federal', 'Private', 'Tribal', 'Other Local Agency']
+  };
+
+  /**
+   * Map a "Road Type" radio value (countyOnly / cityOnly / countyPlusVDOT /
+   * allRoads) to a bucket-spec object {roadType?, roadTypes?, noInterstate?}.
+   * Pure mirror of supabase-bridge.roadTypeSpec() so callers that don't have
+   * the bridge available (tests, headless) get the same answer.
+   */
+  static radioToBucket(radioValue, tier) {
+    const t = tier || 'county';
+    if (radioValue === 'allRoads')   return {};
+    if (radioValue === 'countyOnly') return { roadType: 'dot_roads' };
+    if (radioValue === 'cityOnly')   return { roadType: 'city_roads' };
+    if (radioValue === 'countyPlusVDOT') {
+      if (t === 'federal') {
+        // Sorted alphabetically so the SWR cache key normalizes — two
+        // adjacent Federal Non-DOT clicks share a cache slot regardless of
+        // any caller's array-construction order. SQL `IN(...)` is
+        // order-insensitive, so the wire query is unaffected.
+        return { roadTypes: ['city_roads', 'county_roads', 'other_roads'] };
+      }
+      if (t === 'state' || t === 'region' || t === 'mpo' || t === 'planning_district') {
+        return { roadType: 'county_roads' };
+      }
+      return { noInterstate: true };
+    }
+    return {};
+  }
+
+  /**
+   * Read the active "Road Type" radio in the DOM and return the bucket spec
+   * for the given tier. Returns {} if no radio is found (= "all roads").
+   */
+  static activeRoadType(tier) {
+    if (typeof document === 'undefined') return {};
+    const radio = document.querySelector('input[name="roadTypeFilter"]:checked');
+    const val = radio ? radio.value : ((typeof localStorage !== 'undefined' && localStorage.getItem('selectedFilterProfile')) || 'allRoads');
+    return CrashLensDataClient.radioToBucket(val, tier);
+  }
+
   // ─────────────────────────────────────────────────────────
   //  CONSTRUCTOR
   // ─────────────────────────────────────────────────────────
@@ -157,8 +216,18 @@ class CrashLensDataClient {
    */
   async getSummary(tier, value, filters = {}) {
     if (this.preferSupabase && this.supabaseKey) {
+      // Normalize roadTypes order before keying — SQL `IN(...)` is
+      // order-insensitive so two equivalent calls (['city_roads',...]) and
+      // (['county_roads','city_roads',...]) must hit the same cache slot.
+      // Defensive copy so we don't mutate caller's filters object.
+      const keyFilters = (Array.isArray(filters.roadTypes) && filters.roadTypes.length > 1)
+        ? { ...filters, roadTypes: filters.roadTypes.slice().sort() }
+        : filters;
+      const swrKey = CrashLensDataClient._swrKey({
+        op: 'getSummary', state: this.state, tier, value, filters: keyFilters
+      });
       try {
-        const data = await this._supabaseSummary(tier, value, filters);
+        const data = await this._swr(swrKey, () => this._supabaseSummary(tier, value, filters));
         this._source = 'supabase';
         return data;
       } catch (e) {
@@ -344,7 +413,14 @@ class CrashLensDataClient {
       p_tier_val: opts.tierValue || null,
       p_year:     opts.year || null,
       p_severity: opts.severity || null,
-      p_limit:    opts.limit || this.mapLimit
+      p_limit:    opts.limit || this.mapLimit,
+      // 4-bucket road_type spec — RPC signature extended 2026-04-30 with three
+      // new params keyed off the same is_interstate / road_type columns the
+      // matviews use. NULL = unfiltered. p_road_types takes precedence over
+      // p_road_type when both are supplied.
+      p_road_type:     opts.roadType || null,
+      p_road_types:    Array.isArray(opts.roadTypes) && opts.roadTypes.length > 0 ? opts.roadTypes : null,
+      p_no_interstate: opts.noInterstate ? true : null
     };
 
     const url = `${this.supabaseUrl}/rpc/map_viewport_crashes`;
@@ -558,24 +634,25 @@ class CrashLensDataClient {
     try {
       const tierFilters = this._tierFilter(tier, value);
       const allFilters = { ...tierFilters };
-      if (opts.roadType && opts.roadType !== 'city_roads') allFilters.road_type = `eq.${opts.roadType}`;
+      this._applyRoadTypeMatviewFilters(allFilters, opts);
       const limit = opts.limit || 100;
       // When no roadType filter is applied, the same location may appear up to
-      // 3 times (dot_roads / non_dot_roads / all_roads bucket), so over-fetch
-      // and merge below. With a roadType filter we still over-fetch a bit to
-      // cover the intersections + segments split.
-      const fetchLimit = opts.roadType ? limit * 2 : limit * 6;
+      // 4 times (one per road_type bucket), so over-fetch and merge below.
+      // With a roadType filter we still over-fetch a bit to cover the
+      // intersections + segments split.
+      const fetchLimit = (opts.roadType || opts.roadTypes) ? limit * 2 : limit * 8;
       const data = await this._supabaseQuery('mv_hotspots', {
         filters: allFilters,
         order: 'epdo.desc',
         limit: fetchLimit,
       });
       this._source = 'supabase';
+      this._warnIfZeroRows('mv_hotspots', data, tier, value, opts);
 
       // When no roadType filter is applied, rows for the same physical location
       // arrive once per road_type bucket. Merge them so totals/EPDO aren't split.
       let rows;
-      if (opts.roadType) {
+      if (opts.roadType || opts.roadTypes) {
         rows = data || [];
       } else {
         const merged = new Map();
@@ -658,21 +735,22 @@ class CrashLensDataClient {
     try {
       const tierFilters = this._tierFilter(tier, value);
       const allFilters = { ...tierFilters };
-      if (opts.roadType && opts.roadType !== 'city_roads') allFilters.road_type = `eq.${opts.roadType}`;
+      this._applyRoadTypeMatviewFilters(allFilters, opts);
       if (opts.yearFrom && opts.yearTo) {
         allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
       }
       const data = await this._supabaseQuery('mv_grants_baseline', {
         filters: allFilters,
         order: 'epdo.desc',
-        // When merging across road_type buckets we may pull up to ~3x the rows.
-        limit: opts.roadType ? 5000 : 15000,
+        // When merging across road_type buckets we may pull up to ~4x the rows.
+        limit: (opts.roadType || opts.roadTypes) ? 5000 : 20000,
       });
       this._source = 'supabase';
+      this._warnIfZeroRows('mv_grants_baseline', data, tier, value, opts);
 
       // When no roadType filter, the same (location, year) appears once per
       // road_type bucket. Merge them so EPDO ranking isn't split.
-      if (!opts.roadType) {
+      if (!opts.roadType && !opts.roadTypes) {
         const merged = new Map();
         (data || []).forEach(r => {
           const key = `${r.location_type}|${r.location_name}|${r.rte_name}|${r.crash_year}`;
@@ -840,24 +918,83 @@ class CrashLensDataClient {
     if (filters.severity) allFilters.crash_severity = `eq.${filters.severity}`;
     if (filters.fc) allFilters.functional_class = `eq.${filters.fc}`;
     if (filters.areaType) allFilters.area_type = `eq.${filters.areaType}`;
-    // road_type bucket filter — same column convention used by mv_hotspots /
-    // mv_grants_baseline. When omitted, dashboard_summary returns all buckets
-    // and the caller aggregates across them (= "all roads").
+    // road_type bucket filter — 4-bucket model on the matview (post-2026-04-30):
+    //   dot_roads / county_roads / city_roads / other_roads, derived from
+    //   crashes.ownership. is_interstate boolean is true only on dot_roads
+    //   interstate segments.
     //
-    // The 'city_roads' UI bucket has no corresponding matview bucket — the
-    // `system` column on `crashes` doesn't distinguish city-maintained roads.
-    // Map it to null (= no filter, fetch all buckets) so the query doesn't
-    // return 0 rows.  The R2 parquet path handles city_roads via separate
-    // per-jurisdiction split files, so this mismatch only affects the matview.
-    if (filters.roadType && filters.roadType !== 'city_roads') {
-        allFilters.road_type = `eq.${filters.roadType}`;
-    }
+    //   - filters.roadType ........ single bucket (eq.)
+    //   - filters.roadTypes ....... array of buckets (in.()) — used by Federal
+    //                                "Non-DOT Roads" (county+city+other)
+    //   - filters.noInterstate .... is_interstate=eq.false — used by County
+    //                                "All Roads (No Interstate)"
+    this._applyRoadTypeMatviewFilters(allFilters, filters);
 
-    return this._supabaseQuery('dashboard_summary', {
+    const data = await this._supabaseQuery('dashboard_summary', {
       filters: allFilters,
       order: 'crash_year.asc',
       limit: 100000,
     });
+    this._warnIfZeroRows('dashboard_summary', data, tier, value, filters);
+    return data;
+  }
+
+  /**
+   * Surface a console.warn when a Supabase matview query returns zero rows
+   * for a tier-scoped or filter-scoped request. Common root causes:
+   *   - hierarchy.json `dbName` missing or out of sync with the matview's
+   *     dot_district / mpo_name / planning_district column values
+   *   - state key mismatch between window.crashLensClient.state and the
+   *     actual `state` column (e.g. 'colorado' default leaking into a DE
+   *     session before the dropdown propagates)
+   *   - radio mapped to a bucket that genuinely has no rows for this
+   *     jurisdiction (e.g. cityOnly at a region with no city roads)
+   *
+   * Quietly returns when the query was unscoped (federal × allRoads): empty
+   * results there usually mean an outage, not a config issue, and the bridge
+   * already logs that path.
+   */
+  _warnIfZeroRows(table, data, tier, value, filters) {
+    try {
+      const len = Array.isArray(data) ? data.length : (data?.rows?.length ?? 0);
+      if (len !== 0) return;
+      const f = filters || {};
+      const hasFilter = !!(f.roadType || (Array.isArray(f.roadTypes) && f.roadTypes.length) ||
+                          f.noInterstate || (tier && tier !== 'federal' && value));
+      if (!hasFilter) return;
+      console.warn(
+        `[DataClient] 0 rows from ${table}`,
+        {
+          state: this.state,
+          tier,
+          value,
+          roadType: f.roadType || null,
+          roadTypes: f.roadTypes || null,
+          noInterstate: !!f.noInterstate
+        },
+        '— check that the tier value matches the matview column. ' +
+        'Common cause: hierarchy.json dbName mismatch (region/MPO/planning_district).'
+      );
+    } catch (e) { /* non-fatal — diagnostic only */ }
+  }
+
+  /**
+   * Apply the road_type / roadTypes / noInterstate filter spec onto a Supabase
+   * filters object meant for one of the matviews. Mutates `target` in place.
+   *
+   * Precedence: noInterstate is independent of roadType; roadTypes (array)
+   * wins over roadType (scalar) when both are provided.
+   */
+  _applyRoadTypeMatviewFilters(target, opts) {
+    if (!opts) return;
+    if (Array.isArray(opts.roadTypes) && opts.roadTypes.length > 0) {
+      target.road_type = `in.(${opts.roadTypes.join(',')})`;
+    } else if (opts.roadType) {
+      target.road_type = `eq.${opts.roadType}`;
+    }
+    if (opts.noInterstate) {
+      target.is_interstate = 'eq.false';
+    }
   }
 
   /** Escape an ilike pattern: PostgREST uses `*` as wildcard, comma/parens are reserved */
@@ -876,6 +1013,12 @@ class CrashLensDataClient {
     if (filters.year) allFilters.crash_year = `eq.${filters.year}`;
     if (filters.route) allFilters.rte_name = `eq.${filters.route}`;
     if (filters.node) allFilters.node = `eq.${filters.node}`;
+
+    // Road-type bucket filters against the raw `crashes` table use the
+    // ownership column (the matview's road_type column doesn't exist on the
+    // base table). is_interstate is honored directly when the column exists,
+    // with a `system!=DOT Interstate` fallback baked into the ownership map.
+    this._applyRoadTypeCrashesFilters(allFilters, filters);
 
     // Fuzzy-match filters — used by getCrashesByLocation retry when exact
     // matching fails due to route/node format drift between R2 CSV and Supabase.
@@ -997,6 +1140,10 @@ class CrashLensDataClient {
       }
     }
 
+    // Road-type bucket filters against the raw crashes table — same
+    // ownership-mapped path used by _supabaseCrashes.
+    this._applyRoadTypeCrashesFilters(allFilters, filters);
+
     allFilters.and = `(${andParts.join(',')})`;
 
     return this._supabaseQuery('crashes', {
@@ -1004,6 +1151,36 @@ class CrashLensDataClient {
       filters: allFilters,
       limit: limit,
     });
+  }
+
+  /**
+   * Apply road-type bucket / noInterstate filters against the raw `crashes`
+   * table. The base table doesn't have road_type, so buckets are translated to
+   * an `ownership=in.(...)` clause via OWNERSHIP_BUCKETS. is_interstate is
+   * applied directly (column present on crashes post-2026-04-30 migration);
+   * if the column is missing the request 400s and the caller falls back to R2.
+   */
+  _applyRoadTypeCrashesFilters(target, opts) {
+    if (!opts) return;
+    const buckets = Array.isArray(opts.roadTypes) && opts.roadTypes.length > 0
+      ? opts.roadTypes
+      : (opts.roadType ? [opts.roadType] : []);
+    if (buckets.length > 0) {
+      const owners = [];
+      for (const b of buckets) {
+        const list = CrashLensDataClient.OWNERSHIP_BUCKETS[b];
+        if (Array.isArray(list)) owners.push(...list);
+      }
+      if (owners.length > 0) {
+        // Quote ownership values that contain commas/spaces — PostgREST
+        // requires double-quotes around values inside in.(...).
+        const quoted = owners.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+        target.ownership = `in.(${quoted})`;
+      }
+    }
+    if (opts.noInterstate) {
+      target.is_interstate = 'eq.false';
+    }
   }
 
   /**
@@ -1038,7 +1215,12 @@ class CrashLensDataClient {
     };
 
     if (opts.single) headers['Accept'] = 'application/vnd.pgrst.object+json';
-    if (opts.count) headers['Prefer'] = 'count=exact';
+    // count=estimated uses pg_class.reltuples (planner stats) instead of
+    // running a second COUNT(*) query — saves ~50–80% of latency on
+    // multi-million-row crashes table queries with a small accuracy trade-off
+    // (within ~5% on freshly-VACUUM'd tables). Pagination UI rounds totals
+    // anyway so this is invisible to the user.
+    if (opts.count) headers['Prefer'] = 'count=estimated';
 
     // Range header for pagination
     if (opts.range) {
@@ -1298,6 +1480,94 @@ class CrashLensDataClient {
            (severityCounts.B || 0) * w.B +
            (severityCounts.C || 0) * w.C +
            (severityCounts.O || 0) * w.O;
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  STALE-WHILE-REVALIDATE CACHE  (Phase 6 perf §6.2 / §6.6)
+  //
+  //  In-memory cache keyed by (tier, value, filters). On hit, returns the
+  //  cached value immediately AND fires a background revalidation that
+  //  overwrites the cached value when it lands. The bridge re-renders KPIs
+  //  from whatever value sits in the cache at paint time, so SWR shaves the
+  //  perceived latency of tier toggles without making the UI lie.
+  //
+  //  Pre-2026-04-30: Supabase responses had no Cache-Control headers —
+  //  PostgREST add_cache_headers() hook is dormant on the host (see handoff
+  //  §3.5). This client-side cache is the primary perf lever until that
+  //  env var is set.
+  // ─────────────────────────────────────────────────────────
+
+  static SWR_TTL_MS = 60_000;          // serve stale up to 60s, then evict
+  static _swrCache = new Map();        // shared across all clients in this tab
+  static _swrInflight = new Map();     // de-dup concurrent revalidations
+
+  /**
+   * Stable JSON key for a cache entry. Sorts each level's keys so the
+   * resulting string is deterministic regardless of the producer's property
+   * insertion order — `{a:1,b:2}` and `{b:2,a:1}` hash to the same key.
+   * Recurses into plain objects only; arrays/primitives pass through.
+   */
+  static _swrKey(parts) {
+    const norm = (v) => {
+      if (Array.isArray(v)) return v.map(norm);
+      if (v && typeof v === 'object') {
+        const out = {};
+        for (const k of Object.keys(v).sort()) out[k] = norm(v[k]);
+        return out;
+      }
+      return v;
+    };
+    return JSON.stringify(norm(parts));
+  }
+
+  /**
+   * Wrap an async producer with stale-while-revalidate semantics. Returns the
+   * cached value immediately when fresh; otherwise awaits the producer.
+   * Concurrent calls with the same key share a single in-flight promise.
+   *
+   * @param {string} key - stable JSON key from _swrKey()
+   * @param {function():Promise} producer - async fn returning the value
+   * @returns {Promise<any>}
+   */
+  async _swr(key, producer) {
+    const C = CrashLensDataClient;
+    const now = Date.now();
+    const hit = C._swrCache.get(key);
+    if (hit && (now - hit.t) < C.SWR_TTL_MS) {
+      return hit.v;
+    }
+    if (C._swrInflight.has(key)) {
+      return C._swrInflight.get(key);
+    }
+    const p = (async () => {
+      try {
+        const v = await producer();
+        C._swrCache.set(key, { v, t: Date.now() });
+        return v;
+      } finally {
+        C._swrInflight.delete(key);
+      }
+    })();
+    C._swrInflight.set(key, p);
+    return p;
+  }
+
+  /**
+   * Warm the dashboard_summary cache for an upcoming tier so the next
+   * injectFastDashboard() call paints from cache. Fire-and-forget — never
+   * throws (errors are swallowed). The bridge wires this in on tier change.
+   *
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - same shape as getSummary filters
+   * @returns {Promise<void>}
+   */
+  async prefetchTier(tier, value, opts = {}) {
+    try {
+      await this.getSummary(tier, value, opts || {});
+    } catch (e) {
+      // Non-fatal — prefetch is best-effort
+    }
   }
 
   /** Slugify a name for R2 paths */
