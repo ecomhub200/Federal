@@ -1,0 +1,16 @@
+-- =============================================================================
+-- ROLLBACK CAPTURE: map_viewport_crashes (pre-2026-05-01 body)
+-- =============================================================================
+-- Placeholder. Before applying 2026-05-01_07_map_viewport_crashes_TEMPLATE.sql,
+-- capture the current RPC body and replace this file's contents:
+--
+--   SELECT pg_get_functiondef(
+--     'public.map_viewport_crashes(text,geometry,integer,text,text,integer,text[],integer)'::regprocedure
+--   );
+--
+-- Save the SQL it returns verbatim (including the CREATE OR REPLACE FUNCTION
+-- header). Commit alongside the template/spliced migration so a future
+-- rollback is a single re-apply away.
+-- =============================================================================
+
+-- TODO: paste captured body here
