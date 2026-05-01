@@ -634,6 +634,7 @@ class CrashLensDataClient {
         limit: fetchLimit,
       });
       this._source = 'supabase';
+      this._warnIfZeroRows('mv_hotspots', data, tier, value, opts);
 
       // When no roadType filter is applied, rows for the same physical location
       // arrive once per road_type bucket. Merge them so totals/EPDO aren't split.
@@ -732,6 +733,7 @@ class CrashLensDataClient {
         limit: (opts.roadType || opts.roadTypes) ? 5000 : 20000,
       });
       this._source = 'supabase';
+      this._warnIfZeroRows('mv_grants_baseline', data, tier, value, opts);
 
       // When no roadType filter, the same (location, year) appears once per
       // road_type bucket. Merge them so EPDO ranking isn't split.
@@ -915,11 +917,52 @@ class CrashLensDataClient {
     //                                "All Roads (No Interstate)"
     this._applyRoadTypeMatviewFilters(allFilters, filters);
 
-    return this._supabaseQuery('dashboard_summary', {
+    const data = await this._supabaseQuery('dashboard_summary', {
       filters: allFilters,
       order: 'crash_year.asc',
       limit: 100000,
     });
+    this._warnIfZeroRows('dashboard_summary', data, tier, value, filters);
+    return data;
+  }
+
+  /**
+   * Surface a console.warn when a Supabase matview query returns zero rows
+   * for a tier-scoped or filter-scoped request. Common root causes:
+   *   - hierarchy.json `dbName` missing or out of sync with the matview's
+   *     dot_district / mpo_name / planning_district column values
+   *   - state key mismatch between window.crashLensClient.state and the
+   *     actual `state` column (e.g. 'colorado' default leaking into a DE
+   *     session before the dropdown propagates)
+   *   - radio mapped to a bucket that genuinely has no rows for this
+   *     jurisdiction (e.g. cityOnly at a region with no city roads)
+   *
+   * Quietly returns when the query was unscoped (federal × allRoads): empty
+   * results there usually mean an outage, not a config issue, and the bridge
+   * already logs that path.
+   */
+  _warnIfZeroRows(table, data, tier, value, filters) {
+    try {
+      const len = Array.isArray(data) ? data.length : (data?.rows?.length ?? 0);
+      if (len !== 0) return;
+      const f = filters || {};
+      const hasFilter = !!(f.roadType || (Array.isArray(f.roadTypes) && f.roadTypes.length) ||
+                          f.noInterstate || (tier && tier !== 'federal' && value));
+      if (!hasFilter) return;
+      console.warn(
+        `[DataClient] 0 rows from ${table}`,
+        {
+          state: this.state,
+          tier,
+          value,
+          roadType: f.roadType || null,
+          roadTypes: f.roadTypes || null,
+          noInterstate: !!f.noInterstate
+        },
+        '— check that the tier value matches the matview column. ' +
+        'Common cause: hierarchy.json dbName mismatch (region/MPO/planning_district).'
+      );
+    } catch (e) { /* non-fatal — diagnostic only */ }
   }
 
   /**
