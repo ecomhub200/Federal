@@ -122,6 +122,79 @@ class CrashLensDataClient {
   static EPDO = { K: 883, A: 94, B: 21, C: 11, O: 1 };
 
   // ─────────────────────────────────────────────────────────
+  //  TIER-AWARE ROAD-TYPE RADIO HELPERS
+  //
+  //  The 4 radio buttons (countyOnly / cityOnly / countyPlusVDOT /
+  //  allRoads) mean different things at different view tiers — see the
+  //  matrix in upload-tab.js updateRoadTypeLabels(). These helpers turn
+  //  the active radio + tier into a Supabase filter spec:
+  //
+  //    { bucket: 'dot_roads' | 'county_roads' | 'city_roads' | 'other_roads' | null,
+  //      in:     ['city_roads','county_roads','other_roads'] | null,
+  //      noInterstate: false | true }
+  //
+  //  `bucket` → road_type=eq.X
+  //  `in`     → road_type=in.(X,Y,Z)
+  //  `noInterstate` → is_interstate=eq.false
+  //
+  //  Both bucket and in are mutually exclusive (in is used for the Federal
+  //  "Non-DOT Roads" radio which spans 3 buckets).
+  // ─────────────────────────────────────────────────────────
+
+  static radioToBucket(radioValue, tier) {
+    const aggregate = (tier === 'federal' || tier === 'state' || tier === 'region');
+    const local     = (tier === 'mpo' || tier === 'planning_district' || tier === 'county' || tier === 'city');
+    const out = { bucket: null, in: null, noInterstate: false };
+
+    switch (radioValue) {
+      case 'cityOnly':
+        out.bucket = 'city_roads';
+        break;
+      case 'countyOnly':
+        out.bucket = aggregate ? 'dot_roads' : 'county_roads';
+        break;
+      case 'countyPlusVDOT':
+        if (tier === 'federal') {
+          // Federal "Non-DOT Roads" — everything except state DOT.
+          out.in = ['county_roads', 'city_roads', 'other_roads'];
+        } else if (tier === 'state' || tier === 'region') {
+          // State/Region "County Roads Only".
+          out.bucket = 'county_roads';
+        } else if (local) {
+          // Local-tier "All Roads (No Interstate)" — drop the interstate slice.
+          out.noInterstate = true;
+        }
+        break;
+      case 'allRoads':
+      default:
+        // No filter → matview returns every bucket.
+        break;
+    }
+    return out;
+  }
+
+  static activeRoadType(tier) {
+    const radio = (typeof document !== 'undefined')
+      ? document.querySelector('input[name="roadTypeFilter"]:checked')
+      : null;
+    const val = radio
+      ? radio.value
+      : ((typeof localStorage !== 'undefined' && localStorage.getItem('selectedFilterProfile')) || 'allRoads');
+    return CrashLensDataClient.radioToBucket(val, tier);
+  }
+
+  // Map ownership-derived bucket → the literal `crashes.ownership` value.
+  // The crashes table itself does not store the bucket; row-level queries
+  // (getCrashes / getMapCrashes) must filter on `ownership` instead.
+  // 'other_roads' has no single canonical ownership — falls through to
+  // unfiltered when only that bucket is requested.
+  static OWNERSHIP_BY_BUCKET = {
+    dot_roads:    '1. State Hwy Agency',
+    county_roads: '2. County Hwy Agency',
+    city_roads:   '3. City or Town Hwy Agency'
+  };
+
+  // ─────────────────────────────────────────────────────────
   //  CONSTRUCTOR
   // ─────────────────────────────────────────────────────────
 
@@ -337,14 +410,17 @@ class CrashLensDataClient {
     // `AND state = $p_state` filter (verified backend behavior 2026-04-26).
     // All other tiers stay scoped to the active state.
     const body = {
-      p_state:    opts.tier === 'federal' ? null : this.state,
-      p_bbox:     `SRID=4326;POLYGON((${bounds.west} ${bounds.south},${bounds.east} ${bounds.south},${bounds.east} ${bounds.north},${bounds.west} ${bounds.north},${bounds.west} ${bounds.south}))`,
-      p_zoom:     zoom,
-      p_tier_col: tierCol || null,
-      p_tier_val: opts.tierValue || null,
-      p_year:     opts.year || null,
-      p_severity: opts.severity || null,
-      p_limit:    opts.limit || this.mapLimit
+      p_state:        opts.tier === 'federal' ? null : this.state,
+      p_bbox:         `SRID=4326;POLYGON((${bounds.west} ${bounds.south},${bounds.east} ${bounds.south},${bounds.east} ${bounds.north},${bounds.west} ${bounds.north},${bounds.west} ${bounds.south}))`,
+      p_zoom:         zoom,
+      p_tier_col:     tierCol || null,
+      p_tier_val:     opts.tierValue || null,
+      p_year:         opts.year || null,
+      p_severity:     opts.severity || null,
+      p_road_type:    opts.roadType  || null,
+      p_road_types:   (opts.roadTypes && opts.roadTypes.length) ? opts.roadTypes : null,
+      p_no_interstate: !!opts.noInterstate,
+      p_limit:        opts.limit || this.mapLimit
     };
 
     const url = `${this.supabaseUrl}/rpc/map_viewport_crashes`;
@@ -558,13 +634,19 @@ class CrashLensDataClient {
     try {
       const tierFilters = this._tierFilter(tier, value);
       const allFilters = { ...tierFilters };
-      if (opts.roadType && opts.roadType !== 'city_roads') allFilters.road_type = `eq.${opts.roadType}`;
+      if (opts.roadType) {
+        allFilters.road_type = `eq.${opts.roadType}`;
+      } else if (opts.roadTypes && opts.roadTypes.length) {
+        allFilters.road_type = `in.(${opts.roadTypes.join(',')})`;
+      }
+      if (opts.noInterstate) allFilters.is_interstate = 'eq.false';
       const limit = opts.limit || 100;
-      // When no roadType filter is applied, the same location may appear up to
-      // 3 times (dot_roads / non_dot_roads / all_roads bucket), so over-fetch
-      // and merge below. With a roadType filter we still over-fetch a bit to
-      // cover the intersections + segments split.
-      const fetchLimit = opts.roadType ? limit * 2 : limit * 6;
+      // When the result spans multiple buckets (no single roadType filter),
+      // the same physical location appears once per bucket and must be merged
+      // — over-fetch enough rows to cover the merge AND the intersections +
+      // segments split.
+      const singleBucket = !!opts.roadType;
+      const fetchLimit = singleBucket ? limit * 2 : limit * 6;
       const data = await this._supabaseQuery('mv_hotspots', {
         filters: allFilters,
         order: 'epdo.desc',
@@ -572,10 +654,11 @@ class CrashLensDataClient {
       });
       this._source = 'supabase';
 
-      // When no roadType filter is applied, rows for the same physical location
-      // arrive once per road_type bucket. Merge them so totals/EPDO aren't split.
+      // When the query spans multiple buckets, rows for the same physical
+      // location arrive once per road_type bucket. Merge them so totals /
+      // EPDO aren't split across buckets.
       let rows;
-      if (opts.roadType) {
+      if (singleBucket) {
         rows = data || [];
       } else {
         const merged = new Map();
@@ -658,21 +741,28 @@ class CrashLensDataClient {
     try {
       const tierFilters = this._tierFilter(tier, value);
       const allFilters = { ...tierFilters };
-      if (opts.roadType && opts.roadType !== 'city_roads') allFilters.road_type = `eq.${opts.roadType}`;
+      if (opts.roadType) {
+        allFilters.road_type = `eq.${opts.roadType}`;
+      } else if (opts.roadTypes && opts.roadTypes.length) {
+        allFilters.road_type = `in.(${opts.roadTypes.join(',')})`;
+      }
+      if (opts.noInterstate) allFilters.is_interstate = 'eq.false';
       if (opts.yearFrom && opts.yearTo) {
         allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
       }
+      const singleBucket = !!opts.roadType;
       const data = await this._supabaseQuery('mv_grants_baseline', {
         filters: allFilters,
         order: 'epdo.desc',
-        // When merging across road_type buckets we may pull up to ~3x the rows.
-        limit: opts.roadType ? 5000 : 15000,
+        // When merging across road_type buckets we may pull up to ~4x the rows.
+        limit: singleBucket ? 5000 : 15000,
       });
       this._source = 'supabase';
 
-      // When no roadType filter, the same (location, year) appears once per
-      // road_type bucket. Merge them so EPDO ranking isn't split.
-      if (!opts.roadType) {
+      // When the query spans multiple buckets, the same (location, year)
+      // appears once per road_type bucket. Merge them so EPDO ranking isn't
+      // split.
+      if (!singleBucket) {
         const merged = new Map();
         (data || []).forEach(r => {
           const key = `${r.location_type}|${r.location_name}|${r.rte_name}|${r.crash_year}`;
@@ -840,17 +930,18 @@ class CrashLensDataClient {
     if (filters.severity) allFilters.crash_severity = `eq.${filters.severity}`;
     if (filters.fc) allFilters.functional_class = `eq.${filters.fc}`;
     if (filters.areaType) allFilters.area_type = `eq.${filters.areaType}`;
-    // road_type bucket filter — same column convention used by mv_hotspots /
-    // mv_grants_baseline. When omitted, dashboard_summary returns all buckets
-    // and the caller aggregates across them (= "all roads").
-    //
-    // The 'city_roads' UI bucket has no corresponding matview bucket — the
-    // `system` column on `crashes` doesn't distinguish city-maintained roads.
-    // Map it to null (= no filter, fetch all buckets) so the query doesn't
-    // return 0 rows.  The R2 parquet path handles city_roads via separate
-    // per-jurisdiction split files, so this mismatch only affects the matview.
-    if (filters.roadType && filters.roadType !== 'city_roads') {
-        allFilters.road_type = `eq.${filters.roadType}`;
+    // road_type bucket filter — every Crash Lens matview now derives the
+    // bucket from `crashes.ownership` (4 buckets: dot_roads / county_roads /
+    // city_roads / other_roads). `roadType` requests a single bucket;
+    // `roadTypes` requests an explicit set (used by the Federal "Non-DOT
+    // Roads" radio); omitting both returns every bucket and the caller sums.
+    if (filters.roadType) {
+      allFilters.road_type = `eq.${filters.roadType}`;
+    } else if (filters.roadTypes && filters.roadTypes.length) {
+      allFilters.road_type = `in.(${filters.roadTypes.join(',')})`;
+    }
+    if (filters.noInterstate) {
+      allFilters.is_interstate = 'eq.false';
     }
 
     return this._supabaseQuery('dashboard_summary', {
@@ -904,10 +995,38 @@ class CrashLensDataClient {
       // needs OR — handled in andParts below
     }
 
+    // road_type / roadTypes / noInterstate. The row-level `crashes` table
+    // doesn't have a `road_type` column — push these to the underlying
+    // `ownership` + `functional_class` + `system` columns so the filter
+    // semantics match the matview path.
+    const ownerByBucket = CrashLensDataClient.OWNERSHIP_BY_BUCKET;
+    const requestedBuckets = filters.roadType
+      ? [filters.roadType]
+      : (Array.isArray(filters.roadTypes) ? filters.roadTypes : null);
+    if (requestedBuckets && requestedBuckets.length) {
+      const owners = requestedBuckets.map(b => ownerByBucket[b]).filter(Boolean);
+      // 'other_roads' has no canonical ownership value — only filter when at
+      // least one bucket maps cleanly. If every requested bucket is
+      // 'other_roads' the row-level path falls through to no ownership
+      // filter (matview totals will not match in that edge case).
+      if (owners.length === 1) {
+        allFilters.ownership = `eq.${owners[0]}`;
+      } else if (owners.length > 1) {
+        // PostgREST in.(...) with values that contain commas, parens, dots
+        // or spaces — wrap each in double quotes so it's parsed as a single
+        // value. URL-encoding happens in _supabaseQuery via URLSearchParams.
+        allFilters.ownership = `in.(${owners.map(v => `"${v}"`).join(',')})`;
+      }
+    }
+
     // Date range (crash_date column)
     const andParts = [];
     if (filters.dateFrom) andParts.push(`crash_date.gte.${filters.dateFrom}`);
     if (filters.dateTo)   andParts.push(`crash_date.lte.${filters.dateTo}`);
+    if (filters.noInterstate) {
+      andParts.push('functional_class.not.like.1-Interstate*');
+      andParts.push('system.not.eq.DOT Interstate');
+    }
 
     // Text search — narrowed to the two columns that actually matter (rte_name,
     // collision_type). Searching all 5 columns (doc_nbr/intersection/weather)
@@ -997,6 +1116,24 @@ class CrashLensDataClient {
       }
     }
 
+    // Road-type — same ownership-derived contract as _supabaseCrashes.
+    const ownerByBucketM = CrashLensDataClient.OWNERSHIP_BY_BUCKET;
+    const requestedBucketsM = filters.roadType
+      ? [filters.roadType]
+      : (Array.isArray(filters.roadTypes) ? filters.roadTypes : null);
+    if (requestedBucketsM && requestedBucketsM.length) {
+      const ownersM = requestedBucketsM.map(b => ownerByBucketM[b]).filter(Boolean);
+      if (ownersM.length === 1) {
+        allFilters.ownership = `eq.${ownersM[0]}`;
+      } else if (ownersM.length > 1) {
+        allFilters.ownership = `in.(${ownersM.map(v => `"${v}"`).join(',')})`;
+      }
+    }
+    if (filters.noInterstate) {
+      andParts.push('functional_class.not.like.1-Interstate*');
+      andParts.push('system.not.eq.DOT Interstate');
+    }
+
     allFilters.and = `(${andParts.join(',')})`;
 
     return this._supabaseQuery('crashes', {
@@ -1038,7 +1175,10 @@ class CrashLensDataClient {
     };
 
     if (opts.single) headers['Accept'] = 'application/vnd.pgrst.object+json';
-    if (opts.count) headers['Prefer'] = 'count=exact';
+    // count=estimated — reads pg_class.reltuples (≈free) instead of running
+    // a second full scan. Pagination UIs tolerate the ±5% drift and the
+    // saving is ~200-400 ms on the larger matviews.
+    if (opts.count) headers['Prefer'] = 'count=estimated';
 
     // Range header for pagination
     if (opts.range) {
@@ -1323,6 +1463,40 @@ class CrashLensDataClient {
       rows.push(row);
     }
     return rows;
+  }
+
+  /**
+   * Fan out every detail-tab matview read in parallel for a tier/jurisdiction.
+   * The browser shares a single HTTP/2 connection so the wall-clock time is
+   * roughly the slowest of: Summary, Hotspots, SafetyCategories,
+   * AnalysisBreakdown. Each promise resolves to its tab's data shape (or
+   * null if the matview is missing). Failures inside one tab don't take
+   * the whole prefetch down.
+   *
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - same shape as the per-method opts; roadType /
+   *                       roadTypes / noInterstate / yearFrom / yearTo
+   *                       are forwarded to whichever matview accepts them.
+   * @returns {Promise<{summary, hotspots, safety, analysis}>}
+   */
+  async prefetchTier(tier, value, opts = {}) {
+    const summaryOpts  = {};
+    const hotspotsOpts = {};
+    const grantsOpts   = {};
+    if (opts.roadType)       { summaryOpts.roadType = opts.roadType; hotspotsOpts.roadType = opts.roadType; grantsOpts.roadType = opts.roadType; }
+    if (opts.roadTypes)      { summaryOpts.roadTypes = opts.roadTypes; hotspotsOpts.roadTypes = opts.roadTypes; grantsOpts.roadTypes = opts.roadTypes; }
+    if (opts.noInterstate)   { summaryOpts.noInterstate = true; hotspotsOpts.noInterstate = true; grantsOpts.noInterstate = true; }
+    if (opts.yearFrom)         summaryOpts.yearFrom = opts.yearFrom;
+    if (opts.yearTo)           summaryOpts.yearTo   = opts.yearTo;
+
+    const [summary, hotspots, safety, analysis] = await Promise.all([
+      this.getSummary(tier, value, summaryOpts).catch(() => null),
+      this.getHotspots(tier, value, hotspotsOpts).catch(() => null),
+      this.getSafetyCategories(tier, value, {}).catch(() => null),
+      this.getAnalysisBreakdown(tier, value, {}).catch(() => null),
+    ]);
+    return { summary, hotspots, safety, analysis };
   }
 
   /** Health check — test Supabase connectivity */

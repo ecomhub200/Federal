@@ -182,7 +182,23 @@ CL.data.mapBridge = (function () {
             }
         }
 
-        return { tier: tier, tierValue: tierValue, year: year, severity: severity };
+        // Resolve the active road-type radio against the current tier.
+        // Same helper the dashboard bridge uses, so dashboard + map paint
+        // from the same filter intent.
+        var spec = { bucket: null, in: null, noInterstate: false };
+        if (typeof CrashLensDataClient !== 'undefined' && CrashLensDataClient.activeRoadType) {
+            spec = CrashLensDataClient.activeRoadType(tier || 'county');
+        }
+
+        return {
+            tier: tier,
+            tierValue: tierValue,
+            year: year,
+            severity: severity,
+            roadType:     spec.bucket,
+            roadTypes:    spec.in,
+            noInterstate: spec.noInterstate
+        };
     }
 
     // ── Rendering ───────────────────────────────────────────

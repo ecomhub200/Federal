@@ -438,6 +438,53 @@ test('Multiple tier queries return different totals', async () => {
   return `State: ${stateTotal.toLocaleString()} > Kent: ${countyTotal.toLocaleString()}`;
 });
 
+// ── 2026-05-01: tier-aware road-type matrix ──
+test('radioToBucket() Federal "Non-DOT Roads" → 3-bucket array', () => {
+  const spec = CrashLensDataClient.radioToBucket('countyPlusVDOT', 'federal');
+  assertEq(spec.bucket, null, `expected bucket=null, got ${spec.bucket}`);
+  assert(Array.isArray(spec.in) && spec.in.length === 3, `expected 3-bucket array, got ${JSON.stringify(spec.in)}`);
+  assertEq(spec.noInterstate, false);
+  return `in=[${spec.in.join(',')}]`;
+});
+
+test('radioToBucket() local "All Roads (No Interstate)" → noInterstate=true', () => {
+  for (const tier of ['mpo','planning_district','county','city']) {
+    const spec = CrashLensDataClient.radioToBucket('countyPlusVDOT', tier);
+    assertEq(spec.bucket, null, `${tier}: bucket should be null`);
+    assertEq(spec.in, null, `${tier}: in should be null`);
+    assertEq(spec.noInterstate, true, `${tier}: noInterstate should be true`);
+  }
+  return '4 local tiers all noInterstate=true';
+});
+
+test('radioToBucket() State/Region "County Roads Only" → county_roads bucket', () => {
+  for (const tier of ['state', 'region']) {
+    const spec = CrashLensDataClient.radioToBucket('countyPlusVDOT', tier);
+    assertEq(spec.bucket, 'county_roads', `${tier}: bucket should be county_roads`);
+  }
+  return 'state + region resolved correctly';
+});
+
+test('city_roads bucket — getSummary returns rows', async () => {
+  const data = await crashLensClient.getSummary('state', null, { roadType: 'city_roads' });
+  assert(Array.isArray(data) && data.length > 0, 'Expected city_roads rows');
+  const total = data.reduce((s, r) => s + (parseInt(r.crash_count) || 0), 0);
+  assertGt(total, 0, `city_roads total is ${total}`);
+  return `${data.length} rows, ${total.toLocaleString()} city-roads crashes`;
+});
+
+test('Federal Non-DOT (3-bucket array) totals < DOT-only', async () => {
+  const dot = await crashLensClient.getSummary('federal', null, { roadType: 'dot_roads' });
+  const non = await crashLensClient.getSummary('federal', null, {
+    roadTypes: ['county_roads','city_roads','other_roads']
+  });
+  const dotTotal = dot.reduce((s, r) => s + (parseInt(r.crash_count) || 0), 0);
+  const nonTotal = non.reduce((s, r) => s + (parseInt(r.crash_count) || 0), 0);
+  assert(nonTotal > 0 && dotTotal > 0, 'Either bucket empty');
+  assert(nonTotal < dotTotal, `non-DOT (${nonTotal}) >= DOT (${dotTotal})`);
+  return `non-DOT: ${nonTotal.toLocaleString()}  vs  DOT: ${dotTotal.toLocaleString()}`;
+});
+
 // ═══════════════════════════════════════════════════════════
 //  TEST RUNNER
 // ═══════════════════════════════════════════════════════════

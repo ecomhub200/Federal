@@ -20951,6 +20951,22 @@ function setViewTier(tier) {
     console.log(`[Scope] View tier changed: ${prev} → ${tier}`);
 }
 
+/**
+ * Skeleton paint for KPI cards on tier change. The Supabase preflight is
+ * usually <400ms warm but can be >1s cold; without this helper the user
+ * briefly sees the prior tier's numbers, which reads as a wrong answer.
+ * Sets every `.kpi-value` to '…' and clears every `.trend-indicator`.
+ * Called from handleTierChange, handleCitySelection, saveJurisdictionSelection.
+ */
+function showSkeletonKPIs() {
+    try {
+        document.querySelectorAll('#dashboardKPIs .kpi-value, #dashboardKPIs .kpi-sub')
+            .forEach(el => { if (el.id) el.textContent = '…'; });
+        document.querySelectorAll('#dashboardKPIs .trend-indicator')
+            .forEach(el => { el.innerHTML = ''; });
+    } catch (e) { /* non-fatal */ }
+}
+
 function updateTabVisibilityForTier(tier) {
     const vis = TIER_TAB_VISIBILITY[tier];
     if (!vis) return;
@@ -21029,6 +21045,10 @@ function updateTierSelectorUI(tier) {
 async function handleTierChange(tier) {
     try {
         setViewTier(tier);
+
+        // Instant feedback: blank the KPI cards while the new tier's data
+        // is fetched. Avoids the prior tier's numbers being briefly visible.
+        if (typeof showSkeletonKPIs === 'function') showSkeletonKPIs();
 
         // ── Update road type filter labels for this tier ──
         if (typeof updateRoadTypeLabels === 'function') updateRoadTypeLabels(tier);
@@ -21610,6 +21630,28 @@ async function handleCitySelection() {
             console.warn('[Tier] City aggregate load failed:', e.message);
         }
         console.log(`[Tier] City/Town selected: ${slug} (${displayName}, type=${placeType})`);
+
+        // ── Supabase preflight: paint the dashboard from the matview before
+        // R2 starts. Mirrors the aggregate-tier (state/region/MPO/PD) preflight
+        // so City/Town routes through Supabase first. R2 stays as the fallback
+        // path and runs concurrently below; whichever finishes first paints.
+        try {
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = false;
+                if (Array.isArray(crashState.sampleRows)) crashState.sampleRows = [];
+                if (Array.isArray(crashState.mapPoints))  crashState.mapPoints  = [];
+            }
+            if (typeof showSkeletonKPIs === 'function') showSkeletonKPIs();
+            if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+                await CL.data.supabaseBridge.injectFastDashboard({ force: true });
+            }
+            if (CL.data && CL.data.mapBridge && CL.data.mapBridge.attach) {
+                CL.data.mapBridge.attach();
+                if (CL.data.mapBridge.refresh) CL.data.mapBridge.refresh();
+            }
+        } catch (e) {
+            console.warn('[Tier] City Supabase preflight failed (non-fatal):', e && e.message);
+        }
 
         autoLoadCrashData(true).catch(e => {
             console.warn('[Tier] City/Town CSV load failed (data may not be uploaded yet):', e.message);
@@ -25670,6 +25712,24 @@ function saveJurisdictionSelection() {
             if (stSel && stSel.value) stateKey = stSel.value.toLowerCase().replace(/\s+/g, '_');
         }
         if (stateKey) window.crashLensClient.state = stateKey;
+    }
+
+    // Supabase preflight — paint the dashboard + map from matviews before R2
+    // starts, identical to handleCitySelection() and the aggregate-tier paths.
+    // Fire-and-forget: the bridge has its own crashState.loaded race protection
+    // so whichever source resolves first wins.
+    try {
+        if (typeof showSkeletonKPIs === 'function') showSkeletonKPIs();
+        if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+            CL.data.supabaseBridge.injectFastDashboard({ force: true })
+                .catch(function (e) { console.warn('[Tier] County Supabase preflight failed:', e && e.message); });
+        }
+        if (CL.data && CL.data.mapBridge && CL.data.mapBridge.attach) {
+            CL.data.mapBridge.attach();
+            if (CL.data.mapBridge.refresh) CL.data.mapBridge.refresh();
+        }
+    } catch (e) {
+        console.warn('[Tier] County preflight wiring failed (non-fatal):', e && e.message);
     }
 
     autoLoadCrashData(true); // skipCache = true since cache was just invalidated
@@ -154516,6 +154576,8 @@ function signDef_exportPDF() {
 <!-- CrashLens Supabase Data Client (Phase 1 — foundation only) -->
 <script src="../assets/js/data-client.js"></script>
 <script src="modules/data/supabase-bridge.js"></script>
+<!-- Note: ../assets/js/agg-worker.js is loaded by supabase-bridge.js via
+     `new Worker(...)` on first Supabase paint — no <script> tag required. -->
 <script src="modules/data/lazy-loader.js"></script>
 <script src="modules/data/tab-loaders.js"></script>
 <script src="modules/data/supabase-map-bridge.js"></script>

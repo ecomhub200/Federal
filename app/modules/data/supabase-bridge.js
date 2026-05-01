@@ -121,35 +121,64 @@ CL.data.supabaseBridge = (function () {
     }
 
     /**
-     * Map the active "Road Type" radio button to the matview road_type bucket.
-     * Returns null when the user picked "All Roads" so the dashboard_summary
-     * query is unfiltered and the caller aggregates across all buckets.
+     * Tier-aware spec for the active "Road Type" radio button. Returns
+     *   { bucket, in, noInterstate }
+     * where `bucket` is a single road_type to filter on (eq.X), `in` is an
+     * array of road_type values for in.(...), and `noInterstate` is the
+     * is_interstate=eq.false flag. The matrix lives in
+     * CrashLensDataClient.radioToBucket — see assets/js/data-client.js.
      *
-     * Bucket names mirror the file-suffix taxonomy used by mv_hotspots and
-     * the R2 split parquets (dot_roads / city_roads / non_dot_roads). If the
-     * matview schema uses a different column or value set, the query simply
-     * returns 0 rows and injectFastDashboard() falls through to the R2 path.
+     * Every Crash Lens matview now derives road_type from crashes.ownership
+     * (4 buckets: dot_roads / county_roads / city_roads / other_roads). The
+     * Federal "Non-DOT Roads" radio resolves to a 3-bucket `in.(...)` filter
+     * because there is no single "non-DOT" bucket in the schema.
      */
-    function activeRoadTypeForSupabase() {
-        var radio = document.querySelector('input[name="roadTypeFilter"]:checked');
-        var val = radio ? radio.value : (localStorage.getItem('selectedFilterProfile') || 'allRoads');
-        // Matview road_type buckets are derived from crashes.system:
-        //   dot_roads     = DOT Primary / DOT Secondary / DOT Interstate
-        //   non_dot_roads = Non-DOT primary / Non-DOT secondary
-        //   all_roads     = everything else (including NULL system)
-        //
-        // 'city_roads' has no matview bucket — crashes.system doesn't
-        // distinguish city-maintained roads.  Map it to null (= no filter,
-        // aggregate across all buckets) so the query returns data instead
-        // of 0 rows.  The exact "city roads only" slicing only works
-        // with R2 split parquets at county/city tiers.
-        var map = {
-            countyOnly:     'dot_roads',
-            cityOnly:       null,
-            countyPlusVDOT: 'non_dot_roads',
-            allRoads:       null
-        };
-        return Object.prototype.hasOwnProperty.call(map, val) ? map[val] : null;
+    function activeRoadTypeSpecForSupabase() {
+        var tier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+        if (typeof CrashLensDataClient === 'undefined' || !CrashLensDataClient.activeRoadType) {
+            return { bucket: null, in: null, noInterstate: false };
+        }
+        return CrashLensDataClient.activeRoadType(tier);
+    }
+
+    // Web Worker wrapper around aggregate() — keeps the main thread responsive
+    // when matview rows balloon (state-tier returns 50K rows × 12 fields). The
+    // worker is created lazily on first use and reused thereafter. Falls back
+    // to in-thread aggregate() if the worker can't be created (e.g. file://
+    // origin without a registered Worker source).
+    var _aggWorker = null;
+    var _aggWorkerFailed = false;
+
+    function aggregateAsync(rows) {
+        if (_aggWorkerFailed || typeof Worker === 'undefined') {
+            return Promise.resolve(aggregate(rows));
+        }
+        try {
+            if (!_aggWorker) {
+                _aggWorker = new Worker('../assets/js/agg-worker.js');
+            }
+        } catch (e) {
+            _aggWorkerFailed = true;
+            return Promise.resolve(aggregate(rows));
+        }
+        return new Promise(function (resolve) {
+            var onMessage = function (ev) {
+                _aggWorker.removeEventListener('message', onMessage);
+                _aggWorker.removeEventListener('error', onError);
+                resolve(ev.data);
+            };
+            var onError = function () {
+                _aggWorker.removeEventListener('message', onMessage);
+                _aggWorker.removeEventListener('error', onError);
+                _aggWorkerFailed = true;
+                try { _aggWorker.terminate(); } catch (e) { /* ignore */ }
+                _aggWorker = null;
+                resolve(aggregate(rows));
+            };
+            _aggWorker.addEventListener('message', onMessage);
+            _aggWorker.addEventListener('error', onError);
+            _aggWorker.postMessage({ rows: rows });
+        });
     }
 
     function aggregate(rows) {
@@ -447,8 +476,8 @@ CL.data.supabaseBridge = (function () {
             }
 
             var t = resolveTier();
-            var roadType = activeRoadTypeForSupabase();
-            console.log('[Phase2] Fetching summary from Supabase...', { tier: t.tier, value: t.value, roadType: roadType });
+            var spec = activeRoadTypeSpecForSupabase();
+            console.log('[Phase2] Fetching summary from Supabase...', { tier: t.tier, value: t.value, spec: spec });
             try {
                 if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
                     CL.upload.tierUI.updateTierSwitchProgress(15, 'Fetching dashboard summary…');
@@ -456,7 +485,9 @@ CL.data.supabaseBridge = (function () {
             } catch (e) { /* non-fatal */ }
             var startTime = Date.now();
             var summaryFilters = {};
-            if (roadType) summaryFilters.roadType = roadType;
+            if (spec.bucket)       summaryFilters.roadType     = spec.bucket;
+            if (spec.in)           summaryFilters.roadTypes    = spec.in;
+            if (spec.noInterstate) summaryFilters.noInterstate = true;
             var rows = await window.crashLensClient.getSummary(t.tier, t.value, summaryFilters);
             var fetchMs = Date.now() - startTime;
 
@@ -472,7 +503,7 @@ CL.data.supabaseBridge = (function () {
                 }
             } catch (e) { /* non-fatal */ }
 
-            var agg = aggregate(rows);
+            var agg = await aggregateAsync(rows);
             paintKPIs(agg);
 
             try {
@@ -579,11 +610,30 @@ CL.data.supabaseBridge = (function () {
         }, 150);
     }
 
+    // Re-paint the dashboard + the map whenever the road-type radio
+    // changes. Delegated listener so it survives the radios being
+    // re-rendered by updateRoadTypeLabels(). Both bridges read the radio
+    // through CrashLensDataClient.activeRoadType(...) so they see the
+    // same value.
+    if (typeof document !== 'undefined') {
+        document.addEventListener('change', function (e) {
+            if (e && e.target && e.target.name === 'roadTypeFilter') {
+                try { _injected = false; injectFastDashboard({ force: true }); } catch (err) { /* non-fatal */ }
+                try {
+                    if (CL.data && CL.data.mapBridge && CL.data.mapBridge.refresh) {
+                        CL.data.mapBridge.refresh();
+                    }
+                } catch (err) { /* non-fatal */ }
+            }
+        });
+    }
+
     return {
         injectFastDashboard: injectFastDashboard,
         onR2LoadComplete: onR2LoadComplete,
         refresh: refresh,
         resolveTier: resolveTier,
+        activeRoadTypeSpec: activeRoadTypeSpecForSupabase,
         get injected() { return _injected; }
     };
 })();

@@ -99,8 +99,8 @@ class CrashLensDataClient {
     supabaseUrl:  'https://srv1503081.hstgr.cloud/rest/v1',
     supabaseKey:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc0OTEyNDczLCJleHAiOjIwOTAyNzI0NzN9.5arUDeH3ccQ9O-UK57wFu7w1jKaIoIq3uroqithXjQs',
     r2BaseUrl:    'https://data.aicreatesai.com',
-    timeout:      15000,   // 15s for Supabase, then fallback
-    mapLimit:     5000,    // max crash dots per viewport
+    timeout:      30000,   // 30s for Supabase (text ILIKE on large jurisdictions can take >15s), then fallback
+    mapLimit:     10000,   // max crash dots per viewport (raised for Phase 3 viewport queries)
     pageSize:     25,      // rows per page for detail tables
     preferSupabase: true,
   };
@@ -202,6 +202,79 @@ class CrashLensDataClient {
   static EPDO = { K: 883, A: 94, B: 21, C: 11, O: 1 };
 
   // ─────────────────────────────────────────────────────────
+  //  TIER-AWARE ROAD-TYPE RADIO HELPERS
+  //
+  //  The 4 radio buttons (countyOnly / cityOnly / countyPlusVDOT /
+  //  allRoads) mean different things at different view tiers — see the
+  //  matrix in upload-tab.js updateRoadTypeLabels(). These helpers turn
+  //  the active radio + tier into a Supabase filter spec:
+  //
+  //    { bucket: 'dot_roads' | 'county_roads' | 'city_roads' | 'other_roads' | null,
+  //      in:     ['city_roads','county_roads','other_roads'] | null,
+  //      noInterstate: false | true }
+  //
+  //  `bucket` → road_type=eq.X
+  //  `in`     → road_type=in.(X,Y,Z)
+  //  `noInterstate` → is_interstate=eq.false
+  //
+  //  Both bucket and in are mutually exclusive (in is used for the Federal
+  //  "Non-DOT Roads" radio which spans 3 buckets).
+  // ─────────────────────────────────────────────────────────
+
+  static radioToBucket(radioValue, tier) {
+    const aggregate = (tier === 'federal' || tier === 'state' || tier === 'region');
+    const local     = (tier === 'mpo' || tier === 'planning_district' || tier === 'county' || tier === 'city');
+    const out = { bucket: null, in: null, noInterstate: false };
+
+    switch (radioValue) {
+      case 'cityOnly':
+        out.bucket = 'city_roads';
+        break;
+      case 'countyOnly':
+        out.bucket = aggregate ? 'dot_roads' : 'county_roads';
+        break;
+      case 'countyPlusVDOT':
+        if (tier === 'federal') {
+          // Federal "Non-DOT Roads" — everything except state DOT.
+          out.in = ['county_roads', 'city_roads', 'other_roads'];
+        } else if (tier === 'state' || tier === 'region') {
+          // State/Region "County Roads Only".
+          out.bucket = 'county_roads';
+        } else if (local) {
+          // Local-tier "All Roads (No Interstate)" — drop the interstate slice.
+          out.noInterstate = true;
+        }
+        break;
+      case 'allRoads':
+      default:
+        // No filter → matview returns every bucket.
+        break;
+    }
+    return out;
+  }
+
+  static activeRoadType(tier) {
+    const radio = (typeof document !== 'undefined')
+      ? document.querySelector('input[name="roadTypeFilter"]:checked')
+      : null;
+    const val = radio
+      ? radio.value
+      : ((typeof localStorage !== 'undefined' && localStorage.getItem('selectedFilterProfile')) || 'allRoads');
+    return CrashLensDataClient.radioToBucket(val, tier);
+  }
+
+  // Map ownership-derived bucket → the literal `crashes.ownership` value.
+  // The crashes table itself does not store the bucket; row-level queries
+  // (getCrashes / getMapCrashes) must filter on `ownership` instead.
+  // 'other_roads' has no single canonical ownership — falls through to
+  // unfiltered when only that bucket is requested.
+  static OWNERSHIP_BY_BUCKET = {
+    dot_roads:    '1. State Hwy Agency',
+    county_roads: '2. County Hwy Agency',
+    city_roads:   '3. City or Town Hwy Agency'
+  };
+
+  // ─────────────────────────────────────────────────────────
   //  CONSTRUCTOR
   // ─────────────────────────────────────────────────────────
 
@@ -230,7 +303,9 @@ class CrashLensDataClient {
    *
    * @param {string} tier - 'federal'|'state'|'region'|'planning_district'|'mpo'|'county'|'city'
    * @param {string} value - Jurisdiction name (e.g. 'Kent', 'North District')
-   * @param {object} filters - { yearFrom, yearTo, severity, fc, areaType }
+   * @param {object} filters - { yearFrom, yearTo, severity, fc, areaType, roadType }
+   *                           roadType: matview road_type bucket ('dot_roads', 'city_roads',
+   *                           'non_dot_roads', etc.). Omit for all-roads (no filter).
    * @returns {Promise<Array>} Summary rows with crash_count, fatals, ped_crashes, etc.
    */
   async getSummary(tier, value, filters = {}) {
@@ -255,7 +330,15 @@ class CrashLensDataClient {
    *
    * @param {string} tier
    * @param {string} value
-   * @param {object} filters - { year, severity, route, page }
+   * @param {object} filters - {
+   *     year, severity (string or array), route, node,
+   *     text (searches route/collision/doc_nbr/intersection/weather),
+   *     pedBike ('ped'|'bike'|'either'),
+   *     dateFrom (YYYY-MM-DD), dateTo (YYYY-MM-DD),
+   *     page, pageSize,
+   *     all (bool) — if true, bypass pagination and fetch up to maxRows rows,
+   *     maxRows (default 10000)
+   * }
    * @returns {Promise<{rows: Array, total: number, page: number}>}
    */
   async getCrashes(tier, value, filters = {}) {
@@ -271,6 +354,88 @@ class CrashLensDataClient {
     const rows = await this._r2LoadCrashes(tier, value);
     this._source = 'r2';
     return this._filterLocally(rows, filters);
+  }
+
+  /**
+   * Canonical form of a route/node name: uppercased, stripped of every
+   * non-alphanumeric character. Used to compare values across the
+   * client-side CSV and server-side Postgres when formatting rules differ.
+   *   'DE 18'  → 'DE18'
+   *   'DE-18'  → 'DE18'
+   *   'DE 18 ' → 'DE18'
+   *   'SR 1'   → 'SR1'    (note: does NOT match 'SR0001' / zero-padding)
+   */
+  static canonicalLocationName(s) {
+    return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  /**
+   * Fetch ALL crash rows for a specific location (route or node) within a tier.
+   * Used by CMF & Warrants tabs which need the complete set of location crashes
+   * for profile/pattern analysis — pagination would break those aggregates.
+   *
+   * Resilience strategy for cross-state name-format drift:
+   *   1. Try exact match: rte_name=eq.<value>. Fast, uses b-tree index.
+   *   2. If 0 rows AND the value contains separators (space/dash/dot/underscore),
+   *      retry with ILIKE — replace run of separators with a single `*` wildcard
+   *      so 'DE 18' matches 'DE-18', 'DE18', 'DE  18', etc.
+   *   3. Verify the ILIKE response client-side by canonicalising each row's
+   *      name (strip non-alphanumerics, uppercase) — eliminates false
+   *      positives like 'SR 1' accidentally matching 'SR 11'.
+   *
+   * @param {string} tier - 'county'|'state'|...
+   * @param {string} tierValue - jurisdiction name (e.g. 'Kent')
+   * @param {string} locationType - 'route' or 'node'
+   * @param {string} locationValue - route name or node id
+   * @param {number} maxRows - safety cap (default 10000)
+   * @returns {Promise<Array>} Array of rows (Title Case keys, matching COL)
+   */
+  async getCrashesByLocation(tier, tierValue, locationType, locationValue, maxRows) {
+    if (locationType !== 'route' && locationType !== 'node') {
+      throw new Error('locationType must be "route" or "node"');
+    }
+    const cap = maxRows || 10000;
+
+    // Stage 1: exact match
+    const exactFilters = { all: true, maxRows: cap };
+    if (locationType === 'route') exactFilters.route = locationValue;
+    else exactFilters.node = locationValue;
+    const exact = await this.getCrashes(tier, tierValue, exactFilters);
+    const exactRows = exact.rows || [];
+    if (exactRows.length > 0) return exactRows;
+
+    // Stage 2 + 3: fuzzy ILIKE retry with canonical verification.
+    // Only bother if the value has a separator we could normalise away.
+    const raw = String(locationValue || '');
+    const pattern = raw.replace(/[\s\-_.]+/g, '*').trim();
+    if (!pattern || pattern === raw) return exactRows; // nothing to fuzz
+
+    const fuzzyFilters = { all: true, maxRows: cap };
+    if (locationType === 'route') fuzzyFilters.routePattern = pattern;
+    else fuzzyFilters.nodePattern = pattern;
+
+    let fuzzyRows;
+    try {
+      const fuzzy = await this.getCrashes(tier, tierValue, fuzzyFilters);
+      fuzzyRows = fuzzy.rows || [];
+    } catch (e) {
+      console.warn('[DataClient] Fuzzy location retry failed:', e.message);
+      return exactRows; // fall through to caller's own fallback (e.g. sampleRows)
+    }
+
+    // Client-side canonical verification
+    const canonicalTarget = CrashLensDataClient.canonicalLocationName(raw);
+    const key = locationType === 'route' ? 'RTE Name' : 'Node';
+    const verified = fuzzyRows.filter(r =>
+      CrashLensDataClient.canonicalLocationName(r[key]) === canonicalTarget
+    );
+
+    if (verified.length > 0) {
+      console.log(
+        `[DataClient] Fuzzy match recovered ${verified.length} rows for ${locationType}='${raw}' via pattern '${pattern}'`
+      );
+    }
+    return verified;
   }
 
   /**
@@ -301,6 +466,118 @@ class CrashLensDataClient {
       const rx = parseFloat(r.x || r['x']), ry = parseFloat(r.y || r['y']);
       return rx >= bounds.west && rx <= bounds.east && ry >= bounds.south && ry <= bounds.north;
     }).slice(0, limit);
+  }
+
+  /**
+   * Phase 3: Zoom-aware viewport crash query via PostGIS RPC.
+   * Returns clusters at low zoom, individual points at high zoom.
+   *
+   * @param {object} bounds - { south, west, north, east } from crashMap.getBounds()
+   * @param {number} zoom   - crashMap.getZoom()
+   * @param {object} opts   - { tier, tierValue, year, severity[], limit, signal }
+   *                          `signal` is an external AbortSignal — if it fires,
+   *                          the error is propagated (NOT swallowed into fallback)
+   *                          so the caller can ignore a superseded request.
+   * @returns {Promise<Array>} rows with { cx, cy, n, fatals, serious, epdo, is_cluster, ...pointFields }
+   */
+  async getViewportCrashes(bounds, zoom, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) {
+      return this._fallbackViewportFromMapPoints(bounds, zoom);
+    }
+
+    const tierCol = opts.tier ? CrashLensDataClient.TIER_COLUMNS[opts.tier] : null;
+    // Federal tier spans every state — pass NULL so the RPC skips its
+    // `AND state = $p_state` filter (verified backend behavior 2026-04-26).
+    // All other tiers stay scoped to the active state.
+    const body = {
+      p_state:        opts.tier === 'federal' ? null : this.state,
+      p_bbox:         `SRID=4326;POLYGON((${bounds.west} ${bounds.south},${bounds.east} ${bounds.south},${bounds.east} ${bounds.north},${bounds.west} ${bounds.north},${bounds.west} ${bounds.south}))`,
+      p_zoom:         zoom,
+      p_tier_col:     tierCol || null,
+      p_tier_val:     opts.tierValue || null,
+      p_year:         opts.year || null,
+      p_severity:     opts.severity || null,
+      p_road_type:    opts.roadType  || null,
+      p_road_types:   (opts.roadTypes && opts.roadTypes.length) ? opts.roadTypes : null,
+      p_no_interstate: !!opts.noInterstate,
+      p_limit:        opts.limit || this.mapLimit
+    };
+
+    const url = `${this.supabaseUrl}/rpc/map_viewport_crashes`;
+    // Combine: timeout (internal) + optional external abort signal
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, this.timeout);
+    const onExternalAbort = () => controller.abort();
+    if (opts.signal) {
+      if (opts.signal.aborted) {
+        clearTimeout(timer);
+        const err = new DOMException('Aborted', 'AbortError');
+        throw err;
+      }
+      opts.signal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (opts.signal) opts.signal.removeEventListener('abort', onExternalAbort);
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+
+      this._source = 'supabase';
+      return await resp.json();
+    } catch (e) {
+      clearTimeout(timer);
+      if (opts.signal) opts.signal.removeEventListener('abort', onExternalAbort);
+      // External abort (caller superseded the request): propagate — do NOT fallback
+      if (e.name === 'AbortError' && !timedOut) throw e;
+      // Timeout or network/server error: fall back to client-side filtering
+      console.warn('[DataClient] Viewport query failed, falling back:', e.message);
+      return this._fallbackViewportFromMapPoints(bounds, zoom);
+    }
+  }
+
+  /**
+   * Fallback: filter existing crashState.mapPoints client-side.
+   * Used when Supabase is unavailable or during R2-only sessions.
+   */
+  _fallbackViewportFromMapPoints(bounds, zoom) {
+    if (typeof crashState === 'undefined' || !crashState.mapPoints) return [];
+    const pts = crashState.mapPoints.filter(p =>
+      p.lat >= bounds.south && p.lat <= bounds.north &&
+      p.lng >= bounds.west  && p.lng <= bounds.east
+    );
+    return pts.map(p => ({
+      cx: p.lng, cy: p.lat, n: 1, fatals: p.sev === 'K' ? 1 : 0,
+      serious: p.sev === 'A' ? 1 : 0,
+      epdo: ({ K: 883, A: 94, B: 21, C: 11, O: 1 })[p.sev] || 1,
+      is_cluster: false,
+      objectid: p.docNum || null,
+      crash_severity: p.sev, crash_year: null,
+      collision_type: p.collision, rte_name: p.route,
+      intersection_name: p.node,
+      crash_date: p.date, crash_military_time: p.time,
+      pedestrian: p.isPed ? 'Yes' : 'No',
+      bike: p.isBike ? 'Yes' : 'No',
+      speed: p.isSpeed ? 'Yes' : 'No',
+      weather_condition: p.weather,
+      light_condition: p.light,
+      document_nbr: p.docNum || null,
+      night: p.isNight ? 'Yes' : 'No'
+    }));
   }
 
   /**
@@ -352,6 +629,43 @@ class CrashLensDataClient {
   }
 
   /**
+   * Get scorecard rankings from scorecard_rankings matview.
+   * @param {string} state - State key (e.g. 'delaware')
+   * @param {number} year - Crash year
+   * @param {Object} options - Optional filters
+   * @returns {Promise<Array>} Ranked jurisdiction rows
+   */
+  async getScorecard(state, year, options = {}) {
+    state = state || this.state;
+    if (this.preferSupabase && this.supabaseKey) {
+      try {
+        const filters = { state: `eq.${state}` };
+        if (year) {
+          if (options.yearEnd) {
+            filters.and = `(crash_year.gte.${year},crash_year.lte.${options.yearEnd})`;
+          } else {
+            filters.crash_year = `eq.${year}`;
+          }
+        }
+        if (options.dotDistrict) filters.dot_district = `eq.${options.dotDistrict}`;
+        if (options.planningDistrict) filters.planning_district = `eq.${options.planningDistrict}`;
+        if (options.mpoName) filters.mpo_name = `eq.${options.mpoName}`;
+        if (options.jurisdiction) filters.jurisdiction = `eq.${options.jurisdiction}`;
+        const data = await this._supabaseQuery('scorecard_rankings', {
+          filters: filters,
+          order: 'rank_total_crashes.asc',
+          limit: 5000,
+        });
+        this._source = 'supabase';
+        return data;
+      } catch (e) {
+        console.warn('[DataClient] Scorecard failed:', e.message);
+      }
+    }
+    return [];
+  }
+
+  /**
    * Get available states from states table.
    * @returns {Promise<Array>} [{abbr, name, display_name, total_crashes, ...}]
    */
@@ -369,6 +683,295 @@ class CrashLensDataClient {
       }
     }
     return [];
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  TAB-AWARE SUPABASE METHODS (added 2026-04-25)
+  //
+  //  Each detail tab that previously required the full R2 parquet now has
+  //  a dedicated client method here. Methods try the corresponding Supabase
+  //  matview/RPC first and return null on failure — callers MUST treat null
+  //  as "fall back to R2 sampleRows". This lets the frontend ship before
+  //  the backend matviews are deployed (see docs/SUPABASE_BACKEND_COWORK_PROMPT.md).
+  //
+  //  Backend artefacts expected (see Cowork prompt for full SQL):
+  //    mv_hotspots         — top intersections + segments per tier
+  //    mv_crash_tree       — hierarchical severity → factor → location counts
+  //    mv_grants_baseline  — per-location totals + EPDO + K/A counts
+  //    mv_safety_categories — per-category counts (curves, ped, speed, ...)
+  //    mv_analysis_summary — yearly/monthly/severity/collision-type breakdown
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * Top crash locations (intersections + segments) for the Hot Spots tab.
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { roadType, limit (default 100) }
+   * @returns {Promise<{intersections: Array, segments: Array}|null>}
+   */
+  async getHotspots(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const allFilters = { ...tierFilters };
+      if (opts.roadType) {
+        allFilters.road_type = `eq.${opts.roadType}`;
+      } else if (opts.roadTypes && opts.roadTypes.length) {
+        allFilters.road_type = `in.(${opts.roadTypes.join(',')})`;
+      }
+      if (opts.noInterstate) allFilters.is_interstate = 'eq.false';
+      const limit = opts.limit || 100;
+      // When the result spans multiple buckets (no single roadType filter),
+      // the same physical location appears once per bucket and must be merged
+      // — over-fetch enough rows to cover the merge AND the intersections +
+      // segments split.
+      const singleBucket = !!opts.roadType;
+      const fetchLimit = singleBucket ? limit * 2 : limit * 6;
+      const data = await this._supabaseQuery('mv_hotspots', {
+        filters: allFilters,
+        order: 'epdo.desc',
+        limit: fetchLimit,
+      });
+      this._source = 'supabase';
+
+      // When the query spans multiple buckets, rows for the same physical
+      // location arrive once per road_type bucket. Merge them so totals /
+      // EPDO aren't split across buckets.
+      let rows;
+      if (singleBucket) {
+        rows = data || [];
+      } else {
+        const merged = new Map();
+        (data || []).forEach(r => {
+          const key = `${r.location_type}|${r.location_name}|${r.rte_name}`;
+          if (!merged.has(key)) {
+            merged.set(key, { ...r, total_crashes: 0, k: 0, a: 0, b: 0, c: 0, o: 0, epdo: 0, ped_count: 0, bike_count: 0 });
+          }
+          const m = merged.get(key);
+          m.total_crashes += (r.total_crashes || 0);
+          m.k += (r.k || 0);
+          m.a += (r.a || 0);
+          m.b += (r.b || 0);
+          m.c += (r.c || 0);
+          m.o += (r.o || 0);
+          m.epdo += (r.epdo || 0);
+          m.ped_count += (r.ped_count || 0);
+          m.bike_count += (r.bike_count || 0);
+        });
+        rows = [...merged.values()].sort((a, b) => (b.epdo || 0) - (a.epdo || 0));
+      }
+
+      // Group by location_type into the shape the Hot Spots tab expects,
+      // applying the requested limit per group.
+      const intersections = [], segments = [];
+      rows.forEach(r => {
+        const row = this._pgToFrontend(r);
+        if (r.location_type === 'intersection' && intersections.length < limit) intersections.push(row);
+        else if (r.location_type === 'segment' && segments.length < limit) segments.push(row);
+      });
+      return { intersections, segments };
+    } catch (e) {
+      console.warn('[DataClient] getHotspots failed (matview missing?):', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Hierarchical crash counts for the Crash Tree tab.
+   * Returns counts grouped by severity → contributing factor → location.
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { treeType: 'facility'|'crashType'|'contributing' }
+   * @returns {Promise<Array|null>} Each row: { level1, level2, level3, count, K, A, B, C, O }
+   */
+  async getCrashTree(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const allFilters = { ...tierFilters };
+      if (opts.treeType) allFilters.tree_type = `eq.${opts.treeType}`;
+      const data = await this._supabaseQuery('mv_crash_tree', {
+        filters: allFilters,
+        limit: 50000,
+      });
+      this._source = 'supabase';
+      return (data || []).map(r => {
+        const out = this._pgToFrontend(r);
+        // mv_crash_tree column is `total`; frontend callers read `count`
+        // (the R2/local-aggregation convention). Alias it here.
+        out.count = parseInt(r.total != null ? r.total : r.count, 10) || 0;
+        return out;
+      });
+    } catch (e) {
+      console.warn('[DataClient] getCrashTree failed (matview missing?):', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Per-location baseline totals for the Grants tab (HSIP scoring).
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { roadType, yearFrom, yearTo }
+   * @returns {Promise<Array|null>} Each row: { location_name, location_type,
+   *           total_crashes, K, A, B, C, O, epdo, ped, bike }
+   */
+  async getGrantsBaseline(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const allFilters = { ...tierFilters };
+      if (opts.roadType) {
+        allFilters.road_type = `eq.${opts.roadType}`;
+      } else if (opts.roadTypes && opts.roadTypes.length) {
+        allFilters.road_type = `in.(${opts.roadTypes.join(',')})`;
+      }
+      if (opts.noInterstate) allFilters.is_interstate = 'eq.false';
+      if (opts.yearFrom && opts.yearTo) {
+        allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
+      }
+      const singleBucket = !!opts.roadType;
+      const data = await this._supabaseQuery('mv_grants_baseline', {
+        filters: allFilters,
+        order: 'epdo.desc',
+        // When merging across road_type buckets we may pull up to ~4x the rows.
+        limit: singleBucket ? 5000 : 15000,
+      });
+      this._source = 'supabase';
+
+      // When the query spans multiple buckets, the same (location, year)
+      // appears once per road_type bucket. Merge them so EPDO ranking isn't
+      // split.
+      if (!singleBucket) {
+        const merged = new Map();
+        (data || []).forEach(r => {
+          const key = `${r.location_type}|${r.location_name}|${r.rte_name}|${r.crash_year}`;
+          if (!merged.has(key)) {
+            merged.set(key, { ...r, total_crashes: 0, k: 0, a: 0, b: 0, c: 0, o: 0, epdo: 0, ped: 0, bike: 0 });
+          }
+          const m = merged.get(key);
+          m.total_crashes += (r.total_crashes || 0);
+          m.k += (r.k || 0);
+          m.a += (r.a || 0);
+          m.b += (r.b || 0);
+          m.c += (r.c || 0);
+          m.o += (r.o || 0);
+          m.epdo += (r.epdo || 0);
+          m.ped += (r.ped || 0);
+          m.bike += (r.bike || 0);
+        });
+        const sorted = [...merged.values()]
+          .sort((a, b) => (b.epdo || 0) - (a.epdo || 0))
+          .slice(0, 5000);
+        return sorted.map(r => this._pgToFrontend(r));
+      }
+
+      return (data || []).map(r => this._pgToFrontend(r));
+    } catch (e) {
+      console.warn('[DataClient] getGrantsBaseline failed (matview missing?):', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Per-category counts for the Safety Focus tab (curves, work zones, ped, etc.).
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { yearFrom, yearTo }
+   * @returns {Promise<object|null>} { categoryName: { total, K, A, B, C, O, crashes: [] }, ... }
+   *           Note: crashes[] is empty when served by Supabase (counts only);
+   *           tab must request individual crashes via getCrashes() on demand.
+   */
+  async getSafetyCategories(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const allFilters = { ...tierFilters };
+      // NOTE: mv_safety_categories has no crash_year column — it aggregates all
+      // years by design. Year filtering is not supported for this matview.
+      const data = await this._supabaseQuery('mv_safety_categories', {
+        filters: allFilters,
+        limit: 2000,
+      });
+      this._source = 'supabase';
+      // Rows are grouped by (state, county, district, mpo, planning_district,
+      // category). At any aggregate tier (state/region/MPO/PD) the same
+      // category appears once per county — accumulate instead of overwrite.
+      const out = {};
+      (data || []).forEach(r => {
+        if (!out[r.category]) {
+          out[r.category] = {
+            total: 0, K: 0, A: 0, B: 0, C: 0, O: 0,
+            crashes: [],  // Lazily fetched if tab needs row detail
+          };
+        }
+        const cat = out[r.category];
+        cat.total += (r.total || 0);
+        cat.K += (r.k || 0);
+        cat.A += (r.a || 0);
+        cat.B += (r.b || 0);
+        cat.C += (r.c || 0);
+        cat.O += (r.o || 0);
+      });
+      return out;
+    } catch (e) {
+      console.warn('[DataClient] getSafetyCategories failed (matview missing?):', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Yearly / monthly / severity / collision-type breakdowns for the Analysis tab.
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { yearFrom, yearTo }
+   * @returns {Promise<object|null>} {
+   *           byYear: { 2020: {total,K,A,B,C,O}, ... },
+   *           byMonth: { 1: {total,K,A,...}, ... },
+   *           bySeverity: { K, A, B, C, O },
+   *           byCollision: { 'Rear End': N, 'Angle': N, ... },
+   *           byHour: { 0: N, 1: N, ... }
+   *         }
+   */
+  async getAnalysisBreakdown(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const allFilters = { ...tierFilters };
+      // NOTE: mv_analysis_summary has no crash_year column — 'year' is already
+      // a breakdown axis (rows with dimension='year'), not a filter.
+      const data = await this._supabaseQuery('mv_analysis_summary', {
+        filters: allFilters,
+        limit: 10000,
+      });
+      this._source = 'supabase';
+      // Rows are grouped by (state, county, district, mpo, planning_district,
+      // dimension, dim_value). At any aggregate tier each (dimension, dim_value)
+      // appears once per county — accumulate instead of overwrite.
+      const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byHour: {} };
+      (data || []).forEach(r => {
+        const k = r.k || 0, a = r.a || 0, b = r.b || 0, c = r.c || 0, o = r.o || 0, total = r.total || 0;
+        if (r.dimension === 'year') {
+          if (!out.byYear[r.dim_value]) out.byYear[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+          const y = out.byYear[r.dim_value];
+          y.K += k; y.A += a; y.B += b; y.C += c; y.O += o; y.total += total;
+        } else if (r.dimension === 'month') {
+          if (!out.byMonth[r.dim_value]) out.byMonth[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+          const m = out.byMonth[r.dim_value];
+          m.K += k; m.A += a; m.B += b; m.C += c; m.O += o; m.total += total;
+        } else if (r.dimension === 'severity') {
+          if (out.bySeverity[r.dim_value] !== undefined) out.bySeverity[r.dim_value] += total;
+        } else if (r.dimension === 'collision') {
+          out.byCollision[r.dim_value] = (out.byCollision[r.dim_value] || 0) + total;
+        } else if (r.dimension === 'hour') {
+          out.byHour[r.dim_value] = (out.byHour[r.dim_value] || 0) + total;
+        }
+      });
+      return out;
+    } catch (e) {
+      console.warn('[DataClient] getAnalysisBreakdown failed (matview missing?):', e.message);
+      return null;
+    }
   }
 
   // ─────────────────────────────────────────────────────────
@@ -407,6 +1010,19 @@ class CrashLensDataClient {
     if (filters.severity) allFilters.crash_severity = `eq.${filters.severity}`;
     if (filters.fc) allFilters.functional_class = `eq.${filters.fc}`;
     if (filters.areaType) allFilters.area_type = `eq.${filters.areaType}`;
+    // road_type bucket filter — every Crash Lens matview now derives the
+    // bucket from `crashes.ownership` (4 buckets: dot_roads / county_roads /
+    // city_roads / other_roads). `roadType` requests a single bucket;
+    // `roadTypes` requests an explicit set (used by the Federal "Non-DOT
+    // Roads" radio); omitting both returns every bucket and the caller sums.
+    if (filters.roadType) {
+      allFilters.road_type = `eq.${filters.roadType}`;
+    } else if (filters.roadTypes && filters.roadTypes.length) {
+      allFilters.road_type = `in.(${filters.roadTypes.join(',')})`;
+    }
+    if (filters.noInterstate) {
+      allFilters.is_interstate = 'eq.false';
+    }
 
     return this._supabaseQuery('dashboard_summary', {
       filters: allFilters,
@@ -415,18 +1031,126 @@ class CrashLensDataClient {
     });
   }
 
-  /** Query crashes table with pagination */
+  /** Escape an ilike pattern: PostgREST uses `*` as wildcard, comma/parens are reserved */
+  _escapeIlike(s) {
+    return String(s || '').replace(/[,()]/g, ' ').trim();
+  }
+
+  /** Query crashes table with rich filters + pagination (or bulk fetch when filters.all) */
   async _supabaseCrashes(tier, value, filters) {
     const tierFilters = this._tierFilter(tier, value);
     const allFilters = { ...tierFilters };
     const page = filters.page || 1;
+    const pageSize = filters.pageSize || this.pageSize;
 
+    // Exact-match scalar filters
     if (filters.year) allFilters.crash_year = `eq.${filters.year}`;
-    if (filters.severity) allFilters.crash_severity = `eq.${filters.severity}`;
     if (filters.route) allFilters.rte_name = `eq.${filters.route}`;
+    if (filters.node) allFilters.node = `eq.${filters.node}`;
 
-    const rangeStart = (page - 1) * this.pageSize;
-    const rangeEnd = rangeStart + this.pageSize - 1;
+    // Fuzzy-match filters — used by getCrashesByLocation retry when exact
+    // matching fails due to route/node format drift between R2 CSV and Supabase.
+    if (filters.routePattern) allFilters.rte_name = `ilike.${filters.routePattern}`;
+    if (filters.nodePattern)  allFilters.node     = `ilike.${filters.nodePattern}`;
+
+    // Severity: string or array (multi-severity via in.(...))
+    if (filters.severity) {
+      if (Array.isArray(filters.severity)) {
+        if (filters.severity.length === 1) {
+          allFilters.crash_severity = `eq.${filters.severity[0]}`;
+        } else if (filters.severity.length > 1) {
+          allFilters.crash_severity = `in.(${filters.severity.join(',')})`;
+        }
+      } else {
+        allFilters.crash_severity = `eq.${filters.severity}`;
+      }
+    }
+
+    // Ped / Bike flags
+    if (filters.pedBike === 'ped') {
+      allFilters.pedestrian = 'eq.Yes';
+    } else if (filters.pedBike === 'bike') {
+      allFilters.bike = 'eq.Yes';
+    } else if (filters.pedBike === 'either') {
+      // needs OR — handled in andParts below
+    }
+
+    // road_type / roadTypes / noInterstate. The row-level `crashes` table
+    // doesn't have a `road_type` column — push these to the underlying
+    // `ownership` + `functional_class` + `system` columns so the filter
+    // semantics match the matview path.
+    const ownerByBucket = CrashLensDataClient.OWNERSHIP_BY_BUCKET;
+    const requestedBuckets = filters.roadType
+      ? [filters.roadType]
+      : (Array.isArray(filters.roadTypes) ? filters.roadTypes : null);
+    if (requestedBuckets && requestedBuckets.length) {
+      const owners = requestedBuckets.map(b => ownerByBucket[b]).filter(Boolean);
+      // 'other_roads' has no canonical ownership value — only filter when at
+      // least one bucket maps cleanly. If every requested bucket is
+      // 'other_roads' the row-level path falls through to no ownership
+      // filter (matview totals will not match in that edge case).
+      if (owners.length === 1) {
+        allFilters.ownership = `eq.${owners[0]}`;
+      } else if (owners.length > 1) {
+        // PostgREST in.(...) with values that contain commas, parens, dots
+        // or spaces — wrap each in double quotes so it's parsed as a single
+        // value. URL-encoding happens in _supabaseQuery via URLSearchParams.
+        allFilters.ownership = `in.(${owners.map(v => `"${v}"`).join(',')})`;
+      }
+    }
+
+    // Date range (crash_date column)
+    const andParts = [];
+    if (filters.dateFrom) andParts.push(`crash_date.gte.${filters.dateFrom}`);
+    if (filters.dateTo)   andParts.push(`crash_date.lte.${filters.dateTo}`);
+    if (filters.noInterstate) {
+      andParts.push('functional_class.not.like.1-Interstate*');
+      andParts.push('system.not.eq.DOT Interstate');
+    }
+
+    // Text search — narrowed to the two columns that actually matter (rte_name,
+    // collision_type). Searching all 5 columns (doc_nbr/intersection/weather)
+    // triggered `canceling statement due to statement timeout` on 86K-row
+    // Sussex because the leading-wildcard ILIKE forces a full scan per column.
+    // Until trigram/GIN indexes exist server-side, keep the scan narrow.
+    if (filters.text && String(filters.text).trim()) {
+      const t = this._escapeIlike(filters.text);
+      const pattern = `*${t}*`;
+      allFilters.or = `(rte_name.ilike.${pattern},collision_type.ilike.${pattern})`;
+    }
+
+    if (filters.pedBike === 'either') {
+      // If we're already using `or` for text search, combine into `and` group
+      if (allFilters.or) {
+        andParts.push(`or(pedestrian.eq.Yes,bike.eq.Yes)`);
+      } else {
+        allFilters.or = `(pedestrian.eq.Yes,bike.eq.Yes)`;
+      }
+    }
+
+    if (andParts.length) {
+      allFilters.and = `(${andParts.join(',')})`;
+    }
+
+    // Bulk fetch mode (filters.all) — used by CMF/Warrants/CSV export
+    if (filters.all) {
+      const maxRows = filters.maxRows || 10000;
+      const data = await this._supabaseQuery('crashes', {
+        filters: allFilters,
+        order: 'crash_year.desc,objectid.asc',
+        limit: maxRows,
+      });
+      const rows = Array.isArray(data) ? data : (data.rows || []);
+      return {
+        rows: rows.map(r => this._pgToFrontend(r)),
+        total: rows.length,
+        page: 1,
+      };
+    }
+
+    // Paginated mode (default)
+    const rangeStart = (page - 1) * pageSize;
+    const rangeEnd = rangeStart + pageSize - 1;
 
     const data = await this._supabaseQuery('crashes', {
       filters: allFilters,
@@ -439,6 +1163,7 @@ class CrashLensDataClient {
       rows: (data.rows || data).map(r => this._pgToFrontend(r)),
       total: data.count || 0,
       page: page,
+      pageSize: pageSize,
     };
   }
 
@@ -469,6 +1194,24 @@ class CrashLensDataClient {
       } else {
         andParts.push(`crash_severity.eq.${filters.severity}`);
       }
+    }
+
+    // Road-type — same ownership-derived contract as _supabaseCrashes.
+    const ownerByBucketM = CrashLensDataClient.OWNERSHIP_BY_BUCKET;
+    const requestedBucketsM = filters.roadType
+      ? [filters.roadType]
+      : (Array.isArray(filters.roadTypes) ? filters.roadTypes : null);
+    if (requestedBucketsM && requestedBucketsM.length) {
+      const ownersM = requestedBucketsM.map(b => ownerByBucketM[b]).filter(Boolean);
+      if (ownersM.length === 1) {
+        allFilters.ownership = `eq.${ownersM[0]}`;
+      } else if (ownersM.length > 1) {
+        allFilters.ownership = `in.(${ownersM.map(v => `"${v}"`).join(',')})`;
+      }
+    }
+    if (filters.noInterstate) {
+      andParts.push('functional_class.not.like.1-Interstate*');
+      andParts.push('system.not.eq.DOT Interstate');
     }
 
     allFilters.and = `(${andParts.join(',')})`;
@@ -512,7 +1255,10 @@ class CrashLensDataClient {
     };
 
     if (opts.single) headers['Accept'] = 'application/vnd.pgrst.object+json';
-    if (opts.count) headers['Prefer'] = 'count=exact';
+    // count=estimated — reads pg_class.reltuples (≈free) instead of running
+    // a second full scan. Pagination UIs tolerate the ±5% drift and the
+    // saving is ~200-400 ms on the larger matviews.
+    if (opts.count) headers['Prefer'] = 'count=estimated';
 
     // Range header for pagination
     if (opts.range) {
@@ -552,22 +1298,47 @@ class CrashLensDataClient {
   //  R2 FALLBACK
   // ─────────────────────────────────────────────────────────
 
-  /** Load parquet from R2 — delegates to existing hyparquet loader */
+  /**
+   * Load crashes from R2 as a .parquet file.
+   *
+   * Policy (2026-04-23): R2 crash data is `.parquet` only — not `.parquet.gz`,
+   * not `.csv`. The app's global _parseParquetGz() tolerates both raw and
+   * gzipped bytes (it sniffs the 0x1F 0x8B magic bytes), so we delegate to
+   * it and let it decide. We NEVER fall back to `.csv` — if the .parquet
+   * isn't there, the fetch throws.
+   */
   async _r2LoadCrashes(tier, value) {
-    const path = this._r2Path(tier, value);
+    const path = this._r2Path(tier, value);        // always ends in .parquet
     const url = `${this.r2BaseUrl}/${path}`;
 
-    // Use existing parquet loader if available
-    if (typeof window !== 'undefined' && window.loadParquetFromUrl) {
-      return window.loadParquetFromUrl(url);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`R2 parquet fetch failed (${resp.status}): ${url}`);
+    const buf = await resp.arrayBuffer();
+
+    // Prefer the app's shared parquet parser so we match the main pipeline's
+    // column parsing exactly (Title Case keys, same hyparquet version).
+    // Other modules reference `_parseParquetGz` as a bare global — do the same
+    // so we work regardless of whether it's attached to window or not.
+    const appParser =
+      (typeof window !== 'undefined' && window._parseParquetGz) ||
+      (typeof globalThis !== 'undefined' && globalThis._parseParquetGz) ||
+      null;
+    if (typeof appParser === 'function') {
+      const { rows } = await appParser(buf);
+      return rows;
     }
 
-    // Fallback: fetch as CSV (legacy support)
-    const csvUrl = url.replace('.parquet', '.csv');
-    const resp = await fetch(csvUrl);
-    if (!resp.ok) throw new Error(`R2 load failed: ${resp.status}`);
-    const text = await resp.text();
-    return this._parseCSV(text);
+    // Test / Node environments: inline hyparquet — same logic as the in-app parser.
+    const hp = await import('https://cdn.jsdelivr.net/npm/hyparquet@1.7.0/+esm');
+    const meta = hp.parquetMetadata(buf);
+    const fields = meta.schema.slice(1).map(s => s.name);
+    let rawRows;
+    await hp.parquetRead({ file: buf, onComplete: data => { rawRows = data; } });
+    return rawRows.map(r => {
+      const obj = {};
+      for (let j = 0; j < fields.length; j++) obj[fields[j]] = r[j] != null ? String(r[j]) : '';
+      return obj;
+    });
   }
 
   /** Build R2 path for a tier/value */
@@ -689,21 +1460,49 @@ class CrashLensDataClient {
     return Object.values(groups).sort((a, b) => a.crash_year - b.crash_year);
   }
 
-  /** Filter loaded rows with pagination */
+  /** Filter loaded rows with pagination (R2 fallback path) */
   _filterLocally(rows, filters) {
+    const isYes = (v) => {
+      const s = String(v || '').toLowerCase();
+      return s === 'yes' || s === 'y' || s === 'true' || s === '1';
+    };
+
     let filtered = rows;
-    if (filters.year)     filtered = filtered.filter(r => r['Crash Year'] == filters.year);
-    if (filters.severity) filtered = filtered.filter(r => r['Crash Severity'] === filters.severity);
+    if (filters.year)     filtered = filtered.filter(r => String(r['Crash Year']) == String(filters.year));
     if (filters.route)    filtered = filtered.filter(r => r['RTE Name'] === filters.route);
+    if (filters.node)     filtered = filtered.filter(r => r['Node'] === filters.node);
+    if (filters.severity) {
+      const sevSet = Array.isArray(filters.severity) ? new Set(filters.severity) : new Set([filters.severity]);
+      filtered = filtered.filter(r => sevSet.has((r['Crash Severity'] || '').charAt(0) || r['Crash Severity']));
+    }
+    if (filters.pedBike === 'ped')    filtered = filtered.filter(r => isYes(r['Pedestrian?']));
+    if (filters.pedBike === 'bike')   filtered = filtered.filter(r => isYes(r['Bike?']));
+    if (filters.pedBike === 'either') filtered = filtered.filter(r => isYes(r['Pedestrian?']) || isYes(r['Bike?']));
+    if (filters.dateFrom) filtered = filtered.filter(r => (r['Crash Date'] || '') >= filters.dateFrom);
+    if (filters.dateTo)   filtered = filtered.filter(r => (r['Crash Date'] || '') <= filters.dateTo);
+    if (filters.text && String(filters.text).trim()) {
+      const t = String(filters.text).toLowerCase();
+      filtered = filtered.filter(r => {
+        const hay = [r['Document Nbr'], r['RTE Name'], r['Collision Type'], r['Weather Condition'], r['Node'], r['Intersection Name']].join(' ').toLowerCase();
+        return hay.includes(t);
+      });
+    }
+
+    if (filters.all) {
+      const cap = filters.maxRows || 10000;
+      return { rows: filtered.slice(0, cap), total: filtered.length, page: 1 };
+    }
 
     const page = filters.page || 1;
-    const start = (page - 1) * this.pageSize;
-    const end = start + this.pageSize;
+    const pageSize = filters.pageSize || this.pageSize;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
 
     return {
       rows: filtered.slice(start, end),
       total: filtered.length,
       page: page,
+      pageSize: pageSize,
     };
   }
 
@@ -744,6 +1543,40 @@ class CrashLensDataClient {
       rows.push(row);
     }
     return rows;
+  }
+
+  /**
+   * Fan out every detail-tab matview read in parallel for a tier/jurisdiction.
+   * The browser shares a single HTTP/2 connection so the wall-clock time is
+   * roughly the slowest of: Summary, Hotspots, SafetyCategories,
+   * AnalysisBreakdown. Each promise resolves to its tab's data shape (or
+   * null if the matview is missing). Failures inside one tab don't take
+   * the whole prefetch down.
+   *
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - same shape as the per-method opts; roadType /
+   *                       roadTypes / noInterstate / yearFrom / yearTo
+   *                       are forwarded to whichever matview accepts them.
+   * @returns {Promise<{summary, hotspots, safety, analysis}>}
+   */
+  async prefetchTier(tier, value, opts = {}) {
+    const summaryOpts  = {};
+    const hotspotsOpts = {};
+    const grantsOpts   = {};
+    if (opts.roadType)       { summaryOpts.roadType = opts.roadType; hotspotsOpts.roadType = opts.roadType; grantsOpts.roadType = opts.roadType; }
+    if (opts.roadTypes)      { summaryOpts.roadTypes = opts.roadTypes; hotspotsOpts.roadTypes = opts.roadTypes; grantsOpts.roadTypes = opts.roadTypes; }
+    if (opts.noInterstate)   { summaryOpts.noInterstate = true; hotspotsOpts.noInterstate = true; grantsOpts.noInterstate = true; }
+    if (opts.yearFrom)         summaryOpts.yearFrom = opts.yearFrom;
+    if (opts.yearTo)           summaryOpts.yearTo   = opts.yearTo;
+
+    const [summary, hotspots, safety, analysis] = await Promise.all([
+      this.getSummary(tier, value, summaryOpts).catch(() => null),
+      this.getHotspots(tier, value, hotspotsOpts).catch(() => null),
+      this.getSafetyCategories(tier, value, {}).catch(() => null),
+      this.getAnalysisBreakdown(tier, value, {}).catch(() => null),
+    ]);
+    return { summary, hotspots, safety, analysis };
   }
 
   /** Health check — test Supabase connectivity */
@@ -1138,6 +1971,110 @@ test('getCrashes with severity=K returns only fatals', async () => {
     assertEq(sev, 'K', `Expected K, got ${sev}`);
   }
   return `${result.rows.length} fatal rows, total: ${result.total}`;
+});
+
+// ═══════════════════════════════════════════════════════════
+//  TIER × RADIO MATRIX (2026-05-01 ownership-derived buckets)
+// ═══════════════════════════════════════════════════════════
+
+// ── radioToBucket — pure-function unit checks ──
+test('radioToBucket() resolves the §3 matrix', () => {
+  const cases = [
+    // Federal
+    { tier: 'federal',           radio: 'countyOnly',     expect: { bucket: 'dot_roads',   in: null, noInterstate: false } },
+    { tier: 'federal',           radio: 'cityOnly',       expect: { bucket: 'city_roads',  in: null, noInterstate: false } },
+    { tier: 'federal',           radio: 'countyPlusVDOT', expect: { bucket: null,          in: ['county_roads','city_roads','other_roads'], noInterstate: false } },
+    { tier: 'federal',           radio: 'allRoads',       expect: { bucket: null,          in: null, noInterstate: false } },
+    // State / Region
+    { tier: 'state',             radio: 'countyOnly',     expect: { bucket: 'dot_roads',   in: null, noInterstate: false } },
+    { tier: 'state',             radio: 'cityOnly',       expect: { bucket: 'city_roads',  in: null, noInterstate: false } },
+    { tier: 'state',             radio: 'countyPlusVDOT', expect: { bucket: 'county_roads',in: null, noInterstate: false } },
+    { tier: 'region',            radio: 'countyPlusVDOT', expect: { bucket: 'county_roads',in: null, noInterstate: false } },
+    // Local tiers
+    { tier: 'mpo',               radio: 'countyOnly',     expect: { bucket: 'county_roads',in: null, noInterstate: false } },
+    { tier: 'planning_district', radio: 'cityOnly',       expect: { bucket: 'city_roads',  in: null, noInterstate: false } },
+    { tier: 'county',            radio: 'countyPlusVDOT', expect: { bucket: null,          in: null, noInterstate: true  } },
+    { tier: 'city',              radio: 'allRoads',       expect: { bucket: null,          in: null, noInterstate: false } },
+  ];
+  let mismatches = 0;
+  for (const c of cases) {
+    const got = CrashLensDataClient.radioToBucket(c.radio, c.tier);
+    const ok = got.bucket === c.expect.bucket
+            && JSON.stringify(got.in) === JSON.stringify(c.expect.in)
+            && got.noInterstate === c.expect.noInterstate;
+    if (!ok) {
+      mismatches++;
+      console.error('radioToBucket mismatch', c, 'got:', got);
+    }
+  }
+  assertEq(mismatches, 0, `${mismatches}/${cases.length} matrix cases mismatched`);
+  return `${cases.length}/${cases.length} cases match`;
+});
+
+// ── Live: city_roads bucket returns rows in dashboard_summary ──
+test('getSummary({roadType:"city_roads"}) returns crashes', async () => {
+  const data = await client.getSummary('state', 'delaware', { roadType: 'city_roads' });
+  assertArray(data);
+  assertGt(data.length, 0, 'No city_roads rows — DB migration not applied?');
+  const total = data.reduce((s, r) => s + (r.crash_count || 0), 0);
+  assertGt(total, 0, `city_roads total = ${total}`);
+  return `${data.length} rows, ${total.toLocaleString()} city-roads crashes`;
+});
+
+// ── Live: Federal "Non-DOT Roads" multi-bucket array ──
+test('getSummary({roadTypes:[county,city,other]}) returns sum of 3 buckets', async () => {
+  const data = await client.getSummary('federal', null, {
+    roadTypes: ['county_roads', 'city_roads', 'other_roads']
+  });
+  assertArray(data);
+  assertGt(data.length, 0, 'No rows for Federal Non-DOT');
+  const total = data.reduce((s, r) => s + (r.crash_count || 0), 0);
+  // Compare against the sum of dot_roads — non-DOT must be < dot
+  // (Delaware: ~131K non-DOT vs ~438K DOT).
+  const dotData = await client.getSummary('federal', null, { roadType: 'dot_roads' });
+  const dotTotal = dotData.reduce((s, r) => s + (r.crash_count || 0), 0);
+  assert(total < dotTotal, `non-DOT (${total}) >= DOT (${dotTotal}) — bucketing broken`);
+  return `non-DOT: ${total.toLocaleString()} vs DOT: ${dotTotal.toLocaleString()}`;
+});
+
+// ── Live: noInterstate filter strictly reduces totals ──
+test('getSummary({noInterstate:true}) excludes interstates', async () => {
+  const all = await client.getSummary('state', 'delaware', {});
+  const noIS = await client.getSummary('state', 'delaware', { noInterstate: true });
+  const allTotal = all.reduce((s, r) => s + (r.crash_count || 0), 0);
+  const niTotal  = noIS.reduce((s, r) => s + (r.crash_count || 0), 0);
+  assert(niTotal < allTotal, `noInterstate (${niTotal}) >= all (${allTotal})`);
+  // Delaware has ~40K interstate crashes, so the gap should be ≥ 30K.
+  const gap = allTotal - niTotal;
+  assertGt(gap, 30000, `gap too small: ${gap}`);
+  return `all: ${allTotal.toLocaleString()}, no-IS: ${niTotal.toLocaleString()}, Δ: ${gap.toLocaleString()}`;
+});
+
+// ── Live: viewport RPC accepts p_road_type ──
+test('getViewportCrashes({roadType:"city_roads"}) returns rows', async () => {
+  const bounds = { south: 38.4, west: -76, north: 39.9, east: -75 };
+  const rows = await client.getViewportCrashes(bounds, 10, {
+    tier: 'state', tierValue: null, roadType: 'city_roads'
+  });
+  assertArray(rows);
+  assertGt(rows.length, 0, 'No viewport rows for city_roads');
+  const sum = rows.reduce((s, r) => s + (r.n || 0), 0);
+  assertGt(sum, 0, `viewport sum = ${sum}`);
+  return `${rows.length} rows, ${sum.toLocaleString()} crashes (city_roads)`;
+});
+
+// ── prefetchTier returns all 4 keys ──
+test('prefetchTier(state, delaware) resolves all 4 promises', async () => {
+  const res = await client.prefetchTier('state', 'delaware', {});
+  assertHasKey(res, 'summary');
+  assertHasKey(res, 'hotspots');
+  assertHasKey(res, 'safety');
+  assertHasKey(res, 'analysis');
+  // Summary must always be present; the three matview-backed tabs may
+  // legitimately return null on a state without that matview, but for
+  // Delaware all four should be live.
+  assert(Array.isArray(res.summary), 'summary should be array');
+  return `summary:${(res.summary || []).length} hotspots:${res.hotspots ? Object.keys(res.hotspots).length : 'null'} safety:${res.safety ? Object.keys(res.safety).length : 'null'} analysis:${res.analysis ? 'ok' : 'null'}`;
 });
 
 // ═══════════════════════════════════════════════════════════

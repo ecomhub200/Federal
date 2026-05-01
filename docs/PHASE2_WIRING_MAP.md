@@ -258,3 +258,26 @@ The Phase 2 bridge module is **already fully implemented** with:
 3. **State key default** is hardcoded to `'delaware'` at line 151603. For Federal deployment, this should use `_getActiveStateKey()` which must be defined before the DOMContentLoaded listener fires.
 
 4. **Charts are NOT pre-painted** — the bridge only paints KPI cards, yearly table, and funcClass table. Chart.js canvases (`chartYoY`, `chartKAYear`, `chartDOW`, etc.) are left empty until R2 data arrives and `updateDashboard()` → `updateCharts()` runs.
+
+---
+
+## 9. Tier-Aware Road-Type Buckets (2026-05-01)
+
+The four road-type radios (`countyOnly`, `cityOnly`, `countyPlusVDOT`, `allRoads`) mean different things at different view tiers. The full mapping lives in **`CrashLensDataClient.radioToBucket(radioValue, tier)`** in `assets/js/data-client.js`. Both the dashboard bridge (`supabase-bridge.js`) and the map bridge (`supabase-map-bridge.js`) read the active radio through `CrashLensDataClient.activeRoadType(tier)` so dashboard + map paint from the same filter intent.
+
+Every Crash Lens matview (`dashboard_summary`, `mv_hotspots`, `mv_grants_baseline`, `mv_crash_tree`, `mv_safety_categories`, `mv_analysis_summary`) now derives `road_type` from `crashes.ownership` rather than `crashes.system`:
+
+| `road_type` value | `crashes.ownership`              |
+|-------------------|----------------------------------|
+| `dot_roads`       | `1. State Hwy Agency`            |
+| `county_roads`    | `2. County Hwy Agency`           |
+| `city_roads`      | `3. City or Town Hwy Agency`     |
+| `other_roads`     | `4. Federal Roads` / `6. Private/Unknown` / NULL |
+
+The Federal "Non-DOT Roads" radio resolves to a 3-bucket `road_type=in.(county_roads,city_roads,other_roads)` filter rather than a single bucket — there is no stored "non-DOT" value.
+
+Every detail matview also exposes an **`is_interstate` boolean** (`functional_class LIKE '1-Interstate%' OR system='DOT Interstate'`). The local-tier "All Roads (No Interstate)" radio sets `noInterstate=true` which forwards as `is_interstate=eq.false`.
+
+`map_viewport_crashes` accepts the same three params: `p_road_type text`, `p_road_types text[]`, `p_no_interstate boolean`. Row-level reads against the `crashes` table (which has no `road_type` column) translate the bucket back to `ownership` via `CrashLensDataClient.OWNERSHIP_BY_BUCKET`.
+
+DB migration files live under `docs/supabase/migrations/2026-05-01_*.sql`. The pre-2026-05-01 8-arg `map_viewport_crashes` body is captured to `docs/rollback/map_viewport_crashes.pre.sql` for one-step rollback.
