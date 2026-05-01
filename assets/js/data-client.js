@@ -150,8 +150,14 @@ class CrashLensDataClient {
    */
   static radioToBucket(radioValue, tier) {
     const t = tier || 'county';
+    // Aggregate tiers (federal / state / region) show "DOT Roads Only" for
+    // countyOnly because they conflate state-DOT-maintained roads under
+    // dot_roads. Local tiers (mpo / planning_district / county / city)
+    // re-label that radio to "County Roads Only" → county_roads. Mirror
+    // the upload-tab updateRoadTypeLabels() table verbatim.
+    const aggregate = (t === 'federal' || t === 'state' || t === 'region');
     if (radioValue === 'allRoads')   return {};
-    if (radioValue === 'countyOnly') return { roadType: 'dot_roads' };
+    if (radioValue === 'countyOnly') return { roadType: aggregate ? 'dot_roads' : 'county_roads' };
     if (radioValue === 'cityOnly')   return { roadType: 'city_roads' };
     if (radioValue === 'countyPlusVDOT') {
       if (t === 'federal') {

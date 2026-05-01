@@ -534,6 +534,10 @@ When adding a new state:
 
 Update this table as new states are onboarded.
 
+### Onboarding a new state — `hierarchy.json` `dbName` is mandatory
+
+When adding a state, every entry in `states/<state>/hierarchy.json` under `regions`, `tprs` (MPOs), and `planningDistricts` MUST have a `dbName` field whose value matches the `dot_district` / `mpo_name` / `planning_district` column in the live `dashboard_summary` matview byte-for-byte. The frontend's `resolveTier()` falls back `dbName → shortName → name`, so if `dbName` is missing the bridge will send the long display name (e.g. `WILMAPCO (Wilmington Area Planning Council)`) which doesn't exist in the matview — the dashboard then renders all zeros. Delaware happened to work without explicit region `dbName` because each region's `name` already equaled the `dot_district` value (`North District` etc.), but other states won't be that lucky. The `[DataClient] 0 rows from <table>` console.warn (`assets/js/data-client.js`) surfaces this in DevTools, but bake the `dbName` audit into the hierarchy-prep step so it's caught before deploy. Verify with a single curl: `curl -s "$URL/dashboard_summary?state=eq.<state>&select=mpo_name&limit=20" -H "apikey: $ANON" | jq -r '.[].mpo_name' | sort -u` and cross-check against your hierarchy file.
+
 ---
 
 ## Persistent Knowledge Base (Wiki)
