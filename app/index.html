@@ -21216,6 +21216,8 @@ async function handleTierChange(tier) {
                         }
                     } catch (mb) { /* non-fatal */ }
                     console.log(`[Tier] ${tier} view using Supabase matview (R2 download skipped)`);
+                    console.log('[CrashLens] Data loaded at', new Date().toISOString(),
+                                'source: supabase-matview-' + tier + ', rows:', (crashState && crashState.totalRows) || 0);
                 } catch (e) {
                     console.warn(`[Tier] Supabase bridge for ${tier} failed:`, e.message);
                 }
@@ -21510,6 +21512,8 @@ async function handlePlanningDistrictSelection() {
                 }
             } catch (mb) { /* non-fatal */ }
             console.log('[Tier] PD view using Supabase matview (R2 download skipped)');
+            console.log('[CrashLens] Data loaded at', new Date().toISOString(),
+                        'source: supabase-matview-pd, rows:', (crashState && crashState.totalRows) || 0);
         } catch (e) {
             console.warn('[Tier] PD Supabase bridge failed:', e.message);
         }
@@ -21702,6 +21706,8 @@ async function loadStatewideCSVForTier(stateKey) {
             complete: function() {
                 crashState.totalRows = rowCount;
                 crashState.loaded = true;
+                console.log('[CrashLens] Data loaded at', new Date().toISOString(),
+                            'source: statewide-csv, rows:', rowCount);
                 if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
                 if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
                 if (typeof finalizeData === 'function') finalizeData();
@@ -21714,6 +21720,14 @@ async function loadStatewideCSVForTier(stateKey) {
                 // Refresh visible tabs
                 if (typeof showUploadSummary === 'function') showUploadSummary();
                 if (typeof initDropdowns === 'function') initDropdowns();
+
+                // Notify subscribers (Dashboard, Safety Focus, the active-tab
+                // refresh listener at the bottom of this file) that data is
+                // ready. Without this dispatch the user has to switch tabs
+                // and back to see populated detail tabs.
+                document.dispatchEvent(new CustomEvent('crashDataLoaded', {
+                    detail: { source: 'statewide-csv', rowCount }
+                }));
                 resolve(rowCount);
             },
             error: function(err) {
@@ -21827,6 +21841,8 @@ async function handleRegionSelection() {
                 }
             } catch (mb) { /* non-fatal */ }
             console.log('[Tier] Region view using Supabase matview (R2 download skipped)');
+            console.log('[CrashLens] Data loaded at', new Date().toISOString(),
+                        'source: supabase-matview-region, rows:', (crashState && crashState.totalRows) || 0);
         } catch (e) {
             console.warn('[Tier] Region Supabase bridge failed:', e.message);
         }
@@ -21995,6 +22011,8 @@ async function handleMPOSelection() {
                 }
             } catch (mb) { /* non-fatal */ }
             console.log('[Tier] MPO view using Supabase matview (R2 download skipped)');
+            console.log('[CrashLens] Data loaded at', new Date().toISOString(),
+                        'source: supabase-matview-mpo, rows:', (crashState && crashState.totalRows) || 0);
         } catch (e) {
             console.warn('[Tier] MPO Supabase bridge failed:', e.message);
         }
@@ -28156,6 +28174,8 @@ function restoreCrashStateFromCache(cached) {
     crashState.nodes = cached.nodes;
     crashState.totalRows = cached.totalRows;
     crashState.loaded = true;
+    console.log('[CrashLens] Data loaded at', new Date().toISOString(),
+                'source: idb-cache, rows:', crashState.totalRows || 0);
     if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
     if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
 
@@ -31494,6 +31514,8 @@ function clearDateFilter() {
 }
 
 function showTab(tabId) {
+    console.log('[CrashLens] Tab switched to:', tabId,
+                'data loaded:', !!(typeof crashState !== 'undefined' && crashState.loaded));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.getElementById('tab-' + tabId).classList.add('active');
 
@@ -32414,6 +32436,8 @@ function _processRowObjects(fields, rows, uploadZone, prog) {
 
     crashState.totalRows = rowCount;
     crashState.loaded = true;
+    console.log('[CrashLens] Data loaded at', new Date().toISOString(),
+                'source: autoload-parquet, rows:', rowCount);
     if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
     if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
     finalizeData();
@@ -32454,6 +32478,8 @@ function _parseCsvText(csvText, uploadZone, prog) {
         complete: function() {
                 crashState.totalRows = rowCount;
                 crashState.loaded = true;
+                console.log('[CrashLens] Data loaded at', new Date().toISOString(),
+                            'source: autoload-csv-mainthread, rows:', rowCount);
                 if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
                 if (CL && CL.data && CL.data.supabaseBridge) CL.data.supabaseBridge.onR2LoadComplete();
                 finalizeData();
@@ -32851,6 +32877,8 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
     // Increment generation counter — any in-flight load with an older generation
     // will detect it has been superseded and bail out at key checkpoints.
     const myGeneration = ++_autoLoadGeneration;
+    console.log('[CrashLens] Data load started at', new Date().toISOString(),
+                '(autoLoad gen ' + myGeneration + ', skipCache=' + skipCache + ')');
     console.log(`[AutoLoad] Generation ${myGeneration} starting (skipCache=${skipCache})`);
 
     // ── R2 Manifest Guard ──
@@ -32964,6 +32992,8 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
             // detail tabs will hydrate sampleRows on demand via lazyLoader.
             if (!crashState.loaded) {
                 crashState.loaded = true;
+                console.log('[CrashLens] Data loaded at', new Date().toISOString(),
+                            'source: supabase-bridge-lazy, rows: 0 (sampleRows lazy)');
                 crashState.sampleRows = [];
                 crashState.mapPoints = [];
                 crashState.sampleRowsLoaded = false;
@@ -47929,6 +47959,8 @@ function setDashboardLoadingState(isLoading, opts) {
 
 function updateDashboard() {
     if (!crashState.loaded) return;
+    console.log('[CrashLens] Rendering dashboard, rows available:',
+                crashState.totalRows || (crashState.sampleRows && crashState.sampleRows.length) || 0);
     setDashboardLoadingState(false);
 
     // Phase 1B: Update tier-specific sections (comparison matrices, breadcrumb, scope header)
@@ -107080,6 +107112,56 @@ document.addEventListener('crashDataLoaded', (evt) => {
     if (crashState.loaded && typeof updateDashboard === 'function') {
         updateDashboard();
     }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Active-tab refresh after data load (fixes "blank-on-first-load"
+// bug where the user had to switch tabs to see data).
+//
+// showTab(tabId) gates every per-tab init on `crashState.loaded`. When
+// the page boots, the active tab's showTab() runs while loaded=false
+// and silently skips the update call. This listener waits for the
+// crashDataLoaded event and re-fires showTab() for whichever panel is
+// currently visible — same code path the user would trigger by
+// clicking the tab manually.
+//
+// Source-aware: 'supabase' fires very early from the bridge before
+// any R2 path runs. The bridge has already painted dashboard KPIs
+// into the DOM at that point; re-firing showTab('dashboard') now
+// would call updateDashboard() which reads crashState.aggregates
+// (still empty in lazy mode) and would zero out the bridge's values.
+// So we skip the dashboard tab specifically when source==='supabase'.
+// All other sources (autoload / cache / statewide-csv) run after
+// crashState.aggregates is populated and are safe to re-fire on any
+// active tab.
+// ─────────────────────────────────────────────────────────────
+function refreshActiveTabAfterDataLoad(source) {
+    try {
+        var activePanel = document.querySelector('.tab-content.active');
+        if (!activePanel || !activePanel.id) return;
+        var tabId = activePanel.id.replace(/^tab-/, '');
+        if (!tabId) return;
+
+        // Bridge already painted dashboard KPIs — don't let updateDashboard()
+        // overwrite them with zeros from an empty aggregates object.
+        if (source === 'supabase' && tabId === 'dashboard') {
+            console.log('[CrashLens] crashDataLoaded(supabase) — dashboard already painted by bridge, no re-fire needed');
+            return;
+        }
+
+        console.log('[CrashLens] crashDataLoaded(' + (source || 'unknown') +
+                    ') — refreshing active tab:', tabId,
+                    'data loaded:', !!(typeof crashState !== 'undefined' && crashState.loaded));
+        if (typeof showTab === 'function') {
+            showTab(tabId);
+        }
+    } catch (e) {
+        console.warn('[CrashLens] refreshActiveTabAfterDataLoad failed (non-fatal):', e && e.message);
+    }
+}
+
+document.addEventListener('crashDataLoaded', function (evt) {
+    refreshActiveTabAfterDataLoad(evt && evt.detail && evt.detail.source);
 });
 
 // ============================================================
