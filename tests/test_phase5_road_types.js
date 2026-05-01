@@ -103,9 +103,11 @@ function testRadioToBucket() {
         { roadType: 'county_roads' }, "countyPlusVDOT/planning_district → county_roads");
     assertEq(C.radioToBucket('countyPlusVDOT', 'region'),
         { roadType: 'county_roads' }, "countyPlusVDOT/region → county_roads");
+    // Order is sorted alphabetically so the SWR cache key normalizes —
+    // SQL IN(...) is order-insensitive so the wire query is unaffected.
     assertEq(C.radioToBucket('countyPlusVDOT', 'federal'),
-        { roadTypes: ['county_roads', 'city_roads', 'other_roads'] },
-        "countyPlusVDOT/federal → array (Non-DOT Roads)");
+        { roadTypes: ['city_roads', 'county_roads', 'other_roads'] },
+        "countyPlusVDOT/federal → sorted array (Non-DOT Roads)");
     assertEq(C.radioToBucket('countyPlusVDOT', 'county'),
         { noInterstate: true }, "countyPlusVDOT/county → noInterstate");
     assertEq(C.radioToBucket('countyPlusVDOT', 'city'),
@@ -260,6 +262,16 @@ async function testSWRCache() {
     assertEq(fetchCount, 3, "prefetchTier triggers fetch");
     await c.getSummary('county', 'Kent', { roadType: 'city_roads' });
     assertEq(fetchCount, 3, "post-prefetch getSummary served from cache");
+
+    // Federal Non-DOT — roadTypes order must NOT split the cache slot.
+    // SQL IN(...) is order-insensitive so two different array orders are
+    // semantically equivalent and should hit the same cache key.
+    await c.getSummary('federal', null, { roadTypes: ['county_roads','city_roads','other_roads'] });
+    const beforeReorder = fetchCount;
+    await c.getSummary('federal', null, { roadTypes: ['other_roads','city_roads','county_roads'] });
+    assertEq(fetchCount, beforeReorder, "reordered roadTypes hits same cache slot");
+    await c.getSummary('federal', null, { roadTypes: ['city_roads','county_roads','other_roads'] });
+    assertEq(fetchCount, beforeReorder, "third permutation still hits same cache slot");
 }
 
 // ───────── _applyRoadTypeMatviewFilters helper directness ─────────

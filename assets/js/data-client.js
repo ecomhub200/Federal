@@ -154,7 +154,13 @@ class CrashLensDataClient {
     if (radioValue === 'countyOnly') return { roadType: 'dot_roads' };
     if (radioValue === 'cityOnly')   return { roadType: 'city_roads' };
     if (radioValue === 'countyPlusVDOT') {
-      if (t === 'federal') return { roadTypes: ['county_roads', 'city_roads', 'other_roads'] };
+      if (t === 'federal') {
+        // Sorted alphabetically so the SWR cache key normalizes — two
+        // adjacent Federal Non-DOT clicks share a cache slot regardless of
+        // any caller's array-construction order. SQL `IN(...)` is
+        // order-insensitive, so the wire query is unaffected.
+        return { roadTypes: ['city_roads', 'county_roads', 'other_roads'] };
+      }
       if (t === 'state' || t === 'region' || t === 'mpo' || t === 'planning_district') {
         return { roadType: 'county_roads' };
       }
@@ -210,8 +216,15 @@ class CrashLensDataClient {
    */
   async getSummary(tier, value, filters = {}) {
     if (this.preferSupabase && this.supabaseKey) {
+      // Normalize roadTypes order before keying — SQL `IN(...)` is
+      // order-insensitive so two equivalent calls (['city_roads',...]) and
+      // (['county_roads','city_roads',...]) must hit the same cache slot.
+      // Defensive copy so we don't mutate caller's filters object.
+      const keyFilters = (Array.isArray(filters.roadTypes) && filters.roadTypes.length > 1)
+        ? { ...filters, roadTypes: filters.roadTypes.slice().sort() }
+        : filters;
       const swrKey = CrashLensDataClient._swrKey({
-        op: 'getSummary', state: this.state, tier, value, filters
+        op: 'getSummary', state: this.state, tier, value, filters: keyFilters
       });
       try {
         const data = await this._swr(swrKey, () => this._supabaseSummary(tier, value, filters));

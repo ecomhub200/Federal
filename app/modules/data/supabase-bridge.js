@@ -213,7 +213,10 @@ CL.data.supabaseBridge = (function () {
         if (val === 'cityOnly')   return { roadType: 'city_roads' };
         if (val === 'countyPlusVDOT') {
             if (tier === 'federal') {
-                return { roadTypes: ['county_roads', 'city_roads', 'other_roads'] };
+                // Sorted alphabetically — matches CrashLensDataClient.radioToBucket
+                // so the SWR cache key normalizes regardless of which entry
+                // point the caller used (bridge vs. raw client).
+                return { roadTypes: ['city_roads', 'county_roads', 'other_roads'] };
             }
             if (tier === 'state' || tier === 'region' || tier === 'mpo' || tier === 'planning_district') {
                 return { roadType: 'county_roads' };
