@@ -182,7 +182,28 @@ CL.data.mapBridge = (function () {
             }
         }
 
-        return { tier: tier, tierValue: tierValue, year: year, severity: severity };
+        // Road-type spec — pull from the Phase 2 bridge so the map honors the
+        // same DOT/City/County/All radio the dashboard reads.  Falls back to
+        // CrashLensDataClient.activeRoadType() when the bridge isn't ready
+        // yet (e.g. during very early boot before supabase-bridge has loaded).
+        var spec = {};
+        try {
+            if (CL.data && CL.data.supabaseBridge && typeof CL.data.supabaseBridge.roadTypeSpec === 'function') {
+                spec = CL.data.supabaseBridge.roadTypeSpec() || {};
+            } else if (typeof CrashLensDataClient !== 'undefined' && CrashLensDataClient.activeRoadType) {
+                spec = CrashLensDataClient.activeRoadType(tier) || {};
+            }
+        } catch (e) { /* non-fatal */ }
+
+        return {
+            tier: tier,
+            tierValue: tierValue,
+            year: year,
+            severity: severity,
+            roadType: spec.roadType || null,
+            roadTypes: spec.roadTypes || null,
+            noInterstate: !!spec.noInterstate
+        };
     }
 
     // ── Rendering ───────────────────────────────────────────

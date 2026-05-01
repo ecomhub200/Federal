@@ -21603,6 +21603,28 @@ async function handleCitySelection() {
         const stateKey = (typeof _getActiveStateKey === 'function')
             ? _getActiveStateKey()
             : (appConfig?.defaultState || 'colorado');
+
+        // Supabase-first: paint instant KPI placeholders, then kick off a
+        // dashboard_summary fetch with the new city scope. The R2 fallback
+        // still runs below, but the user sees real numbers in ~1s instead
+        // of waiting on the parquet pipeline.
+        try {
+            if (CL.data && CL.data.supabaseBridge) {
+                if (CL.data.supabaseBridge.showSkeletonKPIs) {
+                    CL.data.supabaseBridge.showSkeletonKPIs();
+                }
+                if (CL.data.supabaseBridge.injectFastDashboard) {
+                    CL.data.supabaseBridge.injectFastDashboard({ force: true });
+                }
+                // Warm cache for the parent county tier in the background so
+                // navigating up is instant (Phase 6 §6.6 prefetchTier).
+                if (window.crashLensClient && typeof window.crashLensClient.prefetchTier === 'function'
+                    && typeof jurisdictionContext !== 'undefined' && jurisdictionContext.jurisdictionName) {
+                    window.crashLensClient.prefetchTier('county', jurisdictionContext.jurisdictionName, {});
+                }
+            }
+        } catch (e) { /* non-fatal */ }
+
         try {
             const cityAgg = await AggregateLoader.loadCity(stateKey, slug);
             if (cityAgg) console.log(`[Tier] City aggregate loaded: ${Object.keys(cityAgg).length} keys`);
@@ -25671,6 +25693,21 @@ function saveJurisdictionSelection() {
         }
         if (stateKey) window.crashLensClient.state = stateKey;
     }
+
+    // Supabase-first: paint skeleton KPIs immediately so the user sees the
+    // dashboard react, then fire a fresh dashboard_summary fetch for the
+    // newly-selected jurisdiction. The R2 path below still runs and will
+    // overwrite the bridge values when the parquet is parsed.
+    try {
+        if (CL.data && CL.data.supabaseBridge) {
+            if (CL.data.supabaseBridge.showSkeletonKPIs) {
+                CL.data.supabaseBridge.showSkeletonKPIs();
+            }
+            if (CL.data.supabaseBridge.injectFastDashboard) {
+                CL.data.supabaseBridge.injectFastDashboard({ force: true });
+            }
+        }
+    } catch (e) { /* non-fatal */ }
 
     autoLoadCrashData(true); // skipCache = true since cache was just invalidated
 }
@@ -154981,6 +155018,12 @@ function updateScorecardChart() {
       // Phase 2: Fast Dashboard pre-load from Supabase
       if (CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
         CL.data.supabaseBridge.injectFastDashboard();
+      }
+
+      // Wire the road-type radio listener so flipping DOT/City/County/All
+      // re-fetches the dashboard summary from Supabase with the new bucket.
+      if (CL.data.supabaseBridge && CL.data.supabaseBridge.attachRoadTypeListener) {
+        CL.data.supabaseBridge.attachRoadTypeListener();
       }
 
       // Re-run the fast dashboard whenever the user changes state / tier / jurisdiction
