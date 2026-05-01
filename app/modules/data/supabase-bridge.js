@@ -208,8 +208,13 @@ CL.data.supabaseBridge = (function () {
         var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
         var tier = (ctx && ctx.viewTier) || 'county';
 
+        // Aggregate tiers (federal / state / region) treat "countyOnly" as
+        // "DOT Roads Only" → dot_roads. Local tiers re-label it to
+        // "County Roads Only" → county_roads. Mirrors the label table in
+        // upload-tab.updateRoadTypeLabels() and CrashLensDataClient.radioToBucket().
+        var aggregate = (tier === 'federal' || tier === 'state' || tier === 'region');
         if (val === 'allRoads') return {};
-        if (val === 'countyOnly') return { roadType: 'dot_roads' };
+        if (val === 'countyOnly') return { roadType: aggregate ? 'dot_roads' : 'county_roads' };
         if (val === 'cityOnly')   return { roadType: 'city_roads' };
         if (val === 'countyPlusVDOT') {
             if (tier === 'federal') {
