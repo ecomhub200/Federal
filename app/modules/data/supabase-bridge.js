@@ -514,19 +514,28 @@ CL.data.supabaseBridge = (function () {
             }
         } catch (e) { /* non-fatal */ }
 
-        // Final defense: derive state from jurisdictionContext which is ALWAYS correct
-        // after buildJurisdictionContextFromSelection(). The _getActiveStateKey() path
-        // above can return the boot default ('colorado') during initial load or rapid
-        // state switch because the dropdown/StateAdapter haven't propagated yet.
+        // Final defense: prefer the live state dropdown over jurisdictionContext.
+        // ctx.stateKey is set by buildJurisdictionContextFromSelection() but during
+        // boot or rapid state switch it can lag the dropdown (it's whatever
+        // _getActiveStateKey returned at the time of the last jurisdiction pick).
+        // Always trust the dropdown when its value resolves to a state key.
         try {
             var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
-            if (ctx && window.crashLensClient) {
-                // Prefer stateKey (exact match for matview 'state' column).
-                // Fallback: derive from stateName (e.g. "New York" → "new_york").
-                var ctxState = ctx.stateKey || (ctx.stateName ? ctx.stateName.toLowerCase().replace(/\s+/g, '_') : null);
-                if (ctxState && ctxState !== window.crashLensClient.state) {
-                    console.log('[Phase2] State corrected from jurisdictionContext: ' + window.crashLensClient.state + ' → ' + ctxState);
-                    window.crashLensClient.state = ctxState;
+            if (window.crashLensClient) {
+                var dropdownState = null;
+                try {
+                    var stateSelectFinal = document.getElementById('stateSelect');
+                    if (stateSelectFinal && stateSelectFinal.value && typeof _fipsToStateKey === 'function') {
+                        dropdownState = _fipsToStateKey(stateSelectFinal.value);
+                    }
+                } catch (e2) { /* non-fatal */ }
+                var ctxState = ctx && (ctx.stateKey || (ctx.stateName ? ctx.stateName.toLowerCase().replace(/\s+/g, '_') : null));
+                var targetState = dropdownState || ctxState;
+                if (targetState && targetState !== window.crashLensClient.state) {
+                    console.log('[Phase2] State corrected: ' +
+                        window.crashLensClient.state + ' → ' + targetState +
+                        ' (dropdown=' + dropdownState + ', ctx.stateKey=' + (ctx && ctx.stateKey) + ')');
+                    window.crashLensClient.state = targetState;
                 }
             }
         } catch (e) { /* non-fatal */ }
