@@ -127,19 +127,28 @@ class CrashLensDataClient {
   // the base table only has `ownership`).
   //
   // The 4-bucket model rebuilds (2026-04-30) derive road_type from
-  // crashes.ownership directly. These lists cover the values seen in the
-  // Delaware dataset; states using different ownership labels can extend the
-  // map at runtime via:
+  // crashes.ownership directly. The labels below MUST match the literal
+  // strings stored in crashes.ownership — verified against the live table
+  // 2026-05-02:
+  //   '1. State Hwy Agency'         438,501 rows
+  //   '3. City or Town Hwy Agency'   81,315 rows
+  //   '2. County Hwy Agency'         39,885 rows
+  //   '4. Federal Roads'                404 rows
+  //   '6. Private/Unknown Roads'        129 rows
+  //   NULL                            9,595 rows  (no bucket — these only
+  //                                                appear when no roadType
+  //                                                filter is supplied)
   //
+  // States that store ownership differently can extend the map at runtime via:
   //   CrashLensDataClient.OWNERSHIP_BUCKETS.dot_roads.push('My State DOT');
   //
   // When no entry matches a bucket, the filter is dropped (= no filter)
   // rather than producing a 0-row query.
   static OWNERSHIP_BUCKETS = {
-    dot_roads:    ['State Highway Agency', 'State', 'State Highway'],
-    county_roads: ['County Highway Agency', 'County'],
-    city_roads:   ['City or Municipal Highway Agency', 'City', 'Municipal', 'Town'],
-    other_roads:  ['Other', 'Federal', 'Private', 'Tribal', 'Other Local Agency']
+    dot_roads:    ['1. State Hwy Agency'],
+    county_roads: ['2. County Hwy Agency'],
+    city_roads:   ['3. City or Town Hwy Agency'],
+    other_roads:  ['4. Federal Roads', '6. Private/Unknown Roads']
   };
 
   /**
@@ -1019,10 +1028,11 @@ class CrashLensDataClient {
     if (filters.node) allFilters.node = `eq.${filters.node}`;
 
     // Road-type bucket filters against the raw `crashes` table use the
-    // ownership column (the matview's road_type column doesn't exist on the
-    // base table). is_interstate is honored directly when the column exists,
-    // with a `system!=DOT Interstate` fallback baked into the ownership map.
-    this._applyRoadTypeCrashesFilters(allFilters, filters);
+    // ownership column (matview's road_type column doesn't exist on the base
+    // table). noInterstate gets pushed into andParts below so the final
+    // `and=(...)` group composes cleanly with date/text/ped filters.
+    const _crashAndParts = [];
+    this._applyRoadTypeCrashesFilters(allFilters, filters, _crashAndParts);
 
     // Fuzzy-match filters — used by getCrashesByLocation retry when exact
     // matching fails due to route/node format drift between R2 CSV and Supabase.
@@ -1052,7 +1062,8 @@ class CrashLensDataClient {
     }
 
     // Date range (crash_date column)
-    const andParts = [];
+    // Seed with any noInterstate clauses pushed by _applyRoadTypeCrashesFilters above.
+    const andParts = _crashAndParts.slice();
     if (filters.dateFrom) andParts.push(`crash_date.gte.${filters.dateFrom}`);
     if (filters.dateTo)   andParts.push(`crash_date.lte.${filters.dateTo}`);
 
@@ -1145,8 +1156,10 @@ class CrashLensDataClient {
     }
 
     // Road-type bucket filters against the raw crashes table — same
-    // ownership-mapped path used by _supabaseCrashes.
-    this._applyRoadTypeCrashesFilters(allFilters, filters);
+    // ownership-mapped path used by _supabaseCrashes. Pushes any
+    // noInterstate clauses into our existing andParts so they ride along
+    // with the bbox group.
+    this._applyRoadTypeCrashesFilters(allFilters, filters, andParts);
 
     allFilters.and = `(${andParts.join(',')})`;
 
@@ -1159,12 +1172,24 @@ class CrashLensDataClient {
 
   /**
    * Apply road-type bucket / noInterstate filters against the raw `crashes`
-   * table. The base table doesn't have road_type, so buckets are translated to
-   * an `ownership=in.(...)` clause via OWNERSHIP_BUCKETS. is_interstate is
-   * applied directly (column present on crashes post-2026-04-30 migration);
-   * if the column is missing the request 400s and the caller falls back to R2.
+   * table. The base table doesn't have a road_type column (only the matviews
+   * do), so buckets are translated to an `ownership=in.(...)` clause via
+   * OWNERSHIP_BUCKETS. The is_interstate boolean is also matview-only — it
+   * was added during the 2026-04-30 derive migration but never propagated to
+   * the base table (verified live 2026-05-02). Use the same expression the
+   * matview migration uses to derive it: not Interstate by functional class
+   * AND system != "DOT Interstate".
+   *
+   * @param {object}  target    filter object (PostgREST URL params)
+   * @param {object}  opts      caller filters
+   * @param {array=}  andParts  optional caller-owned andParts[] — when
+   *                            supplied, noInterstate clauses are pushed
+   *                            into it so the caller's `and=(...)` group
+   *                            survives. When omitted, falls back to a
+   *                            standalone `target.and` (only safe when the
+   *                            caller doesn't otherwise compose `and`).
    */
-  _applyRoadTypeCrashesFilters(target, opts) {
+  _applyRoadTypeCrashesFilters(target, opts, andParts) {
     if (!opts) return;
     const buckets = Array.isArray(opts.roadTypes) && opts.roadTypes.length > 0
       ? opts.roadTypes
@@ -1183,7 +1208,23 @@ class CrashLensDataClient {
       }
     }
     if (opts.noInterstate) {
-      target.is_interstate = 'eq.false';
+      // crashes.is_interstate doesn't exist — derive from functional_class +
+      // system the same way mv_dashboard_summary does. PostgREST `not.like`
+      // uses `*` as the wildcard.
+      const clauses = [
+        'functional_class.not.like.1-Interstate*',
+        'system.neq.DOT Interstate'
+      ];
+      if (Array.isArray(andParts)) {
+        for (const c of clauses) andParts.push(c);
+      } else {
+        // Caller doesn't manage andParts — emit a standalone group. Anything
+        // already in target.and is preserved.
+        const existing = target.and ? target.and.replace(/^\(|\)$/g, '') : '';
+        target.and = existing
+          ? `(${existing},${clauses.join(',')})`
+          : `(${clauses.join(',')})`;
+      }
     }
   }
 

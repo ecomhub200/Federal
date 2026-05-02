@@ -491,53 +491,24 @@ CL.data.supabaseBridge = (function () {
     async function injectFastDashboard(opts) {
         var force = !!(opts && opts.force);
 
-        // Ensure Supabase client uses the currently active state.
-        // _getActiveStateKey() can return a stale value during boot (e.g.
-        // 'colorado' from appConfig.defaultState) before the state dropdown
-        // has been observed. Cross-check against the dropdown directly so
-        // we never query Supabase with the wrong state.
-        try {
-            if (window.crashLensClient) {
-                var stateKey = null;
-
-                if (typeof _getActiveStateKey === 'function') {
-                    stateKey = _getActiveStateKey();
-                }
-
-                var bootDefault = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
-                if (!stateKey || stateKey === bootDefault) {
-                    try {
-                        var stateSelect = document.getElementById('stateSelect');
-                        if (stateSelect && stateSelect.value && typeof _fipsToStateKey === 'function') {
-                            var fromFips = _fipsToStateKey(stateSelect.value);
-                            if (fromFips) stateKey = fromFips;
-                        }
-                    } catch (e2) { /* non-fatal */ }
-                }
-
-                if (stateKey) {
-                    window.crashLensClient.state = stateKey;
-                }
-            }
-        } catch (e) { /* non-fatal */ }
-
-        // Final defense: prefer the live state dropdown over jurisdictionContext.
-        // ctx.stateKey is set by buildJurisdictionContextFromSelection() but during
-        // boot or rapid state switch it can lag the dropdown (it's whatever
-        // _getActiveStateKey returned at the time of the last jurisdiction pick).
-        // Always trust the dropdown when its value resolves to a state key.
+        // Sync Supabase client state from the dropdown first, then fall back to
+        // jurisdictionContext / _getActiveStateKey only if the dropdown can't
+        // resolve. The dropdown is authoritative because ctx.stateKey is set
+        // once at jurisdiction selection time and lags during boot or rapid
+        // state switch — Bug 3 fired exactly that race ("delaware → colorado").
         try {
             var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
             if (window.crashLensClient) {
                 var dropdownState = null;
                 try {
-                    var stateSelectFinal = document.getElementById('stateSelect');
-                    if (stateSelectFinal && stateSelectFinal.value && typeof _fipsToStateKey === 'function') {
-                        dropdownState = _fipsToStateKey(stateSelectFinal.value);
+                    var stateSelect = document.getElementById('stateSelect');
+                    if (stateSelect && stateSelect.value && typeof _fipsToStateKey === 'function') {
+                        dropdownState = _fipsToStateKey(stateSelect.value);
                     }
                 } catch (e2) { /* non-fatal */ }
                 var ctxState = ctx && (ctx.stateKey || (ctx.stateName ? ctx.stateName.toLowerCase().replace(/\s+/g, '_') : null));
-                var targetState = dropdownState || ctxState;
+                var activeKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
+                var targetState = dropdownState || ctxState || activeKey;
                 if (targetState && targetState !== window.crashLensClient.state) {
                     console.log('[Phase2] State corrected: ' +
                         window.crashLensClient.state + ' → ' + targetState +

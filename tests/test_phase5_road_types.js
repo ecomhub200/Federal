@@ -163,7 +163,9 @@ async function testSummaryForwarding() {
 async function testCrashesOwnershipMap() {
     console.log('\nC. _supabaseCrashes uses ownership map for road_type buckets');
 
-    // Single bucket — ownership=in.("State Highway Agency","State","State Highway")
+    // Ownership labels MUST match the literal strings in crashes.ownership —
+    // verified live 2026-05-02. The pre-fix labels ("State Highway Agency"
+    // etc.) returned 0 rows for every detail-tab query.
     let ctx = loadClient();
     let calls = stubFetch(ctx, []);
     await makeClient(ctx).getCrashes('county', 'Kent', {
@@ -171,23 +173,33 @@ async function testCrashesOwnershipMap() {
     }).catch(()=>{});
     const u1 = decodeUrl(calls[0].url);
     assertIncludes(u1, 'ownership=in.', "dot_roads → ownership=in.(...)");
-    assertIncludes(u1, '"State Highway Agency"', "dot_roads ownership list contains 'State Highway Agency'");
+    assertIncludes(u1, '"1. State Hwy Agency"', "dot_roads ownership matches live label");
+    assertNotIncludes(u1, '"State Highway Agency"', "dot_roads no longer uses pre-fix label");
 
-    // Array of buckets — concatenates ownership lists
+    // Array of buckets — concatenates ownership lists for Federal Non-DOT
     ctx = loadClient(); calls = stubFetch(ctx, []);
     await makeClient(ctx).getCrashes('federal', null, {
         page: 1, roadTypes: ['county_roads', 'city_roads', 'other_roads']
     }).catch(()=>{});
     const u2 = decodeUrl(calls[0].url);
-    assertIncludes(u2, '"County Highway Agency"', "Federal Non-DOT keeps County Highway Agency");
-    assertIncludes(u2, '"City or Municipal Highway Agency"', "Federal Non-DOT keeps City Highway Agency");
+    assertIncludes(u2, '"2. County Hwy Agency"',         "Federal Non-DOT keeps County Hwy Agency (live label)");
+    assertIncludes(u2, '"3. City or Town Hwy Agency"',   "Federal Non-DOT keeps City or Town Hwy Agency (live label)");
+    assertIncludes(u2, '"4. Federal Roads"',             "Federal Non-DOT keeps Federal Roads (live label)");
+    assertIncludes(u2, '"6. Private/Unknown Roads"',     "Federal Non-DOT keeps Private/Unknown Roads (live label)");
 
-    // noInterstate — is_interstate=eq.false on the raw crashes table
+    // noInterstate must NOT use is_interstate=eq.false — the column doesn't
+    // exist on the base crashes table (only on the matviews). The functional
+    // class + system fallback is required to avoid a PostgREST 400 error.
     ctx = loadClient(); calls = stubFetch(ctx, []);
     await makeClient(ctx).getCrashes('county', 'Kent', {
         page: 1, noInterstate: true
     }).catch(()=>{});
-    assertIncludes(decodeUrl(calls[0].url), 'is_interstate=eq.false', "noInterstate forwarded to crashes table");
+    const u3 = decodeUrl(calls[0].url);
+    assertNotIncludes(u3, 'is_interstate=', "noInterstate no longer uses non-existent is_interstate column");
+    assertIncludes(u3, 'functional_class.not.like.1-Interstate*',
+        "noInterstate forwarded as functional_class.not.like clause");
+    assertIncludes(u3, 'system.neq.DOT Interstate',
+        "noInterstate forwarded as system.neq clause");
 }
 
 // ───────── getViewportCrashes RPC body (Phase 3 RPC params) ─────────

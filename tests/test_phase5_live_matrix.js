@@ -210,6 +210,48 @@ async function runMatrix() {
             'Kent noInterstate crash count <= Kent all',
             `noInterstate=${sumN(kentNoI)}, all=${sumN(kentAll)}`);
     }
+
+    // Detail-tab crashes-table sanity — guards against the OWNERSHIP_BUCKETS
+    // and is_interstate regressions (Bugs A and B). Every detail tab (CMF,
+    // Warrants, Hot Spots, Map at high zoom) hits getCrashes/getMapCrashes,
+    // not getSummary. Pre-fix these returned 0 rows because the labels in
+    // OWNERSHIP_BUCKETS didn't match crashes.ownership and the noInterstate
+    // path 400'd on a missing column.
+    console.log('\n── crashes-table (detail tab path) sanity ──');
+
+    // Bug A — Bellefonte × city_roads should return real rows.
+    // Live count 2026-05-02: 91 crashes for ownership='3. City or Town Hwy Agency'.
+    let bellefonteRows = null;
+    try {
+        const result = await client.getCrashes('city', 'Bellefonte', {
+            page: 1, pageSize: 200, roadType: 'city_roads'
+        });
+        bellefonteRows = (result && result.rows) || [];
+    } catch (e) {
+        record(false, 'Bellefonte city_roads getCrashes returns rows', e.message);
+    }
+    if (Array.isArray(bellefonteRows)) {
+        record(bellefonteRows.length > 0,
+            'Bellefonte × city_roads via getCrashes returns >0 rows (Bug A)',
+            bellefonteRows.length === 0 ? 'expected ~91 rows, got 0 — OWNERSHIP_BUCKETS labels misaligned' : null);
+    }
+
+    // Bug B — county × noInterstate must NOT return HTTP 400.
+    let kentNoInterstateRows = null;
+    try {
+        const result = await client.getCrashes('county', 'Kent', {
+            page: 1, pageSize: 50, noInterstate: true
+        });
+        kentNoInterstateRows = (result && result.rows) || [];
+    } catch (e) {
+        record(false, 'Kent noInterstate getCrashes does not 400 (Bug B)',
+            `error: ${e.message} — did is_interstate column slip back into the crashes-table query?`);
+    }
+    if (Array.isArray(kentNoInterstateRows)) {
+        record(true,
+            'Kent noInterstate getCrashes does not 400 (Bug B)',
+            null);
+    }
 }
 
 (async () => {
