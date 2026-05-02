@@ -216,11 +216,12 @@ CL.data.supabaseBridge = (function () {
         var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
         var tier = (ctx && ctx.viewTier) || 'county';
 
-        // Aggregate tiers (federal / state / region) treat "countyOnly" as
-        // "DOT Roads Only" → dot_roads. Local tiers re-label it to
-        // "County Roads Only" → county_roads. Mirrors the label table in
-        // upload-tab.updateRoadTypeLabels() and CrashLensDataClient.radioToBucket().
-        var aggregate = (tier === 'federal' || tier === 'state' || tier === 'region');
+        // Aggregate tiers (federal / state / region / mpo / planning_district)
+        // treat "countyOnly" as "DOT Roads Only" → dot_roads. Local tiers
+        // (county / city) re-label it to "County Roads Only" → county_roads.
+        // Mirrors the label table in upload-tab.updateRoadTypeLabels() and
+        // CrashLensDataClient.radioToBucket().
+        var aggregate = (tier === 'federal' || tier === 'state' || tier === 'region' || tier === 'mpo' || tier === 'planning_district');
         if (val === 'allRoads') return {};
         if (val === 'countyOnly') return { roadType: aggregate ? 'dot_roads' : 'county_roads' };
         if (val === 'cityOnly')   return { roadType: 'city_roads' };
@@ -231,10 +232,8 @@ CL.data.supabaseBridge = (function () {
                 // point the caller used (bridge vs. raw client).
                 return { roadTypes: ['city_roads', 'county_roads', 'other_roads'] };
             }
-            if (tier === 'state' || tier === 'region' || tier === 'mpo' || tier === 'planning_district') {
-                return { roadType: 'county_roads' };
-            }
-            return { noInterstate: true };
+            if (aggregate) return { roadType: 'county_roads' };  // state/region/mpo/pd
+            return { noInterstate: true };  // county/city only
         }
         return {};
     }
