@@ -685,6 +685,10 @@ CL.data.supabaseBridge = (function () {
     }
 
     function refresh() {
+        // 250ms debounce — collapses the "input + change + click + tier-handler"
+        // burst that fires on a single radio click into one Supabase query.
+        // Pre-fix the console showed [Phase2] Fetching summary from Supabase...
+        // 2–8 times per click; one is enough.
         if (_refreshTimer) clearTimeout(_refreshTimer);
         _refreshTimer = setTimeout(function () {
             _refreshTimer = null;
@@ -709,7 +713,7 @@ CL.data.supabaseBridge = (function () {
             } catch (e) {
                 console.warn('[Phase2] refresh failed (non-fatal):', e && e.message);
             }
-        }, 150);
+        }, 250);
     }
 
     return {
