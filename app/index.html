@@ -21633,13 +21633,18 @@ async function handleCitySelection() {
             const cityAgg = await AggregateLoader.loadCity(stateKey, slug);
             if (cityAgg) console.log(`[Tier] City aggregate loaded: ${Object.keys(cityAgg).length} keys`);
         } catch (e) {
-            console.warn('[Tier] City aggregate load failed:', e.message);
+            // Per-city aggregates.json doesn't exist on R2 — Supabase is the
+            // canonical source post-migration. Silenced.
         }
         console.log(`[Tier] City/Town selected: ${slug} (${displayName}, type=${placeType})`);
 
-        autoLoadCrashData(true).catch(e => {
-            console.warn('[Tier] City/Town CSV load failed (data may not be uploaded yet):', e.message);
-        });
+        // NOTE: do NOT call autoLoadCrashData() here. R2 has no per-city
+        // parquet, so the fallback chain would load the parent (or worse,
+        // the most-recently-viewed) county's parquet — Bug 1: city view
+        // showing 87,073 Sussex crashes for Bellefonte. Supabase preflight
+        // above already paints the correct city numbers. Detail tabs that
+        // need row-level data will trigger their own fetch via the lazy
+        // loader on demand.
 
         document.dispatchEvent(new CustomEvent('tierChanged', {
             detail: {
@@ -33249,6 +33254,17 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
                     });
                 }
                 // User already asked for all_roads — try R2 fallback (legacy path).
+                // CRITICAL: APP_PATHS.getFallbackData() resolves to the
+                // currently-selected COUNTY's parquet (e.g. delaware/sussex/all_roads.parquet).
+                // For non-county tiers (city/mpo/region/planning_district/state/federal)
+                // that's a cross-jurisdiction substitution — Bug 7a: clicking
+                // "Bellefonte town" loaded 87,073 rows of Sussex County data.
+                // Never substitute a different jurisdiction; surface the 404
+                // and let Supabase be the source of truth.
+                if (tier !== 'county') {
+                    console.warn(`[AutoLoad] ${dataFilePath} failed (HTTP ${response.status}). Skipping cross-jurisdiction R2 fallback for tier=${tier}.`);
+                    return response;
+                }
                 const fallbackPath = APP_PATHS.getFallbackData();
                 console.log(`[AutoLoad] ${dataFilePath} failed (HTTP ${response.status}), trying R2 fallback: ${fallbackPath}`);
                 return fetchWithR2Retry(resolveDataUrl(fallbackPath)).catch(networkErr => {

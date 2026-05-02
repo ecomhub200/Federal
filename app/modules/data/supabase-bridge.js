@@ -161,6 +161,14 @@ CL.data.supabaseBridge = (function () {
                 var rawCity = ctx.jurisdictionName || '';
                 cityVal = rawCity.replace(/\s+County$/i, '') || null;
             }
+            // Strip place-type suffix to match the matview's stored format.
+            // Dropdown shows "Bellefonte town" / "Dover city" / etc.;
+            // physical_juris_name in dashboard_summary stores "Bellefonte" / "Dover".
+            // Without this, eq.Bellefonte%20town returns 0 rows and we fall
+            // through to the wrong-county R2 parquet.
+            if (cityVal) {
+                cityVal = cityVal.replace(/\s+(town|city|village|borough|township|CDP|hamlet|municipality)$/i, '').trim();
+            }
             return { tier: 'county', value: cityVal };
         }
         if (t === 'county') {
