@@ -21525,7 +21525,7 @@ async function handlePlanningDistrictSelection() {
             }
         }));
     } catch (e) {
-        console.error('[Tier] handlePlanningDistrictSelection failed:', e);
+        console.error('[Tier] handlePlanningDistrictSelection failed:', e && e.message, e && e.stack);
     }
 }
 
@@ -21653,7 +21653,7 @@ async function handleCitySelection() {
             }
         }));
     } catch (e) {
-        console.error('[Tier] handleCitySelection failed:', e);
+        console.error('[Tier] handleCitySelection failed:', e && e.message, e && e.stack);
     }
 }
 
@@ -21855,7 +21855,7 @@ async function handleRegionSelection() {
         // Dispatch tierChanged event for school/transit tabs
         document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier: 'region', scopeKey: getTierScopeKey() } }));
     } catch (e) {
-        console.error('[Tier] handleRegionSelection failed:', e);
+        console.error('[Tier] handleRegionSelection failed:', e && e.message, e && e.stack);
     }
 }
 
@@ -22025,7 +22025,7 @@ async function handleMPOSelection() {
         // Dispatch tierChanged event for school/transit tabs
         document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier: 'mpo', scopeKey: getTierScopeKey() } }));
     } catch (e) {
-        console.error('[Tier] handleMPOSelection failed:', e);
+        console.error('[Tier] handleMPOSelection failed:', e && e.message, e && e.stack);
     }
 }
 
