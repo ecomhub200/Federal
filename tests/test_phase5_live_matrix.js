@@ -31,43 +31,74 @@ if (process.env.CRASHLENS_SKIP_LIVE === '1') {
 }
 
 // ─────────────────────────────────────────────────────────
-// Verified against live Supabase 2026-04-30 — Delaware-only data,
+// Verified against live Supabase 2026-05-02 — Delaware-only data,
 // regenerate after onboarding additional states. Each value is
 // sum(crash_count) for the (tier, value, radio) cell after
 // radioToBucket → PostgREST round-trip.
 //
+// Aggregate-tier semantics (federal / state / region / mpo /
+// planning_district):  countyOnly=dot_roads, cityOnly=city_roads,
+//   countyPlusVDOT=county_roads (or roadTypes IN (...) for federal),
+//   allRoads=no filter.
+// Local-tier semantics (county / city):  countyOnly=county_roads,
+//   cityOnly=city_roads, countyPlusVDOT=is_interstate=false,
+//   allRoads=no filter.
+//
 // Pipe-delimited keys: '<tier>|<value or "null">|<radio>'
 // ─────────────────────────────────────────────────────────
 const EXPECTED_DELAWARE = {
-    'state|null|allRoads':          569829,
-    'state|null|countyOnly':        438501,   // dot_roads (aggregate-tier semantics)
-    'state|null|cityOnly':           81315,
-    'state|null|countyPlusVDOT':     39885,   // county_roads (state/region semantics)
-
     'federal|null|allRoads':        569829,
-    'federal|null|countyOnly':      438501,
+    'federal|null|countyOnly':      438501,    // dot_roads
     'federal|null|cityOnly':         81315,
-    'federal|null|countyPlusVDOT':  131328,   // roadTypes IN (county,city,other) — Federal "Non-DOT"
+    'federal|null|countyPlusVDOT':  131328,    // roadTypes IN (county,city,other) — Federal "Non-DOT"
+
+    'state|null|allRoads':          569829,
+    'state|null|countyOnly':        438501,    // dot_roads
+    'state|null|cityOnly':           81315,
+    'state|null|countyPlusVDOT':     39885,    // county_roads
 
     'region|North District|allRoads':         337469,
     'region|North District|countyOnly':       262292,
     'region|North District|cityOnly':          52183,
     'region|North District|countyPlusVDOT':    17712,
+    'region|Central District|allRoads':        98201,
+    'region|South District|allRoads':         134159,
 
-    'mpo|Wilmington Area Planning Council|allRoads':         335962,
-    'mpo|Wilmington Area Planning Council|countyOnly':        17546,   // county_roads — would be ~256K under the pre-fix bug
-    'mpo|Wilmington Area Planning Council|cityOnly':          52167,
-    'mpo|Wilmington Area Planning Council|countyPlusVDOT':   295576,   // is_interstate=false
+    'mpo|Wilmington Area Planning Council|allRoads':       335962,
+    'mpo|Wilmington Area Planning Council|countyOnly':     260967,    // dot_roads — aggregate semantics
+    'mpo|Wilmington Area Planning Council|cityOnly':        52167,
+    'mpo|Wilmington Area Planning Council|countyPlusVDOT':  17546,    // county_roads — aggregate semantics
+    'mpo|Dover / Kent County MPO|allRoads':                107908,
+    'mpo|Salisbury-Wicomico MPO|allRoads':                 125901,
 
-    'county|Kent|allRoads':         38614,
-    'county|Kent|countyOnly':        4121,    // county_roads — would be ~28K under the pre-fix bug
-    'county|Kent|cityOnly':          2047,
-    'county|Kent|countyPlusVDOT':   38380,    // is_interstate=false
+    'planning_district|North District|allRoads':           337469,
+    'planning_district|North District|countyOnly':         262292,    // dot_roads — aggregate semantics
+    'planning_district|North District|cityOnly':            52183,
+    'planning_district|North District|countyPlusVDOT':      17712,    // county_roads — aggregate semantics
+    'planning_district|Central District|allRoads':          98201,
 
-    'city|Dover|allRoads':          33583,
-    'city|Dover|countyOnly':         2884,    // county_roads — would be ~22K under the pre-fix bug
-    'city|Dover|cityOnly':           5972,
-    'city|Dover|countyPlusVDOT':    33507,    // is_interstate=false
+    'county|New Castle|allRoads':       190158,
+    'county|New Castle|countyOnly':       9185,    // county_roads — local semantics
+    'county|New Castle|cityOnly':        11226,
+    'county|New Castle|countyPlusVDOT': 158496,    // is_interstate=false
+    'county|Kent|allRoads':              38614,
+    'county|Kent|countyOnly':             4121,
+    'county|Kent|cityOnly':               2047,
+    'county|Kent|countyPlusVDOT':        38380,
+    'county|Sussex|allRoads':            87073,
+    'county|Sussex|countyOnly':          10944,
+    'county|Sussex|cityOnly':             3430,
+    'county|Sussex|countyPlusVDOT':      87073,    // Sussex has no interstate crashes
+
+    'city|Bellefonte|allRoads':            269,    // dropdown shows "Bellefonte town" — strip suffix!
+    'city|Cheswold|allRoads':              468,    // dropdown shows "Cheswold town"
+    'city|Dover|allRoads':               33583,    // dropdown shows "Dover city"
+    'city|Dover|countyOnly':              2884,    // county_roads — local semantics
+    'city|Dover|cityOnly':                5972,
+    'city|Dover|countyPlusVDOT':         33507,    // is_interstate=false
+    'city|Wilmington|allRoads':          61355,
+    'city|Newark|allRoads':              22123,
+    'city|Smyrna|allRoads':               5943,
 };
 
 // Load the data-client class into a sandbox with real fetch.
@@ -118,7 +149,7 @@ async function runMatrix() {
         process.exit(3);
     }
 
-    console.log('\n── 24-cell exact-numeric matrix ──');
+    console.log(`\n── ${Object.keys(EXPECTED_DELAWARE).length}-cell exact-numeric matrix ──`);
     for (const [key, expected] of Object.entries(EXPECTED_DELAWARE)) {
         const [tier, valueRaw, radio] = key.split('|');
         const value = valueRaw === 'null' ? null : valueRaw;

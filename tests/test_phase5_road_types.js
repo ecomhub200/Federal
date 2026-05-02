@@ -85,15 +85,15 @@ function testRadioToBucket() {
     assertEq(C.radioToBucket('allRoads', 'federal'),  {}, "allRoads/federal → {}");
     assertEq(C.radioToBucket('allRoads', 'county'),   {}, "allRoads/county → {}");
 
-    // countyOnly is tier-aware: aggregate tiers (federal / state / region)
-    // → dot_roads ("DOT Roads Only" radio label). Local tiers
-    // (mpo / planning_district / county / city) → county_roads
-    // ("County Roads Only" radio label). Mirrors upload-tab labels exactly.
+    // countyOnly is tier-aware: aggregate tiers (federal / state / region /
+    // mpo / planning_district) → dot_roads ("DOT Roads Only" radio label).
+    // Local tiers (county / city) → county_roads ("County Roads Only" radio
+    // label). Mirrors upload-tab labels exactly.
     assertEq(C.radioToBucket('countyOnly', 'federal'),           { roadType: 'dot_roads' },    "countyOnly/federal → dot_roads (aggregate tier)");
     assertEq(C.radioToBucket('countyOnly', 'state'),             { roadType: 'dot_roads' },    "countyOnly/state → dot_roads (aggregate tier)");
     assertEq(C.radioToBucket('countyOnly', 'region'),            { roadType: 'dot_roads' },    "countyOnly/region → dot_roads (aggregate tier)");
-    assertEq(C.radioToBucket('countyOnly', 'mpo'),               { roadType: 'county_roads' }, "countyOnly/mpo → county_roads (local tier)");
-    assertEq(C.radioToBucket('countyOnly', 'planning_district'), { roadType: 'county_roads' }, "countyOnly/planning_district → county_roads (local tier)");
+    assertEq(C.radioToBucket('countyOnly', 'mpo'),               { roadType: 'dot_roads' },    "countyOnly/mpo → dot_roads (aggregate tier)");
+    assertEq(C.radioToBucket('countyOnly', 'planning_district'), { roadType: 'dot_roads' },    "countyOnly/planning_district → dot_roads (aggregate tier)");
     assertEq(C.radioToBucket('countyOnly', 'county'),            { roadType: 'county_roads' }, "countyOnly/county → county_roads (local tier)");
     assertEq(C.radioToBucket('countyOnly', 'city'),              { roadType: 'county_roads' }, "countyOnly/city → county_roads (local tier)");
 

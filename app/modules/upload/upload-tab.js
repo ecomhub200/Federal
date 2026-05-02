@@ -634,6 +634,18 @@ CL.upload = CL.upload || {};
                 countyPlusVDOT:  '<strong>County Roads Only</strong> - County-maintained roads',
                 allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined'
             },
+            mpo: {
+                countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
+                cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
+                countyPlusVDOT:  '<strong>County Roads Only</strong> - County-maintained roads',
+                allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined'
+            },
+            planning_district: {
+                countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
+                cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
+                countyPlusVDOT:  '<strong>County Roads Only</strong> - County-maintained roads',
+                allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined'
+            },
             _default: {
                 countyOnly:      '<strong>County Roads Only</strong> - County-maintained roads',
                 cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',

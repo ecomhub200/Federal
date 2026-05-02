@@ -150,12 +150,12 @@ class CrashLensDataClient {
    */
   static radioToBucket(radioValue, tier) {
     const t = tier || 'county';
-    // Aggregate tiers (federal / state / region) show "DOT Roads Only" for
-    // countyOnly because they conflate state-DOT-maintained roads under
-    // dot_roads. Local tiers (mpo / planning_district / county / city)
+    // Aggregate tiers (federal / state / region / mpo / planning_district)
+    // show "DOT Roads Only" for countyOnly because they conflate
+    // state-DOT-maintained roads under dot_roads. Local tiers (county / city)
     // re-label that radio to "County Roads Only" → county_roads. Mirror
     // the upload-tab updateRoadTypeLabels() table verbatim.
-    const aggregate = (t === 'federal' || t === 'state' || t === 'region');
+    const aggregate = (t === 'federal' || t === 'state' || t === 'region' || t === 'mpo' || t === 'planning_district');
     if (radioValue === 'allRoads')   return {};
     if (radioValue === 'countyOnly') return { roadType: aggregate ? 'dot_roads' : 'county_roads' };
     if (radioValue === 'cityOnly')   return { roadType: 'city_roads' };
@@ -167,10 +167,8 @@ class CrashLensDataClient {
         // order-insensitive, so the wire query is unaffected.
         return { roadTypes: ['city_roads', 'county_roads', 'other_roads'] };
       }
-      if (t === 'state' || t === 'region' || t === 'mpo' || t === 'planning_district') {
-        return { roadType: 'county_roads' };
-      }
-      return { noInterstate: true };
+      if (aggregate) return { roadType: 'county_roads' };  // state/region/mpo/pd
+      return { noInterstate: true };  // county/city only
     }
     return {};
   }

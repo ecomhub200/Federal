@@ -161,6 +161,14 @@ CL.data.supabaseBridge = (function () {
                 var rawCity = ctx.jurisdictionName || '';
                 cityVal = rawCity.replace(/\s+County$/i, '') || null;
             }
+            // Strip place-type suffix to match the matview's stored format.
+            // Dropdown shows "Bellefonte town" / "Dover city" / etc.;
+            // physical_juris_name in dashboard_summary stores "Bellefonte" / "Dover".
+            // Without this, eq.Bellefonte%20town returns 0 rows and we fall
+            // through to the wrong-county R2 parquet.
+            if (cityVal) {
+                cityVal = cityVal.replace(/\s+(town|city|village|borough|township|CDP|hamlet|municipality)$/i, '').trim();
+            }
             return { tier: 'county', value: cityVal };
         }
         if (t === 'county') {
@@ -208,11 +216,12 @@ CL.data.supabaseBridge = (function () {
         var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
         var tier = (ctx && ctx.viewTier) || 'county';
 
-        // Aggregate tiers (federal / state / region) treat "countyOnly" as
-        // "DOT Roads Only" → dot_roads. Local tiers re-label it to
-        // "County Roads Only" → county_roads. Mirrors the label table in
-        // upload-tab.updateRoadTypeLabels() and CrashLensDataClient.radioToBucket().
-        var aggregate = (tier === 'federal' || tier === 'state' || tier === 'region');
+        // Aggregate tiers (federal / state / region / mpo / planning_district)
+        // treat "countyOnly" as "DOT Roads Only" → dot_roads. Local tiers
+        // (county / city) re-label it to "County Roads Only" → county_roads.
+        // Mirrors the label table in upload-tab.updateRoadTypeLabels() and
+        // CrashLensDataClient.radioToBucket().
+        var aggregate = (tier === 'federal' || tier === 'state' || tier === 'region' || tier === 'mpo' || tier === 'planning_district');
         if (val === 'allRoads') return {};
         if (val === 'countyOnly') return { roadType: aggregate ? 'dot_roads' : 'county_roads' };
         if (val === 'cityOnly')   return { roadType: 'city_roads' };
@@ -223,10 +232,8 @@ CL.data.supabaseBridge = (function () {
                 // point the caller used (bridge vs. raw client).
                 return { roadTypes: ['city_roads', 'county_roads', 'other_roads'] };
             }
-            if (tier === 'state' || tier === 'region' || tier === 'mpo' || tier === 'planning_district') {
-                return { roadType: 'county_roads' };
-            }
-            return { noInterstate: true };
+            if (aggregate) return { roadType: 'county_roads' };  // state/region/mpo/pd
+            return { noInterstate: true };  // county/city only
         }
         return {};
     }
@@ -514,19 +521,28 @@ CL.data.supabaseBridge = (function () {
             }
         } catch (e) { /* non-fatal */ }
 
-        // Final defense: derive state from jurisdictionContext which is ALWAYS correct
-        // after buildJurisdictionContextFromSelection(). The _getActiveStateKey() path
-        // above can return the boot default ('colorado') during initial load or rapid
-        // state switch because the dropdown/StateAdapter haven't propagated yet.
+        // Final defense: prefer the live state dropdown over jurisdictionContext.
+        // ctx.stateKey is set by buildJurisdictionContextFromSelection() but during
+        // boot or rapid state switch it can lag the dropdown (it's whatever
+        // _getActiveStateKey returned at the time of the last jurisdiction pick).
+        // Always trust the dropdown when its value resolves to a state key.
         try {
             var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
-            if (ctx && window.crashLensClient) {
-                // Prefer stateKey (exact match for matview 'state' column).
-                // Fallback: derive from stateName (e.g. "New York" → "new_york").
-                var ctxState = ctx.stateKey || (ctx.stateName ? ctx.stateName.toLowerCase().replace(/\s+/g, '_') : null);
-                if (ctxState && ctxState !== window.crashLensClient.state) {
-                    console.log('[Phase2] State corrected from jurisdictionContext: ' + window.crashLensClient.state + ' → ' + ctxState);
-                    window.crashLensClient.state = ctxState;
+            if (window.crashLensClient) {
+                var dropdownState = null;
+                try {
+                    var stateSelectFinal = document.getElementById('stateSelect');
+                    if (stateSelectFinal && stateSelectFinal.value && typeof _fipsToStateKey === 'function') {
+                        dropdownState = _fipsToStateKey(stateSelectFinal.value);
+                    }
+                } catch (e2) { /* non-fatal */ }
+                var ctxState = ctx && (ctx.stateKey || (ctx.stateName ? ctx.stateName.toLowerCase().replace(/\s+/g, '_') : null));
+                var targetState = dropdownState || ctxState;
+                if (targetState && targetState !== window.crashLensClient.state) {
+                    console.log('[Phase2] State corrected: ' +
+                        window.crashLensClient.state + ' → ' + targetState +
+                        ' (dropdown=' + dropdownState + ', ctx.stateKey=' + (ctx && ctx.stateKey) + ')');
+                    window.crashLensClient.state = targetState;
                 }
             }
         } catch (e) { /* non-fatal */ }
@@ -669,6 +685,10 @@ CL.data.supabaseBridge = (function () {
     }
 
     function refresh() {
+        // 250ms debounce — collapses the "input + change + click + tier-handler"
+        // burst that fires on a single radio click into one Supabase query.
+        // Pre-fix the console showed [Phase2] Fetching summary from Supabase...
+        // 2–8 times per click; one is enough.
         if (_refreshTimer) clearTimeout(_refreshTimer);
         _refreshTimer = setTimeout(function () {
             _refreshTimer = null;
@@ -693,7 +713,7 @@ CL.data.supabaseBridge = (function () {
             } catch (e) {
                 console.warn('[Phase2] refresh failed (non-fatal):', e && e.message);
             }
-        }, 150);
+        }, 250);
     }
 
     return {
