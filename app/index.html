@@ -49266,7 +49266,16 @@ function updateDashboardTierSections() {
             }
 
             const elapsed = (performance.now() - startTime).toFixed(1);
-            console.log(`[Tier] Comparison tables rendered in ${elapsed}ms (${crashState.sampleRows.length.toLocaleString()} rows)`);
+            const _sampleLen = (crashState && Array.isArray(crashState.sampleRows)) ? crashState.sampleRows.length : 0;
+            console.log(`[Tier] Comparison tables rendered in ${elapsed}ms (${_sampleLen.toLocaleString()} rows)`);
+            // Bug 9: at aggregate tiers, sampleRows carries the previously-viewed
+            // county's rows (e.g. 87,073 from Sussex). The comparison tables read
+            // it directly, so the figures look right but are scoped wrong. Until
+            // the renders are routed through dashboard_summary / mv_hotspots,
+            // surface the stale-source mismatch so QA flags it.
+            if (_sampleLen > 0 && (tier === 'state' || tier === 'federal' || tier === 'region' || tier === 'mpo' || tier === 'planning_district')) {
+                console.warn('[Tier] Comparison tables using stale sampleRows at aggregate tier — re-fetch from Supabase');
+            }
         }, 50); // 50ms debounce — prevents stacking during rapid tier switches
     }
 
