@@ -23181,7 +23181,18 @@ const AggregateLoader = (() => {
         try {
             const url = _resolveR2Url(path);
             const resp = await fetch(url);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            if (!resp.ok) {
+                // Per-scope aggregates.json files for region/mpo/planning_district/city
+                // are not published — Supabase dashboard_summary is the canonical
+                // source post-migration. 404s here are expected, not errors.
+                // Cache the negative so we don't re-request the same missing file
+                // on every tier toggle. Other HTTP errors still log loudly.
+                if (resp.status === 404) {
+                    _cache[path] = null;
+                    return null;
+                }
+                throw new Error(`HTTP ${resp.status}`);
+            }
             const data = await resp.json();
             _cache[path] = data;
             return data;
@@ -28208,16 +28219,18 @@ function restoreCrashStateFromCache(cached) {
  * switches jurisdictions while the background fetch is in flight.
  */
 async function loadSampleRowsInBackground(loadGeneration) {
-    // ── Aggregate tier guard ──
+    // ── Non-county tier guard ──
     // At federal/state/region/mpo/planning_district tiers the R2 parquet is
-    // far too large for in-browser use (118 MB+ for _national/).  Skip the
-    // background download entirely — the dashboard already painted from the
-    // Supabase matview, and detail tabs will lazy-load the *county-level*
-    // file when needed.
+    // far too large for in-browser use (118 MB+ for _national/).  At the city
+    // tier no per-city parquet exists — the legacy fallback would substitute
+    // the active county's parquet (Bug 1: 87,073 Sussex rows for Bellefonte).
+    // Skip the background download for any non-county tier — the dashboard
+    // already painted from the Supabase matview, and detail tabs will
+    // lazy-load the county-level file when needed.
     const _bgTier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
-    const _skipTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
+    const _skipTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district', 'city']);
     if (_skipTiers.has(_bgTier)) {
-        console.log(`[CrashCache] Skipping background R2 download for ${_bgTier} tier (too large, Supabase matview is primary)`);
+        console.log(`[CrashCache] Skipping background R2 download for ${_bgTier} tier (Supabase matview is primary)`);
         showBackgroundLoadingIndicator(false);
         return;
     }
