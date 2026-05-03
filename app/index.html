@@ -155075,6 +155075,29 @@ let _scorecardSortCol  = 'rank_total_crashes';
 let _scorecardSortAsc  = true;
 let _scorecardInited   = false;
 
+// Auto-refresh on jurisdiction / state change. State-agnostic: works for
+// every state via _resolveActiveState() in loadScorecardData. Triggers from
+// jurisdictionChanged (county/city/region/MPO/PD picks in Upload Data),
+// tierChanged (view-tier toggles), and crashDataLoaded (state switches).
+(function () {
+  function _invalidateScorecard(reason) {
+    _scorecardData = [];
+    const activePanel = document.querySelector('.tab-content.active');
+    if (activePanel && activePanel.id === 'tab-scorecard') {
+      console.log('[Scorecard] Active — refetching after ' + reason);
+      if (typeof loadScorecardData === 'function') loadScorecardData();
+    } else {
+      console.log('[Scorecard] Inactive — marked for refresh on next visit (' + reason + ')');
+      _scorecardInited = false;
+    }
+  }
+  document.addEventListener('jurisdictionChanged', function () { _invalidateScorecard('jurisdictionChanged'); });
+  document.addEventListener('tierChanged',         function () { _invalidateScorecard('tierChanged'); });
+  document.addEventListener('crashDataLoaded',     function (evt) {
+    if (evt && evt.detail && evt.detail.source === 'supabase') _invalidateScorecard('crashDataLoaded');
+  });
+})();
+
 /**
  * Initialize the scorecard tab — populate year dropdowns, load data.
  * Called once on first tab visit via showTab().
