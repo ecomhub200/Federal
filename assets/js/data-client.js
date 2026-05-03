@@ -585,7 +585,37 @@ class CrashLensDataClient {
           limit: 5000,
         });
         this._source = 'supabase';
-        return data;
+        // Dedupe: the matview emits one row per (state × jurisdiction × dot_district
+        // × planning_district × mpo_name × year). Kent shows up 6× in DE 2023, etc.
+        // Keep the row with the largest total_crashes per (jurisdiction, year) — that's
+        // the most-aggregated (parent-NULL) row, which represents the canonical totals.
+        // State-agnostic: works for any state's partition.
+        const dedupKey = (r) => `${r.jurisdiction}|${r.crash_year}`;
+        const map = new Map();
+        (data || []).forEach(r => {
+          const k = dedupKey(r);
+          const existing = map.get(k);
+          if (!existing || (Number(r.total_crashes) || 0) > (Number(existing.total_crashes) || 0)) {
+            map.set(k, r);
+          }
+        });
+        const deduped = [...map.values()];
+        // Re-rank after dedupe so rank_* columns reflect the canonical row order.
+        const _resortByMetric = (key, rankKey) => {
+          const sorted = deduped.slice().sort((a, b) => (Number(b[key]) || 0) - (Number(a[key]) || 0));
+          sorted.forEach((r, i) => { r[rankKey] = i + 1; });
+        };
+        _resortByMetric('total_crashes',    'rank_total_crashes');
+        _resortByMetric('fatal_crashes',    'rank_fatal');
+        _resortByMetric('ksi_crashes',      'rank_ksi');
+        _resortByMetric('total_epdo',       'rank_epdo');
+        _resortByMetric('ped_crashes',      'rank_ped');
+        _resortByMetric('bike_crashes',     'rank_bike');
+        _resortByMetric('impaired_crashes', 'rank_impaired');
+        _resortByMetric('speed_crashes',    'rank_speed');
+        _resortByMetric('night_crashes',    'rank_night');
+        console.log(`[Scorecard] Deduped ${(data || []).length} rows → ${deduped.length} unique jurisdictions for ${state}/${year}`);
+        return deduped;
       } catch (e) {
         console.warn('[DataClient] Scorecard failed:', e.message);
       }
