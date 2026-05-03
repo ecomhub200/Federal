@@ -602,23 +602,41 @@ CL.data.supabaseBridge = (function () {
         try {
             if (window.crashLensClient) {
                 var stateKey = null;
+                var dropdownStateA = null;
 
                 if (typeof _getActiveStateKey === 'function') {
                     stateKey = _getActiveStateKey();
                 }
 
                 var bootDefault = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
+                try {
+                    var stateSelectA = document.getElementById('stateSelect');
+                    if (stateSelectA && stateSelectA.value && typeof _fipsToStateKey === 'function') {
+                        dropdownStateA = _fipsToStateKey(stateSelectA.value);
+                    }
+                } catch (e2) { /* non-fatal */ }
+
+                // Fix A3 — if _getActiveStateKey fell through to Priority 5
+                // (bootDefault), prefer the live dropdown when it has a more-
+                // specific value. Same intent as the Fix A second-defense
+                // block below, but applied here so the FIRST defense doesn't
+                // pin state to 'colorado' before the second defense even runs.
                 if (!stateKey || stateKey === bootDefault) {
-                    try {
-                        var stateSelect = document.getElementById('stateSelect');
-                        if (stateSelect && stateSelect.value && typeof _fipsToStateKey === 'function') {
-                            var fromFips = _fipsToStateKey(stateSelect.value);
-                            if (fromFips) stateKey = fromFips;
-                        }
-                    } catch (e2) { /* non-fatal */ }
+                    if (dropdownStateA) {
+                        stateKey = dropdownStateA;
+                    }
                 }
 
-                if (stateKey) {
+                // Fix A3 guard: never overwrite an already-specific
+                // crashLensClient.state with the boot default when the only
+                // signal we have IS the boot default. This is what was
+                // letting the boot race repeatedly pin state to 'colorado'
+                // and produce 0-row matview queries for Delaware.
+                if (
+                    stateKey &&
+                    stateKey !== window.crashLensClient.state &&
+                    !(stateKey === bootDefault && !dropdownStateA && window.crashLensClient.state && window.crashLensClient.state !== bootDefault)
+                ) {
                     window.crashLensClient.state = stateKey;
                 }
             }
