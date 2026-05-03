@@ -20570,6 +20570,22 @@ Developed by CRASH LENS | <a href="mailto:support@aicreatesai.com" style="color:
 <!-- ═══════════════════════════════════════════════ -->
 <!-- SAFETY SCORECARD TAB                          -->
 <!-- ═══════════════════════════════════════════════ -->
+<style>
+  /* Scorecard table — sticky left columns + header polish.
+     Header sticky-top is inherited from the global .data-table th rule. */
+  #scorecardTable th { white-space:nowrap; }
+  #scorecardTable th:hover { filter:brightness(1.15); }
+  #scorecardTable .sc-th-sticky-l,
+  #scorecardTable .sc-td-sticky-l   { position:sticky; left:0;   z-index:8;  background:#1e3a8a; }
+  #scorecardTable td.sc-td-sticky-l { background:#fff; }
+  #scorecardTable tbody tr:nth-child(even) td.sc-td-sticky-l { background:#f8fafc; }
+  #scorecardTable tbody tr:hover     td.sc-td-sticky-l { background:#eff6ff; }
+  #scorecardTable .sc-th-sticky-l2,
+  #scorecardTable .sc-td-sticky-l2  { left:60px; }
+  #scorecardTable thead th.sc-th-sticky-l { z-index:12; }   /* corner cell stays on top */
+  #scorecardTable .scorecard-info:hover,
+  #scorecardTable .scorecard-info:focus { background:#1e3a8a !important; color:#fff !important; outline:none; }
+</style>
 <div id="tab-scorecard" class="tab-content" role="tabpanel" aria-labelledby="tab-scorecard-btn">
 <div class="card">
 <div class="card-title"><span aria-hidden="true">📋</span> Safety Scorecard — Jurisdiction Comparison</div>
@@ -20607,6 +20623,18 @@ Developed by CRASH LENS | <a href="mailto:support@aicreatesai.com" style="color:
 <option value="infrastructure">Infrastructure</option>
 </select>
 </div>
+
+<div style="display:flex;flex-direction:column;gap:.25rem" title="Limit visible rows after sorting — useful for screening top performers/offenders.">
+<label style="font-size:.75rem;font-weight:600;color:#475569">Show</label>
+<select id="scorecard-topn" onchange="onScorecardTopNChange()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem">
+<option value="0">All rows</option>
+<option value="10">Top 10</option>
+<option value="25">Top 25</option>
+<option value="50">Top 50</option>
+</select>
+</div>
+
+<button type="button" id="scorecard-export-btn" onclick="exportScorecardCSV()" title="Download the current view as CSV" style="padding:.45rem .8rem;border:1px solid #1e3a8a;background:#1e3a8a;color:#fff;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;align-self:flex-end">⬇ Export CSV</button>
 
 <div style="margin-left:auto;font-size:.8rem;color:#64748b" id="scorecard-status"></div>
 </div>
@@ -155012,61 +155040,64 @@ function signDef_exportPDF() {
 // Safety Scorecard — Jurisdiction Comparison & Ranking
 // ================================================================
 
-/** Column configs for each scorecard type */
+/** Column configs for each scorecard type.
+ *  `tip` adds a hover definition shown via a small ⓘ icon in the header.
+ *  All numeric columns get sort affordance + heatmap shading automatically.
+ */
 const SCORECARD_COLUMNS = {
   volume: {
     label: 'Volume & Severity',
     cols: [
-      { key: 'total_crashes',   label: 'Total',   rank: 'rank_total_crashes' },
-      { key: 'fatal_crashes',   label: 'Fatal',   rank: 'rank_fatal' },
-      { key: 'ksi_crashes',     label: 'KSI',     rank: 'rank_ksi' },
-      { key: 'total_epdo',      label: 'EPDO',    rank: 'rank_epdo' },
-      { key: 'total_injured',   label: 'Injured' },
-      { key: 'total_killed',    label: 'Killed' },
-      { key: 'fatality_rate',   label: 'Fatal %', pct: true },
-      { key: 'ksi_rate',        label: 'KSI %',   pct: true },
+      { key: 'total_crashes',   label: 'Total',   rank: 'rank_total_crashes', tip: 'All reported crashes (all severities) in the selected period.' },
+      { key: 'fatal_crashes',   label: 'Fatal',   rank: 'rank_fatal',         tip: 'Crashes with at least one fatality (KABCO severity K).' },
+      { key: 'ksi_crashes',     label: 'KSI',     rank: 'rank_ksi',           tip: 'Killed + Serious Injury (KABCO K + A). Primary FHWA Safe-System metric.' },
+      { key: 'total_epdo',      label: 'EPDO',    rank: 'rank_epdo',          tip: 'Equivalent Property Damage Only — severity-weighted score. FHWA-SA-25-021 weights: K=883, A=94, B=21, C=11, O=1.' },
+      { key: 'total_injured',   label: 'Injured', tip: 'Total persons injured (any severity, A+B+C).' },
+      { key: 'total_killed',    label: 'Killed',  tip: 'Total persons killed (fatalities). Persons, not crashes.' },
+      { key: 'fatality_rate',   label: 'Fatal %', pct: true, tip: 'Fatal crashes ÷ total crashes × 100. Higher = more lethal mix of crashes.' },
+      { key: 'ksi_rate',        label: 'KSI %',   pct: true, tip: 'KSI crashes ÷ total crashes × 100. Higher = more severe outcomes per crash.' },
     ]
   },
   vulnerable: {
     label: 'Vulnerable Users',
     cols: [
-      { key: 'total_crashes',       label: 'Total',       rank: 'rank_total_crashes' },
-      { key: 'ped_crashes',         label: 'Pedestrian',  rank: 'rank_ped' },
-      { key: 'bike_crashes',        label: 'Bicycle',     rank: 'rank_bike' },
-      { key: 'motorcycle_crashes',  label: 'Motorcycle' },
-      { key: 'ped_killed',          label: 'Ped Killed' },
-      { key: 'ped_injured',         label: 'Ped Injured' },
-      { key: 'senior_crashes',      label: 'Senior' },
-      { key: 'young_crashes',       label: 'Young' },
-      { key: 'ped_rate',            label: 'Ped %', pct: true },
+      { key: 'total_crashes',       label: 'Total',       rank: 'rank_total_crashes', tip: 'All crashes — denominator for vulnerable-user rates.' },
+      { key: 'ped_crashes',         label: 'Pedestrian',  rank: 'rank_ped',  tip: 'Crashes involving at least one pedestrian.' },
+      { key: 'bike_crashes',        label: 'Bicycle',     rank: 'rank_bike', tip: 'Crashes involving at least one bicyclist.' },
+      { key: 'motorcycle_crashes',  label: 'Motorcycle',  tip: 'Crashes involving at least one motorcycle.' },
+      { key: 'ped_killed',          label: 'Ped Killed',  tip: 'Pedestrian fatalities (persons).' },
+      { key: 'ped_injured',         label: 'Ped Injured', tip: 'Pedestrians injured (any severity).' },
+      { key: 'senior_crashes',      label: 'Senior',      tip: 'Crashes involving a driver age 65+.' },
+      { key: 'young_crashes',       label: 'Young',       tip: 'Crashes involving a driver under 21.' },
+      { key: 'ped_rate',            label: 'Ped %', pct: true, tip: 'Pedestrian crashes ÷ total crashes × 100.' },
     ]
   },
   factors: {
     label: 'Contributing Factors',
     cols: [
-      { key: 'total_crashes',        label: 'Total',       rank: 'rank_total_crashes' },
-      { key: 'impaired_crashes',     label: 'Impaired',    rank: 'rank_impaired' },
-      { key: 'speed_crashes',        label: 'Speed',       rank: 'rank_speed' },
-      { key: 'distracted_crashes',   label: 'Distracted' },
-      { key: 'unrestrained_crashes', label: 'Unrestrained' },
-      { key: 'night_crashes',        label: 'Night',       rank: 'rank_night' },
-      { key: 'impaired_rate',        label: 'Impaired %',  pct: true },
-      { key: 'speed_rate',           label: 'Speed %',     pct: true },
-      { key: 'night_rate',           label: 'Night %',     pct: true },
+      { key: 'total_crashes',        label: 'Total',       rank: 'rank_total_crashes', tip: 'All crashes — denominator for factor rates.' },
+      { key: 'impaired_crashes',     label: 'Impaired',    rank: 'rank_impaired', tip: 'Crashes flagged for alcohol/drug impairment.' },
+      { key: 'speed_crashes',        label: 'Speed',       rank: 'rank_speed',    tip: 'Crashes flagged with speed as a contributing factor.' },
+      { key: 'distracted_crashes',   label: 'Distracted',  tip: 'Crashes flagged with driver distraction (phone, in-vehicle, external).' },
+      { key: 'unrestrained_crashes', label: 'Unrestrained', tip: 'Crashes with at least one unrestrained occupant (no seat belt / child seat).' },
+      { key: 'night_crashes',        label: 'Night',       rank: 'rank_night', tip: 'Crashes occurring during dark/dawn/dusk light conditions.' },
+      { key: 'impaired_rate',        label: 'Impaired %',  pct: true, tip: 'Impaired crashes ÷ total crashes × 100.' },
+      { key: 'speed_rate',           label: 'Speed %',     pct: true, tip: 'Speed-related crashes ÷ total crashes × 100.' },
+      { key: 'night_rate',           label: 'Night %',     pct: true, tip: 'Night crashes ÷ total crashes × 100.' },
     ]
   },
   infrastructure: {
     label: 'Infrastructure',
     cols: [
-      { key: 'total_crashes',          label: 'Total',        rank: 'rank_total_crashes' },
-      { key: 'intersection_crashes',   label: 'Intersection' },
-      { key: 'road_departure_crashes', label: 'Road Depart.' },
-      { key: 'workzone_crashes',       label: 'Work Zone' },
-      { key: 'school_zone_crashes',    label: 'School Zone' },
-      { key: 'near_school_crashes',    label: 'Near School' },
-      { key: 'near_bridge_crashes',    label: 'Near Bridge' },
-      { key: 'near_rail_crashes',      label: 'Near Rail' },
-      { key: 'near_transit_crashes',   label: 'Near Transit' },
+      { key: 'total_crashes',          label: 'Total',        rank: 'rank_total_crashes', tip: 'All crashes — denominator for infrastructure context.' },
+      { key: 'intersection_crashes',   label: 'Intersection', tip: 'Crashes coded as intersection or intersection-related.' },
+      { key: 'road_departure_crashes', label: 'Road Depart.', tip: 'Roadway-departure crashes (run-off-road, cross-median, head-on).' },
+      { key: 'workzone_crashes',       label: 'Work Zone',    tip: 'Crashes within an active work zone.' },
+      { key: 'school_zone_crashes',    label: 'School Zone',  tip: 'Crashes occurring inside a designated school zone.' },
+      { key: 'near_school_crashes',    label: 'Near School',  tip: 'Crashes within proximity buffer of a school.' },
+      { key: 'near_bridge_crashes',    label: 'Near Bridge',  tip: 'Crashes within proximity buffer of a bridge structure.' },
+      { key: 'near_rail_crashes',      label: 'Near Rail',    tip: 'Crashes within proximity buffer of a rail crossing/corridor.' },
+      { key: 'near_transit_crashes',   label: 'Near Transit', tip: 'Crashes within proximity buffer of a transit stop/route.' },
     ]
   }
 };
@@ -155076,6 +155107,7 @@ let _scorecardData  = [];     // latest fetched rows
 let _scorecardSortCol  = 'rank_total_crashes';
 let _scorecardSortAsc  = true;
 let _scorecardInited   = false;
+let _scorecardTopN     = 0;   // 0 = show all; otherwise limit to top N rows after sort
 
 /**
  * Initialize the scorecard tab — populate year dropdowns, load data.
@@ -155228,6 +155260,14 @@ function _rerank(rows, valKey, rankKey) {
 
 /**
  * Render the main scorecard table (single year or rolling).
+ *
+ * Features layered on top of the basic count table:
+ *   • Every header is sortable — inactive cols show ⇅, active shows ▲/▼.
+ *   • Header ⓘ icon reveals a metric definition tooltip.
+ *   • Numeric cells get a heatmap background scaled to the column's max.
+ *   • Each cell shows a thin horizontal bar so the eye can spot outliers fast.
+ *   • Sticky header + sticky Jurisdiction column survive horizontal scroll.
+ *   • `_scorecardTopN` clamps to the first N rows after sort (0 = show all).
  */
 function renderScorecardTable(data) {
   const type = document.getElementById('scorecard-type').value;
@@ -155237,49 +155277,111 @@ function renderScorecardTable(data) {
   if (!thead || !tbody) return;
 
   // Sort data
-  const sorted = data.slice().sort((a, b) => {
+  const sortedAll = data.slice().sort((a, b) => {
     let av = a[_scorecardSortCol], bv = b[_scorecardSortCol];
+    if (_scorecardSortCol === 'jurisdiction') {
+      av = (av || '').toString().toLowerCase();
+      bv = (bv || '').toString().toLowerCase();
+      return _scorecardSortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+    }
     av = (av === null || av === undefined) ? Infinity : Number(av);
     bv = (bv === null || bv === undefined) ? Infinity : Number(bv);
     return _scorecardSortAsc ? av - bv : bv - av;
   });
 
+  const sorted  = (_scorecardTopN > 0) ? sortedAll.slice(0, _scorecardTopN) : sortedAll;
   const maxRank = data.length || 1;
 
-  // Build header
-  let hdr = '<tr><th style="cursor:pointer;min-width:60px" onclick="scorecardSort(\'rank_total_crashes\')">#</th>';
-  hdr += '<th style="cursor:pointer;min-width:140px" onclick="scorecardSort(\'jurisdiction\')">Jurisdiction</th>';
+  // Pre-compute per-column max for heatmap + bar scaling
+  const colMax = {};
   cfg.cols.forEach(c => {
-    const arrow = _scorecardSortCol === c.key ? (_scorecardSortAsc ? ' ▲' : ' ▼') : '';
-    hdr += `<th style="cursor:pointer;text-align:right;min-width:80px" onclick="scorecardSort('${c.key}')">${c.label}${arrow}</th>`;
+    let m = 0;
+    data.forEach(r => { const v = Number(r[c.key]) || 0; if (v > m) m = v; });
+    colMax[c.key] = m || 1;
+  });
+
+  // ── Header ──────────────────────────────────────────────────────
+  const sortGlyph = (key) => {
+    if (_scorecardSortCol === key) return `<span style="margin-left:4px;color:#1e3a8a">${_scorecardSortAsc ? '▲' : '▼'}</span>`;
+    return '<span style="margin-left:4px;color:#cbd5e1;font-size:.8em" aria-hidden="true">⇅</span>';
+  };
+  const infoIcon = (tip) => tip
+    ? `<span class="scorecard-info" tabindex="0" aria-label="${_escAttr(tip)}" title="${_escAttr(tip)}" style="display:inline-block;margin-left:4px;width:14px;height:14px;line-height:13px;text-align:center;border-radius:50%;background:#e2e8f0;color:#475569;font-size:.65rem;font-weight:700;cursor:help">?</span>`
+    : '';
+
+  let hdr = '<tr>';
+  hdr += `<th class="sc-th-sticky-l" style="cursor:pointer;min-width:60px" title="Click to sort by overall rank" onclick="scorecardSort('rank_total_crashes')">#${sortGlyph('rank_total_crashes')}</th>`;
+  hdr += `<th class="sc-th-sticky-l sc-th-sticky-l2" style="cursor:pointer;min-width:140px" title="Click to sort by name" onclick="scorecardSort('jurisdiction')">Jurisdiction${sortGlyph('jurisdiction')}</th>`;
+  cfg.cols.forEach(c => {
+    hdr += `<th style="cursor:pointer;text-align:right;min-width:90px" title="Click to sort by ${_escAttr(c.label)}" onclick="scorecardSort('${c.key}')">${c.label}${sortGlyph(c.key)}${infoIcon(c.tip)}</th>`;
   });
   hdr += '</tr>';
   thead.innerHTML = hdr;
 
-  // Build rows
+  // ── Body ────────────────────────────────────────────────────────
   let html = '';
   sorted.forEach(r => {
     const rank = Number(r.rank_total_crashes) || 999;
     const rankColor = _rankColor(rank, maxRank);
-    html += `<tr style="cursor:pointer" onclick="scorecardDrillDown('${(r.jurisdiction||'').replace(/'/g,"\\'")}')">`;
-    html += `<td style="text-align:center"><span style="display:inline-block;width:28px;height:28px;line-height:28px;border-radius:50%;font-weight:700;font-size:.8rem;color:#fff;background:${rankColor}">${rank}</span></td>`;
-    html += `<td style="font-weight:600">${r.jurisdiction || '—'}</td>`;
+    const jname = (r.jurisdiction || '').replace(/'/g, "\\'");
+    html += `<tr style="cursor:pointer" onclick="scorecardDrillDown('${jname}')">`;
+    html += `<td class="sc-td-sticky-l" style="text-align:center"><span style="display:inline-block;width:28px;height:28px;line-height:28px;border-radius:50%;font-weight:700;font-size:.8rem;color:#fff;background:${rankColor}">${rank}</span></td>`;
+    html += `<td class="sc-td-sticky-l sc-td-sticky-l2" style="font-weight:600">${r.jurisdiction || '—'}</td>`;
     cfg.cols.forEach(c => {
-      let val = r[c.key];
-      if (val === null || val === undefined) val = '—';
-      else if (c.pct) val = parseFloat(val).toFixed(1) + '%';
-      else val = Number(val).toLocaleString();
+      const raw  = r[c.key];
+      const num  = Number(raw) || 0;
+      let display;
+      if (raw === null || raw === undefined) display = '—';
+      else if (c.pct) display = parseFloat(raw).toFixed(1) + '%';
+      else display = num.toLocaleString();
+
+      // Heatmap shade — pct columns scale 0–max%, counts scale 0–colMax
+      const denom = c.pct ? Math.max(colMax[c.key], 1) : colMax[c.key];
+      const ratio = Math.min(num / denom, 1);
+      const bg    = _heatColor(ratio);
+      const barW  = (ratio * 100).toFixed(1);
+
       // Mini rank badge if column has a rank key
       let badge = '';
       if (c.rank && r[c.rank] !== undefined) {
         const cr = Number(r[c.rank]);
         badge = ` <span style="font-size:.65rem;color:${_rankColor(cr, maxRank)};font-weight:700">#${cr}</span>`;
       }
-      html += `<td style="text-align:right">${val}${badge}</td>`;
+
+      html += `<td style="text-align:right;position:relative;background:${bg};padding-bottom:10px">`
+            + `<div style="position:relative;z-index:1">${display}${badge}</div>`
+            + `<div aria-hidden="true" style="position:absolute;left:4px;right:4px;bottom:3px;height:3px;background:#e2e8f0;border-radius:2px;overflow:hidden">`
+            +   `<div style="width:${barW}%;height:100%;background:#1e3a8a;opacity:.55"></div>`
+            + `</div>`
+            + `</td>`;
     });
     html += '</tr>';
   });
   tbody.innerHTML = html || '<tr><td colspan="99" style="text-align:center;padding:2rem;color:#94a3b8">No data for this selection</td></tr>';
+}
+
+/**
+ * HTML-escape a string for safe insertion into an attribute value.
+ */
+function _escAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                  .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Map a 0..1 ratio to a heatmap background.
+ * 0 = white, 1 = strong red. Pale yellow → orange → red gradient.
+ * Used as cell background (low contrast so text stays readable).
+ */
+function _heatColor(ratio) {
+  if (!isFinite(ratio) || ratio <= 0) return 'transparent';
+  const r = Math.min(1, Math.max(0, ratio));
+  // Interpolate between #fff7ed (warm white) and #ef4444 (red).
+  const lerp = (a, b) => Math.round(a + (b - a) * r);
+  const R = lerp(255, 239), G = lerp(247, 68), B = lerp(237, 68);
+  // Soften by mixing toward white based on (1 - r) so low values stay near white.
+  const alpha = 0.18 + r * 0.42;   // 0.18 → 0.60 across range
+  return `rgba(${R},${G},${B},${alpha.toFixed(2)})`;
 }
 
 /**
@@ -155345,15 +155447,88 @@ function _rankColor(rank, total) {
 
 /**
  * Sort handler — toggle direction if same column clicked again.
+ * Numeric columns default to descending (biggest first); name column to ascending.
  */
 function scorecardSort(col) {
   if (_scorecardSortCol === col) {
     _scorecardSortAsc = !_scorecardSortAsc;
   } else {
     _scorecardSortCol = col;
-    _scorecardSortAsc = true;
+    _scorecardSortAsc = (col === 'jurisdiction' || col === 'rank_total_crashes');
   }
   renderScorecardTable(_scorecardData);
+}
+
+/**
+ * Top-N filter change — clamp visible rows after sort.
+ */
+function onScorecardTopNChange() {
+  const sel = document.getElementById('scorecard-topn');
+  _scorecardTopN = parseInt(sel.value, 10) || 0;
+  renderScorecardTable(_scorecardData);
+}
+
+/**
+ * Export the currently visible scorecard view to a CSV file.
+ * Honors active scorecard type (column set), sort order, and Top-N filter.
+ */
+function exportScorecardCSV() {
+  if (!_scorecardData || !_scorecardData.length) return;
+  const type = document.getElementById('scorecard-type').value;
+  const cfg  = SCORECARD_COLUMNS[type] || SCORECARD_COLUMNS.volume;
+
+  // Mirror the table's sort + Top-N
+  const sortedAll = _scorecardData.slice().sort((a, b) => {
+    let av = a[_scorecardSortCol], bv = b[_scorecardSortCol];
+    if (_scorecardSortCol === 'jurisdiction') {
+      av = (av || '').toString().toLowerCase();
+      bv = (bv || '').toString().toLowerCase();
+      return _scorecardSortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+    }
+    av = (av === null || av === undefined) ? Infinity : Number(av);
+    bv = (bv === null || bv === undefined) ? Infinity : Number(bv);
+    return _scorecardSortAsc ? av - bv : bv - av;
+  });
+  const rows = (_scorecardTopN > 0) ? sortedAll.slice(0, _scorecardTopN) : sortedAll;
+
+  const headers = ['Rank', 'Jurisdiction', ...cfg.cols.map(c => c.label)];
+  const csvLines = [headers.map(_csvCell).join(',')];
+  rows.forEach(r => {
+    const line = [
+      r.rank_total_crashes ?? '',
+      r.jurisdiction ?? '',
+      ...cfg.cols.map(c => {
+        const v = r[c.key];
+        if (v === null || v === undefined) return '';
+        if (c.pct) return parseFloat(v).toFixed(2);
+        return v;
+      })
+    ];
+    csvLines.push(line.map(_csvCell).join(','));
+  });
+
+  const yearSel = document.getElementById('scorecard-year');
+  const modeSel = document.getElementById('scorecard-year-mode');
+  const year = yearSel ? yearSel.value : 'data';
+  const mode = modeSel ? modeSel.value : 'single';
+  const fname = `safety-scorecard_${type}_${mode === 'rolling' ? (year-2)+'-'+year : year}.csv`;
+
+  const blob = new Blob(['﻿' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Quote a CSV cell — wraps in double quotes and doubles internal quotes. */
+function _csvCell(v) {
+  const s = (v === null || v === undefined) ? '' : String(v);
+  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
 }
 
 /**
