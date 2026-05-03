@@ -61,6 +61,28 @@ CL.data.lazyLoader = (function () {
             && CL.data.tabLoaders.tabServedBySupabase(tabId)) {
             return false;
         }
+        // R2 has no aggregate-level parquets. At aggregate tiers (region/MPO/
+        // PD/state/federal), trying to download <state>/_region/<id>/<roadtype>.parquet
+        // returns 404 across 4 candidate formats × 3 retries = 12 wasted requests.
+        // Skip R2 entirely for those tiers — the tab will render its empty state
+        // or use the per-tab Supabase preloader (if registered).
+        try {
+            var _tier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+            var _aggregateTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
+            if (_aggregateTiers.has(_tier)) {
+                console.log('[LazyLoader] Tab "' + tabId + '" needs R2 but tier=' + _tier + ' has no aggregate parquet — skipping R2 download. Tab will use Supabase preloader or show its empty state.');
+                return false;
+            }
+            // County tier with rollup: R2 download would clobber the bridge's
+            // PD-rollup KPIs with the county-only parquet. Same skip pattern.
+            if (_tier === 'county' && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier) {
+                var _r = CL.data.supabaseBridge.resolveTier();
+                if (_r && _r.rolledUpFrom === 'county') {
+                    console.log('[LazyLoader] Tab "' + tabId + '" — county rollup active, R2 download skipped.');
+                    return false;
+                }
+            }
+        } catch (e) { /* non-fatal */ }
         return true;
     }
 

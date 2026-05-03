@@ -21352,11 +21352,52 @@ function _placeSlugFor(name) {
 function lookupCountyKeyByFips(fips5) {
     if (typeof appConfig === 'undefined' || !appConfig || !appConfig.jurisdictions) return null;
     var target = String(fips5 || '').padStart(5, '0');
+    if (target.length !== 5) return null;
+    var stateFipsFromTarget = target.substring(0, 2);
+    var countyFipsFromTarget = target.substring(2);
+    // Primary: tigerweb.stateFips is updated by applyDynamicStateConfig for
+    // the active state. Fallback: top-level appConfig.state.fips (state-bundle
+    // configs like states/<state>/config.json).
+    var appStateFips =
+        (appConfig.apis && appConfig.apis.tigerweb && appConfig.apis.tigerweb.stateFips)
+            ? String(appConfig.apis.tigerweb.stateFips).padStart(2, '0')
+            : (appConfig.state && appConfig.state.fips)
+                ? String(appConfig.state.fips).padStart(2, '0')
+                : null;
     for (var k in appConfig.jurisdictions) {
         if (!Object.prototype.hasOwnProperty.call(appConfig.jurisdictions, k)) continue;
         var j = appConfig.jurisdictions[k];
         if (!j) continue;
-        if (String(j.fullFips || '').padStart(5, '0') === target) return k;
+        // Different state configs key FIPS differently. Try every plausible
+        // shape and normalize to a 5-digit string before comparing.
+        //   Virginia / legacy:  j.fullFips = "51087"
+        //   Delaware / modern:  j.fips     = "001" (3-digit county only,
+        //                       paired with appConfig.state.fips = "10")
+        //   Hybrid:             j.stateFips + j.countyFips, or j.state + j.county
+        var candidates = [];
+        if (j.fullFips) candidates.push(String(j.fullFips));
+        if (j.fips5) candidates.push(String(j.fips5));
+        if (j.stateFips && j.countyFips) {
+            candidates.push(
+                String(j.stateFips).padStart(2, '0') +
+                String(j.countyFips).padStart(3, '0')
+            );
+        }
+        // 3-digit county FIPS combined with the active state's FIPS.
+        if (j.fips && String(j.fips).length === 3 && appStateFips) {
+            candidates.push(appStateFips + String(j.fips).padStart(3, '0'));
+        }
+        // Bare county code matches when the target's state matches appConfig.state.
+        if (j.fips && appStateFips && stateFipsFromTarget === appStateFips) {
+            candidates.push(appStateFips + String(j.fips).padStart(3, '0'));
+        }
+        // Final fallback: if j.fips is itself a 5-digit string.
+        if (j.fips && String(j.fips).length === 5) {
+            candidates.push(String(j.fips));
+        }
+        for (var i = 0; i < candidates.length; i++) {
+            if (candidates[i].padStart(5, '0') === target) return k;
+        }
     }
     return null;
 }
@@ -25429,7 +25470,34 @@ async function handleStateSelection() {
                     }
                 }
 
-                autoLoadCrashData(true); // skipCache = true since cache was just invalidated
+                // Defer R2 download when the resolved tier rolls up to a
+                // planning_district / dot_district. Otherwise R2 races the
+                // bridge — when the matview is slow (~15s), R2 wins and pins
+                // the dashboard to the unincorporated-only county count.
+                // saveJurisdictionSelection already has this guard; this is
+                // the second autoLoad entry point and needs the same skip.
+                let _hssRolledUp = false;
+                try {
+                    const _hssTr = (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+                        ? CL.data.supabaseBridge.resolveTier()
+                        : null;
+                    _hssRolledUp = !!(_hssTr && _hssTr.rolledUpFrom === 'county');
+                } catch (e) { /* non-fatal */ }
+
+                if (_hssRolledUp) {
+                    console.log('[Tier] handleStateSelection — rollup detected, R2 download skipped (bridge handles KPIs)');
+                    if (typeof crashState !== 'undefined') {
+                        crashState.loaded = true;
+                        crashState.sampleRowsLoaded = false;
+                    }
+                    try { if (typeof updateDataConnectionStatus === 'function') updateDataConnectionStatus('connected'); } catch (e2) {}
+                    try {
+                        if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+                        if (typeof showRefreshButton === 'function') showRefreshButton();
+                    } catch (uiErr) { /* non-fatal */ }
+                } else {
+                    autoLoadCrashData(true); // skipCache = true since cache was just invalidated
+                }
 
                 // Reload hierarchy for the new state and refresh Region/MPO dropdowns
                 try {
@@ -36096,6 +36164,24 @@ function yieldToUI() {
 
 // Main ranking function - now async with chunked processing and caching
 async function rankLocationsForGrants() {
+    // Aggregate tiers have no row-level R2 data and mv_grants_baseline isn't
+    // yet populated for those tiers. Render the empty-state instead of
+    // ranking against stale county-tier sampleRows.
+    try {
+        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
+            const _container = document.getElementById('tab-grants');
+            if (_container) {
+                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
+                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
+                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
+                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
+                    '</div>';
+            }
+            return;
+        }
+    } catch (e) { /* non-fatal — fall through to normal init */ }
+
     if (!crashState.loaded) return;
 
     // Ensure sampleRows are loaded (lazy loading after Worker parse)
@@ -50106,6 +50192,24 @@ function isValidMapPoint(p) {
 function initMap() {
     if (crashMap) return;
 
+    // Aggregate tiers (region/MPO/PD/state/federal) have no row-level data on
+    // R2 and the map_viewport_crashes RPC currently times out at those tiers.
+    // Render an empty-state instead of running with stale data.
+    try {
+        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
+            const _container = document.getElementById('tab-map');
+            if (_container) {
+                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
+                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
+                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
+                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
+                    '</div>';
+            }
+            return;
+        }
+    } catch (e) { /* non-fatal — fall through to normal init */ }
+
     // Find center from data or use selected jurisdiction's center
     let center = MAP_CENTER; // Dynamic based on selected jurisdiction
     let zoom = MAP_ZOOM;
@@ -59917,6 +60021,24 @@ document.addEventListener('click', function(e) {
 });
 
 function analyzeHotspots() {
+    // Aggregate tiers have no row-level R2 data and mv_hotspots isn't yet
+    // populated for those tiers. Render the empty-state instead of running
+    // hotspot scoring with stale sampleRows from a previous county tier.
+    try {
+        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
+            const _container = document.getElementById('tab-hotspots');
+            if (_container) {
+                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
+                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
+                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
+                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
+                    '</div>';
+            }
+            return;
+        }
+    } catch (e) { /* non-fatal — fall through to normal init */ }
+
     if (!crashState.loaded) { alert('Load data first'); return; }
     showLoading('Analyzing hot spots...');
 
@@ -62052,6 +62174,23 @@ function getFilteredIntersectionData() {
 }
 
 function updateIntersectionTab() {
+    // Aggregate tiers have no row-level R2 data. Render the empty-state so
+    // we don't show a per-intersection table built from stale sampleRows.
+    try {
+        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
+            const _container = document.getElementById('tab-intersection');
+            if (_container) {
+                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
+                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
+                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
+                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
+                    '</div>';
+            }
+            return;
+        }
+    } catch (e) { /* non-fatal — fall through to normal init */ }
+
     const data = getFilteredIntersectionData();
     const int = data.intersection;
     const total = data.totalRows;
@@ -82302,6 +82441,23 @@ const dkState = {
 
 // Initialize Domain Knowledge tab
 function initDomainKnowledge() {
+    // Aggregate tiers have no row-level R2 data. Render the empty-state so
+    // domain extraction doesn't run on stale county-tier sampleRows.
+    try {
+        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
+            const _container = document.getElementById('tab-domain-knowledge');
+            if (_container) {
+                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
+                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
+                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
+                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
+                    '</div>';
+            }
+            return;
+        }
+    } catch (e) { /* non-fatal — fall through to normal init */ }
+
     if (dkState.initialized) return;
 
     // Initialize Location Type Selector (if not already created)
@@ -94946,6 +95102,23 @@ function enrichMissingCrashFields(rows) {
 
 // Initialize Safety Focus module
 function initSafetyFocus() {
+    // Aggregate tiers have no row-level R2 data. Render the empty-state so
+    // we don't run with stale county-tier sampleRows from a previous tier.
+    try {
+        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
+            const _container = document.getElementById('tab-safety');
+            if (_container) {
+                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
+                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
+                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
+                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
+                    '</div>';
+            }
+            return;
+        }
+    } catch (e) { /* non-fatal — fall through to normal init */ }
+
     if (!crashState.loaded || !crashState.sampleRows || crashState.sampleRows.length === 0) {
         console.log('[Safety Focus] Waiting for data...');
         return;
@@ -152324,6 +152497,23 @@ function ddRenderKpiRow(containerId, kpis) {
 }
 
 function initDeepDiveTab() {
+    // Aggregate tiers have no row-level R2 data. Render the empty-state so
+    // we don't drill into stale crashes from a previous county tier.
+    try {
+        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
+            const _container = document.getElementById('tab-deepdive');
+            if (_container) {
+                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
+                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
+                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
+                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
+                    '</div>';
+            }
+            return;
+        }
+    } catch (e) { /* non-fatal — fall through to normal init */ }
+
     if (deepDiveState.loaded) {
         applyDeepDiveFilters();
         return;
