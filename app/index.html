@@ -33029,6 +33029,15 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
                 console.warn('[AutoLoad] Background sampleRows load failed:', err);
             });
 
+            // Re-enable the Road Type radios + Refresh button. Without this
+            // the Supabase-only path early-returns before reaching the R2
+            // code that calls showFilterLoadingState(false), leaving the
+            // radios visually disabled (opacity .6 + pointer-events:none)
+            // even though the dashboard is fully painted.
+            try {
+                if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+            } catch (e) { /* non-fatal */ }
+
             return; // Supabase served the dashboard — done.
         }
 
