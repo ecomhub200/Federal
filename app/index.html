@@ -20609,6 +20609,16 @@ Developed by CRASH LENS | <a href="mailto:support@aicreatesai.com" style="color:
 <div style="margin-left:auto;font-size:.8rem;color:#64748b" id="scorecard-status"></div>
 </div>
 
+<!-- Tier filter strip — splits the leaderboard by jurisdiction tier (Fix 6) -->
+<div id="scorecard-tier-tabs" style="display:flex;gap:.5rem;margin-bottom:1rem">
+  <button class="scorecard-tier-btn active" data-tier="all" onclick="setScorecardTier('all')"
+    style="padding:.4rem .8rem;border:1px solid #cbd5e1;background:#1e293b;color:#fff;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">All</button>
+  <button class="scorecard-tier-btn" data-tier="county" onclick="setScorecardTier('county')"
+    style="padding:.4rem .8rem;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:6px;font-size:.8rem;cursor:pointer">Counties</button>
+  <button class="scorecard-tier-btn" data-tier="city" onclick="setScorecardTier('city')"
+    style="padding:.4rem .8rem;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:6px;font-size:.8rem;cursor:pointer">Cities &amp; Towns</button>
+</div>
+
 <!-- Scorecard Table -->
 <div style="max-height:520px;overflow-y:auto;border:1px solid var(--gray-light);border-radius:var(--radius)">
 <table class="data-table" id="scorecardTable">
@@ -155074,6 +155084,44 @@ let _scorecardData  = [];     // latest fetched rows
 let _scorecardSortCol  = 'rank_total_crashes';
 let _scorecardSortAsc  = true;
 let _scorecardInited   = false;
+let _scorecardTierFilter = 'all';   // 'county' | 'city' | 'all'
+
+/**
+ * Infer the tier of a scorecard row from the active state's hierarchy.json.
+ * State-agnostic: every state has allCounties + cities.
+ * Falls back to 'unknown' if hierarchy isn't loaded yet.
+ */
+function _inferScorecardTier(row) {
+  if (!row || !row.jurisdiction) return 'unknown';
+  try {
+    const hier = (typeof HierarchyRegistry !== 'undefined') ? HierarchyRegistry.getData() : null;
+    if (!hier) return 'unknown';
+    const norm = (s) => String(s || '').toLowerCase().trim().replace(/\s+county$/i, '');
+    const target = norm(row.jurisdiction);
+    // Counties — hier.allCounties is a {fips: name} map.
+    if (hier.allCounties) {
+      for (const fips in hier.allCounties) {
+        if (norm(hier.allCounties[fips]) === target) return 'county';
+      }
+    }
+    // Otherwise treat as city/town/CDP. Future: refine with a places list.
+    return 'city';
+  } catch (e) {
+    return 'unknown';
+  }
+}
+
+function setScorecardTier(tier) {
+  _scorecardTierFilter = tier;
+  document.querySelectorAll('.scorecard-tier-btn').forEach(btn => {
+    const active = btn.getAttribute('data-tier') === tier;
+    btn.style.background = active ? '#1e293b' : '#fff';
+    btn.style.color      = active ? '#fff'    : '#475569';
+    btn.style.fontWeight = active ? '600'     : '400';
+  });
+  renderScorecardTable(_scorecardData);
+  updateScorecardChart();
+}
 
 // Auto-refresh on jurisdiction / state change. State-agnostic: works for
 // every state via _resolveActiveState() in loadScorecardData. Triggers from
@@ -155282,15 +155330,20 @@ function renderScorecardTable(data) {
   const tbody = document.getElementById('scorecardBody');
   if (!thead || !tbody) return;
 
+  // Tier filter (Fix 6) — narrow rows to the active sub-tab.
+  const _filtered = (_scorecardTierFilter === 'all')
+    ? data
+    : data.filter(r => _inferScorecardTier(r) === _scorecardTierFilter);
+
   // Sort data
-  const sorted = data.slice().sort((a, b) => {
+  const sorted = _filtered.slice().sort((a, b) => {
     let av = a[_scorecardSortCol], bv = b[_scorecardSortCol];
     av = (av === null || av === undefined) ? Infinity : Number(av);
     bv = (bv === null || bv === undefined) ? Infinity : Number(bv);
     return _scorecardSortAsc ? av - bv : bv - av;
   });
 
-  const maxRank = data.length || 1;
+  const maxRank = _filtered.length || 1;
 
   // Build header
   let hdr = '<tr><th style="cursor:pointer;min-width:60px" onclick="scorecardSort(\'rank_total_crashes\')">#</th>';
@@ -155309,7 +155362,11 @@ function renderScorecardTable(data) {
     const rankColor = _rankColor(rank, maxRank);
     html += `<tr style="cursor:pointer" onclick="scorecardDrillDown('${(r.jurisdiction||'').replace(/'/g,"\\'")}')">`;
     html += `<td style="text-align:center"><span style="display:inline-block;width:28px;height:28px;line-height:28px;border-radius:50%;font-weight:700;font-size:.8rem;color:#fff;background:${rankColor}">${rank}</span></td>`;
-    html += `<td style="font-weight:600">${r.jurisdiction || '—'}</td>`;
+    const _inferredTier = _inferScorecardTier(r);
+    const _tierBadge = (_inferredTier && _inferredTier !== 'unknown')
+      ? ` <span style="font-size:.65rem;color:#64748b;font-weight:500;margin-left:.4rem;padding:.1rem .35rem;background:#f1f5f9;border-radius:3px">${_inferredTier}</span>`
+      : '';
+    html += `<td style="font-weight:600">${r.jurisdiction || '—'}${_tierBadge}</td>`;
     cfg.cols.forEach(c => {
       let val = r[c.key];
       if (val === null || val === undefined) val = '—';
@@ -155342,7 +155399,12 @@ function renderComparisonTable(current, compare, yearA, yearB) {
   const compMap = {};
   (compare || []).forEach(r => compMap[r.jurisdiction] = r);
 
-  const maxRank = current.length || 1;
+  // Tier filter (Fix 6) — also gate the compare view by sub-tab.
+  const _filtered = (_scorecardTierFilter === 'all')
+    ? current
+    : current.filter(r => _inferScorecardTier(r) === _scorecardTierFilter);
+
+  const maxRank = _filtered.length || 1;
 
   // Header with year labels
   let hdr = '<tr><th>#</th><th>Jurisdiction</th>';
@@ -155353,7 +155415,7 @@ function renderComparisonTable(current, compare, yearA, yearB) {
   thead.innerHTML = hdr;
 
   // Sort by rank
-  const sorted = current.slice().sort((a, b) => (Number(a.rank_total_crashes)||999) - (Number(b.rank_total_crashes)||999));
+  const sorted = _filtered.slice().sort((a, b) => (Number(a.rank_total_crashes)||999) - (Number(b.rank_total_crashes)||999));
 
   let html = '';
   sorted.forEach(r => {
