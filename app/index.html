@@ -21474,8 +21474,12 @@ async function handlePlanningDistrictSelection() {
             builtInLayersState.jurisdictionBoundary.enabled = false;
         }
 
-        if (pdSource && typeof displayPlanningDistrictBoundary === 'function') {
-            displayPlanningDistrictBoundary(pdSource, pdId);
+        try {
+            if (pdSource && typeof displayPlanningDistrictBoundary === 'function') {
+                displayPlanningDistrictBoundary(pdSource, pdId);
+            }
+        } catch (boundaryErr) {
+            console.warn('[Tier] displayPlanningDistrictBoundary failed (non-fatal, continuing to data fetch):', boundaryErr && boundaryErr.message);
         }
 
         const stateKey = (typeof _getActiveStateKey === 'function')
@@ -21598,10 +21602,14 @@ async function handleCitySelection() {
             builtInLayersState.jurisdictionBoundary.enabled = false;
         }
 
-        if (typeof displayCityBoundary === 'function') {
-            displayCityBoundary(slug, displayName, placeType).catch(e =>
-                console.warn('[Tier] City boundary fetch failed:', e.message)
-            );
+        try {
+            if (typeof displayCityBoundary === 'function') {
+                displayCityBoundary(slug, displayName, placeType).catch(e =>
+                    console.warn('[Tier] City boundary fetch failed:', e.message)
+                );
+            }
+        } catch (boundaryErr) {
+            console.warn('[Tier] displayCityBoundary failed (non-fatal, continuing to data fetch):', boundaryErr && boundaryErr.message);
         }
 
         const stateKey = (typeof _getActiveStateKey === 'function')
@@ -21807,11 +21815,17 @@ async function handleRegionSelection() {
             builtInLayersState.jurisdictionBoundary.enabled = false;
         }
 
-        // Display region boundary on map (uses mapBounds or center/zoom from hierarchy)
-        if (typeof displayRegionBoundary === 'function') {
-            displayRegionBoundary(region, regionId);
-        } else if (region.center && crashMap) {
-            crashMap.flyTo([region.center[1], region.center[0]], region.zoom || 8, { duration: 1.2 });
+        // Display region boundary on map (uses mapBounds or center/zoom from hierarchy).
+        // The data path MUST NOT depend on map state — wrap the boundary draw in
+        // its own try/catch so a future map error never blocks the Supabase fetch.
+        try {
+            if (typeof displayRegionBoundary === 'function') {
+                displayRegionBoundary(region, regionId);
+            } else if (region.center && crashMap && typeof crashMap.flyTo === 'function') {
+                crashMap.flyTo([region.center[1], region.center[0]], region.zoom || 8, { duration: 1.2 });
+            }
+        } catch (boundaryErr) {
+            console.warn('[Tier] displayRegionBoundary failed (non-fatal, continuing to data fetch):', boundaryErr && boundaryErr.message);
         }
 
         // Load region aggregate
@@ -21958,31 +21972,36 @@ async function handleMPOSelection() {
             }
         }
 
-        // Display the boundary on the map
-        if (boundary?.features?.length > 0) {
-            // Cache the boundary GeoJSON on the MPO context for reuse when map initializes later
-            jurisdictionContext.tierMpo._cachedBoundary = boundary;
+        // Display the boundary on the map. Wrapped in try/catch so a map-state
+        // failure here NEVER blocks the Supabase fetch below — Bug 1 fix.
+        try {
+            if (boundary?.features?.length > 0) {
+                // Cache the boundary GeoJSON on the MPO context for reuse when map initializes later
+                jurisdictionContext.tierMpo._cachedBoundary = boundary;
 
-            if (typeof displayMPOBoundary === 'function') {
-                displayMPOBoundary(boundary, mpoId, mpo.shortName || mpo.name);
+                if (typeof displayMPOBoundary === 'function') {
+                    displayMPOBoundary(boundary, mpoId, mpo.shortName || mpo.name);
+                }
+            } else if (mpo.center) {
+                // Fallback: fly to MPO center from hierarchy data
+                if (typeof removeMPOBoundaryLayer === 'function') removeMPOBoundaryLayer();
+                if (crashMap && typeof crashMap.flyTo === 'function') {
+                    crashMap.flyTo([mpo.center[1], mpo.center[0]], mpo.zoom || 10, { duration: 1.2 });
+                }
+                console.log(`[Tier] No BTS boundary polygon found for ${mpo.shortName}, using hierarchy center`);
+            } else if (mpo.mapBounds) {
+                // Fallback: use mapBounds from hierarchy
+                if (typeof removeMPOBoundaryLayer === 'function') removeMPOBoundaryLayer();
+                if (crashMap && typeof crashMap.flyToBounds === 'function') {
+                    const bounds = L.latLngBounds(
+                        L.latLng(mpo.mapBounds.sw[0], mpo.mapBounds.sw[1]),
+                        L.latLng(mpo.mapBounds.ne[0], mpo.mapBounds.ne[1])
+                    );
+                    crashMap.flyToBounds(bounds, { padding: [50, 50], duration: 1.2 });
+                }
             }
-        } else if (mpo.center) {
-            // Fallback: fly to MPO center from hierarchy data
-            if (typeof removeMPOBoundaryLayer === 'function') removeMPOBoundaryLayer();
-            if (crashMap) {
-                crashMap.flyTo([mpo.center[1], mpo.center[0]], mpo.zoom || 10, { duration: 1.2 });
-            }
-            console.log(`[Tier] No BTS boundary polygon found for ${mpo.shortName}, using hierarchy center`);
-        } else if (mpo.mapBounds) {
-            // Fallback: use mapBounds from hierarchy
-            if (typeof removeMPOBoundaryLayer === 'function') removeMPOBoundaryLayer();
-            if (crashMap) {
-                const bounds = L.latLngBounds(
-                    L.latLng(mpo.mapBounds.sw[0], mpo.mapBounds.sw[1]),
-                    L.latLng(mpo.mapBounds.ne[0], mpo.mapBounds.ne[1])
-                );
-                crashMap.flyToBounds(bounds, { padding: [50, 50], duration: 1.2 });
-            }
+        } catch (boundaryErr) {
+            console.warn('[Tier] displayMPOBoundary failed (non-fatal, continuing to data fetch):', boundaryErr && boundaryErr.message);
         }
 
         // Use _getActiveStateKey() for full state name (e.g., 'colorado') — NOT abbreviation ('co')
@@ -24844,29 +24863,21 @@ function _getActiveStateKey() {
  */
 function getActiveRoadTypeSuffix(tier) {
     const activeTier = tier || (typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county');
+    // Delegate to the central mapping module — single source of truth shared
+    // with supabase-bridge.roadTypeSpec(), data-client.radioToBucket(), and
+    // updateRoadTypeLabels().
+    if (CL && CL.data && CL.data.roadTypeMapping) {
+        const radioVal = CL.data.roadTypeMapping.activeRadioValue();
+        return CL.data.roadTypeMapping.suffixFor(activeTier, radioVal);
+    }
+    // Defensive fallback (shouldn't happen — module loads before this is called).
     const filterRadio = document.querySelector('input[name="roadTypeFilter"]:checked');
     const filterValue = filterRadio?.value || localStorage.getItem('selectedFilterProfile') || 'countyOnly';
-
     if (activeTier === 'state' || activeTier === 'federal' || activeTier === 'region') {
-        // State/Federal/Region: DOT Roads, Non-DOT Roads, All Roads
-        // R2 files live under the tier folder (_state/, _national/, _region/<id>/)
-        // with state-agnostic names: all_roads.parquet, dot_roads.parquet, non_dot_roads.parquet
-        const dotMap = {
-            'countyOnly':      'dot_roads',
-            'cityOnly':        'city_roads',
-            'countyPlusVDOT':  'non_dot_roads',
-            'allRoads':        'all_roads'
-        };
+        const dotMap = { countyOnly: 'dot_roads', cityOnly: 'city_roads', countyPlusVDOT: 'non_dot_roads', allRoads: 'all_roads' };
         return dotMap[filterValue] || 'all_roads';
     }
-
-    // County, MPO: County Roads, City Roads, No Interstate, All Roads
-    const localMap = {
-        'countyOnly':      'county_roads',
-        'cityOnly':        'city_roads',
-        'countyPlusVDOT':  'no_interstate',
-        'allRoads':        'all_roads'
-    };
+    const localMap = { countyOnly: 'county_roads', cityOnly: 'city_roads', countyPlusVDOT: 'no_interstate', allRoads: 'all_roads' };
     return localMap[filterValue] || 'county_roads';
 }
 
@@ -24877,46 +24888,26 @@ function getActiveRoadTypeSuffix(tier) {
  * @param {string} tier - The active view tier
  */
 function updateRoadTypeLabels(tier) {
-    const labelConfigs = {
-        state: {
-            countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-            cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-            countyPlusVDOT:  '<strong>Non-DOT Roads</strong> - Local and non-state roads',
-            allRoads:        '<strong>Statewide All Roads</strong> - DOT + Non-DOT combined'
-        },
-        federal: {
-            countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-            cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-            countyPlusVDOT:  '<strong>Non-DOT Roads</strong> - Local and non-state roads',
-            allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined (nationwide)'
-        },
-        region: {
-            countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-            cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-            countyPlusVDOT:  '<strong>Non-DOT Roads</strong> - Local and non-state roads',
-            allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined'
-        },
-        _default: {
-            countyOnly:      '<strong>County Roads Only</strong> - County-maintained roads',
-            cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-            countyPlusVDOT:  '<strong>All Roads (No Interstate)</strong> - Includes state routes',
-            allRoads:        '<strong>All Roads</strong> - Including interstates'
-        }
+    // Delegate to the central road-type-mapping module — single source of truth.
+    // Pre-fix, three different label tables (here, upload-tab.js, and the
+    // implicit _default) silently disagreed with the matview query buckets.
+    const map = (CL && CL.data && CL.data.roadTypeMapping) ? CL.data.roadTypeMapping : null;
+    const ids = {
+        countyOnly:     'filterLabelCountyOnly',
+        cityOnly:       'filterLabelCityOnly',
+        countyPlusVDOT: 'filterLabelCountyPlusVDOT',
+        allRoads:       'filterLabelAllRoads'
     };
-
-    const labels = labelConfigs[tier] || labelConfigs._default;
-
-    const el1 = document.getElementById('filterLabelCountyOnly');
-    const elCity = document.getElementById('filterLabelCityOnly');
-    const el2 = document.getElementById('filterLabelCountyPlusVDOT');
-    const el3 = document.getElementById('filterLabelAllRoads');
-
-    if (el1) el1.innerHTML = labels.countyOnly;
-    if (elCity) elCity.innerHTML = labels.cityOnly;
-    if (el2) el2.innerHTML = labels.countyPlusVDOT;
-    if (el3) el3.innerHTML = labels.allRoads;
-
-    console.log(`[RoadType] Labels updated for tier: ${tier}`);
+    if (map) {
+        Object.keys(ids).forEach(radio => {
+            const el = document.getElementById(ids[radio]);
+            if (el) el.innerHTML = map.labelFor(tier, radio);
+        });
+        console.log(`[RoadType] Labels updated for tier: ${tier}`);
+        return;
+    }
+    // Defensive fallback only — module should always be loaded.
+    console.warn('[RoadType] road-type-mapping module not loaded; labels not updated.');
 }
 
 // Get the data file path based on current selection (tier-aware, R2-aware)
@@ -136575,8 +136566,12 @@ function displayRegionBoundary(region, regionId) {
     }
 
     if (!region?.mapBounds || !crashMap) {
-        // Fallback: fly to center/zoom if no bounds
-        if (region?.center) {
+        // Fallback: fly to center/zoom if no bounds. Guard against null
+        // crashMap — without this guard the "no bounds + no map" branch
+        // throws TypeError: Cannot read properties of null (reading 'flyTo')
+        // and aborts the calling tier handler before it reaches the
+        // Supabase bridge fetch.
+        if (region?.center && crashMap && typeof crashMap.flyTo === 'function') {
             crashMap.flyTo([region.center[1], region.center[0]], region.zoom || 8, { duration: 1.2 });
         }
         return;
@@ -154671,6 +154666,9 @@ function signDef_exportPDF() {
 </div>
 
 <!-- CrashLens Supabase Data Client (Phase 1 — foundation only) -->
+<!-- road-type-mapping.js MUST load before data-client.js and supabase-bridge.js -->
+<!-- (single source of truth for tier × radio → spec/label/r2Suffix mapping). -->
+<script src="modules/data/road-type-mapping.js"></script>
 <script src="../assets/js/data-client.js"></script>
 <script src="modules/data/supabase-bridge.js"></script>
 <script src="modules/data/lazy-loader.js"></script>

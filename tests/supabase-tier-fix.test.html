@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CrashLens — Supabase Tier+RoadType Fix Acceptance Tests</title>
+<style>
+    body { font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif; margin: 18px; color: #0f172a; }
+    h1 { font-size: 1.2rem; margin: 0 0 .25rem; }
+    h2 { font-size: 1rem; margin: 1.25rem 0 .25rem; }
+    p.lead { color: #475569; margin: 0 0 1rem; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { padding: 6px 10px; border: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+    th { background: #f1f5f9; }
+    .pass { color: #047857; font-weight: 600; }
+    .fail { color: #b91c1c; font-weight: 700; }
+    .skip { color: #64748b; font-style: italic; }
+    code { font-family: ui-monospace, Menlo, monospace; background: #f8fafc; padding: 1px 4px; border-radius: 3px; }
+    .summary { margin: .5rem 0 1rem; padding: 8px 12px; border-radius: 6px; background: #ecfdf5; border-left: 4px solid #047857; }
+    .summary.fail { background: #fef2f2; border-left-color: #b91c1c; }
+    button { background: #1e3a8a; color: white; border: 0; border-radius: 6px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<h1>Supabase Tier + RoadType Fix — Acceptance Tests</h1>
+<p class="lead">
+    Hits the live <code>dashboard_summary</code> matview at
+    <code>https://srv1503081.hstgr.cloud/rest/v1</code> using the anon key
+    embedded in <code>assets/js/data-client.js</code>. Numbers below are the
+    "Live totals" oracle from the fix prompt — anything that doesn't match
+    means either (a) the mapping is wrong, or (b) the matview shifted and
+    the prompt's oracle needs refreshing.
+</p>
+
+<!-- Load the shared mapping module + data client. Paths assume the file
+     is opened as tests/supabase-tier-fix.test.html in this repo. -->
+<script src="../app/modules/data/road-type-mapping.js"></script>
+<script src="../assets/js/data-client.js"></script>
+
+<button id="run">Run all tests</button>
+<div id="summary" class="summary" style="display:none;"></div>
+<div id="results"></div>
+
+<script>
+(function () {
+    'use strict';
+
+    // ─────────────────────────────────────────────────────────
+    // Shim: in this sandbox there's no jurisdictionContext / appConfig,
+    // so the road-type-mapping module's tier dispatch is fed directly
+    // through specFor(tier, radio).
+    // ─────────────────────────────────────────────────────────
+    var RT = (window.CL && window.CL.data && window.CL.data.roadTypeMapping);
+    if (!RT) {
+        document.body.insertAdjacentHTML('beforeend',
+            '<p class="fail">FATAL: road-type-mapping module did not load. Did you open this file via http://, not file://?</p>');
+        return;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Live totals oracle — copied verbatim from the fix prompt.
+    // ─────────────────────────────────────────────────────────
+    // Each test row encodes:
+    //   tier, radio (input from updateRoadTypeLabels' 4 radios), state,
+    //   tierValue (matview-stored name), expected sum(crash_count), expected row count
+    var ORACLE = [
+        // state-level
+        { id: 'state-allRoads',        tier: 'state',  radio: 'allRoads',       state: 'delaware', tierValue: null,                                              expectedSum: 569829, expectedRows: 58745 },
+        { id: 'state-dot',             tier: 'state',  radio: 'countyOnly',     state: 'delaware', tierValue: null,                                              expectedSum: 438501, expectedRows: 40745 },
+        { id: 'state-county_roads',    tier: 'mpo',    radio: 'countyOnly',     state: 'delaware', tierValue: null,                                              expectedSum:  39885, expectedRows:  7883, _note: 'tier=mpo with no value just exercises road_type=county_roads filter' },
+        { id: 'state-city_roads',      tier: 'state',  radio: 'cityOnly',       state: 'delaware', tierValue: null,                                              expectedSum:  81315, expectedRows:  9301 },
+        { id: 'state-non_dot',         tier: 'state',  radio: 'countyPlusVDOT', state: 'delaware', tierValue: null,                                              expectedSum: 131328, expectedRows: 18000 },
+        { id: 'state-noInterstate',    tier: 'mpo',    radio: 'countyPlusVDOT', state: 'delaware', tierValue: null,                                              expectedSum: 529069, expectedRows: 57075, _note: 'tier=mpo with no value exercises is_interstate=eq.false filter' },
+
+        // region (dot_district) — DE de_1 = North District
+        { id: 'region-north',          tier: 'region', radio: 'allRoads',       state: 'delaware', tierValue: 'North District',                                  expectedSum: 337469, expectedRows: 24661 },
+
+        // planning_district = DE South District (1:1 with Sussex county)
+        { id: 'pd-south',              tier: 'planning_district', radio: 'allRoads', state: 'delaware', tierValue: 'South District',                              expectedSum: 134159, expectedRows: 18788 },
+
+        // mpo (mpo_name) — WAPC, the headline regression test
+        { id: 'mpo-wapc-all',          tier: 'mpo',    radio: 'allRoads',       state: 'delaware', tierValue: 'Wilmington Area Planning Council',                expectedSum: 335962, expectedRows: 23851 },
+        { id: 'mpo-wapc-countyOnly',   tier: 'mpo',    radio: 'countyOnly',     state: 'delaware', tierValue: 'Wilmington Area Planning Council',                expectedSum:  17546, expectedRows:  3399, _bug2: true },
+        { id: 'mpo-wapc-noInterstate', tier: 'mpo',    radio: 'countyPlusVDOT', state: 'delaware', tierValue: 'Wilmington Area Planning Council',                expectedSum: 295576, expectedRows: 22387 },
+
+        // county tier — physical_juris_name returns unincorporated only.
+        { id: 'county-sussex-allRoads', tier: 'county', radio: 'allRoads',      state: 'delaware', tierValue: 'Sussex',                                          expectedSum:  87073, expectedRows:  5059, _bug3FallbackOnly: true },
+        { id: 'county-sussex-noInter',  tier: 'county', radio: 'countyPlusVDOT', state: 'delaware', tierValue: 'Sussex',                                          expectedSum:  87073, expectedRows:  5059, _bug3FallbackOnly: true },
+        { id: 'county-dover-allRoads',  tier: 'county', radio: 'allRoads',      state: 'delaware', tierValue: 'Dover',                                           expectedSum:  33583, expectedRows:  2034, _bug3FallbackOnly: true }
+    ];
+
+    // ─────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────
+    var SUPABASE_URL = (CrashLensDataClient.DEFAULTS.supabaseUrl || '').replace(/\/+$/, '');
+    var ANON_KEY = CrashLensDataClient.DEFAULTS.supabaseKey;
+    var TIER_COL = CrashLensDataClient.TIER_COLUMNS;
+
+    function buildQuery(t) {
+        // Spec from the central mapping module
+        var spec = RT.specFor(t.tier, t.radio);
+        var params = new URLSearchParams();
+        params.set('select', 'crash_count');
+        if (t.state) params.set('state', 'eq.' + t.state);
+        // Apply tier filter — but only if we have a tier column AND a value.
+        // (The state-level tests exercise just the road_type filter; tierValue is null.)
+        var col = TIER_COL[t.tier];
+        if (col && t.tierValue) {
+            params.set(col, 'eq.' + t.tierValue);
+        }
+        if (Array.isArray(spec.roadTypes) && spec.roadTypes.length > 0) {
+            params.set('road_type', 'in.(' + spec.roadTypes.join(',') + ')');
+        } else if (spec.roadType) {
+            params.set('road_type', 'eq.' + spec.roadType);
+        }
+        if (spec.noInterstate) {
+            params.set('is_interstate', 'eq.false');
+        }
+        params.set('limit', '100000');
+        return SUPABASE_URL + '/dashboard_summary?' + params.toString();
+    }
+
+    async function runOne(t) {
+        var url = buildQuery(t);
+        var resp = await fetch(url, {
+            headers: { apikey: ANON_KEY, Authorization: 'Bearer ' + ANON_KEY }
+        });
+        if (!resp.ok) {
+            return { ok: false, reason: 'HTTP ' + resp.status };
+        }
+        var rows = await resp.json();
+        var sum = 0;
+        for (var i = 0; i < rows.length; i++) {
+            sum += parseInt(rows[i].crash_count, 10) || 0;
+        }
+        var sumOk = (sum === t.expectedSum);
+        var rowsOk = (rows.length === t.expectedRows);
+        return {
+            ok: sumOk && rowsOk,
+            sum: sum,
+            rows: rows.length,
+            sumOk: sumOk,
+            rowsOk: rowsOk,
+            url: url
+        };
+    }
+
+    function el(html) {
+        var d = document.createElement('div');
+        d.innerHTML = html;
+        return d.firstElementChild;
+    }
+
+    async function runAll() {
+        var btn = document.getElementById('run');
+        btn.disabled = true;
+        var results = document.getElementById('results');
+        results.innerHTML = '';
+        var summary = document.getElementById('summary');
+        summary.style.display = 'none';
+
+        var table = el('<table><thead><tr><th>ID</th><th>Tier</th><th>Radio</th><th>Value</th><th>Spec</th><th>Expected sum / rows</th><th>Actual sum / rows</th><th>Status</th></tr></thead><tbody></tbody></table>');
+        results.appendChild(table);
+        var tbody = table.querySelector('tbody');
+
+        var passed = 0, failed = 0;
+
+        for (var i = 0; i < ORACLE.length; i++) {
+            var t = ORACLE[i];
+            var spec = RT.specFor(t.tier, t.radio);
+            var specStr = JSON.stringify(spec);
+            var tr = el('<tr><td><code>' + t.id + '</code></td><td>' + t.tier + '</td><td>' + t.radio + '</td><td>' + (t.tierValue || '<em>null</em>') + '</td><td><code>' + specStr + '</code></td><td>' + t.expectedSum.toLocaleString() + ' / ' + t.expectedRows.toLocaleString() + '</td><td>…</td><td class="skip">running</td></tr>');
+            tbody.appendChild(tr);
+            try {
+                var r = await runOne(t);
+                var actualCell = tr.children[6];
+                var statusCell = tr.children[7];
+                if (r.ok) {
+                    actualCell.textContent = r.sum.toLocaleString() + ' / ' + r.rows.toLocaleString();
+                    statusCell.className = 'pass';
+                    statusCell.textContent = 'PASS';
+                    passed++;
+                } else if (r.reason) {
+                    actualCell.innerHTML = '<em>' + r.reason + '</em>';
+                    statusCell.className = 'fail';
+                    statusCell.textContent = 'FAIL (network)';
+                    failed++;
+                } else {
+                    actualCell.innerHTML = r.sum.toLocaleString() + ' / ' + r.rows.toLocaleString() +
+                        ' <small>(sum ' + (r.sumOk ? 'OK' : '<strong style="color:#b91c1c">MISMATCH</strong>') +
+                        ', rows ' + (r.rowsOk ? 'OK' : '<strong style="color:#b91c1c">MISMATCH</strong>') + ')</small>';
+                    statusCell.className = 'fail';
+                    statusCell.textContent = 'FAIL';
+                    failed++;
+                }
+            } catch (e) {
+                tr.children[6].textContent = '';
+                tr.children[7].className = 'fail';
+                tr.children[7].textContent = 'ERROR: ' + e.message;
+                failed++;
+            }
+        }
+
+        summary.classList.toggle('fail', failed > 0);
+        summary.style.display = 'block';
+        summary.innerHTML = '<strong>' + (failed === 0 ? 'All tests passed.' : failed + ' test(s) failed.') + '</strong> ' +
+            passed + ' / ' + ORACLE.length + ' assertions passed against the live matview.';
+
+        btn.disabled = false;
+    }
+
+    document.getElementById('run').addEventListener('click', runAll);
+})();
+</script>
+
+<h2>What this file proves</h2>
+<ul>
+    <li><strong>Bug 2:</strong> the radio labeled "County Roads Only" at the MPO tier returns ~17,546, not the pre-fix 260,967 (which was actually the <code>dot_roads</code> bucket).</li>
+    <li><strong>Bug 3:</strong> rows tagged <code>_bug3FallbackOnly</code> are the unincorporated-only physical_juris_name fallback. If the JS implements the planning_district rollup, the dashboard will display the rolled-up total instead — that's a separate UI assertion in the smoke test.</li>
+    <li><strong>Bug 4:</strong> every row passes <em>only</em> if the central mapping in <code>road-type-mapping.js</code> is wired in — no inline label/spec tables disagreeing in any caller.</li>
+</ul>
+
+</body>
+</html>

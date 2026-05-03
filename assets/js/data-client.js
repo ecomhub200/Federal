@@ -145,30 +145,34 @@ class CrashLensDataClient {
   /**
    * Map a "Road Type" radio value (countyOnly / cityOnly / countyPlusVDOT /
    * allRoads) to a bucket-spec object {roadType?, roadTypes?, noInterstate?}.
-   * Pure mirror of supabase-bridge.roadTypeSpec() so callers that don't have
-   * the bridge available (tests, headless) get the same answer.
+   *
+   * Delegates to CL.data.roadTypeMapping — the single source of truth shared
+   * with supabase-bridge.roadTypeSpec(), updateRoadTypeLabels(), and
+   * getActiveRoadTypeSuffix(). Only federal/state/region are aggregate tiers;
+   * mpo / planning_district / county / city are place tiers.
    */
   static radioToBucket(radioValue, tier) {
     const t = tier || 'county';
-    // Aggregate tiers (federal / state / region / mpo / planning_district)
-    // show "DOT Roads Only" for countyOnly because they conflate
-    // state-DOT-maintained roads under dot_roads. Local tiers (county / city)
-    // re-label that radio to "County Roads Only" → county_roads. Mirror
-    // the upload-tab updateRoadTypeLabels() table verbatim.
-    const aggregate = (t === 'federal' || t === 'state' || t === 'region' || t === 'mpo' || t === 'planning_district');
+    if (typeof window !== 'undefined' && window.CL && window.CL.data && window.CL.data.roadTypeMapping) {
+      const src = window.CL.data.roadTypeMapping.specFor(t, radioValue) || {};
+      // Defensive copy — caller may mutate.
+      const out = {};
+      if (src.roadType) out.roadType = src.roadType;
+      if (Array.isArray(src.roadTypes)) out.roadTypes = src.roadTypes.slice();
+      if (src.noInterstate) out.noInterstate = true;
+      return out;
+    }
+    // Headless / non-DOM context (tests in Node) — inline mirror of the
+    // mapping table. Keep in sync with road-type-mapping.js.
+    const aggregate = (t === 'federal' || t === 'state' || t === 'region');
     if (radioValue === 'allRoads')   return {};
     if (radioValue === 'countyOnly') return { roadType: aggregate ? 'dot_roads' : 'county_roads' };
     if (radioValue === 'cityOnly')   return { roadType: 'city_roads' };
     if (radioValue === 'countyPlusVDOT') {
-      if (t === 'federal') {
-        // Sorted alphabetically so the SWR cache key normalizes — two
-        // adjacent Federal Non-DOT clicks share a cache slot regardless of
-        // any caller's array-construction order. SQL `IN(...)` is
-        // order-insensitive, so the wire query is unaffected.
+      if (aggregate) {
         return { roadTypes: ['city_roads', 'county_roads', 'other_roads'] };
       }
-      if (aggregate) return { roadType: 'county_roads' };  // state/region/mpo/pd
-      return { noInterstate: true };  // county/city only
+      return { noInterstate: true };
     }
     return {};
   }

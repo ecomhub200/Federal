@@ -114,6 +114,68 @@ CL.data.supabaseBridge = (function () {
         return null;
     }
 
+    /**
+     * Look up a county-level rollup target in the active hierarchy.json.
+     * Returns the planning_district or dot_district that maps 1:1 to the
+     * given county FIPS, or null if no 1:1 mapping is present (multi-county
+     * regions disqualify the rollup — falling back to physical_juris_name
+     * keeps the answer state-agnostic instead of silently misreporting).
+     *
+     * Used by Bug 3 fix: until the matview gains a `parent_county_name`
+     * column, `physical_juris_name=eq.Sussex` returns ONLY the unincorporated
+     * remainder. Where a planning_district covers exactly one county we can
+     * substitute `planning_district=eq.<dbName>` and pick up the cities too.
+     */
+    function _countyRollupTarget(ctx) {
+        try {
+            if (typeof HierarchyRegistry === 'undefined') return null;
+            var hier = HierarchyRegistry.getData();
+            if (!hier) return null;
+            var fips3 = (ctx && ctx.fullFips) ? String(ctx.fullFips).slice(-3) : null;
+            if (!fips3) return null;
+
+            // Prefer planning_district (most stable across states); fall back
+            // to dot_district. If multiple PDs/regions cover the same county,
+            // 1:1 doesn't hold — bail.
+            function find1to1(map) {
+                if (!map) return null;
+                var hit = null;
+                var keys = Object.keys(map);
+                for (var i = 0; i < keys.length; i++) {
+                    var k = keys[i];
+                    if (k && k.charAt(0) === '_') continue;
+                    var entry = map[k];
+                    if (!entry || !Array.isArray(entry.counties)) continue;
+                    if (entry.counties.length === 1 && entry.counties[0] === fips3) {
+                        if (hit) return null;       // ambiguous
+                        hit = { id: k, dbName: entry.dbName || null, name: entry.name || null };
+                    }
+                }
+                return hit;
+            }
+
+            var pd = find1to1(hier.planningDistricts);
+            if (pd && pd.dbName) return { column: 'planning_district', value: pd.dbName, source: 'planningDistricts', id: pd.id };
+
+            var region = find1to1(hier.regions);
+            if (region && region.dbName) return { column: 'dot_district', value: region.dbName, source: 'regions', id: region.id };
+
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function _logMissingDbName(scope, id, fallback) {
+        // CONFIG bugs of this shape silently produce "0 rows" results — surface
+        // loudly so they're caught in DevTools immediately instead of looking
+        // like a Supabase outage. State-agnostic; works for any state's hierarchy.
+        try {
+            console.error('[CONFIG] Missing dbName for tier=' + scope + ' id=' + id +
+                ' — falling back to "' + fallback + '" (verify hierarchy.json against dashboard_summary).');
+        } catch (e) { /* non-fatal */ }
+    }
+
     function resolveTier() {
         var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
         if (!ctx) return { tier: 'state', value: null };
@@ -129,6 +191,7 @@ CL.data.supabaseBridge = (function () {
                 console.log('[resolveTier] No region selected, falling back to state tier');
                 return { tier: 'state', value: null };
             }
+            if (!regionObj.dbName) _logMissingDbName('region', regionObj.id || regionObj.name, regionObj.name);
             return { tier: 'region', value: regionObj.dbName || regionObj.name };
         }
         if (t === 'mpo') {
@@ -140,6 +203,7 @@ CL.data.supabaseBridge = (function () {
                 console.log('[resolveTier] No MPO selected, falling back to state tier');
                 return { tier: 'state', value: null };
             }
+            if (!mpoObj.dbName) _logMissingDbName('mpo', mpoObj.id || mpoObj.name, mpoObj.shortName || mpoObj.name);
             return { tier: 'mpo', value: mpoObj.dbName || mpoObj.shortName || mpoObj.name };
         }
         if (t === 'planning_district') {
@@ -148,6 +212,7 @@ CL.data.supabaseBridge = (function () {
                 console.log('[resolveTier] No planning district selected, falling back to state tier');
                 return { tier: 'state', value: null };
             }
+            if (!pdObj.dbName) _logMissingDbName('planning_district', pdObj.id || pdObj.name, pdObj.name);
             return { tier: 'planning_district', value: pdObj.dbName || pdObj.name };
         }
         if (t === 'city') {
@@ -172,6 +237,21 @@ CL.data.supabaseBridge = (function () {
             return { tier: 'county', value: cityVal };
         }
         if (t === 'county') {
+            // Bug 3 — `physical_juris_name` stores the most-specific juris,
+            // so a county query at that column returns ONLY the unincorporated
+            // remainder (e.g. Sussex=87,073 instead of ~134,159). When the
+            // hierarchy has a planning_district / dot_district that maps 1:1
+            // to this county, query at THAT column to roll up cities + the
+            // unincorporated remainder. Otherwise fall back to
+            // physical_juris_name with a UI disclaimer.
+            var rollup = _countyRollupTarget(ctx);
+            if (rollup) {
+                var rollupTier = (rollup.column === 'planning_district') ? 'planning_district' : 'region';
+                console.log('[resolveTier] County rollup via ' + rollup.column + '=' +
+                    rollup.value + ' (1:1 mapping from ' + rollup.source + '/' + rollup.id + ')');
+                return { tier: rollupTier, value: rollup.value, rolledUpFrom: 'county', rollupSource: rollup.source };
+            }
+
             // physicalJurisName is the DB-matching short form stored at selection time
             // (e.g. "New Castle" not "New Castle County"). 50-state safe — sourced from
             // config.json namePatterns[0]. Falls back to config lookup, then a
@@ -181,7 +261,7 @@ CL.data.supabaseBridge = (function () {
                 var rawCounty = ctx.jurisdictionName || '';
                 countyVal = rawCounty.replace(/\s+County$/i, '') || null;
             }
-            return { tier: 'county', value: countyVal };
+            return { tier: 'county', value: countyVal, unincorporatedOnly: true };
         }
         return { tier: 'state', value: null };
     }
@@ -200,41 +280,30 @@ CL.data.supabaseBridge = (function () {
      *   is_interstate ∈ {true, false}
      *   road_type buckets are derived from crashes.ownership (NOT crashes.system).
      *
-     * Tier-aware mapping (matches the radio labels in app/index.html):
-     *   countyOnly      → DOT Roads Only           → dot_roads everywhere
-     *   cityOnly        → City Roads Only          → city_roads everywhere
-     *   countyPlusVDOT  → varies by tier:
-     *                       state/region/MPO/PD → County Roads Only → county_roads
-     *                       federal             → Non-DOT Roads     → [county,city,other]
-     *                       county/city         → All Roads (No Interstate) → noInterstate
-     *   allRoads        → All Roads               → no filter
+     * The tier × radio table lives in CL.data.roadTypeMapping — single source
+     * of truth shared with CrashLensDataClient.radioToBucket(),
+     * updateRoadTypeLabels(), and getActiveRoadTypeSuffix(). MPO / planning
+     * district are PLACE tiers (countyOnly → county_roads, countyPlusVDOT →
+     * noInterstate); only federal / state / region are AGGREGATE tiers.
      */
     function roadTypeSpec() {
-        var radio = document.querySelector('input[name="roadTypeFilter"]:checked');
-        var val = radio ? radio.value : (localStorage.getItem('selectedFilterProfile') || 'allRoads');
-
         var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
         var tier = (ctx && ctx.viewTier) || 'county';
-
-        // Aggregate tiers (federal / state / region / mpo / planning_district)
-        // treat "countyOnly" as "DOT Roads Only" → dot_roads. Local tiers
-        // (county / city) re-label it to "County Roads Only" → county_roads.
-        // Mirrors the label table in upload-tab.updateRoadTypeLabels() and
-        // CrashLensDataClient.radioToBucket().
-        var aggregate = (tier === 'federal' || tier === 'state' || tier === 'region' || tier === 'mpo' || tier === 'planning_district');
-        if (val === 'allRoads') return {};
-        if (val === 'countyOnly') return { roadType: aggregate ? 'dot_roads' : 'county_roads' };
-        if (val === 'cityOnly')   return { roadType: 'city_roads' };
-        if (val === 'countyPlusVDOT') {
-            if (tier === 'federal') {
-                // Sorted alphabetically — matches CrashLensDataClient.radioToBucket
-                // so the SWR cache key normalizes regardless of which entry
-                // point the caller used (bridge vs. raw client).
-                return { roadTypes: ['city_roads', 'county_roads', 'other_roads'] };
-            }
-            if (aggregate) return { roadType: 'county_roads' };  // state/region/mpo/pd
-            return { noInterstate: true };  // county/city only
+        var radioVal = (CL.data.roadTypeMapping)
+            ? CL.data.roadTypeMapping.activeRadioValue()
+            : ((document.querySelector('input[name="roadTypeFilter"]:checked') || {}).value
+                || (typeof localStorage !== 'undefined' && localStorage.getItem('selectedFilterProfile'))
+                || 'allRoads');
+        if (CL.data.roadTypeMapping) {
+            // Defensive copy so callers can't mutate the shared spec.
+            var src = CL.data.roadTypeMapping.specFor(tier, radioVal) || {};
+            var out = {};
+            if (src.roadType) out.roadType = src.roadType;
+            if (Array.isArray(src.roadTypes)) out.roadTypes = src.roadTypes.slice();
+            if (src.noInterstate) out.noInterstate = true;
+            return out;
         }
+        // Defensive fallback (shouldn't happen — module loads before bridge).
         return {};
     }
 
@@ -473,12 +542,23 @@ CL.data.supabaseBridge = (function () {
         tbody.innerHTML = html;
     }
 
-    function showBanner() {
-        if (document.getElementById('supabaseBridgeIndicator')) return;
+    function showBanner(opts) {
+        var existing = document.getElementById('supabaseBridgeIndicator');
+        var msg = '⚡ Summary loaded from database — detailed charts & filters loading...';
+        if (opts && opts.unincorporatedOnly) {
+            // Bug 3 disclaimer — visible to the user when we couldn't roll up
+            // the county to planning_district / dot_district and physical_juris_name
+            // is returning unincorporated rows only.
+            msg += ' · Incorporated cities reported separately.';
+        }
+        if (existing) {
+            existing.textContent = msg;
+            return;
+        }
         var banner = document.createElement('div');
         banner.id = 'supabaseBridgeIndicator';
         banner.style.cssText = 'padding:8px 14px;margin:0 0 10px 0;background:#1e3a8a;color:#e0e7ff;border-radius:6px;font-size:13px;border-left:3px solid #60a5fa;';
-        banner.textContent = '⚡ Summary loaded from database — detailed charts & filters loading...';
+        banner.textContent = msg;
         var kpi = document.getElementById('dashboardKPIs');
         if (kpi && kpi.parentNode) kpi.parentNode.insertBefore(banner, kpi);
     }
@@ -596,7 +676,7 @@ CL.data.supabaseBridge = (function () {
 
             paintYearlyTable(agg);
             paintFuncClassTable(agg);
-            showBanner();
+            showBanner({ unincorporatedOnly: !!t.unincorporatedOnly });
             _injected = true;
 
             console.log('[Phase2] Supabase bridge injected', {
