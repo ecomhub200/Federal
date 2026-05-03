@@ -155403,27 +155403,72 @@ function scorecardSort(col) {
 }
 
 /**
- * Drill down: clicking a jurisdiction row sets the tier context and goes to Dashboard.
+ * Drill into a jurisdiction from the scorecard table.
+ *
+ * Routes through appConfig.jurisdictions namePatterns / fullName so the
+ * matview's "Kent" maps to the dropdown's "kent" key. State-agnostic —
+ * works for any state's hierarchy. Then sets the tier button + dropdown
+ * value, fires change events so the bridge picks up the new tier+value,
+ * navigates to Dashboard.
+ *
+ * @param {string} jurisdiction - matview jurisdiction name (e.g. "Kent")
  */
 function scorecardDrillDown(jurisdiction) {
-  // Try to set jurisdiction context
-  if (typeof updateJurisdictionContext === 'function') {
-    const tierSel = document.getElementById('upload-tier-select');
-    if (tierSel) {
-      tierSel.value = 'city';
-      tierSel.dispatchEvent(new Event('change'));
-    }
-    const jurisSel = document.getElementById('jurisdictionSelect');
-    if (jurisSel) {
-      for (let i = 0; i < jurisSel.options.length; i++) {
-        if (jurisSel.options[i].text === jurisdiction || jurisSel.options[i].value === jurisdiction) {
-          jurisSel.selectedIndex = i;
-          break;
-        }
+  if (!jurisdiction) return;
+
+  // Resolve the matview name → appConfig.jurisdictions key.
+  let targetKey = null;
+  let targetTier = 'county';   // default to county (most jurisdictions in scorecard ARE counties)
+  try {
+    const jurs = (typeof appConfig !== 'undefined' && appConfig && appConfig.jurisdictions) || {};
+    const norm = (s) => String(s || '').toLowerCase().trim();
+    for (const k in jurs) {
+      const j = jurs[k];
+      if (!j) continue;
+      const candidates = [
+        j.name, j.fullName, j.shortName, j.displayName,
+        ...(Array.isArray(j.namePatterns) ? j.namePatterns : [])
+      ].filter(Boolean).map(norm);
+      if (candidates.includes(norm(jurisdiction))) {
+        targetKey = k;
+        if (j.tier) targetTier = j.tier;
+        break;
       }
     }
+  } catch (e) { /* non-fatal */ }
+
+  if (!targetKey) {
+    console.warn('[Scorecard] Drill-down failed: no appConfig.jurisdictions match for "' + jurisdiction + '"');
+    if (typeof showToast === 'function') {
+      showToast('Could not navigate to ' + jurisdiction + ' — not in current state config.', 'warning');
+    }
+    return;
   }
-  // Navigate to dashboard
+
+  // Set the tier (county/city/etc.) by clicking the matching tier button.
+  // The tier picker is a button row with [data-view-tier] attributes —
+  // NOT a <select>. Defensive: fall through silently if buttons aren't found.
+  try {
+    const tierBtns = document.querySelectorAll('[data-view-tier]');
+    let tierBtn = null;
+    tierBtns.forEach(btn => {
+      if (btn.getAttribute('data-view-tier') === targetTier) tierBtn = btn;
+    });
+    if (tierBtn && typeof tierBtn.click === 'function') tierBtn.click();
+  } catch (e) { /* non-fatal */ }
+
+  // Set the jurisdiction dropdown by VALUE (not text). The dropdown's
+  // values are 'kent' / 'sussex' / 'wilmington' etc.
+  try {
+    const sel = document.getElementById('jurisdictionSelect');
+    if (sel && sel.querySelector('option[value="' + targetKey + '"]')) {
+      sel.value = targetKey;
+      sel.dispatchEvent(new Event('change'));
+    }
+  } catch (e) { /* non-fatal */ }
+
+  // Navigate to Dashboard. The change events kick off the Supabase bridge
+  // — KPIs paint within ~1s.
   if (typeof navigateTo === 'function') navigateTo('dashboard');
 }
 
