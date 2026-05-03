@@ -20965,6 +20965,27 @@ function setViewTier(tier) {
     updateTabVisibilityForTier(tier);
     updateTierSelectorUI(tier);
     console.log(`[Scope] View tier changed: ${prev} → ${tier}`);
+
+    // Fix 2 — clear stale per-row data on every tier change. Map / Hot Spots /
+    // detail tabs read crashState.mapPoints / sampleRows directly — leaving
+    // them in place causes "Map shows previous tier's points" bugs (e.g.
+    // tier=City→Delaware City still showing 2,047 points cached from Kent).
+    // Don't clear crashState.aggregates / .totalRows — the bridge will repaint
+    // them right after; Fix 4 keeps totalRows in sync.
+    if (prev !== tier) {
+        try {
+            if (typeof crashState !== 'undefined' && crashState) {
+                crashState.mapPoints = [];
+                crashState.sampleRows = [];
+                crashState.sampleRowsLoaded = false;
+            }
+            // If the Leaflet map exists, repaint it immediately so the user
+            // doesn't see the previous tier's markers while the new tier loads.
+            if (typeof crashMap !== 'undefined' && crashMap && typeof updateMapDisplay === 'function') {
+                try { updateMapDisplay(); } catch (mapErr) { /* non-fatal */ }
+            }
+        } catch (e) { /* non-fatal */ }
+    }
 }
 
 function updateTabVisibilityForTier(tier) {
@@ -21255,7 +21276,7 @@ async function handleTierChange(tier) {
             if (typeof updateMapScopeLabel === 'function') updateMapScopeLabel();
         } catch (e) { /* non-fatal */ }
         // Dispatch tierChanged event for school/transit tabs
-        document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier, scopeKey: getTierScopeKey() } }));
+        document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier, scopeKey: getTierScopeKey(tier) } }));
     } catch (e) {
         console.error(`[Tier] handleTierChange failed for tier '${tier}':`, e);
     }
@@ -21362,16 +21383,26 @@ function lookupCountyKeyByFips(fips5) {
     var target = String(fips5 || '').padStart(5, '0');
     if (target.length !== 5) return null;
     var stateFipsFromTarget = target.substring(0, 2);
-    var countyFipsFromTarget = target.substring(2);
-    // Primary: tigerweb.stateFips is updated by applyDynamicStateConfig for
-    // the active state. Fallback: top-level appConfig.state.fips (state-bundle
-    // configs like states/<state>/config.json).
-    var appStateFips =
-        (appConfig.apis && appConfig.apis.tigerweb && appConfig.apis.tigerweb.stateFips)
-            ? String(appConfig.apis.tigerweb.stateFips).padStart(2, '0')
-            : (appConfig.state && appConfig.state.fips)
-                ? String(appConfig.state.fips).padStart(2, '0')
-                : null;
+    // Resolve active state FIPS from every plausible source in priority order.
+    // jurisdictionContext.stateFips is the canonical runtime value; the
+    // appConfig sources are fallbacks for early-boot calls. Final fallback:
+    // read the dropdown directly. State-agnostic.
+    var appStateFips = null;
+    if (typeof jurisdictionContext !== 'undefined' && jurisdictionContext && jurisdictionContext.stateFips) {
+        appStateFips = String(jurisdictionContext.stateFips).padStart(2, '0');
+    }
+    if (!appStateFips && appConfig.apis && appConfig.apis.tigerweb && appConfig.apis.tigerweb.stateFips) {
+        appStateFips = String(appConfig.apis.tigerweb.stateFips).padStart(2, '0');
+    }
+    if (!appStateFips && appConfig.state && appConfig.state.fips) {
+        appStateFips = String(appConfig.state.fips).padStart(2, '0');
+    }
+    if (!appStateFips) {
+        try {
+            var _stSel = document.getElementById('stateSelect');
+            if (_stSel && _stSel.value) appStateFips = String(_stSel.value).padStart(2, '0');
+        } catch (e) { /* non-fatal */ }
+    }
     for (var k in appConfig.jurisdictions) {
         if (!Object.prototype.hasOwnProperty.call(appConfig.jurisdictions, k)) continue;
         var j = appConfig.jurisdictions[k];
@@ -21380,28 +21411,33 @@ function lookupCountyKeyByFips(fips5) {
         // shape and normalize to a 5-digit string before comparing.
         //   Virginia / legacy:  j.fullFips = "51087"
         //   Delaware / modern:  j.fips     = "001" (3-digit county only,
-        //                       paired with appConfig.state.fips = "10")
+        //                       paired with appStateFips = "10")
         //   Hybrid:             j.stateFips + j.countyFips, or j.state + j.county
         var candidates = [];
         if (j.fullFips) candidates.push(String(j.fullFips));
         if (j.fips5) candidates.push(String(j.fips5));
-        if (j.stateFips && j.countyFips) {
+        if (j.stateFips != null && j.countyFips != null) {
             candidates.push(
                 String(j.stateFips).padStart(2, '0') +
                 String(j.countyFips).padStart(3, '0')
             );
         }
+        // Numeric state + county pair (some configs use 'state'/'county' keys
+        // with FIPS digits — only treat as FIPS when both are numeric, since
+        // many configs use j.state="DE" as a 2-letter abbreviation instead).
+        if (j.state != null && j.county != null && /^\d+$/.test(String(j.state)) && /^\d+$/.test(String(j.county))) {
+            candidates.push(
+                String(j.state).padStart(2, '0') +
+                String(j.county).padStart(3, '0')
+            );
+        }
         // 3-digit county FIPS combined with the active state's FIPS.
-        if (j.fips && String(j.fips).length === 3 && appStateFips) {
+        if (j.fips && String(j.fips).length <= 3 && appStateFips) {
             candidates.push(appStateFips + String(j.fips).padStart(3, '0'));
         }
-        // Bare county code matches when the target's state matches appConfig.state.
-        if (j.fips && appStateFips && stateFipsFromTarget === appStateFips) {
-            candidates.push(appStateFips + String(j.fips).padStart(3, '0'));
-        }
-        // Final fallback: if j.fips is itself a 5-digit string.
-        if (j.fips && String(j.fips).length === 5) {
-            candidates.push(String(j.fips));
+        // 4-5 digit fips field — already a (partial) full FIPS.
+        if (j.fips && String(j.fips).length >= 4) {
+            candidates.push(String(j.fips).padStart(5, '0'));
         }
         for (var i = 0; i < candidates.length; i++) {
             if (candidates[i].padStart(5, '0') === target) return k;
@@ -21683,7 +21719,7 @@ async function handlePlanningDistrictSelection() {
         document.dispatchEvent(new CustomEvent('tierChanged', {
             detail: {
                 tier: 'planning_district',
-                scopeKey: (typeof getTierScopeKey === 'function') ? getTierScopeKey() : pdId
+                scopeKey: (typeof getTierScopeKey === 'function') ? getTierScopeKey('planning_district') : pdId
             }
         }));
     } catch (e) {
@@ -21904,7 +21940,7 @@ async function handleCitySelection() {
         document.dispatchEvent(new CustomEvent('tierChanged', {
             detail: {
                 tier: 'city',
-                scopeKey: (typeof getTierScopeKey === 'function') ? getTierScopeKey() : slug
+                scopeKey: (typeof getTierScopeKey === 'function') ? getTierScopeKey('city') : slug
             }
         }));
     } catch (e) {
@@ -22122,7 +22158,7 @@ async function handleRegionSelection() {
         }
 
         // Dispatch tierChanged event for school/transit tabs
-        document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier: 'region', scopeKey: getTierScopeKey() } }));
+        document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier: 'region', scopeKey: getTierScopeKey('region') } }));
     } catch (e) {
         console.error('[Tier] handleRegionSelection failed:', e && e.message, e && e.stack);
     }
@@ -22302,7 +22338,7 @@ async function handleMPOSelection() {
         }
 
         // Dispatch tierChanged event for school/transit tabs
-        document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier: 'mpo', scopeKey: getTierScopeKey() } }));
+        document.dispatchEvent(new CustomEvent('tierChanged', { detail: { tier: 'mpo', scopeKey: getTierScopeKey('mpo') } }));
     } catch (e) {
         console.error('[Tier] handleMPOSelection failed:', e && e.message, e && e.stack);
     }
@@ -22447,8 +22483,14 @@ function getBoundsForTier() {
  * Get a unique cache/scope key for the current tier view.
  * @returns {string}
  */
-function getTierScopeKey() {
-    const tier = jurisdictionContext.viewTier;
+function getTierScopeKey(tierOverride) {
+    // Fix 5 — accept an explicit tier override. Dispatchers like
+    // handleRegionSelection / handleMPOSelection know what tier they're
+    // firing for; relying on jurisdictionContext.viewTier produced a
+    // mismatch when the global tier hadn't propagated yet (symptom:
+    // "tier=state, scope=planning_district_*"). Falls back to
+    // jurisdictionContext.viewTier when called without an argument.
+    const tier = tierOverride || jurisdictionContext.viewTier;
     switch (tier) {
         case 'federal':
             return 'federal_all';
@@ -26550,6 +26592,24 @@ function applyStateAdapterConfig() {
     console.log(`[StateAdapter] Config overrides applied successfully for ${geoConfig.stateName}`);
 }
 
+// Fix 6 — module-level debounce for the bridge call. A single radio click
+// fires onchange + saveFilterProfile + downstream listeners; without this,
+// each one would dispatch its own injectFastDashboard() and the bridge
+// (whose internal debounce only catches its own .refresh() path) would
+// fetch 4-6 times per click. State-agnostic.
+let _filterRefreshTimer = null;
+function _debouncedBridgeRefresh() {
+    if (_filterRefreshTimer) clearTimeout(_filterRefreshTimer);
+    _filterRefreshTimer = setTimeout(function () {
+        _filterRefreshTimer = null;
+        try {
+            if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
+                CL.data.supabaseBridge.injectFastDashboard({ force: true });
+            }
+        } catch (e) { /* non-fatal */ }
+    }, 250);
+}
+
 function saveFilterProfile() {
     const selected = document.querySelector('input[name="roadTypeFilter"]:checked');
     if (!selected) return;
@@ -26585,9 +26645,8 @@ function saveFilterProfile() {
     const _aggTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district', 'city']);
     if (_aggTiers.has(_filterTier)) {
         console.log(`[Config] Filter changed at ${_filterTier} tier — refreshing Supabase matview (R2 skipped)`);
-        if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
-            CL.data.supabaseBridge.injectFastDashboard({ force: true });
-        }
+        // Fix 6 — debounced so a single radio click → ONE bridge fetch.
+        _debouncedBridgeRefresh();
         showFilterLoadingState(false);
         return;
     }
@@ -148136,6 +148195,15 @@ setTimeout(checkPredictionAvailabilityIndicator, 3000);
 document.addEventListener('tierChanged', function(e) {
     const detail = e.detail || {};
     console.log(`[TierEvent] Tier changed to: ${detail.tier}, scope: ${detail.scopeKey}`);
+    // Fix 5 — assert the scopeKey aligns with the tier. Catches regressions
+    // where a future dispatcher forgets to pass the tier to getTierScopeKey().
+    if (detail.tier && detail.scopeKey) {
+        const _expectedPrefix = (detail.tier === 'federal') ? 'federal_' : detail.tier + '_';
+        if (!String(detail.scopeKey).startsWith(_expectedPrefix)) {
+            console.warn('[TierEvent] Scope/tier mismatch — tier=' + detail.tier +
+                ', scopeKey=' + detail.scopeKey + ' (expected prefix "' + _expectedPrefix + '")');
+        }
+    }
 
     // Update transit tab
     if (transitTabState.initialized) {

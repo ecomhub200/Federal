@@ -712,6 +712,40 @@ CL.data.supabaseBridge = (function () {
             var rows = await window.crashLensClient.getSummary(t.tier, t.value, summaryFilters);
             var fetchMs = Date.now() - startTime;
 
+            // Fix 1 — when the matview returns 0 rows AND the tier is one
+            // where data is expected to exist (rolled-up county OR any
+            // aggregate tier with a non-null value), re-sync state from the
+            // dropdown and retry once. This catches the boot-time race where
+            // crashLensClient.state was the previous state when the first
+            // fetch fired but corrected to the new state right after.
+            // State-agnostic — works for any state.
+            var _expectsData = !!(t.rolledUpFrom === 'county' ||
+                (t.tier !== 'county' && t.tier !== 'city' && t.value));
+            if ((!Array.isArray(rows) || rows.length === 0) && _expectsData) {
+                try {
+                    var _stateSelectRetry = document.getElementById('stateSelect');
+                    var _retryStateKey = (_stateSelectRetry && _stateSelectRetry.value && typeof _fipsToStateKey === 'function')
+                        ? _fipsToStateKey(_stateSelectRetry.value)
+                        : null;
+                    if (_retryStateKey && window.crashLensClient.state !== _retryStateKey) {
+                        console.log('[Phase2] Retry — state was ' + window.crashLensClient.state + ', dropdown says ' + _retryStateKey + ' — re-querying.');
+                        window.crashLensClient.state = _retryStateKey;
+                    }
+                    // Brief wait for any in-flight DOM/state propagation, then retry.
+                    await new Promise(function (r) { setTimeout(r, 250); });
+                    var _retryStart = Date.now();
+                    var rowsRetry = await window.crashLensClient.getSummary(t.tier, t.value, summaryFilters);
+                    var retryMs = Date.now() - _retryStart;
+                    if (Array.isArray(rowsRetry) && rowsRetry.length > 0) {
+                        console.log('[Phase2] Retry succeeded — ' + rowsRetry.length + ' rows in ' + retryMs + 'ms (was 0 in ' + fetchMs + 'ms).');
+                        rows = rowsRetry;
+                        fetchMs += retryMs;
+                    }
+                } catch (retryErr) {
+                    console.warn('[Phase2] Retry failed (non-fatal):', retryErr && retryErr.message);
+                }
+            }
+
             if (!force && typeof crashState !== 'undefined' && crashState && crashState.loaded) {
                 console.log('[Phase2] R2 won the race (' + fetchMs + 'ms fetch, but R2 finished first), discarding');
                 return;
@@ -780,10 +814,17 @@ CL.data.supabaseBridge = (function () {
 
             // Bug G: ensure crashState.loaded = true so detail tabs (which all
             // gate on this flag) don't bail before their matview path runs.
+            // Fix 4 — also refresh crashState.totalRows from the bridge agg
+            // so the loaded log + downstream consumers don't show a stale
+            // crashState.totalRows from the previous tier's R2 load
+            // (e.g. federal tier showing 'rows: 2047' from prior Kent load).
             try {
-                if (typeof crashState !== 'undefined' && crashState && !crashState.loaded) {
-                    crashState.loaded = true;
-                    if (!Array.isArray(crashState.sampleRows)) crashState.sampleRows = [];
+                if (typeof crashState !== 'undefined' && crashState) {
+                    if (!crashState.loaded) {
+                        crashState.loaded = true;
+                        if (!Array.isArray(crashState.sampleRows)) crashState.sampleRows = [];
+                    }
+                    crashState.totalRows = (agg && typeof agg.total === 'number') ? agg.total : 0;
                 }
             } catch (gErr) { /* non-fatal */ }
 
