@@ -629,6 +629,14 @@ CL.data.supabaseBridge = (function () {
         // boot or rapid state switch it can lag the dropdown (it's whatever
         // _getActiveStateKey returned at the time of the last jurisdiction pick).
         // Always trust the dropdown when its value resolves to a state key.
+        // Final defense: prefer the live state dropdown over jurisdictionContext.
+        // Boot race fix: ctx.stateName can be a stale appConfig.defaultState
+        // (e.g. 'Colorado' before the user's Delaware selection propagates), so
+        // falling back to ctxState during boot can correct the state BACKWARDS
+        // (delaware → colorado), poisoning the very first matview query. Only
+        // trust ctx.stateKey (set explicitly by buildJurisdictionContextFromSelection)
+        // — never fall back to ctx.stateName-derived state. And never overwrite a
+        // non-default crashLensClient.state with the appConfig boot default.
         try {
             var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
             if (window.crashLensClient) {
@@ -639,9 +647,19 @@ CL.data.supabaseBridge = (function () {
                         dropdownState = _fipsToStateKey(stateSelectFinal.value);
                     }
                 } catch (e2) { /* non-fatal */ }
-                var ctxState = ctx && (ctx.stateKey || (ctx.stateName ? ctx.stateName.toLowerCase().replace(/\s+/g, '_') : null));
+                // Only ctx.stateKey is trustworthy at boot. ctx.stateName-derived
+                // values can leak the appConfig default and cause backwards correction.
+                var ctxState = ctx && ctx.stateKey ? ctx.stateKey : null;
                 var targetState = dropdownState || ctxState;
-                if (targetState && targetState !== window.crashLensClient.state) {
+                var bootDefault = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
+
+                if (
+                    targetState &&
+                    targetState !== window.crashLensClient.state &&
+                    // Don't overwrite a more-specific state with the boot default
+                    // when the only signal we have is the boot default itself.
+                    !(targetState === bootDefault && !dropdownState)
+                ) {
                     console.log('[Phase2] State corrected: ' +
                         window.crashLensClient.state + ' → ' + targetState +
                         ' (dropdown=' + dropdownState + ', ctx.stateKey=' + (ctx && ctx.stateKey) + ')');

@@ -21723,7 +21723,22 @@ async function handleCitySelection() {
                         } else if (place._parentCountyName) {
                             jurisdictionContext.physicalJurisName = place._parentCountyName.replace(/\s+County$/i, '');
                         }
+                    } else if (!parentCountyKey) {
+                        // Fix E — surface the silent "FIPS resolved but no
+                        // matching jurisdiction" path so config bugs are
+                        // visible in DevTools instead of looking like a
+                        // generic data issue.
+                        console.warn('[Tier] City ' + slug + ' → fips5=' + fips5 +
+                            ' has no matching county in appConfig.jurisdictions; reassignment skipped.');
                     }
+                    // else: parentCountyKey === current — nothing to do, intentional silence.
+                } else {
+                    // Fix E — surface the silent "geo data couldn't resolve
+                    // the parent county" path. Likely cause: place record
+                    // missing INTPTLAT/INTPTLON, or TIGERweb spatial query
+                    // returned no match.
+                    console.warn('[Tier] City ' + slug + ' → could not resolve parent county fips (fips2="' +
+                        fips2 + '", fips3="' + fips3 + '"); reassignment skipped.');
                 }
             } else {
                 console.warn('[Tier] City selected (' + slug + ') but no place record found in CL.geo.places — county jurisdiction NOT updated');
@@ -21816,9 +21831,10 @@ async function handleCitySelection() {
                 // and the aggregate-tier path at line ~33252 — without this,
                 // a city pick that converged via the Supabase matview leaves
                 // the radios stuck disabled (opacity .6 + pointer-events:none)
-                // and the Refresh button stuck on "⏳ Loading...".
+                // and the Refresh button stuck on "⏳ Loading..." (Fix D).
                 try {
                     if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+                    if (typeof showRefreshButton === 'function') showRefreshButton();
                 } catch (uiErr) { /* non-fatal */ }
             }
         } catch (skipErr) { /* non-fatal */ }
@@ -25950,14 +25966,14 @@ function saveJurisdictionSelection() {
             crashState.sampleRowsLoaded = false;
         }
         try { updateDataConnectionStatus('connected'); } catch (e2) {}
-        // Re-enable the Road Type radios + Refresh button. Without this
-        // the Supabase-rollup early-return bypasses autoLoadCrashData(),
-        // which is the path that normally calls showFilterLoadingState(false),
-        // leaving the radios visually disabled (opacity .6 + pointer-events:none)
-        // and the Refresh button stuck on "⏳ Loading..." after the dashboard
-        // is fully painted. Mirrors the same cleanup at line ~33252.
+        // Re-enable the Road Type radios + Refresh button. saveFilterProfile
+        // disables them via showFilterLoadingState(true) before this early-
+        // return path runs; without this clear, the radios are stuck at
+        // opacity:0.6, pointer-events:none and the button stays "⏳ Loading..."
+        // even though the dashboard is fully painted (Fix D).
         try {
             if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+            if (typeof showRefreshButton === 'function') showRefreshButton();
         } catch (uiErr) { /* non-fatal */ }
     } else {
         autoLoadCrashData(true); // skipCache = true since cache was just invalidated
@@ -28456,6 +28472,23 @@ async function loadSampleRowsInBackground(loadGeneration) {
         showBackgroundLoadingIndicator(false);
         return;
     }
+    // County tier with rollup: the bridge painted the planning_district /
+    // dot_district total (e.g. Sussex County → PD South = 134K). The
+    // <state>/<county>/<roadtype>.parquet on R2 only has the unincorporated
+    // remainder — downloading it would feed the detail tabs the wrong rowset
+    // and contradict the dashboard KPIs. Skip in that case too.
+    try {
+        const _bgResolved = (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+            ? CL.data.supabaseBridge.resolveTier()
+            : null;
+        if (_bgResolved && _bgResolved.rolledUpFrom === 'county') {
+            console.log('[CrashCache] Skipping background R2 download — county rolled up to ' +
+                (_bgResolved.rollupColumn || _bgResolved.tier) + '=' + _bgResolved.value +
+                '. Detail tabs will lazy-fetch from Supabase.');
+            showBackgroundLoadingIndicator(false);
+            return;
+        }
+    } catch (e) { /* non-fatal */ }
 
     // Snapshot the current selection at the moment this is called
     const snapshotJurisdiction = getActiveJurisdictionId();
@@ -28534,6 +28567,38 @@ async function loadSampleRowsInBackground(loadGeneration) {
             return false;
         }
 
+        // Honor the resolved data format set by fetchCsvWithFallback. Papa
+        // parsing parquet binary as CSV produces single-key garbage rows
+        // (Safety Focus 'Sample row keys: Array(1)' bug — Fix C).
+        const _fmt = csvResponse._dataFormat || 'csv';
+        if (_fmt === 'parquet' || _fmt === 'parquet.gz') {
+            // Re-use the same parquet pipeline the foreground autoLoadCrashData
+            // path uses. _parseParquetGz returns { fields, rows };
+            // processSampleRowsFromObjects(fields, rows) drives the same
+            // per-row body Papa's chunk callback uses for CSV.
+            try {
+                if (typeof _parseParquetGz === 'function' &&
+                    typeof processSampleRowsFromObjects === 'function') {
+                    const buf = await csvResponse.arrayBuffer();
+                    const parsed = await _parseParquetGz(buf);
+                    const fields = (parsed && parsed.fields) || [];
+                    const rows   = (parsed && parsed.rows)   || [];
+                    return await processSampleRowsFromObjects(fields, rows);
+                }
+            } catch (parquetErr) {
+                console.error('[CrashCache] Parquet sampleRows parse failed:', parquetErr && parquetErr.message);
+            }
+            // Defensive: if the parquet helper isn't available, DON'T fall
+            // through to Papa.parse — that produces the Array(1) garbage.
+            // Mark sampleRows as empty + loaded so detail tabs use Supabase
+            // lazy fetches instead.
+            console.warn('[CrashCache] Parquet decode unavailable in background path — clearing sampleRows; detail tabs will lazy-fetch from Supabase.');
+            crashState.sampleRows = [];
+            crashState.mapPoints = [];
+            crashState.sampleRowsLoaded = true;
+            showBackgroundLoadingIndicator(false);
+            return false;
+        }
         return await processSampleRowsFromText(await csvResponse.text());
     } catch (error) {
         console.error('[CrashCache] Background loading failed:', error);
