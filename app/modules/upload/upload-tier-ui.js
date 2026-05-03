@@ -460,7 +460,24 @@
                 } catch (e) {}
                 if (iconHost) iconHost.textContent = '✅';
                 titleEl.textContent = 'Data Auto-Loaded!';
-                subtitleEl.textContent = rows.toLocaleString() + ' crash records loaded' + (path ? ' from ' + path : '');
+                // Fix 6 — when we're at the county tier and R2 was the
+                // winning source (Supabase preflight failed or was disabled),
+                // make it explicit that this is the unincorporated-remainder-
+                // only parquet, not the rolled-up matview total.
+                var subtitleParts = [rows.toLocaleString() + ' crash records loaded' + (path ? ' from ' + path : '')];
+                try {
+                    var atCountyTier = (typeof jurisdictionContext !== 'undefined' &&
+                        (jurisdictionContext.viewTier === 'county' || jurisdictionContext.viewTier === 'city'));
+                    var supabaseUnavailable = !!(typeof window !== 'undefined' && window.crashLensClient &&
+                        window.crashLensClient.preferSupabase === false);
+                    var bridgeFailed = !!(typeof window !== 'undefined' && window.crashLensClient &&
+                        window.crashLensClient.source === 'r2');
+                    if (atCountyTier && (supabaseUnavailable || bridgeFailed)) {
+                        subtitleParts.push('source: R2 fallback');
+                        subtitleParts.push('unincorporated remainder only — Supabase unavailable');
+                    }
+                } catch (e) { /* non-fatal */ }
+                subtitleEl.textContent = subtitleParts.join(' · ');
                 subtitleEl.title = '';
                 setUploadZoneCompact(true);
                 return;
@@ -471,7 +488,7 @@
         } catch (e) { /* non-fatal */ }
     }
 
-    function paintCountySupabaseCard(total) {
+    function paintCountySupabaseCard(total, opts) {
         var titleEl = $('loadingTitle');
         var subtitleEl = $('loadingSubtitle');
         if (!titleEl || !subtitleEl) return;
@@ -489,8 +506,19 @@
         titleEl.textContent = 'Dashboard ready' + (jurisdictionName ? ' — ' + jurisdictionName : '');
         var parts = [];
         if (typeof total === 'number' && total > 0) parts.push(total.toLocaleString() + ' crashes');
-        parts.push('source: Supabase matview');
-        parts.push('detail tabs load full data on demand');
+        // Fix 6 — distinguish the Supabase rollup path from the R2 fallback
+        // path so the user doesn't see "source: Supabase matview" while
+        // actually viewing the county-level parquet (which is unincorporated-
+        // remainder only and excludes city crashes). Default to Supabase
+        // when no opts are supplied — matches the legacy behavior.
+        var isR2Fallback = !!(opts && opts.source === 'r2');
+        if (isR2Fallback) {
+            parts.push('source: R2 fallback');
+            parts.push('unincorporated remainder only — Supabase unavailable');
+        } else {
+            parts.push('source: Supabase matview');
+            parts.push('detail tabs load full data on demand');
+        }
         subtitleEl.textContent = parts.join(' · ');
         subtitleEl.title = '';
         setUploadZoneCompact(true);

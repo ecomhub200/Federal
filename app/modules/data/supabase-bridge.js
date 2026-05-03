@@ -249,7 +249,16 @@ CL.data.supabaseBridge = (function () {
                 var rollupTier = (rollup.column === 'planning_district') ? 'planning_district' : 'region';
                 console.log('[resolveTier] County rollup via ' + rollup.column + '=' +
                     rollup.value + ' (1:1 mapping from ' + rollup.source + '/' + rollup.id + ')');
-                return { tier: rollupTier, value: rollup.value, rolledUpFrom: 'county', rollupSource: rollup.source };
+                // Fix 3 — surface the rollup *column* (planning_district vs
+                // dot_district) so the banner copy can be specific instead
+                // of generically saying "rolled up".
+                return {
+                    tier: rollupTier,
+                    value: rollup.value,
+                    rolledUpFrom: 'county',
+                    rollupSource: rollup.source,
+                    rollupColumn: rollup.column
+                };
             }
 
             // physicalJurisName is the DB-matching short form stored at selection time
@@ -545,19 +554,33 @@ CL.data.supabaseBridge = (function () {
     function showBanner(opts) {
         var existing = document.getElementById('supabaseBridgeIndicator');
         var msg = '⚡ Summary loaded from database — detailed charts & filters loading...';
-        if (opts && opts.unincorporatedOnly) {
+        var bg = '#1e3a8a', border = '#60a5fa', fg = '#e0e7ff';
+        if (opts && opts.zeroRows) {
+            // Fix 2c: amber banner when the matview legitimately returned 0 rows
+            // for this jurisdiction × road-type combination. Tells the user
+            // "we asked, the answer was zero" — distinct from a load failure.
+            msg = '⚠ No matching crashes for this jurisdiction × road-type combination.';
+            bg = '#78350f'; border = '#fbbf24'; fg = '#fef3c7';
+        } else if (opts && opts.unincorporatedOnly) {
             // Bug 3 disclaimer — visible to the user when we couldn't roll up
             // the county to planning_district / dot_district and physical_juris_name
             // is returning unincorporated rows only.
             msg += ' · Incorporated cities reported separately.';
+        } else if (opts && opts.rolledUp) {
+            // Fix 3: confirms to the user that the headline number includes
+            // the county's incorporated cities (rolled up via the named column).
+            msg += ' · Includes incorporated cities (rolled up via ' + (opts.rollupColumn || 'planning_district') + ').';
         }
         if (existing) {
+            existing.style.background = bg;
+            existing.style.borderLeftColor = border;
+            existing.style.color = fg;
             existing.textContent = msg;
             return;
         }
         var banner = document.createElement('div');
         banner.id = 'supabaseBridgeIndicator';
-        banner.style.cssText = 'padding:8px 14px;margin:0 0 10px 0;background:#1e3a8a;color:#e0e7ff;border-radius:6px;font-size:13px;border-left:3px solid #60a5fa;';
+        banner.style.cssText = 'padding:8px 14px;margin:0 0 10px 0;background:' + bg + ';color:' + fg + ';border-radius:6px;font-size:13px;border-left:3px solid ' + border + ';';
         banner.textContent = msg;
         var kpi = document.getElementById('dashboardKPIs');
         if (kpi && kpi.parentNode) kpi.parentNode.insertBefore(banner, kpi);
@@ -657,7 +680,35 @@ CL.data.supabaseBridge = (function () {
                 console.log('[Phase2] R2 won the race (' + fetchMs + 'ms fetch, but R2 finished first), discarding');
                 return;
             }
-            if (!Array.isArray(rows) || rows.length === 0) return false;
+            // Fix 2c — when the matview legitimately returns 0 rows (a real
+            // jurisdiction × road-type combination with no crashes, e.g. a
+            // tiny city + countyOnly filter), the previous behavior was to
+            // bail with `return false`, leaving stale KPIs on screen and
+            // inviting downstream R2 fallbacks to fill in wrong numbers.
+            // Now: paint zeros + amber banner + dispatch crashDataLoaded so
+            // the rest of the app converges on "0 crashes" deliberately.
+            if (!Array.isArray(rows) || rows.length === 0) {
+                var hasFilter = !!(spec && (spec.roadType || (Array.isArray(spec.roadTypes) && spec.roadTypes.length) || spec.noInterstate));
+                if (t.tier === 'county' && t.value && hasFilter) {
+                    paintKPIs({
+                        total: 0, bySeverity: { K: 0, A: 0, B: 0, C: 0, O: 0 },
+                        byYear: {}, byFuncClass: {}, byCollision: {},
+                        safety: { ped: 0, bike: 0, speed: 0, alcohol: 0, night: 0, animal: 0, fatals: 0, seriousInjured: 0, totalInjured: 0 }
+                    });
+                    showBanner({ zeroRows: true });
+                    if (typeof crashState !== 'undefined' && crashState && !crashState.loaded) {
+                        crashState.loaded = true;
+                        crashState.sampleRows = [];
+                    }
+                    try {
+                        document.dispatchEvent(new CustomEvent('crashDataLoaded', {
+                            detail: { source: 'supabase', total: 0, rows: 0, zeroRows: true }
+                        }));
+                    } catch (evtErr) { /* non-fatal */ }
+                    return true;
+                }
+                return false;
+            }
 
             try {
                 if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
@@ -676,7 +727,15 @@ CL.data.supabaseBridge = (function () {
 
             paintYearlyTable(agg);
             paintFuncClassTable(agg);
-            showBanner({ unincorporatedOnly: !!t.unincorporatedOnly });
+            // Fix 3 — surface the rollup column ('planning_district' or
+            // 'dot_district') in the banner copy so the user reads
+            // "Includes incorporated cities (rolled up via planning_district)"
+            // instead of just the bare "Summary loaded" message.
+            showBanner({
+                unincorporatedOnly: !!t.unincorporatedOnly,
+                rolledUp: !!t.rolledUpFrom,
+                rollupColumn: t.rollupColumn || null
+            });
             _injected = true;
 
             console.log('[Phase2] Supabase bridge injected', {

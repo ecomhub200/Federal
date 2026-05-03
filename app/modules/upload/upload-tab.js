@@ -60,7 +60,15 @@ CL.upload = CL.upload || {};
      */
     function getR2BasePath() {
         var tier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
-        var stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : ((typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || 'colorado');
+        // Fix 7 — _resolveActiveState (defined in app/index.html) is the single
+        // source of truth for the active state key. Returns null when neither
+        // the user-selected state nor appConfig.defaultState resolves —
+        // caller falls back to '' (R2 path becomes meaningless), which is the
+        // honest answer rather than silently routing to 'colorado'.
+        var stateKey = (typeof _resolveActiveState === 'function')
+            ? (_resolveActiveState() || '')
+            : ((typeof _getActiveStateKey === 'function' && _getActiveStateKey()) ||
+               (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || '');
         var r2Prefix = (appConfig && appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].r2Prefix) || stateKey;
 
         if (tier === 'federal') return '_national';
@@ -107,7 +115,15 @@ CL.upload = CL.upload || {};
      */
     function getDataFilePath() {
         var tier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
-        var stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : ((typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || 'colorado');
+        // Fix 7 — _resolveActiveState (defined in app/index.html) is the single
+        // source of truth for the active state key. Returns null when neither
+        // the user-selected state nor appConfig.defaultState resolves —
+        // caller falls back to '' (R2 path becomes meaningless), which is the
+        // honest answer rather than silently routing to 'colorado'.
+        var stateKey = (typeof _resolveActiveState === 'function')
+            ? (_resolveActiveState() || '')
+            : ((typeof _getActiveStateKey === 'function' && _getActiveStateKey()) ||
+               (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || '');
         var r2Prefix = (appConfig && appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].r2Prefix) || stateKey;
         var roadType = getActiveRoadTypeSuffix(tier);
 

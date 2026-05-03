@@ -20698,12 +20698,20 @@ function getCurrentStateFips() {
         const manualFips = StateAdapter.getManualStateFips?.();
         if (manualFips) return manualFips;
         const detected = StateAdapter.getDetectedState?.();
-        if (detected === 'virginia') return '51';
-        if (detected === 'colorado') return '08';
+        // Fix 7 — translate detected state name → FIPS via appConfig.states
+        // instead of hardcoding the (virginia, colorado) pair. Works for any
+        // state in the deployment's config.
+        if (detected && typeof appConfig !== 'undefined' && appConfig?.states?.[detected]?.fips) {
+            return appConfig.states[detected].fips;
+        }
     }
     // Priority 4: Default from config
-    const defaultState = (typeof appConfig !== 'undefined' && appConfig?.defaultState) || 'colorado';
-    return (typeof appConfig !== 'undefined' && appConfig?.states?.[defaultState]?.fips) || '08';
+    const defaultState = (typeof appConfig !== 'undefined' && appConfig?.defaultState) || null;
+    if (defaultState && typeof appConfig !== 'undefined' && appConfig?.states?.[defaultState]?.fips) {
+        return appConfig.states[defaultState].fips;
+    }
+    console.error('[CONFIG] getCurrentStateFips: no state could be determined and no appConfig.defaultState/.states[default].fips. Returning null.');
+    return null;
 }
 
 /**
@@ -21072,7 +21080,7 @@ async function handleTierChange(tier) {
             const stateKey = stateSelect?.value;
             if (stateKey) {
                 // Resolve FIPS code to state directory name via FIPSDatabase
-                let stateDir = appConfig?.defaultState || 'colorado'; // fallback
+                let stateDir = _resolveActiveState() || ''; // null guarded by FIPSDatabase block below
                 if (typeof FIPSDatabase !== 'undefined') {
                     const stInfo = FIPSDatabase.getState(stateKey);
                     if (stInfo) stateDir = stInfo.name.toLowerCase().replace(/\s+/g, '_');
@@ -21318,6 +21326,97 @@ function _extractPlaceType(namelsad) {
 }
 
 /**
+ * Fix 2a — small registry of {slug, place-record} for the active state's
+ * places, populated by populateGeoTierDropdown() and consumed by
+ * handleCitySelection() to discover a city's parent county. Pre-existing
+ * data files (us_places.json) don't carry COUNTY at the place level, so we
+ * resolve it via TIGERweb spatial intersection just-in-time and cache the
+ * result on the place record.
+ */
+window.CL = window.CL || {};
+CL.geo = CL.geo || {};
+CL.geo.places = CL.geo.places || {};
+
+function _placeSlugFor(name) {
+    return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+/**
+ * Find an existing jurisdiction key in appConfig.jurisdictions by 5-digit
+ * county FIPS (state+county). Returns null when no entry matches — the
+ * caller should treat that as "leave jurisdictionContext alone."
+ *
+ * State-agnostic — relies on appConfig being already populated for the
+ * active state, which is true any time handleCitySelection() can run.
+ */
+function lookupCountyKeyByFips(fips5) {
+    if (typeof appConfig === 'undefined' || !appConfig || !appConfig.jurisdictions) return null;
+    var target = String(fips5 || '').padStart(5, '0');
+    for (var k in appConfig.jurisdictions) {
+        if (!Object.prototype.hasOwnProperty.call(appConfig.jurisdictions, k)) continue;
+        var j = appConfig.jurisdictions[k];
+        if (!j) continue;
+        if (String(j.fullFips || '').padStart(5, '0') === target) return k;
+    }
+    return null;
+}
+
+/**
+ * Resolve the parent county FIPS-3 for a place using its centroid + the
+ * TIGERweb counties layer (point-in-polygon spatial intersect). Cached on
+ * the place record so repeat selections are free. Returns null when the
+ * place lacks coordinates or TIGERweb is unreachable — caller falls back
+ * to whatever jurisdictionContext already has.
+ */
+async function _resolvePlaceParentCountyFips(place, stateFips) {
+    if (!place || !stateFips) return null;
+    if (place._parentCountyFips) return place._parentCountyFips;       // cached hit
+
+    // Some Census subdivisions already carry COUNTY directly (CCDs/townships).
+    if (place.COUNTY) {
+        place._parentCountyFips = String(place.COUNTY).padStart(3, '0');
+        return place._parentCountyFips;
+    }
+
+    var lat = parseFloat(place.INTPTLAT || place.CENTLAT);
+    var lon = parseFloat(place.INTPTLON || place.CENTLON);
+    if (!isFinite(lat) || !isFinite(lon)) return null;
+
+    try {
+        // TIGERweb counties layer = 82. Spatial point-in-polygon. Filter to
+        // the active state to defend against places that straddle a border.
+        var base = (typeof TIGERWEB_BASE !== 'undefined' && TIGERWEB_BASE)
+            ? TIGERWEB_BASE
+            : 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer';
+        var url = base + '/82/query?' +
+            'geometry=' + encodeURIComponent(lon + ',' + lat) +
+            '&geometryType=esriGeometryPoint&inSR=4326' +
+            '&spatialRel=esriSpatialRelIntersects' +
+            '&outFields=COUNTY,STATE,NAME,GEOID' +
+            '&returnGeometry=false&f=json';
+        var resp = await fetch(url);
+        if (!resp.ok) return null;
+        var data = await resp.json();
+        var feats = (data && data.features) || [];
+        var match = null;
+        for (var i = 0; i < feats.length; i++) {
+            var attrs = feats[i] && feats[i].attributes;
+            if (attrs && String(attrs.STATE).padStart(2, '0') === String(stateFips).padStart(2, '0')) {
+                match = attrs;
+                break;
+            }
+        }
+        if (!match && feats.length) match = feats[0].attributes;
+        if (!match || !match.COUNTY) return null;
+        place._parentCountyFips = String(match.COUNTY).padStart(3, '0');
+        place._parentCountyName = match.NAME || null;
+        return place._parentCountyFips;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
  * Populate the merged City / Town dropdown from geography JSON data.
  * Combines places (cities, towns, villages, CDPs) with active subdivisions (townships).
  */
@@ -21397,6 +21496,18 @@ async function populateGeoTierDropdown() {
                 select.appendChild(opt);
             });
         }
+        // Fix 2a — register slug → place record so handleCitySelection() can
+        // look up centroid coords + (eventually) parent county FIPS without
+        // re-scanning the full us_places.json on every city click.
+        CL.geo.places = {};
+        activePlaces.forEach(p => {
+            const slug = _placeSlugFor(p.NAME);
+            if (slug) CL.geo.places[slug] = p;
+        });
+        activeSubdivisions.forEach(s => {
+            const slug = _placeSlugFor(s.NAME);
+            if (slug && !CL.geo.places[slug]) CL.geo.places[slug] = s;
+        });
         console.log(`[Geo] Populated ${merged.length} cities/towns for FIPS ${stateFips} (${activePlaces.length} places + ${activeSubdivisions.length} subdivisions, deduped)`);
     } catch (e) {
         console.error(`[Geo] Failed to populate city/town dropdown:`, e);
@@ -21482,9 +21593,7 @@ async function handlePlanningDistrictSelection() {
             console.warn('[Tier] displayPlanningDistrictBoundary failed (non-fatal, continuing to data fetch):', boundaryErr && boundaryErr.message);
         }
 
-        const stateKey = (typeof _getActiveStateKey === 'function')
-            ? _getActiveStateKey()
-            : (appConfig?.defaultState || 'colorado');
+        const stateKey = _resolveActiveState();
         try {
             const pdAgg = await AggregateLoader.loadPlanningDistrict(stateKey, pdId);
             if (pdAgg) console.log(`[Tier] PD aggregate loaded: ${Object.keys(pdAgg).length} keys`);
@@ -21582,6 +21691,47 @@ async function handleCitySelection() {
 
         jurisdictionContext.tierCity = { id: slug, name: displayName, type: placeType };
 
+        // Fix 2a — reassign jurisdictionContext to the city's parent county
+        // BEFORE any path resolution or data fetch. Without this, a stale
+        // previous-county selection (e.g. Kent from before the user picked
+        // Ardentown which is in New Castle) leaks into the R2 path
+        // (delaware/kent/county_roads.parquet) and any other code that reads
+        // jurisdictionContext.jurisdictionKey. State-agnostic — uses
+        // CL.geo.places (populated by populateGeoTierDropdown) + a TIGERweb
+        // point-in-polygon spatial query, no city→county hardcoding.
+        try {
+            const place = (CL.geo && CL.geo.places) ? CL.geo.places[slug] : null;
+            if (place) {
+                const fips2 = String(jurisdictionContext.stateFips || _getCurrentStateFips() || '').padStart(2, '0');
+                let fips3 = String(place._parentCountyFips || place.COUNTY || '').padStart(3, '0').replace(/^0+$/, '');
+                if (!fips3 && fips2) {
+                    fips3 = await _resolvePlaceParentCountyFips(place, fips2);
+                }
+                if (fips2 && fips3) {
+                    const fips5 = fips2 + String(fips3).padStart(3, '0');
+                    const parentCountyKey = lookupCountyKeyByFips(fips5);
+                    if (parentCountyKey && parentCountyKey !== jurisdictionContext.jurisdictionKey) {
+                        const prevKey = jurisdictionContext.jurisdictionKey;
+                        console.log('[Tier] City ' + slug + ' → reassigning parent county from ' + prevKey + ' to ' + parentCountyKey);
+                        jurisdictionContext.jurisdictionKey = parentCountyKey;
+                        jurisdictionContext.fullFips = fips5;
+                        jurisdictionContext.countyFips = String(fips3).padStart(3, '0');
+                        const parentJur = appConfig.jurisdictions[parentCountyKey];
+                        if (parentJur) {
+                            jurisdictionContext.physicalJurisName = (Array.isArray(parentJur.namePatterns) && parentJur.namePatterns[0]) || jurisdictionContext.physicalJurisName;
+                            jurisdictionContext.jurisdictionName = parentJur.fullName || parentJur.name || jurisdictionContext.jurisdictionName;
+                        } else if (place._parentCountyName) {
+                            jurisdictionContext.physicalJurisName = place._parentCountyName.replace(/\s+County$/i, '');
+                        }
+                    }
+                }
+            } else {
+                console.warn('[Tier] City selected (' + slug + ') but no place record found in CL.geo.places — county jurisdiction NOT updated');
+            }
+        } catch (e) {
+            console.warn('[Tier] City→county reassignment failed (non-fatal):', e && e.message);
+        }
+
         if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI('city');
         if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.renderTierScopeCard) {
             CL.upload.tierUI.renderTierScopeCard('city');
@@ -21612,9 +21762,7 @@ async function handleCitySelection() {
             console.warn('[Tier] displayCityBoundary failed (non-fatal, continuing to data fetch):', boundaryErr && boundaryErr.message);
         }
 
-        const stateKey = (typeof _getActiveStateKey === 'function')
-            ? _getActiveStateKey()
-            : (appConfig?.defaultState || 'colorado');
+        const stateKey = _resolveActiveState();
 
         // Supabase-first: paint instant KPI placeholders, then kick off a
         // dashboard_summary fetch with the new city scope. The R2 fallback
@@ -21645,6 +21793,26 @@ async function handleCitySelection() {
             // canonical source post-migration. Silenced.
         }
         console.log(`[Tier] City/Town selected: ${slug} (${displayName}, type=${placeType})`);
+
+        // Fix 2b — explicit "skip R2" log + crashState.loaded flag, mirroring
+        // the Fix 1 county-rollup pattern. R2 is already not called from
+        // handleCitySelection (see note below), but downstream paths
+        // (saveFilterProfile, lazy detail tab loaders) still gate on
+        // crashState.loaded — ensure it's set so they don't try to refetch
+        // the wrong county's parquet.
+        try {
+            const tierResolved = (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+                ? CL.data.supabaseBridge.resolveTier()
+                : null;
+            if (tierResolved && tierResolved.tier === 'county' && tierResolved.value
+                && jurisdictionContext.viewTier === 'city') {
+                console.log('[Tier] City view using Supabase matview (R2 download skipped)');
+                if (typeof crashState !== 'undefined') {
+                    crashState.loaded = true;
+                    crashState.sampleRowsLoaded = false;
+                }
+            }
+        } catch (skipErr) { /* non-fatal */ }
 
         // NOTE: do NOT call autoLoadCrashData() here. R2 has no per-city
         // parquet, so the fallback chain would load the parent (or worse,
@@ -21831,7 +21999,7 @@ async function handleRegionSelection() {
         // Load region aggregate
         // Use _getActiveStateKey() for full state name (e.g., 'colorado') — NOT abbreviation ('co')
         // R2 paths require full state key: colorado/_region/{regionId}/aggregates.json
-        const stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : (appConfig?.defaultState || 'colorado');
+        const stateKey = _resolveActiveState();
         const regionAgg = await AggregateLoader.loadRegion(stateKey, regionId);
         if (regionAgg) console.log(`[Tier] Region aggregate loaded: ${Object.keys(regionAgg).length} keys`);
         console.log(`[Tier] Region selected: ${region.shortName || region.name}, ${region.counties.length} counties`);
@@ -22006,7 +22174,7 @@ async function handleMPOSelection() {
 
         // Use _getActiveStateKey() for full state name (e.g., 'colorado') — NOT abbreviation ('co')
         // R2 paths require full state key: colorado/_mpo/{mpoId}/aggregates.json
-        const stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : (appConfig?.defaultState || 'colorado');
+        const stateKey = _resolveActiveState();
         const mpoAgg = await AggregateLoader.loadMPO(stateKey, mpoId);
         if (mpoAgg) console.log(`[Tier] MPO aggregate loaded: ${Object.keys(mpoAgg).length} keys`);
         console.log(`[Tier] MPO selected: ${mpo.shortName || mpo.name}, ${mpo.counties.length} counties`);
@@ -23338,7 +23506,7 @@ const AggregateLoader = (() => {
 // All file paths relative to app/index.html location
 // Update BASE_PATH if app is moved to a different directory
 // ============================================================
-const APP_VERSION = '2.1.2-stream-progress';  // Real download % via streaming fetch on autoload
+const APP_VERSION = '2.1.3-tier-rollup';  // Round-2 county→PD rollup, city parent-county, zero-row paint, rollup banner
 console.log(`[App] CRASH LENS v${APP_VERSION} loading...`);
 
 // Shared function to dismiss the loading overlay (called by auth protection or fallback)
@@ -23418,7 +23586,7 @@ const APP_PATHS = {
 
     // Fallback data file: uses all_roads for the active jurisdiction (R2-native path)
     getFallbackData: () => {
-        const stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : ((typeof appConfig !== 'undefined' && appConfig?.defaultState) || 'colorado');
+        const stateKey = _resolveActiveState();
         const r2Prefix = (typeof appConfig !== 'undefined' && appConfig?.states?.[stateKey]?.r2Prefix) || stateKey;
         let jurisdiction = (typeof getActiveJurisdictionId === 'function')
             ? getActiveJurisdictionId() : (typeof _getDefaultJurisdictionForActiveState === 'function' ? _getDefaultJurisdictionForActiveState() : 'douglas');
@@ -24037,7 +24205,7 @@ function buildJurisdictionContextFromSelection(jurisdictionId) {
     const countyFips = (jurisdiction.fips || '').padStart(3, '0');
 
     // Get state info from StateAdapter or appConfig states registry
-    const activeStateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : (appConfig?.defaultState || 'colorado');
+    const activeStateKey = _resolveActiveState();
     const stateEntry = appConfig?.states?.[activeStateKey] || {};
     let stateFips = stateEntry.fips || appConfig.stateFips || '08';
     let stateName = stateEntry.name || appConfig.stateName || 'Colorado';
@@ -24428,7 +24596,7 @@ async function loadAppConfig() {
 
         // Cache the default state's jurisdictions from config.json so they survive state switching
         // When user switches to another state and back, we restore these
-        const defaultStateKey = appConfig.defaultState || 'colorado';
+        const defaultStateKey = appConfig.defaultState || _resolveActiveState() || '<unset>';
         window._defaultStateConfigJurisdictions = JSON.parse(JSON.stringify(appConfig.jurisdictions));
         // Backward compat: keep _virginiaConfigJurisdictions alias
         window._virginiaConfigJurisdictions = window._defaultStateConfigJurisdictions;
@@ -24482,8 +24650,8 @@ async function loadAppConfig() {
 
         // Resolve TIGERweb stateFips from active state config if not set
         if (appConfig.apis?.tigerweb && !appConfig.apis.tigerweb.stateFips) {
-            const dsk = appConfig.defaultState || 'colorado';
-            const dsFips = appConfig.states?.[dsk]?.fips;
+            const dsk = appConfig.defaultState || _resolveActiveState();
+            const dsFips = dsk && appConfig.states?.[dsk]?.fips;
             if (dsFips) {
                 appConfig.apis.tigerweb.stateFips = dsFips;
                 console.log(`[Config] TIGERweb stateFips resolved from ${dsk}: ${dsFips}`);
@@ -24802,7 +24970,8 @@ function _abbrToStateKey(abbr) {
  *   4. StateAdapter.getDetectedState() — from CSV header analysis (lower priority
  *      to prevent fallback CSVs from overriding explicit state selection)
  *   5. appConfig.defaultState — from config.json
- *   6. 'colorado' — hardcoded fallback matching deployment default
+ *   6. null — caller should resolve via _resolveActiveState() which logs
+ *      a config error rather than silently mis-routing (Fix 7).
  */
 function _getActiveStateKey() {
     // Priority 1: StateAdapter manual FIPS (user explicitly selected a state via UI)
@@ -24848,8 +25017,29 @@ function _getActiveStateKey() {
     // Priority 5: appConfig.defaultState (from config.json)
     if (appConfig?.defaultState) return appConfig.defaultState;
 
-    // Priority 6: deployment default from config, with hardcoded safety net
-    return (typeof appConfig !== 'undefined' && appConfig?.defaultState) || 'colorado';
+    // Priority 6: no active state could be determined. Returning null is the
+    // honest answer — callers should resolve via _resolveActiveState() which
+    // logs a loud config error instead of silently mis-routing to a literal
+    // 'colorado' fallback (Fix 7).
+    return null;
+}
+
+/**
+ * Fix 7 — central state resolver. Returns the active state key
+ * (e.g. 'delaware') by deferring to _getActiveStateKey() and falling back
+ * to appConfig.defaultState. Returns null + emits a loud console.error
+ * when neither is set, so a misconfigured deployment surfaces the
+ * problem in DevTools instead of silently loading Colorado data into a
+ * Delaware UI. Replaces the inline `_resolveActiveState()`
+ * pattern that used to be sprinkled across the file.
+ */
+function _resolveActiveState() {
+    var k = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
+    if (k) return k;
+    var d = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
+    if (d) return d;
+    console.error('[CONFIG] No active state and no appConfig.defaultState — UI cannot determine state. Set appConfig.defaultState in config.json.');
+    return null;
 }
 
 // ── Road Type Helpers (tier-aware) ──
@@ -24913,7 +25103,7 @@ function updateRoadTypeLabels(tier) {
 // Get the data file path based on current selection (tier-aware, R2-aware)
 function getDataFilePath() {
     const tier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
-    const stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : ((typeof appConfig !== 'undefined' && appConfig?.defaultState) || 'colorado');
+    const stateKey = _resolveActiveState();
     const r2Prefix = appConfig?.states?.[stateKey]?.r2Prefix || stateKey;
     const roadType = getActiveRoadTypeSuffix(tier);
     console.log('[R2-DEBUG] getDataFilePath:', { tier, stateKey, r2Prefix, roadType });
@@ -25734,7 +25924,26 @@ function saveJurisdictionSelection() {
         }
     } catch (e) { /* non-fatal */ }
 
-    autoLoadCrashData(true); // skipCache = true since cache was just invalidated
+    // Fix 1: when resolveTier() rolled the county up to a planning_district
+    // (or dot_district) for the matview query, the R2 parquet at
+    // <state>/<county>/<roadtype>.parquet would clobber the rollup with a
+    // physical_juris_name=eq.<county>-only result (unincorporated remainder).
+    // Skip R2 in that case — the bridge has already painted the correct,
+    // city-inclusive total.
+    const tierResolved = (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+        ? CL.data.supabaseBridge.resolveTier()
+        : null;
+
+    if (tierResolved && tierResolved.rolledUpFrom === 'county') {
+        console.log('[Tier] County view using Supabase matview rollup (R2 download skipped)');
+        if (typeof crashState !== 'undefined') {
+            crashState.loaded = true;
+            crashState.sampleRowsLoaded = false;
+        }
+        try { updateDataConnectionStatus('connected'); } catch (e2) {}
+    } else {
+        autoLoadCrashData(true); // skipCache = true since cache was just invalidated
+    }
 }
 
 /**
@@ -26205,7 +26414,11 @@ function saveFilterProfile() {
     // instead of triggering autoLoadCrashData which would attempt the 118 MB+
     // national or statewide parquet and OOM the browser.
     const _filterTier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
-    const _aggTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district']);
+    // Fix 2b — 'city' belongs in this guard: at the city tier R2 has no
+    // per-city parquet, so without this gate a road-type radio change here
+    // falls through to autoLoadCrashData() which loads the most-recently-
+    // viewed county's parquet (Bug 1: Ardentown showing kent/county_roads).
+    const _aggTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district', 'city']);
     if (_aggTiers.has(_filterTier)) {
         console.log(`[Config] Filter changed at ${_filterTier} tier — refreshing Supabase matview (R2 skipped)`);
         if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
@@ -32803,9 +33016,11 @@ function _r2RoadTypeIsAllRoads(suffix) {
 // split-parquet fallback so we always have a tier-correct file to load.
 function _r2AllRoadsPathForActiveTier() {
     const tier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
-    const stateKey = (typeof _getActiveStateKey === 'function')
-        ? _getActiveStateKey()
-        : ((typeof appConfig !== 'undefined' && appConfig?.defaultState) || 'colorado');
+    const stateKey = _resolveActiveState();
+    if (!stateKey) {
+        console.error('[R2] _r2AllRoadsPathForActiveTier: no active state — cannot construct R2 path');
+        return null;
+    }
     const r2Prefix = appConfig?.states?.[stateKey]?.r2Prefix || stateKey;
     const allRoadsSuffix = (tier === 'state') ? 'statewide_all_roads' : 'all_roads';
 
@@ -36551,7 +36766,7 @@ function mergeSubscribers(r2Emails, localEmails) {
 
 // Get R2-compatible jurisdiction path parts for subscriber storage
 function _getSubscriberR2Path() {
-    const stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : ((typeof appConfig !== 'undefined' && appConfig?.defaultState) || 'colorado');
+    const stateKey = _resolveActiveState();
     const r2Prefix = appConfig?.states?.[stateKey]?.r2Prefix || stateKey;
     const jurisdiction = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : '';
     if (!jurisdiction) return null;
@@ -49734,6 +49949,28 @@ function initMap() {
 
     crashMap = L.map('map', { zoomControl: false }).setView(center, zoom);
 
+    // Fix 8 — replay any pending region-boundary draw that was deferred while
+    // the Leaflet map was still initializing. Without this, picking a region
+    // from the dropdown immediately on a hard refresh leaves the dashed
+    // boundary unpainted because displayRegionBoundary() bailed when
+    // crashMap was still null. With the replay, the boundary draws as soon
+    // as the map is ready — no second click required.
+    try {
+        var pendingRegionId = (typeof jurisdictionContext !== 'undefined'
+            && jurisdictionContext.tierRegion
+            && jurisdictionContext.tierRegion.id) || null;
+        if (pendingRegionId && typeof displayRegionBoundary === 'function') {
+            var hier = (typeof HierarchyRegistry !== 'undefined') ? HierarchyRegistry.getData() : null;
+            var region = hier && hier.regions && hier.regions[pendingRegionId];
+            if (region) {
+                console.log('[Tier] Map ready — replaying region boundary for ' + pendingRegionId);
+                displayRegionBoundary(region, pendingRegionId);
+            }
+        }
+    } catch (replayErr) {
+        console.warn('[Tier] Region replay on map mount failed (non-fatal):', replayErr && replayErr.message);
+    }
+
     // Add zoom control to bottom-right so it's not hidden behind the Select Location panel
     L.control.zoom({ position: 'bottomright' }).addTo(crashMap);
 
@@ -60340,7 +60577,7 @@ function sendAllJurisdictionsToTrafficInventory() {
     if (!frame || !frame.contentWindow || frame.src === 'about:blank') return;
     if (!appConfig?.jurisdictions) return;
 
-    const fallbackStateKey = _getActiveStateKey() || 'colorado';
+    const fallbackStateKey = _resolveActiveState();
     const allJuris = {};
 
     Object.entries(appConfig.jurisdictions).forEach(([key, j]) => {
@@ -60404,7 +60641,7 @@ function sendAllJurisdictionsToInventoryManager() {
     if (!frame || !frame.contentWindow || frame.src === 'about:blank') return;
     if (!appConfig?.jurisdictions) return;
 
-    const fallbackStateKey = _getActiveStateKey() || 'colorado';
+    const fallbackStateKey = _resolveActiveState();
     const allJuris = {};
 
     Object.entries(appConfig.jurisdictions).forEach(([key, j]) => {
@@ -60502,7 +60739,7 @@ function sendConfigToAssetDeficiency() {
 
     const jurisdictionId = getActiveJurisdictionId();
     const jurisdictionConfig = appConfig?.jurisdictions?.[jurisdictionId];
-    const stateKey = _getActiveStateKey() || 'colorado';
+    const stateKey = _resolveActiveState();
     const stateConfig = appConfig?.states?.[stateKey];
     const r2Prefix = stateConfig?.r2Prefix || stateKey;
     const baseUrl = (typeof r2State !== 'undefined' && r2State.manifest?.r2BaseUrl) ? r2State.manifest.r2BaseUrl : R2_BASE_URL;
@@ -84355,7 +84592,7 @@ async function loadADTrafficInventory() {
         }
 
         // Build the R2 URL for traffic-inventory.parquet.gz (jurisdiction-agnostic)
-        const stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : ((typeof appConfig !== 'undefined' && appConfig?.defaultState) || 'colorado');
+        const stateKey = _resolveActiveState();
         const stateConfig = (typeof appConfig !== 'undefined') ? appConfig?.states?.[stateKey] : null;
         const r2Prefix = stateConfig?.r2Prefix || stateKey;
         const jurisdiction = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : ((typeof _getDefaultJurisdictionForActiveState === 'function') ? _getDefaultJurisdictionForActiveState() : 'douglas');
@@ -132483,7 +132720,7 @@ async function loadTrafficInventoryForMap() {
             trafficInventoryLayerState.data = signDefState.inventoryData;
         } else {
             // Fetch from R2 (jurisdiction-agnostic) — parquet.gz format
-            var stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : ((typeof appConfig !== 'undefined' && appConfig?.defaultState) || 'colorado');
+            var stateKey = _resolveActiveState();
             var stateConfig = (typeof appConfig !== 'undefined') ? appConfig?.states?.[stateKey] : null;
             var r2Prefix = stateConfig?.r2Prefix || stateKey;
             var jurisdiction = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : ((typeof _getDefaultJurisdictionForActiveState === 'function') ? _getDefaultJurisdictionForActiveState() : 'douglas');
@@ -153150,7 +153387,7 @@ async function signDef_loadInventory() {
     if (signDefState.inventoryLoaded) return;
 
     try {
-        const stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : ((typeof appConfig !== 'undefined' && appConfig?.defaultState) || 'colorado');
+        const stateKey = _resolveActiveState();
         const stateConfig = (typeof appConfig !== 'undefined') ? appConfig?.states?.[stateKey] : null;
         const r2Prefix = stateConfig?.r2Prefix || stateKey;
         const jurisdiction = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : ((typeof _getDefaultJurisdictionForActiveState === 'function') ? _getDefaultJurisdictionForActiveState() : 'douglas');
