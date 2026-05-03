@@ -2777,4 +2777,72 @@ The cache uses `update_schedule` to detect unexpected situations:
 
 ---
 
+## Required matview migration: `parent_county_name` on `dashboard_summary`
+
+**Status (2026-05-03):** open. Tracked here so the matview team has a clear spec.
+
+### Problem
+
+`dashboard_summary.physical_juris_name` stores the *most-specific* jurisdiction
+for every row (a city/town if the crash is inside one, otherwise the county).
+This means a county-tier query at this column
+
+```sql
+SELECT SUM(crash_count)
+FROM dashboard_summary
+WHERE state = 'delaware' AND physical_juris_name = 'Sussex';
+-- returns 87,073 — Sussex's UNINCORPORATED rows only
+```
+
+silently undercounts the county. To roll up the true county total we have to
+add the rows for every city/town inside the county too (Seaford, Georgetown,
+Millsboro, …) which the current schema can only do via a brittle
+state-specific list lookup in the frontend.
+
+### Required column
+
+Add `parent_county_name` (TEXT) — or, equivalently, `juris_county_fips` — to
+`dashboard_summary` (and the underlying crash table that feeds it):
+
+```sql
+ALTER TABLE crashes
+    ADD COLUMN parent_county_name TEXT;
+
+-- Backfill from the existing FIPS column. For DE that gives:
+--   physical_juris_name='Dover'        → parent_county_name='Kent'
+--   physical_juris_name='Wilmington'   → parent_county_name='New Castle'
+--   physical_juris_name='Sussex'       → parent_county_name='Sussex'  (already a county row)
+
+UPDATE crashes c
+   SET parent_county_name = co.county_name
+  FROM lkp_county co
+ WHERE substr(c.fips, 3, 3) = co.fips;
+```
+
+Then refresh the matview definition to include the column.
+
+### Why not derive in the frontend
+
+We already do — see `_countyRollupTarget()` in
+`app/modules/data/supabase-bridge.js`. The frontend rollup only works when a
+state's hierarchy.json has a `planningDistricts` (or `regions`) entry that
+maps 1:1 to the county. States whose planning districts cover multiple
+counties (most of the country — Virginia, Texas, California, …) cannot use
+this path and fall back to `physical_juris_name` with a visible
+"Incorporated cities reported separately" disclaimer.
+
+Once `parent_county_name` ships on the matview, every state gets the correct
+county total automatically and the disclaimer disappears.
+
+### Frontend rollback plan
+
+When the column lands, replace the `_countyRollupTarget` lookup in
+`supabase-bridge.resolveTier()` with a simple
+`{ tier: 'county', value: <countyDbName>, queryColumn: 'parent_county_name' }`
+return shape, and add `parent_county_name` to
+`CrashLensDataClient.TIER_COLUMNS.county` so `_tierFilter()` picks it up
+without further code changes.
+
+---
+
 *End of Document — Crash Lens Unified Pipeline Architecture v6.0*

@@ -30,25 +30,24 @@ CL.upload = CL.upload || {};
      */
     function getActiveRoadTypeSuffix(tier) {
         var activeTier = tier || (typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county');
+        // Delegate to the shared road-type-mapping module — single source of
+        // truth across supabase-bridge / data-client / index.html.
+        if (CL && CL.data && CL.data.roadTypeMapping) {
+            var radioVal = CL.data.roadTypeMapping.activeRadioValue();
+            var suffix = CL.data.roadTypeMapping.suffixFor(activeTier, radioVal);
+            // Preserve the legacy 'statewide_all_roads' filename for the state
+            // tier's all-roads R2 file (matches existing R2 publish layout).
+            if (activeTier === 'state' && suffix === 'all_roads') return 'statewide_all_roads';
+            return suffix;
+        }
+        // Defensive fallback only.
         var filterRadio = document.querySelector('input[name="roadTypeFilter"]:checked');
         var filterValue = filterRadio ? filterRadio.value : (localStorage.getItem('selectedFilterProfile') || 'countyOnly');
-
         if (activeTier === 'state' || activeTier === 'federal' || activeTier === 'region') {
-            var dotMap = {
-                'countyOnly':      'dot_roads',
-                'cityOnly':        'city_roads',
-                'countyPlusVDOT':  'non_dot_roads',
-                'allRoads':        activeTier === 'state' ? 'statewide_all_roads' : 'all_roads'
-            };
+            var dotMap = { countyOnly: 'dot_roads', cityOnly: 'city_roads', countyPlusVDOT: 'non_dot_roads', allRoads: activeTier === 'state' ? 'statewide_all_roads' : 'all_roads' };
             return dotMap[filterValue] || (activeTier === 'state' ? 'statewide_all_roads' : 'all_roads');
         }
-
-        var localMap = {
-            'countyOnly':      'county_roads',
-            'cityOnly':        'city_roads',
-            'countyPlusVDOT':  'no_interstate',
-            'allRoads':        'all_roads'
-        };
+        var localMap = { countyOnly: 'county_roads', cityOnly: 'city_roads', countyPlusVDOT: 'no_interstate', allRoads: 'all_roads' };
         return localMap[filterValue] || 'county_roads';
     }
 
@@ -615,55 +614,21 @@ CL.upload = CL.upload || {};
      * @param {string} tier - The active view tier
      */
     function updateRoadTypeLabels(tier) {
-        var labelConfigs = {
-            state: {
-                countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-                cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-                countyPlusVDOT:  '<strong>County Roads Only</strong> - County-maintained roads',
-                allRoads:        '<strong>Statewide All Roads</strong> - DOT + Non-DOT combined'
-            },
-            federal: {
-                countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-                cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-                countyPlusVDOT:  '<strong>Non-DOT Roads</strong> - Local and non-state roads',
-                allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined (nationwide)'
-            },
-            region: {
-                countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-                cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-                countyPlusVDOT:  '<strong>County Roads Only</strong> - County-maintained roads',
-                allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined'
-            },
-            mpo: {
-                countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-                cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-                countyPlusVDOT:  '<strong>County Roads Only</strong> - County-maintained roads',
-                allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined'
-            },
-            planning_district: {
-                countyOnly:      '<strong>DOT Roads Only</strong> - State DOT-maintained roads',
-                cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-                countyPlusVDOT:  '<strong>County Roads Only</strong> - County-maintained roads',
-                allRoads:        '<strong>All Roads</strong> - DOT + Non-DOT combined'
-            },
-            _default: {
-                countyOnly:      '<strong>County Roads Only</strong> - County-maintained roads',
-                cityOnly:        '<strong>City Roads Only</strong> - City/town agency roads',
-                countyPlusVDOT:  '<strong>All Roads (No Interstate)</strong> - Includes state routes',
-                allRoads:        '<strong>All Roads</strong> - Including interstates'
-            }
+        // Delegate to the shared road-type-mapping module — single source of
+        // truth. Pre-fix this file, app/index.html, and supabase-bridge.js
+        // each had their own slightly different table.
+        var map = (CL && CL.data && CL.data.roadTypeMapping) ? CL.data.roadTypeMapping : null;
+        if (!map) return;
+        var ids = {
+            countyOnly:     'filterLabelCountyOnly',
+            cityOnly:       'filterLabelCityOnly',
+            countyPlusVDOT: 'filterLabelCountyPlusVDOT',
+            allRoads:       'filterLabelAllRoads'
         };
-
-        var labels = labelConfigs[tier] || labelConfigs._default;
-        var el1 = document.getElementById('filterLabelCountyOnly');
-        var elCity = document.getElementById('filterLabelCityOnly');
-        var el2 = document.getElementById('filterLabelCountyPlusVDOT');
-        var el3 = document.getElementById('filterLabelAllRoads');
-
-        if (el1) el1.innerHTML = labels.countyOnly;
-        if (elCity) elCity.innerHTML = labels.cityOnly;
-        if (el2) el2.innerHTML = labels.countyPlusVDOT;
-        if (el3) el3.innerHTML = labels.allRoads;
+        Object.keys(ids).forEach(function (radio) {
+            var el = document.getElementById(ids[radio]);
+            if (el) el.innerHTML = map.labelFor(tier, radio);
+        });
     }
 
     // ============================================================

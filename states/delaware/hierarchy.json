@@ -21,6 +21,7 @@
     "de_1": {
       "name": "North District",
       "shortName": "North District",
+      "dbName": "North District",
       "center": [
         -75.6,
         39.6
@@ -47,6 +48,7 @@
     "de_2": {
       "name": "Central District",
       "shortName": "Central District",
+      "dbName": "Central District",
       "center": [
         -75.52,
         39.15
@@ -73,6 +75,7 @@
     "de_3": {
       "name": "South District",
       "shortName": "South District",
+      "dbName": "South District",
       "center": [
         -75.38,
         38.68
@@ -95,6 +98,41 @@
         ]
       },
       "hq": "Georgetown"
+    }
+  },
+  "planningDistricts": {
+    "de_pd_north": {
+      "name": "North District",
+      "shortName": "North District",
+      "dbName": "North District",
+      "counties": [
+        "003"
+      ],
+      "countyNames": {
+        "003": "New Castle"
+      }
+    },
+    "de_pd_central": {
+      "name": "Central District",
+      "shortName": "Central District",
+      "dbName": "Central District",
+      "counties": [
+        "001"
+      ],
+      "countyNames": {
+        "001": "Kent"
+      }
+    },
+    "de_pd_south": {
+      "name": "South District",
+      "shortName": "South District",
+      "dbName": "South District",
+      "counties": [
+        "005"
+      ],
+      "countyNames": {
+        "005": "Sussex"
+      }
     }
   },
   "tprType": {
