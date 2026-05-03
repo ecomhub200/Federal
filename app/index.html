@@ -21811,6 +21811,15 @@ async function handleCitySelection() {
                     crashState.loaded = true;
                     crashState.sampleRowsLoaded = false;
                 }
+                // Re-enable the Road Type radios + Refresh button. Same
+                // pattern as the county-rollup branch in saveJurisdictionSelection
+                // and the aggregate-tier path at line ~33252 — without this,
+                // a city pick that converged via the Supabase matview leaves
+                // the radios stuck disabled (opacity .6 + pointer-events:none)
+                // and the Refresh button stuck on "⏳ Loading...".
+                try {
+                    if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+                } catch (uiErr) { /* non-fatal */ }
             }
         } catch (skipErr) { /* non-fatal */ }
 
@@ -25941,6 +25950,15 @@ function saveJurisdictionSelection() {
             crashState.sampleRowsLoaded = false;
         }
         try { updateDataConnectionStatus('connected'); } catch (e2) {}
+        // Re-enable the Road Type radios + Refresh button. Without this
+        // the Supabase-rollup early-return bypasses autoLoadCrashData(),
+        // which is the path that normally calls showFilterLoadingState(false),
+        // leaving the radios visually disabled (opacity .6 + pointer-events:none)
+        // and the Refresh button stuck on "⏳ Loading..." after the dashboard
+        // is fully painted. Mirrors the same cleanup at line ~33252.
+        try {
+            if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+        } catch (uiErr) { /* non-fatal */ }
     } else {
         autoLoadCrashData(true); // skipCache = true since cache was just invalidated
     }
