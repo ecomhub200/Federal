@@ -155121,6 +155121,16 @@ async function loadScorecardData() {
   const mode = modeSel ? modeSel.value : 'single';
   if (statusEl) statusEl.textContent = 'Loading…';
 
+  // State-agnostic resolution. Use the same picker every other tab uses so
+  // switching state in Upload Data automatically swaps scorecard partitions.
+  const stateKey = (typeof _resolveActiveState === 'function')
+    ? _resolveActiveState()
+    : (window.crashLensClient && window.crashLensClient.state) || null;
+  if (!stateKey) {
+    if (statusEl) statusEl.textContent = 'No state selected — pick a state in Upload Data first.';
+    return;
+  }
+
   // Resolve tier context (state / county / city etc.)
   let opts = {};
   if (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier) {
@@ -155144,19 +155154,34 @@ async function loadScorecardData() {
     if (mode === 'rolling') {
       // 3-year rolling: fetch year-2 → year
       opts.yearEnd = year;
-      data = await client.getScorecard(null, year - 2, opts);
+      data = await client.getScorecard(stateKey, year - 2, opts);
       // Aggregate across the 3 years per jurisdiction
       data = _aggregateRolling(data);
     } else {
-      data = await client.getScorecard(null, year, opts);
+      data = await client.getScorecard(stateKey, year, opts);
     }
 
     _scorecardData = data || [];
 
+    // Empty-state UI — only Delaware is currently populated; tell the user
+    // the front-end is ready and the backend pipeline is the gate.
+    if (_scorecardData.length === 0) {
+      const tbody = document.getElementById('scorecardBody');
+      const thead = document.getElementById('scorecardHead');
+      if (thead) thead.innerHTML = '<tr><th colspan="99" style="text-align:left;padding:1rem;color:#475569">No scorecard data available for ' + stateKey + ' (' + year + ').</th></tr>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="99" style="text-align:center;padding:2rem;color:#94a3b8">' +
+        '<strong>State not yet populated.</strong><br>' +
+        'Currently only Delaware data is in the <code>scorecard_rankings</code> matview. ' +
+        'When the backend pipeline adds <strong>' + stateKey + '</strong>, this view will work automatically — no frontend change needed.' +
+        '</td></tr>';
+      if (statusEl) statusEl.textContent = '0 jurisdictions · ' + stateKey + ' (' + year + ')';
+      return;
+    }
+
     if (mode === 'compare') {
       const compareYear = parseInt(document.getElementById('scorecard-compare-year').value, 10);
       const opts2 = Object.assign({}, opts);
-      const compareData = await client.getScorecard(null, compareYear, opts2);
+      const compareData = await client.getScorecard(stateKey, compareYear, opts2);
       renderComparisonTable(_scorecardData, compareData || [], year, compareYear);
     } else {
       renderScorecardTable(_scorecardData);
