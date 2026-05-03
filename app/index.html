@@ -21640,6 +21640,11 @@ async function handlePlanningDistrictSelection() {
     } catch (e) {
         console.error('[Tier] handlePlanningDistrictSelection failed:', e && e.message, e && e.stack);
     }
+    // Fix D2 belt-and-suspenders unlock — radios self-heal regardless of branch.
+    try {
+        if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+        if (typeof showRefreshButton === 'function') showRefreshButton();
+    } catch (uiErr) { /* non-fatal */ }
 }
 
 /**
@@ -21856,6 +21861,14 @@ async function handleCitySelection() {
     } catch (e) {
         console.error('[Tier] handleCitySelection failed:', e && e.message, e && e.stack);
     }
+    // Fix D2 belt-and-suspenders: regardless of which branch we took above,
+    // guarantee the radios are clickable when handleCitySelection completes.
+    // The bridge fetch is still in flight async, but the user can already
+    // start switching road types — the bridge debounces internally.
+    try {
+        if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+        if (typeof showRefreshButton === 'function') showRefreshButton();
+    } catch (uiErr) { /* non-fatal */ }
 }
 
 /**
@@ -22064,6 +22077,11 @@ async function handleRegionSelection() {
     } catch (e) {
         console.error('[Tier] handleRegionSelection failed:', e && e.message, e && e.stack);
     }
+    // Fix D2 belt-and-suspenders unlock — radios self-heal regardless of branch.
+    try {
+        if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+        if (typeof showRefreshButton === 'function') showRefreshButton();
+    } catch (uiErr) { /* non-fatal */ }
 }
 
 async function handleMPOSelection() {
@@ -22239,6 +22257,11 @@ async function handleMPOSelection() {
     } catch (e) {
         console.error('[Tier] handleMPOSelection failed:', e && e.message, e && e.stack);
     }
+    // Fix D2 belt-and-suspenders unlock — radios self-heal regardless of branch.
+    try {
+        if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+        if (typeof showRefreshButton === 'function') showRefreshButton();
+    } catch (uiErr) { /* non-fatal */ }
 }
 
 // ============================================================
@@ -25391,10 +25414,19 @@ async function handleStateSelection() {
                 // which causes the Supabase-first guard in autoLoadCrashData to be SKIPPED.
                 if (typeof resetState === 'function') resetState();
 
-                // Sync crashLensClient.state to the new state BEFORE the Supabase query
+                // Sync crashLensClient.state to the new state BEFORE the Supabase query.
+                // This site fires immediately after the user picks a state, so newStateKey
+                // is authoritative — apply it directly. The Fix A guard in the bridge
+                // catches any subsequent boot-race overwrite. Logging added by Fix A2a
+                // so the operator can see the exact state-correction sequence in DevTools.
                 if (window.crashLensClient) {
                     const newStateKey = geoConfig.stateKey || geoConfig.stateName?.toLowerCase().replace(/\s+/g, '_');
-                    if (newStateKey) window.crashLensClient.state = newStateKey;
+                    if (newStateKey) {
+                        if (window.crashLensClient.state !== newStateKey) {
+                            console.log('[StateSync] handleStateSelection: ' + window.crashLensClient.state + ' → ' + newStateKey);
+                        }
+                        window.crashLensClient.state = newStateKey;
+                    }
                 }
 
                 autoLoadCrashData(true); // skipCache = true since cache was just invalidated
@@ -25924,14 +25956,29 @@ function saveJurisdictionSelection() {
     // CRITICAL: Reset crashState and lazyLoader before loading new jurisdiction.
     if (typeof resetState === 'function') resetState();
 
-    // Sync crashLensClient.state to match the current state selection
+    // Sync crashLensClient.state to match the current state selection. Apply
+    // Fix A's guard (Fix A2b): never overwrite a non-default state with the
+    // boot default when the only signal IS the boot default (prevents the
+    // delaware → colorado race during boot before the dropdown propagates).
     if (window.crashLensClient) {
         var stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
-        if (!stateKey) {
-            var stSel = document.getElementById('stateSelect');
-            if (stSel && stSel.value) stateKey = stSel.value.toLowerCase().replace(/\s+/g, '_');
+        var dropdownStateB = null;
+        var stSel = document.getElementById('stateSelect');
+        if (stSel && stSel.value) {
+            dropdownStateB = (typeof _fipsToStateKey === 'function')
+                ? _fipsToStateKey(stSel.value)
+                : stSel.value.toLowerCase().replace(/\s+/g, '_');
         }
-        if (stateKey) window.crashLensClient.state = stateKey;
+        if (!stateKey) stateKey = dropdownStateB;
+        var bootDefaultB = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
+        if (
+            stateKey &&
+            stateKey !== window.crashLensClient.state &&
+            !(stateKey === bootDefaultB && !dropdownStateB && window.crashLensClient.state && window.crashLensClient.state !== bootDefaultB)
+        ) {
+            console.log('[StateSync] saveJurisdictionSelection: ' + window.crashLensClient.state + ' → ' + stateKey);
+            window.crashLensClient.state = stateKey;
+        }
     }
 
     // Supabase-first: paint skeleton KPIs immediately so the user sees the
@@ -25978,6 +26025,13 @@ function saveJurisdictionSelection() {
     } else {
         autoLoadCrashData(true); // skipCache = true since cache was just invalidated
     }
+    // Fix D2 belt-and-suspenders unlock — radios self-heal regardless of branch.
+    // Mirror the same pattern at the end of every tier handler so a stuck
+    // "⏳ Loading..." state is impossible no matter which path runs.
+    try {
+        if (typeof showFilterLoadingState === 'function') showFilterLoadingState(false);
+        if (typeof showRefreshButton === 'function') showRefreshButton();
+    } catch (uiErr) { /* non-fatal */ }
 }
 
 /**
@@ -26601,6 +26655,29 @@ async function forceRefreshAllData() {
 
 // Show/hide loading state on filter options
 function showFilterLoadingState(show) {
+    // Fix D2 — emit a single `[FilterLock]` line per call, with the caller's
+    // first non-self frame extracted from the stack trace. Centralizing here
+    // (instead of wrapping each of the ~18 call sites) guarantees every
+    // call gets logged and the operator can see the exact lock/unlock
+    // sequence at every transition. Search the console for `[FilterLock]`
+    // to debug "radios stuck disabled" reports.
+    try {
+        const err = new Error();
+        const lines = String(err.stack || '').split('\n');
+        // Skip frame 0 ("Error") and frame 1 (this function); use the next
+        // non-empty frame as the caller hint. Trim file URL noise.
+        let callerHint = '<unknown>';
+        for (let i = 2; i < lines.length; i++) {
+            const ln = (lines[i] || '').trim();
+            if (!ln) continue;
+            // Keep only the function name + line number tail when present.
+            const m = ln.match(/at\s+([^\s(]+)\s*\(?[^():]*:?(\d+:\d+)?\)?/);
+            callerHint = m ? (m[1] + (m[2] ? ':' + m[2] : '')) : ln.slice(0, 80);
+            break;
+        }
+        console.log('[FilterLock] showFilterLoadingState(' + !!show + ') from ' + callerHint);
+    } catch (logErr) { /* non-fatal */ }
+
     const refreshBtn = document.getElementById('refreshDataBtn');
     const filterLabels = document.querySelectorAll('.radio-item');
 
@@ -33266,14 +33343,27 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
         if (window.crashLensClient) {
             let _activeState = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
             const _bootDefault = (typeof appConfig !== 'undefined' && appConfig?.defaultState) || null;
-            if (!_activeState || _activeState === _bootDefault) {
-                const _stSel = document.getElementById('stateSelect');
-                if (_stSel && _stSel.value && typeof _fipsToStateKey === 'function') {
-                    const _fromFips = _fipsToStateKey(_stSel.value);
-                    if (_fromFips) _activeState = _fromFips;
-                }
+            let _dropdownStateC = null;
+            const _stSel = document.getElementById('stateSelect');
+            if (_stSel && _stSel.value && typeof _fipsToStateKey === 'function') {
+                _dropdownStateC = _fipsToStateKey(_stSel.value);
             }
-            if (_activeState) window.crashLensClient.state = _activeState;
+            if (!_activeState || _activeState === _bootDefault) {
+                if (_dropdownStateC) _activeState = _dropdownStateC;
+            }
+            // Fix A2c — guard: never overwrite a non-default state with the
+            // boot default when the only signal we have IS the boot default.
+            // This is the third state-sync site — without this guard, an
+            // autoLoad race can pin state back to 'colorado' after the user
+            // has picked Delaware, producing 0-row matview queries.
+            if (
+                _activeState &&
+                _activeState !== window.crashLensClient.state &&
+                !(_activeState === _bootDefault && !_dropdownStateC && window.crashLensClient.state && window.crashLensClient.state !== _bootDefault)
+            ) {
+                console.log('[StateSync] autoLoadCrashData: ' + window.crashLensClient.state + ' → ' + _activeState);
+                window.crashLensClient.state = _activeState;
+            }
         }
     } catch (e) { /* non-fatal */ }
 
