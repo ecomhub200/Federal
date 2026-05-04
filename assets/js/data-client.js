@@ -25,7 +25,9 @@ class CrashLensDataClient {
     preferSupabase: true,
   };
 
-  // 7-tier hierarchy: tier name → Supabase column
+  // 7-tier hierarchy: tier name → Supabase column.
+  // Default shape used by dashboard_summary, mv_safety_categories,
+  // mv_crash_tree, and mv_analysis_summary.
   static TIER_COLUMNS = {
     federal:           null,                   // no filter, all states
     state:             'state',
@@ -34,6 +36,43 @@ class CrashLensDataClient {
     mpo:               'mpo_name',
     county:            'physical_juris_name',
     city:              'physical_juris_name',
+  };
+
+  // Per-matview column overrides. mv_hotspots and mv_grants_baseline
+  // aliased physical_juris_name → county, dot_district → region,
+  // mpo_name → mpo at CREATE time. PostgREST surfaces the alias, not
+  // the source column, so requests using the dashboard_summary names
+  // against those two matviews return HTTP 400 (which the data-client
+  // catches and logs as "matview missing?"). Default to the
+  // dashboard_summary names; override only where the alias differs.
+  static TIER_COLUMNS_BY_MATVIEW = {
+    default: {
+      federal:           null,
+      state:             'state',
+      region:            'dot_district',
+      planning_district: 'planning_district',
+      mpo:               'mpo_name',
+      county:            'physical_juris_name',
+      city:              'physical_juris_name',
+    },
+    mv_hotspots: {
+      federal:           null,
+      state:             'state',
+      region:            'region',
+      planning_district: 'planning_district',
+      mpo:               'mpo',
+      county:            'county',
+      city:              'county',
+    },
+    mv_grants_baseline: {
+      federal:           null,
+      state:             'state',
+      region:            'region',
+      planning_district: 'planning_district',
+      mpo:               'mpo',
+      county:            'county',
+      city:              'county',
+    },
   };
 
   // Frontend column names (Title Case) → Supabase column names (snake_case)
@@ -669,63 +708,71 @@ class CrashLensDataClient {
    */
   async getHotspots(tier, value, opts = {}) {
     if (!this.preferSupabase || !this.supabaseKey) return null;
-    try {
-      const tierFilters = this._tierFilter(tier, value);
-      const allFilters = { ...tierFilters };
-      this._applyRoadTypeMatviewFilters(allFilters, opts);
-      const limit = opts.limit || 100;
-      // When no roadType filter is applied, the same location may appear up to
-      // 4 times (one per road_type bucket), so over-fetch and merge below.
-      // With a roadType filter we still over-fetch a bit to cover the
-      // intersections + segments split.
-      const fetchLimit = (opts.roadType || opts.roadTypes) ? limit * 2 : limit * 8;
-      const data = await this._supabaseQuery('mv_hotspots', {
-        filters: allFilters,
-        order: 'epdo.desc',
-        limit: fetchLimit,
-      });
-      this._source = 'supabase';
-      this._warnIfZeroRows('mv_hotspots', data, tier, value, opts);
-
-      // When no roadType filter is applied, rows for the same physical location
-      // arrive once per road_type bucket. Merge them so totals/EPDO aren't split.
-      let rows;
-      if (opts.roadType || opts.roadTypes) {
-        rows = data || [];
-      } else {
-        const merged = new Map();
-        (data || []).forEach(r => {
-          const key = `${r.location_type}|${r.location_name}|${r.rte_name}`;
-          if (!merged.has(key)) {
-            merged.set(key, { ...r, total_crashes: 0, k: 0, a: 0, b: 0, c: 0, o: 0, epdo: 0, ped_count: 0, bike_count: 0 });
-          }
-          const m = merged.get(key);
-          m.total_crashes += (r.total_crashes || 0);
-          m.k += (r.k || 0);
-          m.a += (r.a || 0);
-          m.b += (r.b || 0);
-          m.c += (r.c || 0);
-          m.o += (r.o || 0);
-          m.epdo += (r.epdo || 0);
-          m.ped_count += (r.ped_count || 0);
-          m.bike_count += (r.bike_count || 0);
+    const keyFilters = (Array.isArray(opts.roadTypes) && opts.roadTypes.length > 1)
+      ? { ...opts, roadTypes: opts.roadTypes.slice().sort() }
+      : opts;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getHotspots', state: this.state, tier, value, opts: keyFilters
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value, 'mv_hotspots');
+        const allFilters = { ...tierFilters };
+        this._applyRoadTypeMatviewFilters(allFilters, opts);
+        const limit = opts.limit || 100;
+        // When no roadType filter is applied, the same location may appear up to
+        // 4 times (one per road_type bucket), so over-fetch and merge below.
+        // With a roadType filter we still over-fetch a bit to cover the
+        // intersections + segments split.
+        const fetchLimit = (opts.roadType || opts.roadTypes) ? limit * 2 : limit * 8;
+        const data = await this._supabaseQuery('mv_hotspots', {
+          filters: allFilters,
+          order: 'epdo.desc',
+          limit: fetchLimit,
         });
-        rows = [...merged.values()].sort((a, b) => (b.epdo || 0) - (a.epdo || 0));
-      }
+        this._source = 'supabase';
+        this._warnIfZeroRows('mv_hotspots', data, tier, value, opts);
 
-      // Group by location_type into the shape the Hot Spots tab expects,
-      // applying the requested limit per group.
-      const intersections = [], segments = [];
-      rows.forEach(r => {
-        const row = this._pgToFrontend(r);
-        if (r.location_type === 'intersection' && intersections.length < limit) intersections.push(row);
-        else if (r.location_type === 'segment' && segments.length < limit) segments.push(row);
-      });
-      return { intersections, segments };
-    } catch (e) {
-      console.warn('[DataClient] getHotspots failed (matview missing?):', e.message);
-      return null;
-    }
+        // When no roadType filter is applied, rows for the same physical location
+        // arrive once per road_type bucket. Merge them so totals/EPDO aren't split.
+        let rows;
+        if (opts.roadType || opts.roadTypes) {
+          rows = data || [];
+        } else {
+          const merged = new Map();
+          (data || []).forEach(r => {
+            const key = `${r.location_type}|${r.location_name}|${r.rte_name}`;
+            if (!merged.has(key)) {
+              merged.set(key, { ...r, total_crashes: 0, k: 0, a: 0, b: 0, c: 0, o: 0, epdo: 0, ped_count: 0, bike_count: 0 });
+            }
+            const m = merged.get(key);
+            m.total_crashes += (r.total_crashes || 0);
+            m.k += (r.k || 0);
+            m.a += (r.a || 0);
+            m.b += (r.b || 0);
+            m.c += (r.c || 0);
+            m.o += (r.o || 0);
+            m.epdo += (r.epdo || 0);
+            m.ped_count += (r.ped_count || 0);
+            m.bike_count += (r.bike_count || 0);
+          });
+          rows = [...merged.values()].sort((a, b) => (b.epdo || 0) - (a.epdo || 0));
+        }
+
+        // Group by location_type into the shape the Hot Spots tab expects,
+        // applying the requested limit per group.
+        const intersections = [], segments = [];
+        rows.forEach(r => {
+          const row = this._pgToFrontend(r);
+          if (r.location_type === 'intersection' && intersections.length < limit) intersections.push(row);
+          else if (r.location_type === 'segment' && segments.length < limit) segments.push(row);
+        });
+        return { intersections, segments };
+      } catch (e) {
+        console.warn('[DataClient] getHotspots failed (matview missing?):', e.message);
+        return null;
+      }
+    });
   }
 
   /**
@@ -738,26 +785,31 @@ class CrashLensDataClient {
    */
   async getCrashTree(tier, value, opts = {}) {
     if (!this.preferSupabase || !this.supabaseKey) return null;
-    try {
-      const tierFilters = this._tierFilter(tier, value);
-      const allFilters = { ...tierFilters };
-      if (opts.treeType) allFilters.tree_type = `eq.${opts.treeType}`;
-      const data = await this._supabaseQuery('mv_crash_tree', {
-        filters: allFilters,
-        limit: 50000,
-      });
-      this._source = 'supabase';
-      return (data || []).map(r => {
-        const out = this._pgToFrontend(r);
-        // mv_crash_tree column is `total`; frontend callers read `count`
-        // (the R2/local-aggregation convention). Alias it here.
-        out.count = parseInt(r.total != null ? r.total : r.count, 10) || 0;
-        return out;
-      });
-    } catch (e) {
-      console.warn('[DataClient] getCrashTree failed (matview missing?):', e.message);
-      return null;
-    }
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getCrashTree', state: this.state, tier, value, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value);
+        const allFilters = { ...tierFilters };
+        if (opts.treeType) allFilters.tree_type = `eq.${opts.treeType}`;
+        const data = await this._supabaseQuery('mv_crash_tree', {
+          filters: allFilters,
+          limit: 50000,
+        });
+        this._source = 'supabase';
+        return (data || []).map(r => {
+          const out = this._pgToFrontend(r);
+          // mv_crash_tree column is `total`; frontend callers read `count`
+          // (the R2/local-aggregation convention). Alias it here.
+          out.count = parseInt(r.total != null ? r.total : r.count, 10) || 0;
+          return out;
+        });
+      } catch (e) {
+        console.warn('[DataClient] getCrashTree failed (matview missing?):', e.message);
+        return null;
+      }
+    });
   }
 
   /**
@@ -770,53 +822,61 @@ class CrashLensDataClient {
    */
   async getGrantsBaseline(tier, value, opts = {}) {
     if (!this.preferSupabase || !this.supabaseKey) return null;
-    try {
-      const tierFilters = this._tierFilter(tier, value);
-      const allFilters = { ...tierFilters };
-      this._applyRoadTypeMatviewFilters(allFilters, opts);
-      if (opts.yearFrom && opts.yearTo) {
-        allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
-      }
-      const data = await this._supabaseQuery('mv_grants_baseline', {
-        filters: allFilters,
-        order: 'epdo.desc',
-        // When merging across road_type buckets we may pull up to ~4x the rows.
-        limit: (opts.roadType || opts.roadTypes) ? 5000 : 20000,
-      });
-      this._source = 'supabase';
-      this._warnIfZeroRows('mv_grants_baseline', data, tier, value, opts);
-
-      // When no roadType filter, the same (location, year) appears once per
-      // road_type bucket. Merge them so EPDO ranking isn't split.
-      if (!opts.roadType && !opts.roadTypes) {
-        const merged = new Map();
-        (data || []).forEach(r => {
-          const key = `${r.location_type}|${r.location_name}|${r.rte_name}|${r.crash_year}`;
-          if (!merged.has(key)) {
-            merged.set(key, { ...r, total_crashes: 0, k: 0, a: 0, b: 0, c: 0, o: 0, epdo: 0, ped: 0, bike: 0 });
-          }
-          const m = merged.get(key);
-          m.total_crashes += (r.total_crashes || 0);
-          m.k += (r.k || 0);
-          m.a += (r.a || 0);
-          m.b += (r.b || 0);
-          m.c += (r.c || 0);
-          m.o += (r.o || 0);
-          m.epdo += (r.epdo || 0);
-          m.ped += (r.ped || 0);
-          m.bike += (r.bike || 0);
+    const keyFilters = (Array.isArray(opts.roadTypes) && opts.roadTypes.length > 1)
+      ? { ...opts, roadTypes: opts.roadTypes.slice().sort() }
+      : opts;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getGrantsBaseline', state: this.state, tier, value, opts: keyFilters
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value, 'mv_grants_baseline');
+        const allFilters = { ...tierFilters };
+        this._applyRoadTypeMatviewFilters(allFilters, opts);
+        if (opts.yearFrom && opts.yearTo) {
+          allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
+        }
+        const data = await this._supabaseQuery('mv_grants_baseline', {
+          filters: allFilters,
+          order: 'epdo.desc',
+          // When merging across road_type buckets we may pull up to ~4x the rows.
+          limit: (opts.roadType || opts.roadTypes) ? 5000 : 20000,
         });
-        const sorted = [...merged.values()]
-          .sort((a, b) => (b.epdo || 0) - (a.epdo || 0))
-          .slice(0, 5000);
-        return sorted.map(r => this._pgToFrontend(r));
-      }
+        this._source = 'supabase';
+        this._warnIfZeroRows('mv_grants_baseline', data, tier, value, opts);
 
-      return (data || []).map(r => this._pgToFrontend(r));
-    } catch (e) {
-      console.warn('[DataClient] getGrantsBaseline failed (matview missing?):', e.message);
-      return null;
-    }
+        // When no roadType filter, the same (location, year) appears once per
+        // road_type bucket. Merge them so EPDO ranking isn't split.
+        if (!opts.roadType && !opts.roadTypes) {
+          const merged = new Map();
+          (data || []).forEach(r => {
+            const key = `${r.location_type}|${r.location_name}|${r.rte_name}|${r.crash_year}`;
+            if (!merged.has(key)) {
+              merged.set(key, { ...r, total_crashes: 0, k: 0, a: 0, b: 0, c: 0, o: 0, epdo: 0, ped: 0, bike: 0 });
+            }
+            const m = merged.get(key);
+            m.total_crashes += (r.total_crashes || 0);
+            m.k += (r.k || 0);
+            m.a += (r.a || 0);
+            m.b += (r.b || 0);
+            m.c += (r.c || 0);
+            m.o += (r.o || 0);
+            m.epdo += (r.epdo || 0);
+            m.ped += (r.ped || 0);
+            m.bike += (r.bike || 0);
+          });
+          const sorted = [...merged.values()]
+            .sort((a, b) => (b.epdo || 0) - (a.epdo || 0))
+            .slice(0, 5000);
+          return sorted.map(r => this._pgToFrontend(r));
+        }
+
+        return (data || []).map(r => this._pgToFrontend(r));
+      } catch (e) {
+        console.warn('[DataClient] getGrantsBaseline failed (matview missing?):', e.message);
+        return null;
+      }
+    });
   }
 
   /**
@@ -830,40 +890,45 @@ class CrashLensDataClient {
    */
   async getSafetyCategories(tier, value, opts = {}) {
     if (!this.preferSupabase || !this.supabaseKey) return null;
-    try {
-      const tierFilters = this._tierFilter(tier, value);
-      const allFilters = { ...tierFilters };
-      // NOTE: mv_safety_categories has no crash_year column — it aggregates all
-      // years by design. Year filtering is not supported for this matview.
-      const data = await this._supabaseQuery('mv_safety_categories', {
-        filters: allFilters,
-        limit: 2000,
-      });
-      this._source = 'supabase';
-      // Rows are grouped by (state, county, district, mpo, planning_district,
-      // category). At any aggregate tier (state/region/MPO/PD) the same
-      // category appears once per county — accumulate instead of overwrite.
-      const out = {};
-      (data || []).forEach(r => {
-        if (!out[r.category]) {
-          out[r.category] = {
-            total: 0, K: 0, A: 0, B: 0, C: 0, O: 0,
-            crashes: [],  // Lazily fetched if tab needs row detail
-          };
-        }
-        const cat = out[r.category];
-        cat.total += (r.total || 0);
-        cat.K += (r.k || 0);
-        cat.A += (r.a || 0);
-        cat.B += (r.b || 0);
-        cat.C += (r.c || 0);
-        cat.O += (r.o || 0);
-      });
-      return out;
-    } catch (e) {
-      console.warn('[DataClient] getSafetyCategories failed (matview missing?):', e.message);
-      return null;
-    }
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getSafetyCategories', state: this.state, tier, value, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value);
+        const allFilters = { ...tierFilters };
+        // NOTE: mv_safety_categories has no crash_year column — it aggregates all
+        // years by design. Year filtering is not supported for this matview.
+        const data = await this._supabaseQuery('mv_safety_categories', {
+          filters: allFilters,
+          limit: 2000,
+        });
+        this._source = 'supabase';
+        // Rows are grouped by (state, county, district, mpo, planning_district,
+        // category). At any aggregate tier (state/region/MPO/PD) the same
+        // category appears once per county — accumulate instead of overwrite.
+        const out = {};
+        (data || []).forEach(r => {
+          if (!out[r.category]) {
+            out[r.category] = {
+              total: 0, K: 0, A: 0, B: 0, C: 0, O: 0,
+              crashes: [],  // Lazily fetched if tab needs row detail
+            };
+          }
+          const cat = out[r.category];
+          cat.total += (r.total || 0);
+          cat.K += (r.k || 0);
+          cat.A += (r.a || 0);
+          cat.B += (r.b || 0);
+          cat.C += (r.c || 0);
+          cat.O += (r.o || 0);
+        });
+        return out;
+      } catch (e) {
+        console.warn('[DataClient] getSafetyCategories failed (matview missing?):', e.message);
+        return null;
+      }
+    });
   }
 
   /**
@@ -881,52 +946,68 @@ class CrashLensDataClient {
    */
   async getAnalysisBreakdown(tier, value, opts = {}) {
     if (!this.preferSupabase || !this.supabaseKey) return null;
-    try {
-      const tierFilters = this._tierFilter(tier, value);
-      const allFilters = { ...tierFilters };
-      // NOTE: mv_analysis_summary has no crash_year column — 'year' is already
-      // a breakdown axis (rows with dimension='year'), not a filter.
-      const data = await this._supabaseQuery('mv_analysis_summary', {
-        filters: allFilters,
-        limit: 10000,
-      });
-      this._source = 'supabase';
-      // Rows are grouped by (state, county, district, mpo, planning_district,
-      // dimension, dim_value). At any aggregate tier each (dimension, dim_value)
-      // appears once per county — accumulate instead of overwrite.
-      const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byHour: {} };
-      (data || []).forEach(r => {
-        const k = r.k || 0, a = r.a || 0, b = r.b || 0, c = r.c || 0, o = r.o || 0, total = r.total || 0;
-        if (r.dimension === 'year') {
-          if (!out.byYear[r.dim_value]) out.byYear[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
-          const y = out.byYear[r.dim_value];
-          y.K += k; y.A += a; y.B += b; y.C += c; y.O += o; y.total += total;
-        } else if (r.dimension === 'month') {
-          if (!out.byMonth[r.dim_value]) out.byMonth[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
-          const m = out.byMonth[r.dim_value];
-          m.K += k; m.A += a; m.B += b; m.C += c; m.O += o; m.total += total;
-        } else if (r.dimension === 'severity') {
-          if (out.bySeverity[r.dim_value] !== undefined) out.bySeverity[r.dim_value] += total;
-        } else if (r.dimension === 'collision') {
-          out.byCollision[r.dim_value] = (out.byCollision[r.dim_value] || 0) + total;
-        } else if (r.dimension === 'hour') {
-          out.byHour[r.dim_value] = (out.byHour[r.dim_value] || 0) + total;
-        }
-      });
-      return out;
-    } catch (e) {
-      console.warn('[DataClient] getAnalysisBreakdown failed (matview missing?):', e.message);
-      return null;
-    }
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getAnalysisBreakdown', state: this.state, tier, value, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value);
+        const allFilters = { ...tierFilters };
+        // NOTE: mv_analysis_summary has no crash_year column — 'year' is already
+        // a breakdown axis (rows with dimension='year'), not a filter.
+        const data = await this._supabaseQuery('mv_analysis_summary', {
+          filters: allFilters,
+          limit: 10000,
+        });
+        this._source = 'supabase';
+        // Rows are grouped by (state, county, district, mpo, planning_district,
+        // dimension, dim_value). At any aggregate tier each (dimension, dim_value)
+        // appears once per county — accumulate instead of overwrite.
+        const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byHour: {} };
+        (data || []).forEach(r => {
+          const k = r.k || 0, a = r.a || 0, b = r.b || 0, c = r.c || 0, o = r.o || 0, total = r.total || 0;
+          if (r.dimension === 'year') {
+            if (!out.byYear[r.dim_value]) out.byYear[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+            const y = out.byYear[r.dim_value];
+            y.K += k; y.A += a; y.B += b; y.C += c; y.O += o; y.total += total;
+          } else if (r.dimension === 'month') {
+            if (!out.byMonth[r.dim_value]) out.byMonth[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+            const m = out.byMonth[r.dim_value];
+            m.K += k; m.A += a; m.B += b; m.C += c; m.O += o; m.total += total;
+          } else if (r.dimension === 'severity') {
+            if (out.bySeverity[r.dim_value] !== undefined) out.bySeverity[r.dim_value] += total;
+          } else if (r.dimension === 'collision') {
+            out.byCollision[r.dim_value] = (out.byCollision[r.dim_value] || 0) + total;
+          } else if (r.dimension === 'hour') {
+            out.byHour[r.dim_value] = (out.byHour[r.dim_value] || 0) + total;
+          }
+        });
+        return out;
+      } catch (e) {
+        console.warn('[DataClient] getAnalysisBreakdown failed (matview missing?):', e.message);
+        return null;
+      }
+    });
   }
 
   // ─────────────────────────────────────────────────────────
   //  SUPABASE INTERNALS
   // ─────────────────────────────────────────────────────────
 
-  /** Build tier filter params for Supabase */
-  _tierFilter(tier, value) {
-    const col = CrashLensDataClient.TIER_COLUMNS[tier];
+  /**
+   * Build tier filter params for Supabase.
+   *
+   * @param {string} tier
+   * @param {string} value
+   * @param {string} [matview='default'] — name of the matview being queried.
+   *   mv_hotspots and mv_grants_baseline aliased the tier columns at
+   *   CREATE time (county / region / mpo) so they need their own column
+   *   map. Every other matview accepts the dashboard_summary column names.
+   */
+  _tierFilter(tier, value, matview = 'default') {
+    const map = CrashLensDataClient.TIER_COLUMNS_BY_MATVIEW[matview]
+             || CrashLensDataClient.TIER_COLUMNS_BY_MATVIEW.default;
+    const col = map[tier];
     const params = {};
     if (this.state && tier !== 'federal') {
       params.state = `eq.${this.state}`;
@@ -968,7 +1049,15 @@ class CrashLensDataClient {
     //                                "All Roads (No Interstate)"
     this._applyRoadTypeMatviewFilters(allFilters, filters);
 
+    // Explicit projection — dashboard_summary has 22 columns but the bridge's
+    // aggregate() only consumes 14. Dropping `SELECT *` cuts the JSON payload
+    // by ~6× on county-tier queries (~8 MB → ~1.3 MB) and the wall-clock by
+    // ~4× on the same queries. Jurisdictional columns (state, physical_juris_name,
+    // dot_district, mpo_name, planning_district) are already in the WHERE
+    // clause, so shipping them back per-row is dead weight. If a future card
+    // breaks, add the column back to this list — that's the entire reverse path.
     const data = await this._supabaseQuery('dashboard_summary', {
+      select: 'crash_year,crash_severity,road_type,is_interstate,crash_count,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,alcohol_crashes,night_crashes,animal_crashes,functional_class,collision_type',
       filters: allFilters,
       order: 'crash_year.asc',
       limit: 100000,
@@ -1027,7 +1116,14 @@ class CrashLensDataClient {
     if (!opts) return;
     if (Array.isArray(opts.roadTypes) && opts.roadTypes.length > 0) {
       target.road_type = `in.(${opts.roadTypes.join(',')})`;
-    } else if (opts.roadType) {
+    } else if (opts.roadType && opts.roadType !== 'all_roads' && opts.roadType !== 'allRoads') {
+      // 'all_roads' / 'allRoads' are UI sentinels meaning "no filter".
+      // The matview's road_type column only has the four bucket values
+      // (dot_roads / county_roads / city_roads / other_roads); literal
+      // 'all_roads' would match no rows. The single source of truth for
+      // radio → spec is app/modules/data/road-type-mapping.js, which
+      // emits {} for "All Roads" — this guard is a defense-in-depth
+      // layer for callers that hardcode 'all_roads' as a default.
       target.road_type = `eq.${opts.roadType}`;
     }
     if (opts.noInterstate) {
