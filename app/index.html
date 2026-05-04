@@ -32198,6 +32198,14 @@ function showTab(tabId) {
             }
         }, 200);
     }
+    // True when the tab can populate from a Supabase matview without needing
+    // crashState.sampleRows (the legacy R2 path). Used as an OR-clause on tab
+    // gates so aggregate-tier and rolled-up tiers still init when R2 is skipped.
+    function _supabaseTabReady(method) {
+        var dc = (window.CL && CL.data) ? CL.data.client : null;
+        return !!(dc && typeof dc[method] === 'function');
+    }
+
     if (tabId === 'dashboard' && crashState.loaded) {
         updateDashboard();
         // Auto-load magisterial district statistics when visiting Dashboard tab
@@ -32219,7 +32227,7 @@ function showTab(tabId) {
             }
         }
     }
-    if (tabId === 'crashtree' && crashState.loaded) {
+    if (tabId === 'crashtree' && (crashState.loaded || _supabaseTabReady('getCrashTree'))) {
         var _ctCurrentTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
         if (!crashTreeState.loaded || crashTreeState._lastTier !== _ctCurrentTier) {
             crashTreeState._lastTier = _ctCurrentTier;
@@ -32229,7 +32237,7 @@ function showTab(tabId) {
             buildCrashTreeData();
         }
     }
-    if (tabId === 'analysis' && crashState.loaded) updateAnalysis();
+    if (tabId === 'analysis' && (crashState.loaded || _supabaseTabReady('getAnalysisBreakdown'))) updateAnalysis();
     if (tabId === 'intersection' && crashState.loaded) updateIntersectionTab();
     if (tabId === 'pedestrian' && crashState.loaded) updatePedBikeTab();
     if (tabId === 'hotspots' && crashState.loaded && !crashState.hotspots.length) analyzeHotspots();
@@ -61028,7 +61036,12 @@ function exportHotspotsPDF() {
 // ANALYSIS TAB
 // ============================================================
 function updateAnalysis() {
-    if (!crashState.loaded) return;
+    // Bug 4 fix — gate also accepts Supabase-matview path so the tab populates
+    // at aggregate tiers (and rolled-up county tier) where the R2 sampleRows
+    // pipeline is skipped and crashState.loaded never flips true.
+    var _dcReady = (window.CL && CL.data && CL.data.client &&
+                    typeof CL.data.client.getAnalysisBreakdown === 'function');
+    if (!crashState.loaded && !_dcReady) return;
     // Summary content has been moved to Dashboard tab
     // Analysis tab contains Infrastructure Assets sub-tab
     // Initialize default sub-tab (infrastructure) if not already set
