@@ -36251,6 +36251,15 @@ async function rankLocationsForGrants() {
 
     if (!crashState.loaded) return;
 
+    // Round 5 Fix 4 — at county-rollup tier sampleRows is empty.
+    // Pull grant-ready locations from mv_grants_baseline instead of running
+    // the row-level scoring path against the empty array.
+    const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
+    if (!_hasSampleRows) {
+        await _loadGrantsFromMatview();
+        return;
+    }
+
     // Ensure sampleRows are loaded (lazy loading after Worker parse)
     if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
         await CL.worker.ensureSampleRows();
@@ -36538,6 +36547,101 @@ async function rankLocationsForGrants() {
 
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
     console.log(`[Grants] Ranked ${locations.length} locations in ${elapsed}s using ${grantState.scoringProfile} profile (${aggregationLevel} level)`);
+}
+
+/**
+ * Round 5 Fix 4 — populate grantState.allRankedLocations from
+ * mv_grants_baseline so the Grants tab works at county-rollup tier where
+ * sampleRows is empty. The matview rows are per-year per-location; this
+ * helper aggregates them by location and maps to the displayGrantLocations()
+ * shape. Score is EPDO-driven (a reasonable proxy when full scoring inputs
+ * aren't available). State-agnostic.
+ */
+async function _loadGrantsFromMatview() {
+    try {
+        if (!window.crashLensClient || !CL.data || !CL.data.supabaseBridge) {
+            return false;
+        }
+        const stateKey = (typeof _resolveActiveState === 'function') ? _resolveActiveState() : null;
+        if (!stateKey) return false;
+        const t = CL.data.supabaseBridge.resolveTier();
+        window.crashLensClient.state = stateKey;
+
+        showGrantRankingProgress(true, 'Querying mv_grants_baseline…', 0);
+        const rows = await window.crashLensClient.getGrantsBaseline(t.tier, t.value, {});
+        if (!rows || !rows.length) {
+            grantState.allRankedLocations = [];
+            applyLocationLimit();
+            displayGrantLocations();
+            showGrantRankingProgress(false);
+            console.log('[Grants] mv_grants_baseline returned no rows for ' + t.tier + '=' + t.value);
+            return false;
+        }
+
+        // Rows are per-year per-location. Aggregate by (location_type, location_name, rte_name).
+        const merged = new Map();
+        rows.forEach(r => {
+            const key = (r.location_type || '') + '|' + (r.location_name || '') + '|' + (r.rte_name || '');
+            if (!merged.has(key)) {
+                merged.set(key, {
+                    name: r.location_name || r.rte_name || '(unnamed)',
+                    type: r.location_type || 'segment',
+                    crashes: 0, K: 0, A: 0, B: 0, C: 0, O: 0,
+                    epdo: 0, ped: 0, bike: 0,
+                    lat: r.lat_centroid || null, lon: r.lon_centroid || null,
+                    nodeId: r.location_name || r.rte_name || '',
+                    matchingGrants: [], bestMatch: '402',
+                    patterns: { night: 0, impaired: 0, speed: 0, angle: 0 },
+                    confidence: 'medium'
+                });
+            }
+            const m = merged.get(key);
+            m.crashes += (r.total_crashes || 0);
+            m.K += (r.k || 0);
+            m.A += (r.a || 0);
+            m.B += (r.b || 0);
+            m.C += (r.c || 0);
+            m.O += (r.o || 0);
+            m.epdo += (r.epdo || 0);
+            m.ped += (r.ped || 0);
+            m.bike += (r.bike || 0);
+        });
+
+        const minCrashes = grantState.minCrashThreshold || 3;
+        const ranked = [...merged.values()]
+            .filter(loc => loc.crashes >= minCrashes)
+            .map(loc => {
+                loc.vru = loc.ped + loc.bike;
+                // EPDO-driven score (proxy for full scoring matrix). 1000-pt scale.
+                loc.score = Math.round(loc.epdo);
+                loc.needScore = Math.round(loc.epdo);
+                loc.patternScore = 0;
+                loc.feasibilityScore = 0;
+                // Best-match grant: K>0 → SS4A, A>0 → HSIP, else 402.
+                if (loc.K > 0) loc.bestMatch = 'ss4a';
+                else if (loc.A > 0) loc.bestMatch = 'hsip';
+                else loc.bestMatch = '402';
+                loc.confidence = (loc.K + loc.A) > 0 ? 'high' : (loc.crashes >= 10 ? 'medium' : 'low');
+                return loc;
+            })
+            .sort((a, b) => b.score - a.score);
+
+        grantState.allRankedLocations = ranked;
+        // Cache for follow-up filter changes within the same tier.
+        grantState.rankingCache = {
+            key: getGrantRankingCacheKey(),
+            locations: ranked
+        };
+        applyLocationLimit();
+        displayGrantLocations();
+        showGrantRankingProgress(false);
+        console.log('[Grants] Loaded ' + ranked.length + ' grant-ready locations from mv_grants_baseline');
+        return true;
+    } catch (e) {
+        console.warn('[Grants] Matview path failed:', e && e.message);
+        showGrantRankingProgress(false);
+        return false;
+    }
 }
 
 // Apply location limit based on dropdown selection
@@ -60106,6 +60210,15 @@ function analyzeHotspots() {
         }
     } catch (e) { /* non-fatal — fall through to normal init */ }
 
+    // Round 5 Fix 2 — when sampleRows is empty (county-rollup or post-bridge
+    // load with no R2), pull top locations from mv_hotspots instead of running
+    // CL.analysis.hotspots.scoreAndRank() against the empty array.
+    const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
+    if (!_hasSampleRows && crashState.loaded) {
+        _loadHotspotsFromMatview();
+        return;
+    }
+
     if (!crashState.loaded) { alert('Load data first'); return; }
     showLoading('Analyzing hot spots...');
 
@@ -60163,6 +60276,82 @@ function analyzeHotspots() {
 
         hideLoading();
     }, 50);
+}
+
+/**
+ * Round 5 Fix 2 — populate crashState.hotspots from mv_hotspots so the Hot
+ * Spots tab works at county-rollup tier where sampleRows is empty.
+ * Renders directly via renderHotspots(). State-agnostic.
+ */
+async function _loadHotspotsFromMatview() {
+    try {
+        if (!window.crashLensClient || !CL.data || !CL.data.supabaseBridge) return false;
+        const stateKey = (typeof _resolveActiveState === 'function') ? _resolveActiveState() : null;
+        if (!stateKey) return false;
+        const t = CL.data.supabaseBridge.resolveTier();
+        window.crashLensClient.state = stateKey;
+
+        const minCrashesEl = document.getElementById('hsMinCrashes');
+        const topNEl = document.getElementById('hsTopN');
+        const groupByEl = document.getElementById('hsGroupBy');
+        const minCrashes = parseInt(minCrashesEl && minCrashesEl.value, 10) || 5;
+        const topN = parseInt(topNEl && topNEl.value, 10) || 25;
+        const groupBy = (groupByEl && groupByEl.value) || 'route';
+
+        showLoading('Analyzing hot spots…');
+        const data = await window.crashLensClient.getHotspots(t.tier, t.value, { limit: topN });
+        if (!data || (!data.intersections.length && !data.segments.length)) {
+            crashState.hotspots = [];
+            setPaginationData('hotspots', []);
+            renderHotspots();
+            hideLoading();
+            console.log('[Hot Spots] mv_hotspots returned no rows for ' + t.tier + '=' + t.value);
+            return false;
+        }
+
+        // Pick intersections vs segments based on the Group By UI control.
+        // 'node' / 'intersection' → intersections; everything else → segments.
+        const useIntersections = (groupBy === 'node' || groupBy === 'intersection');
+        const rows = useIntersections ? data.intersections : data.segments;
+
+        // Map matview row → renderHotspots() shape. perYear computed from
+        // first_year/last_year. topType isn't in the matview — leave 'N/A'.
+        const filtered = rows
+            .filter(r => (r.total_crashes || 0) >= minCrashes)
+            .map(r => {
+                const total = r.total_crashes || 0;
+                const span = Math.max(1, ((r.last_year || 0) - (r.first_year || 0)) + 1);
+                const epdo = r.epdo || 0;
+                const K = r.k || 0, A = r.a || 0, B = r.b || 0, C = r.c || 0, O = r.o || 0;
+                const locName = r.location_name || r.intersection_name || r.rte_name || '';
+                return {
+                    loc: locName,
+                    total: total,
+                    K: K, A: A, B: B, C: C, O: O,
+                    epdo: epdo,
+                    ka: K + A,
+                    perYear: (total / span).toFixed(1),
+                    topType: 'N/A',
+                    route: r.rte_name || '',
+                    county: r.county || '',
+                    lat: r.lat_centroid,
+                    lon: r.lon_centroid
+                };
+            })
+            .sort((a, b) => (b.epdo || 0) - (a.epdo || 0));
+
+        crashState.hotspots = filtered;
+        setPaginationData('hotspots', filtered);
+        renderHotspots();
+        try { initSignalWarrantChecker(); } catch (e) { /* non-fatal */ }
+        hideLoading();
+        console.log('[Hot Spots] Loaded ' + filtered.length + ' locations from mv_hotspots');
+        return true;
+    } catch (e) {
+        console.warn('[Hot Spots] Matview path failed:', e && e.message);
+        hideLoading();
+        return false;
+    }
 }
 
 // Auto-select top ranked hotspot and show info banner
@@ -62138,6 +62327,77 @@ function updateIntersectionFilterStatus() {
     }
 }
 
+/**
+ * Round 5 Fix 3 — derive Intersection-tab KPIs from the intersection subset
+ * of mv_hotspots. Used when sampleRows is empty (county-rollup tier).
+ * The 3 chart cards (Intersection Type, Traffic Control, Collision Types)
+ * need the dedicated mv_intersection_summary matview — pending backend.
+ * State-agnostic.
+ */
+async function _loadIntersectionsFromHotspots() {
+    try {
+        if (!window.crashLensClient || !CL.data || !CL.data.supabaseBridge) return false;
+        const stateKey = (typeof _resolveActiveState === 'function') ? _resolveActiveState() : null;
+        if (!stateKey) return false;
+        const t = CL.data.supabaseBridge.resolveTier();
+        window.crashLensClient.state = stateKey;
+
+        const data = await window.crashLensClient.getHotspots(t.tier, t.value, { limit: 1000 });
+        if (!data || !data.intersections || !data.intersections.length) {
+            const container = document.getElementById('tab-intersection');
+            if (container) {
+                container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
+                    '<div style="font-size:2rem;margin-bottom:.5rem">📊</div>' +
+                    '<div style="font-weight:600;margin-bottom:.25rem">No intersection crashes found</div>' +
+                    '<div style="font-size:.85rem;color:#94a3b8">mv_hotspots returned no intersection rows for this jurisdiction. Charts require mv_intersection_summary (backend ticket).</div>' +
+                    '</div>';
+            }
+            console.log('[Intersections] No intersection rows in mv_hotspots for ' + t.tier + '=' + t.value);
+            return false;
+        }
+
+        const intersections = data.intersections;
+        let intTotal = 0, intK = 0, intA = 0;
+        intersections.forEach(r => {
+            intTotal += (r.total_crashes || 0);
+            intK += (r.k || 0);
+            intA += (r.a || 0);
+        });
+
+        const total = (typeof crashState !== 'undefined' && crashState.totalRows) || intTotal;
+        const intTotalEl = document.getElementById('intTotal');
+        const intFatalEl = document.getElementById('intFatal');
+        const intSeriousEl = document.getElementById('intSerious');
+        const intPctEl = document.getElementById('intPct');
+        if (intTotalEl) intTotalEl.textContent = intTotal.toLocaleString();
+        if (intFatalEl) intFatalEl.textContent = intK;
+        if (intSeriousEl) intSeriousEl.textContent = intA;
+        if (intPctEl) intPctEl.textContent = (typeof pct === 'function' ? pct(intTotal, total) : ((total > 0 ? (intTotal/total*100) : 0).toFixed(1))) + '%';
+
+        // Inject a status banner so the user knows the 3 chart cards aren't
+        // populated because the dedicated matview hasn't shipped.
+        const tabEl = document.getElementById('tab-intersection');
+        if (tabEl && !tabEl.querySelector('.int-matview-banner')) {
+            const banner = document.createElement('div');
+            banner.className = 'int-matview-banner';
+            banner.style.cssText = 'margin:.75rem 1rem;padding:.6rem .85rem;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;font-size:.85rem;color:#78350f';
+            banner.textContent = 'Intersection-level charts (Type Distribution, Traffic Control, Collision Types) require the mv_intersection_summary matview which is not yet deployed. The 4 KPIs above are derived from mv_hotspots.';
+            const firstCard = tabEl.querySelector('.card, .kpi-row, .grid');
+            if (firstCard && firstCard.parentNode) {
+                firstCard.parentNode.insertBefore(banner, firstCard);
+            } else {
+                tabEl.insertBefore(banner, tabEl.firstChild);
+            }
+        }
+
+        console.log('[Intersections] Derived from mv_hotspots (' + intersections.length + ' rows). Charts disabled until mv_intersection_summary ships.');
+        return true;
+    } catch (e) {
+        console.warn('[Intersections] Matview path failed:', e && e.message);
+        return false;
+    }
+}
+
 function getFilteredIntersectionData() {
     const hasFilters = intFilters.startDate || intFilters.endDate || intFilters.trafficCtrl;
 
@@ -62257,6 +62517,16 @@ function updateIntersectionTab() {
             return;
         }
     } catch (e) { /* non-fatal — fall through to normal init */ }
+
+    // Round 5 Fix 3 — at county-rollup tier sampleRows is empty.
+    // mv_intersection_summary doesn't exist yet (backend ticket), so derive
+    // the 4 KPIs from the intersection subset of mv_hotspots. Charts stay
+    // empty until the dedicated matview ships.
+    const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
+    if (!_hasSampleRows && crashState.loaded) {
+        _loadIntersectionsFromHotspots();
+        return;
+    }
 
     const data = getFilteredIntersectionData();
     const int = data.intersection;
@@ -95186,6 +95456,34 @@ function initSafetyFocus() {
         }
     } catch (e) { /* non-fatal — fall through to normal init */ }
 
+    // Round 5 Fix 1 — at county/city tier with rollup-active or empty
+    // sampleRows (post-bridge load), pull per-category counts from
+    // mv_safety_categories instead of the row-level processSafetyData() path.
+    // The matview returns 15 of the 22 categories the UI shows; the rest
+    // render as 0 with a "(matview pending)" badge.
+    const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
+    if (!_hasSampleRows && crashState.loaded) {
+        _loadSafetyFromMatview().then(function (ok) {
+            if (!ok) {
+                const _container = document.getElementById('tab-safety');
+                if (_container) {
+                    _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
+                        '<div style="font-size:2rem;margin-bottom:.5rem">📊</div>' +
+                        '<div style="font-weight:600;margin-bottom:.25rem">No safety category data available</div>' +
+                        '<div style="font-size:.85rem;color:#94a3b8">The mv_safety_categories matview returned no rows for this jurisdiction.</div>' +
+                        '</div>';
+                }
+                return;
+            }
+            updateSafetyCards();
+            try { selectSafetyCategory('curves'); } catch (e) { /* non-fatal */ }
+            safetyState.loaded = true;
+        }).catch(function (e) {
+            console.warn('[Safety Focus] Matview path failed:', e && e.message);
+        });
+        return;
+    }
+
     if (!crashState.loaded || !crashState.sampleRows || crashState.sampleRows.length === 0) {
         console.log('[Safety Focus] Waiting for data...');
         return;
@@ -95615,20 +95913,104 @@ function extractSeverity(row) {
     return 'O';
 }
 
+// Round 5 Fix 1 — categories the UI shows that mv_safety_categories does NOT
+// yet expose. Cards render 0 + "(matview pending)" badge instead of "0%".
+const SAFETY_MATVIEW_PENDING = new Set([
+    'workzone', 'senior', 'young', 'lgtruck', 'hitrun', 'drowsy', 'alcoholonly'
+]);
+
 function updateSafetyCards() {
     // Use filtered total for accurate percentages when filters are applied
     const total = safetyState.filteredTotal || crashState.totalRows || crashState.sampleRows?.length || 0;
+    // Round 5 Fix 1 — when running from mv_safety_categories (no row-level
+    // sampleRows), prefer the matview's per-category total. Falls back to
+    // crashes.length for the legacy R2-driven path.
+    const _matviewMode = !!safetyState.matviewMode;
 
     Object.keys(safetyState.data).forEach(catKey => {
-        const count = safetyState.data[catKey].crashes.length;
+        const cat = safetyState.data[catKey];
+        const count = (_matviewMode && typeof cat.total === 'number')
+            ? cat.total
+            : cat.crashes.length;
         const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
 
         const countEl = document.getElementById(`safety${catKey.charAt(0).toUpperCase() + catKey.slice(1)}Count`);
         const pctEl = document.getElementById(`safety${catKey.charAt(0).toUpperCase() + catKey.slice(1)}Pct`);
 
         if (countEl) countEl.textContent = count.toLocaleString();
-        if (pctEl) pctEl.textContent = pct + '%';
+        if (pctEl) {
+            if (_matviewMode && SAFETY_MATVIEW_PENDING.has(catKey)) {
+                pctEl.textContent = '(matview pending)';
+                pctEl.title = 'This category is not yet exposed by mv_safety_categories — backend ticket pending.';
+            } else {
+                pctEl.textContent = pct + '%';
+                pctEl.title = '';
+            }
+        }
     });
+}
+
+/**
+ * Round 5 Fix 1 — populate safetyState.data from mv_safety_categories.
+ * Returns true when the matview yielded at least one category. State-agnostic
+ * — uses _resolveActiveState() to scope the query.
+ */
+async function _loadSafetyFromMatview() {
+    if (!window.crashLensClient || !CL.data || !CL.data.supabaseBridge) return false;
+    const stateKey = (typeof _resolveActiveState === 'function') ? _resolveActiveState() : null;
+    if (!stateKey) return false;
+    const t = CL.data.supabaseBridge.resolveTier();
+    window.crashLensClient.state = stateKey;
+    const cats = await window.crashLensClient.getSafetyCategories(t.tier, t.value, {});
+    if (!cats || Object.keys(cats).length === 0) return false;
+
+    // Reset all UI categories to zero with matview marker.
+    Object.keys(safetyState.data).forEach(cat => {
+        safetyState.data[cat] = {
+            crashes: [], byRoute: {},
+            severity: { K: 0, A: 0, B: 0, C: 0, O: 0 },
+            bySubcategory: {},
+            total: 0
+        };
+    });
+    safetyState.matviewMode = true;
+
+    // Map matview category → UI key. Keys match by default; the spec's
+    // explicit map is here for documentation and to handle any drift.
+    const SAFETY_CARD_MAP = {
+        'curves':         'curves',
+        'school':         'school',
+        'guardrail':      'guardrail',
+        'roaddeparture':  'roaddeparture',
+        'pedestrian':     'pedestrian',
+        'bicycle':        'bicycle',
+        'speed':          'speed',
+        'impaired':       'impaired',
+        'intersection':   'intersection',
+        'nighttime':      'nighttime',
+        'distracted':     'distracted',
+        'motorcycle':     'motorcycle',
+        'weather':        'weather',
+        'animal':         'animal',
+        'unrestrained':   'unrestrained'
+    };
+
+    let mapped = 0;
+    Object.keys(cats).forEach(matviewCat => {
+        const uiKey = SAFETY_CARD_MAP[matviewCat] || matviewCat;
+        if (safetyState.data[uiKey]) {
+            const m = cats[matviewCat] || {};
+            safetyState.data[uiKey].total = m.total || 0;
+            safetyState.data[uiKey].severity = {
+                K: m.K || 0, A: m.A || 0, B: m.B || 0, C: m.C || 0, O: m.O || 0
+            };
+            mapped++;
+        }
+    });
+
+    safetyState.filteredTotal = (typeof crashState !== 'undefined' && crashState.totalRows) || 0;
+    console.log('[Safety Focus] Loaded ' + mapped + ' categories from mv_safety_categories');
+    return true;
 }
 
 function selectSafetyCategory(category) {
