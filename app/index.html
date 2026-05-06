@@ -32270,7 +32270,7 @@ function showTab(tabId) {
         // Hide/show empty state based on data availability
         const safetyEmptyState = document.getElementById('safetyEmptyState');
         const safetyContainer = document.querySelector('.safety-focus-container');
-        if (crashState.loaded) {
+        if (crashState.loaded || _supabaseTabReady('getSafetyCategories')) {
             if (safetyEmptyState) safetyEmptyState.style.display = 'none';
             if (safetyContainer) safetyContainer.style.display = '';
             if (!safetyState.loaded) {
@@ -36249,34 +36249,18 @@ function yieldToUI() {
 
 // Main ranking function - now async with chunked processing and caching
 async function rankLocationsForGrants() {
-    // Aggregate tiers have no row-level R2 data and mv_grants_baseline isn't
-    // yet populated for those tiers. Render the empty-state instead of
-    // ranking against stale county-tier sampleRows.
-    try {
-        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
-        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
-            const _container = document.getElementById('tab-grants');
-            if (_container) {
-                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
-                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
-                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
-                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
-                    '</div>';
-            }
-            return;
-        }
-    } catch (e) { /* non-fatal — fall through to normal init */ }
-
-    if (!crashState.loaded) return;
-
-    // Round 5 Fix 4 — at county-rollup tier sampleRows is empty.
-    // Pull grant-ready locations from mv_grants_baseline instead of running
-    // the row-level scoring path against the empty array.
+    // Try matview path first — mv_grants_baseline is populated at every tier
+    // (federal/state/region/MPO/PD/county/city) after PR #68's column-alias fix.
+    // The matview path doesn't depend on crashState.loaded (which only flips
+    // after sampleRows is hydrated, never at aggregate tiers where R2 is skipped).
     const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
-    if (!_hasSampleRows) {
+    const _matviewReady = !!(typeof CL !== 'undefined' && CL.data && CL.data.client && typeof CL.data.client.getGrantsBaseline === 'function');
+    if (_matviewReady && !_hasSampleRows) {
         await _loadGrantsFromMatview();
         return;
     }
+
+    if (!crashState.loaded) return;
 
     // Ensure sampleRows are loaded (lazy loading after Worker parse)
     if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
@@ -95478,30 +95462,14 @@ function enrichMissingCrashFields(rows) {
 
 // Initialize Safety Focus module
 function initSafetyFocus() {
-    // Aggregate tiers have no row-level R2 data. Render the empty-state so
-    // we don't run with stale county-tier sampleRows from a previous tier.
-    try {
-        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
-        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
-            const _container = document.getElementById('tab-safety');
-            if (_container) {
-                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
-                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
-                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
-                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
-                    '</div>';
-            }
-            return;
-        }
-    } catch (e) { /* non-fatal — fall through to normal init */ }
-
-    // Round 5 Fix 1 — at county/city tier with rollup-active or empty
-    // sampleRows (post-bridge load), pull per-category counts from
-    // mv_safety_categories instead of the row-level processSafetyData() path.
-    // The matview returns 15 of the 22 categories the UI shows; the rest
-    // render as 0 with a "(matview pending)" badge.
+    // mv_safety_categories is populated at every tier (federal/state/region/
+    // MPO/PD/county/city). Try the matview path whenever sampleRows are absent
+    // — the legacy processSafetyData() path is reserved for the county/city
+    // case where R2 sampleRows actually loaded. Doesn't require crashState.loaded
+    // (false at aggregate tiers because R2 is skipped — see PR #64).
     const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
-    if (!_hasSampleRows && crashState.loaded) {
+    const _matviewReady = !!(typeof CL !== 'undefined' && CL.data && CL.data.client && typeof CL.data.client.getSafetyCategories === 'function');
+    if (_matviewReady && !_hasSampleRows) {
         _loadSafetyFromMatview().then(function (ok) {
             if (!ok) {
                 const _container = document.getElementById('tab-safety');
