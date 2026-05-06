@@ -60296,8 +60296,24 @@ async function _loadHotspotsFromMatview() {
 
         // Pick intersections vs segments based on the Group By UI control.
         // 'node' / 'intersection' → intersections; everything else → segments.
+        // Bug 11 fix — mv_hotspots currently emits 0 segment rows for every state
+        // (every base-table crash with a non-null node becomes an intersection
+        // row; segment-shaped rows have null rte_name and are filtered out by
+        // the matview's WHERE rte_name IS NOT NULL guard). When the user-selected
+        // bucket is empty, auto-fallback to the non-empty one so Hot Spots renders
+        // SOMETHING instead of a blank list. Jurisdiction-agnostic.
         const useIntersections = (groupBy === 'node' || groupBy === 'intersection');
-        const rows = useIntersections ? data.intersections : data.segments;
+        let rows = useIntersections ? data.intersections : data.segments;
+        if (!rows || rows.length === 0) {
+            const fallback = useIntersections ? data.segments : data.intersections;
+            if (fallback && fallback.length > 0) {
+                console.log('[Hot Spots] Group By="' + groupBy + '" returned 0 rows; auto-falling back to ' +
+                    (useIntersections ? 'segments' : 'intersections') + ' (' + fallback.length + ' rows)');
+                rows = fallback;
+            } else {
+                rows = [];
+            }
+        }
 
         // Map matview row → renderHotspots() shape. perYear computed from
         // first_year/last_year. topType isn't in the matview — leave 'N/A'.
