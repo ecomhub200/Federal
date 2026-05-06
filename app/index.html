@@ -32241,7 +32241,17 @@ function showTab(tabId) {
     if (tabId === 'intersection' && crashState.loaded) updateIntersectionTab();
     if (tabId === 'pedestrian' && crashState.loaded) updatePedBikeTab();
     if (tabId === 'hotspots' && crashState.loaded && !crashState.hotspots.length) analyzeHotspots();
-    if (tabId === 'cmf' && !cmfState.loaded) loadCMFDatabase();
+    if (tabId === 'cmf') {
+        if (!cmfState.loaded) {
+            loadCMFDatabase();
+        } else if (typeof populateCMFLocations === 'function') {
+            // Bug 7 fix — rebuild dropdown each time CMF is opened so a tier
+            // change between visits is reflected. populateCMFLocations() reads
+            // crashState.aggregates first and falls back to crashState.hotspots
+            // via the matview path inside buildLocationData().
+            populateCMFLocations();
+        }
+    }
     if (tabId === 'grants' && !grantState.loaded) initGrantModule();
     if (tabId === 'grants') initDistrictStatisticsOnGrantsTab();  // Initialize district stats section
     if (tabId === 'warrants') {
@@ -87998,6 +88008,59 @@ function getLocationDisplayName(type, value) {
  * @param {boolean} options.sortByCrashes - Sort by crash count (default: true)
  * @returns {Object} { segments: [], intersections: [], all: [] }
  */
+/**
+ * Bug 7 fix helper — derives the location-dropdown shape from
+ * crashState.hotspots (matview-loaded), without needing the legacy R2
+ * crashState.aggregates. Used as a fallback inside buildLocationData()
+ * when aggregates is missing (rolled-up county tier, MPO tier, etc.).
+ *
+ * crashState.hotspots row shape (set by _loadHotspotsFromMatview):
+ *   { loc, total, K, A, B, C, O, epdo, ka, perYear, topType,
+ *     route, county, lat, lon }
+ *
+ * State-agnostic: keys on data shape only, never on a jurisdiction literal.
+ */
+function _buildLocationDataFromHotspots(opts) {
+    const result = { segments: [], intersections: [], all: [] };
+    const rows = Array.isArray(crashState.hotspots) ? crashState.hotspots : [];
+    const isNodeId = (s) => /^\d+(\.\d+)?$/.test(String(s || '').trim());
+
+    rows.forEach(r => {
+        const total = r.total || 0;
+        if (isNodeId(r.loc)) {
+            result.intersections.push({
+                type: 'intersection',
+                value: r.loc,
+                displayName: r.route || r.loc,
+                nodeId: r.loc,
+                routes: new Set(r.route ? [r.route] : []),
+                intType: '',
+                trafficCtrl: '',
+                crashes: total,
+            });
+        } else {
+            result.segments.push({
+                type: 'segment',
+                value: r.loc,
+                displayName: typeof formatRouteName === 'function' ? formatRouteName(r.loc) : (r.loc || ''),
+                funcClass: '',
+                areaType: '',
+                crashes: total,
+            });
+        }
+    });
+
+    if (opts.sortByCrashes) {
+        result.segments.sort((a, b) => b.crashes - a.crashes);
+        result.intersections.sort((a, b) => b.crashes - a.crashes);
+    }
+    result.segments = result.segments.slice(0, opts.maxSegments || 150);
+    result.intersections = result.intersections.slice(0, opts.maxIntersections || 100);
+    result.all = [...result.segments, ...result.intersections];
+    if (opts.sortByCrashes) result.all.sort((a, b) => b.crashes - a.crashes);
+    return result;
+}
+
 function buildLocationData(options = {}) {
     const opts = {
         includeSegments: true,
@@ -88010,6 +88073,16 @@ function buildLocationData(options = {}) {
 
     const result = { segments: [], intersections: [], all: [] };
 
+    // Bug 7 fix — at rolled-up tiers (county→PD, etc.) R2 is skipped and
+    // crashState.aggregates is never built. crashState.hotspots IS populated
+    // by _loadHotspotsFromMatview from mv_hotspots and contains the same
+    // location-level data. Fall back to it when aggregates is missing so the
+    // dropdown still renders. Jurisdiction-agnostic: keys on data shape, not
+    // on any state/county/city literal.
+    if ((!crashState.loaded || !crashState.aggregates)
+        && Array.isArray(crashState.hotspots) && crashState.hotspots.length > 0) {
+        return _buildLocationDataFromHotspots(opts);
+    }
     if (!crashState.loaded || !crashState.aggregates) return result;
 
     // Build road segment data from pre-calculated aggregates for consistency
