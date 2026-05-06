@@ -32074,7 +32074,7 @@ function showTab(tabId) {
         return; // Don't run tab init yet — data not ready
     }
 
-    if (tabId === 'map' && crashState.loaded) {
+    if (tabId === 'map' && (crashState.loaded || _supabaseTabReady('getViewportCrashes'))) {
         if (!crashMap) {
             setTimeout(initMap, 100);
         } else {
@@ -32238,9 +32238,9 @@ function showTab(tabId) {
         }
     }
     if (tabId === 'analysis' && (crashState.loaded || _supabaseTabReady('getAnalysisBreakdown'))) updateAnalysis();
-    if (tabId === 'intersection' && crashState.loaded) updateIntersectionTab();
+    if (tabId === 'intersection' && (crashState.loaded || _supabaseTabReady('getHotspots'))) updateIntersectionTab();
     if (tabId === 'pedestrian' && crashState.loaded) updatePedBikeTab();
-    if (tabId === 'hotspots' && crashState.loaded && !crashState.hotspots.length) analyzeHotspots();
+    if (tabId === 'hotspots' && (crashState.loaded || _supabaseTabReady('getHotspots')) && !crashState.hotspots.length) analyzeHotspots();
     if (tabId === 'cmf') {
         if (!cmfState.loaded) {
             loadCMFDatabase();
