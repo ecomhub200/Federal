@@ -6760,10 +6760,22 @@ Analyzing risk factors...
 
 <!-- Analysis Sub-Navigation -->
 <div class="analysis-subnav">
+<button class="analysis-subtab" data-subtab="crashanalysis" onclick="switchAnalysisSubtab('crashanalysis')">📊 Crash Analysis</button>
 <button class="analysis-subtab active" data-subtab="infrastructure" onclick="switchAnalysisSubtab('infrastructure')">🚦 Infrastructure Assets</button>
 <button class="analysis-subtab" data-subtab="trafficinventory" onclick="switchAnalysisSubtab('trafficinventory')">🗺️ Traffic Inventory</button>
 <button class="analysis-subtab" data-subtab="inventorymanager" onclick="switchAnalysisSubtab('inventorymanager')">📋 Inventory Manager</button>
 <button class="analysis-subtab" data-subtab="assetdeficiency" onclick="switchAnalysisSubtab('assetdeficiency')">🔧 Asset Deficiency</button>
+</div>
+
+<!-- CRASH ANALYSIS SUB-TAB (Bug 17 — populated from mv_analysis_summary at aggregate tiers) -->
+<div id="analysis-crashanalysis" class="analysis-subtab-content" style="display:none">
+<h3 style="margin:0 0 1rem 0">📊 Crash Analysis</h3>
+<div class="card-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:1rem">
+<div class="chart-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1rem"><div class="chart-title" style="font-weight:600;margin-bottom:.5rem">📅 Crashes by Year</div><div class="chart-container" style="height:240px"><canvas id="anaChartYear"></canvas></div></div>
+<div class="chart-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1rem"><div class="chart-title" style="font-weight:600;margin-bottom:.5rem">📆 Crashes by Month</div><div class="chart-container" style="height:240px"><canvas id="anaChartMonth"></canvas></div></div>
+<div class="chart-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1rem"><div class="chart-title" style="font-weight:600;margin-bottom:.5rem">⚠️ By Severity</div><div class="chart-container" style="height:240px"><canvas id="anaChartSeverity"></canvas></div></div>
+<div class="chart-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1rem"><div class="chart-title" style="font-weight:600;margin-bottom:.5rem">💥 By Collision Type</div><div class="chart-container" style="height:240px"><canvas id="anaChartCollision"></canvas></div></div>
+</div>
 </div>
 
 <!-- INFRASTRUCTURE ASSETS SUB-TAB -->
@@ -50774,6 +50786,18 @@ function updateMapDisplay() {
     // whether MapBridge or the local renderer ends up drawing the markers.
     if (typeof updateMapScopeLabel === 'function') updateMapScopeLabel();
 
+    // Bug 18 — when sampleRows is empty (R2 skipped at county-roll-up or any
+    // aggregate tier), the legacy renderer below would draw nothing and the
+    // user sees a blank map with "No valid crash points". Attach the viewport
+    // map bridge on the fly so points are fetched from the PostGIS RPC for
+    // every pan/zoom. Idempotent — attach() guards against duplicate listeners.
+    var _mb = CL.data && CL.data.mapBridge;
+    var _sampleRowsEmpty = !crashState.mapPoints || crashState.mapPoints.length === 0;
+    if (_mb && typeof _mb.attach === 'function' && _sampleRowsEmpty
+        && (!_mb.isActive || !_mb.isActive())) {
+        try { _mb.attach(); _mb.refresh(); } catch (e) { /* non-fatal */ }
+    }
+
     // When the Supabase viewport map bridge is active (aggregate tiers, no
     // R2 sampleRows), it owns the cluster/marker/heat layers — running our
     // own clearLayers + render here would wipe mapBridge's just-drawn markers.
@@ -59045,6 +59069,29 @@ function aggregateHotspotDetailData() {
         };
     });
 
+    // Bug 14b — when sampleRows is empty (data sourced from mv_hotspots at
+    // aggregate tier), the per-row filter below would aggregate to zeros and
+    // the Detail PDF would print all zeros. Seed totals/severity/epdo from the
+    // matched matview hotspot rows so the PDF reflects real numbers; richer
+    // dimensions (byYear, byCollision, factors, etc.) remain empty until
+    // R2 row-level data is loaded.
+    const _sampleRowsEmpty = !crashState.sampleRows || crashState.sampleRows.length === 0;
+    if (_sampleRowsEmpty && Array.isArray(crashState.hotspots) && crashState.hotspots.length > 0) {
+        hotspotDetailState.selectedLocations.forEach(loc => {
+            const hs = crashState.hotspots.find(h => h.loc === loc);
+            if (!hs) return;
+            const sev = { K: hs.K || 0, A: hs.A || 0, B: hs.B || 0, C: hs.C || 0, O: hs.O || 0 };
+            data.total += hs.total || 0;
+            data.severity.K += sev.K; data.severity.A += sev.A;
+            data.severity.B += sev.B; data.severity.C += sev.C; data.severity.O += sev.O;
+            data.byLocation[loc].total = hs.total || 0;
+            data.byLocation[loc].severity = sev;
+        });
+        data.epdo = calcEPDO(data.severity);
+        hotspotDetailState.aggregatedData = data;
+        return;
+    }
+
     // Filter and aggregate crashes
     crashState.sampleRows.forEach(row => {
         // Check location match
@@ -60316,12 +60363,24 @@ async function _loadHotspotsFromMatview() {
                 const span = Math.max(1, ((r.last_year || 0) - (r.first_year || 0)) + 1);
                 const epdo = r.epdo || 0;
                 const K = r.k || 0, A = r.a || 0, B = r.b || 0, C = r.c || 0, O = r.o || 0;
-                // Also: when location_name is "0" but rte_name exists, show the route
-                // name as the display loc (so the Detail button has something to match).
-                let locName = r.location_name || r.intersection_name || r.rte_name || '';
-                if (String(locName).trim() === '0' || String(locName).trim() === '0.0') {
-                    locName = r.rte_name || r.intersection_name || '';
+                // Bug 14a — prefer human-readable street names over location_name,
+                // which frequently holds a numeric node ID (e.g. "12345") or "0"
+                // placeholder. For intersection rows, combine rte_name with the
+                // cross-street (intersection_name) when both are present. For
+                // segment rows, rte_name is the most readable.
+                const ln = String(r.location_name || '').trim();
+                const lnIsPlaceholder = !ln || ln === '0' || ln === '0.0' || /^\d+(\.\d+)?$/.test(ln);
+                let locName;
+                if (useIntersections) {
+                    if (r.rte_name && r.intersection_name) {
+                        locName = String(r.rte_name).trim() + ' & ' + String(r.intersection_name).trim();
+                    } else {
+                        locName = r.intersection_name || r.rte_name || (lnIsPlaceholder ? '' : ln);
+                    }
+                } else {
+                    locName = r.rte_name || (lnIsPlaceholder ? '' : ln) || r.intersection_name || '';
                 }
+                if (!locName) locName = ln; // last-resort, preserves filter behavior
                 return {
                     loc: locName,
                     total: total,
@@ -61032,11 +61091,18 @@ function updateAnalysis() {
     var _dcReady = (window.CL && CL.data && CL.data.client &&
                     typeof CL.data.client.getAnalysisBreakdown === 'function');
     if (!crashState.loaded && !_dcReady) return;
-    // Summary content has been moved to Dashboard tab
-    // Analysis tab contains Infrastructure Assets sub-tab
-    // Initialize default sub-tab (infrastructure) if not already set
+    // Bug 17 — at aggregate tiers (or county-rolled-up-to-PD), default to the
+    // new Crash Analysis sub-tab (which renders from mv_analysis_summary) so
+    // engineers see real data on first visit. Infrastructure Assets requires
+    // row-level / city-tier data, so keep that as the default at city tier.
     if (!currentAnalysisSubtab) {
-        switchAnalysisSubtab('infrastructure');
+        var tr = (window.CL && CL.data && CL.data.supabaseBridge &&
+                  typeof CL.data.supabaseBridge.resolveTier === 'function')
+                  ? CL.data.supabaseBridge.resolveTier() : null;
+        var isAggregate = tr && (tr.tier === 'state' || tr.tier === 'region' ||
+                                  tr.tier === 'planning_district' || tr.tier === 'mpo' ||
+                                  tr.rolledUpFrom === 'county');
+        switchAnalysisSubtab(isAggregate ? 'crashanalysis' : 'infrastructure');
     }
 }
 
@@ -61073,7 +61139,57 @@ function switchAnalysisSubtab(subtab) {
     if (targetContent) targetContent.style.display = 'block';
 
     // Initialize and soft-activate layers for school/transit subtabs
-    if (subtab === 'schools') {
+    if (subtab === 'crashanalysis') {
+        // Bug 17 — render the four crash-analysis charts from mv_analysis_summary.
+        // No row-level dependency: works at every aggregate tier.
+        (async () => {
+            try {
+                const dc = window.crashLensClient;
+                const tr = window.CL && CL.data && CL.data.supabaseBridge
+                           && typeof CL.data.supabaseBridge.resolveTier === 'function'
+                           ? CL.data.supabaseBridge.resolveTier() : null;
+                if (!dc || !tr) return;
+                const data = await dc.getAnalysisBreakdown(tr.tier, tr.value);
+                if (!data) return;
+                if (typeof createChart !== 'function') return;
+                // byYear → line
+                const years = Object.entries(data.byYear || {}).sort((a, b) => Number(a[0]) - Number(b[0]));
+                createChart('anaChartYear', 'line', {
+                    labels: years.map(y => y[0]),
+                    datasets: [{ label: 'Crashes', data: years.map(y => y[1].total || 0),
+                                 borderColor: '#1e40af', backgroundColor: 'rgba(30,64,175,0.1)',
+                                 fill: true, tension: 0.2 }]
+                });
+                // byMonth → bar
+                const monthNames = ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const months = Object.entries(data.byMonth || {}).sort((a, b) => Number(a[0]) - Number(b[0]));
+                createChart('anaChartMonth', 'bar', {
+                    labels: months.map(m => monthNames[Number(m[0])] || m[0]),
+                    datasets: [{ label: 'Crashes', data: months.map(m => m[1].total || 0),
+                                 backgroundColor: '#1e40af' }]
+                });
+                // bySeverity → doughnut (data-client returns flat counts: {K, A, B, C, O})
+                const sev = data.bySeverity || {};
+                createChart('anaChartSeverity', 'doughnut', {
+                    labels: ['K','A','B','C','O'],
+                    datasets: [{ data: ['K','A','B','C','O'].map(k => Number(sev[k]) || 0),
+                                 backgroundColor: ['#dc2626','#f59e0b','#fde047','#3b82f6','#94a3b8'] }]
+                });
+                // byCollision (top 8) → horizontal bar (data-client returns flat counts)
+                const collisions = Object.entries(data.byCollision || {})
+                    .sort((a, b) => Number(b[1]) - Number(a[1]))
+                    .slice(0, 8);
+                createChart('anaChartCollision', 'bar', {
+                    labels: collisions.map(c => String(c[0]).substring(0, 24)),
+                    datasets: [{ label: 'Crashes', data: collisions.map(c => Number(c[1]) || 0),
+                                 backgroundColor: '#7c3aed' }]
+                }, { indexAxis: 'y' });
+                console.log('[Analysis] Crash analysis charts rendered from mv_analysis_summary');
+            } catch (e) {
+                console.warn('[Analysis] Crash analysis render failed:', e && e.message);
+            }
+        })();
+    } else if (subtab === 'schools') {
         initSchoolSafetyTab();
         softActivateSchoolLayer();
     } else if (subtab === 'transit') {
@@ -62808,8 +62924,34 @@ function exportIntersectionCSV() {
 // Export intersection analysis to PDF
 async function exportIntersectionPDF() {
     const data = getFilteredIntersectionData();
-    const int = data.intersection;
-    const total = data.totalRows;
+    let int = data.intersection;
+    let total = data.totalRows;
+
+    // Bug 14c — at aggregate tiers sampleRows is empty so getFilteredIntersectionData()
+    // returns int.total=0 even though the on-screen charts (sourced from
+    // mv_intersection_summary) have data. Pull KPIs from the same matview the
+    // charts use so the PDF KPIs and charts agree on tier.
+    if ((int.total === 0) && window.crashLensClient && window.CL?.data?.supabaseBridge?.resolveTier) {
+        try {
+            const t = window.CL.data.supabaseBridge.resolveTier();
+            const summary = await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+            if (Array.isArray(summary) && summary.length > 0) {
+                const kpi = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+                summary.forEach(r => {
+                    if (/not at intersection/i.test(r.intersection_type || '')) return;
+                    kpi.total += r.total || 0;
+                    kpi.K += r.k || 0; kpi.A += r.a || 0;
+                    kpi.B += r.b || 0; kpi.C += r.c || 0; kpi.O += r.o || 0;
+                });
+                if (kpi.total > 0) {
+                    int = kpi;
+                    if (!total || total === 0) total = kpi.total;
+                    data.intersection = kpi;
+                    console.log('[Intersection PDF] KPIs sourced from mv_intersection_summary (tier=' + t.tier + ')');
+                }
+            }
+        } catch (e) { console.warn('[Intersection PDF] matview KPI fetch failed:', e && e.message); }
+    }
 
     if (int.total === 0) {
         alert('No intersection crash data to export.');
