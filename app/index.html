@@ -60280,8 +60280,22 @@ async function _loadHotspotsFromMatview() {
 
         // Pick intersections vs segments based on the Group By UI control.
         // 'node' / 'intersection' → intersections; everything else → segments.
+        // Bug 11 fix — mv_hotspots currently emits 0 segment rows for every state
+        // (Delaware data has no crashes with null node + non-null rte_name; this
+        // is data shape, not a matview bug). When the user-selected bucket is
+        // empty, auto-fallback to the non-empty one. Jurisdiction-agnostic.
         const useIntersections = (groupBy === 'node' || groupBy === 'intersection');
-        const rows = useIntersections ? data.intersections : data.segments;
+        let rows = useIntersections ? data.intersections : data.segments;
+        if (!rows || rows.length === 0) {
+            const fallback = useIntersections ? data.segments : data.intersections;
+            if (fallback && fallback.length > 0) {
+                console.log('[Hot Spots] Group By="' + groupBy + '" returned 0 rows; auto-falling back to ' +
+                    (useIntersections ? 'segments' : 'intersections') + ' (' + fallback.length + ' rows)');
+                rows = fallback;
+            } else {
+                rows = [];
+            }
+        }
 
         // Map matview row → renderHotspots() shape. perYear computed from
         // first_year/last_year. topType isn't in the matview — leave 'N/A'.
@@ -62348,23 +62362,60 @@ async function _loadIntersectionsFromHotspots() {
         if (intSeriousEl) intSeriousEl.textContent = intA;
         if (intPctEl) intPctEl.textContent = (typeof pct === 'function' ? pct(intTotal, total) : ((total > 0 ? (intTotal/total*100) : 0).toFixed(1))) + '%';
 
-        // Inject a status banner so the user knows the 3 chart cards aren't
-        // populated because the dedicated matview hasn't shipped.
+        // Bug 12 fix — the matview ships now. Remove any stale banner from a
+        // previous load and render the 2 unblocked charts (Intersection Type
+        // Distribution + Traffic Control Type) from mv_intersection_summary.
+        // The Collision-Types chart still needs a separate aggregation — leave
+        // its canvas alone here so it gracefully shows nothing at aggregate tiers.
         const tabEl = document.getElementById('tab-intersection');
-        if (tabEl && !tabEl.querySelector('.int-matview-banner')) {
-            const banner = document.createElement('div');
-            banner.className = 'int-matview-banner';
-            banner.style.cssText = 'margin:.75rem 1rem;padding:.6rem .85rem;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;font-size:.85rem;color:#78350f';
-            banner.textContent = 'Intersection-level charts (Type Distribution, Traffic Control, Collision Types) require the mv_intersection_summary matview which is not yet deployed. The 4 KPIs above are derived from mv_hotspots.';
-            const firstCard = tabEl.querySelector('.card, .kpi-row, .grid');
-            if (firstCard && firstCard.parentNode) {
-                firstCard.parentNode.insertBefore(banner, firstCard);
+        const staleBanner = tabEl && tabEl.querySelector('.int-matview-banner');
+        if (staleBanner) staleBanner.remove();
+        try {
+            const summary = await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+            if (Array.isArray(summary) && summary.length > 0) {
+                // Pivot 1 — intersection_type → total (exclude "Not at Intersection")
+                const byType = new Map();
+                summary.forEach(r => {
+                    const it = r.intersection_type || 'Unknown';
+                    if (/not at intersection/i.test(it)) return;
+                    byType.set(it, (byType.get(it) || 0) + (r.total || 0));
+                });
+                const intTypes = [...byType.entries()].sort((a,b) => b[1] - a[1]).slice(0, 8);
+                if (typeof createChart === 'function' && intTypes.length > 0) {
+                    createChart('chartIntType', 'bar', {
+                        labels: intTypes.map(([name]) => String(name).substring(0, 20)),
+                        datasets: [{ label: 'Crashes', data: intTypes.map(([,n]) => n), backgroundColor: '#1e40af' }]
+                    }, { indexAxis: 'y' });
+                }
+                // Pivot 2 — traffic_control_type → total
+                const byCtrl = new Map();
+                summary.forEach(r => {
+                    const tc = r.traffic_control_type || 'Unknown';
+                    byCtrl.set(tc, (byCtrl.get(tc) || 0) + (r.total || 0));
+                });
+                const tcSorted = [...byCtrl.entries()].sort((a,b) => b[1] - a[1]).slice(0, 8);
+                const tcLabels = tcSorted.map(([name]) => String(name).substring(0, 20));
+                const tcData   = tcSorted.map(([, n]) => n);
+                const tcColors = ['#dc2626','#f59e0b','#22c55e','#3b82f6','#8b5cf6','#ec4899','#64748b','#0ea5e9'];
+                const tcTotal  = tcData.reduce((a,b) => a + b, 0);
+                if (typeof createChart === 'function' && tcSorted.length > 0) {
+                    createChart('chartTrafficControl', 'doughnut', {
+                        labels: tcLabels,
+                        datasets: [{ data: tcData, backgroundColor: tcColors, borderWidth: 2, borderColor: '#fff' }]
+                    }, { cutout: '50%', plugins: { legend: { display: false } } });
+                    if (typeof buildCustomLegend === 'function') {
+                        buildCustomLegend('legendTrafficControl', tcLabels, tcData, tcColors, tcTotal);
+                    }
+                }
+                console.log('[Intersections] Charts rendered from mv_intersection_summary (' + summary.length + ' rows; ' +
+                    intTypes.length + ' intersection types, ' + tcSorted.length + ' control types).');
             } else {
-                tabEl.insertBefore(banner, tabEl.firstChild);
+                console.warn('[Intersections] mv_intersection_summary returned 0 rows for ' + t.tier + '=' + t.value);
             }
+        } catch (e) {
+            console.warn('[Intersections] mv_intersection_summary fetch failed:', e && e.message);
         }
-
-        console.log('[Intersections] Derived from mv_hotspots (' + intersections.length + ' rows). Charts disabled until mv_intersection_summary ships.');
+        console.log('[Intersections] KPIs from mv_hotspots (' + intersections.length + ' locations).');
         return true;
     } catch (e) {
         console.warn('[Intersections] Matview path failed:', e && e.message);

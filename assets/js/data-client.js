@@ -990,6 +990,44 @@ class CrashLensDataClient {
     });
   }
 
+  /**
+   * Per-tier intersection breakdowns for the Intersections tab.
+   * Source: mv_intersection_summary (deployed 2026-05-05).
+   *
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { roadType, roadTypes, noInterstate, yearFrom, yearTo }
+   * @returns {Promise<Array|null>} rows: { intersection_type, traffic_control_type,
+   *           crash_year, total, k, a, b, c, o, ka, epdo }
+   */
+  async getIntersectionSummary(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getIntersectionSummary', state: this.state, tier, value, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value);
+        const allFilters = { ...tierFilters };
+        this._applyRoadTypeMatviewFilters(allFilters, opts);
+        if (opts.yearFrom && opts.yearTo) {
+          allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
+        }
+        const data = await this._supabaseQuery('mv_intersection_summary', {
+          select: 'intersection_type,traffic_control_type,crash_year,total,k,a,b,c,o,ka,epdo',
+          filters: allFilters,
+          limit: 50000,
+        });
+        this._source = 'supabase';
+        this._warnIfZeroRows('mv_intersection_summary', data, tier, value, opts);
+        return (data || []);
+      } catch (e) {
+        console.warn('[DataClient] getIntersectionSummary failed:', e.message);
+        return null;
+      }
+    });
+  }
+
   // ─────────────────────────────────────────────────────────
   //  SUPABASE INTERNALS
   // ─────────────────────────────────────────────────────────
