@@ -107,6 +107,14 @@ CL.data.supabaseBridge = (function () {
             if (typeof appConfig !== 'undefined' && appConfig && appConfig.jurisdictions) {
                 var jur = appConfig.jurisdictions[key];
                 if (jur && Array.isArray(jur.namePatterns) && jur.namePatterns.length > 0) {
+                    // Bug 15 — matview columns store Title-case ("Sussex") but legacy
+                    // entries in us_counties_db.js list ALL-CAPS as namePatterns[0].
+                    // Prefer the first pattern containing a lowercase letter so the
+                    // eq-filter matches; fall back to [0] if all are uppercase.
+                    for (var i = 0; i < jur.namePatterns.length; i++) {
+                        var p = jur.namePatterns[i];
+                        if (p && /[a-z]/.test(p)) return p;
+                    }
                     return jur.namePatterns[0];
                 }
             }
