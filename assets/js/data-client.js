@@ -759,6 +759,22 @@ class CrashLensDataClient {
           rows = [...merged.values()].sort((a, b) => (b.epdo || 0) - (a.epdo || 0));
         }
 
+        // Bug 13a fix — drop "fake" hotspots where location_name is "0" (or
+        // empty / NaN). These are the matview's catch-all bucket for crashes
+        // that lack a specific node OR route — they aggregate per (county,
+        // road_type) and produce inflated EPDO scores that pile to the top
+        // of the ranking but aren't actionable locations. Detail PDFs on
+        // these rows fail because sampleRows can't match the placeholder.
+        // Jurisdiction-agnostic: keys on the "0" sentinel value, not on
+        // any state/county name.
+        rows = rows.filter(r => {
+            const ln = String(r.location_name || '').trim();
+            if (!ln || ln === '0' || ln === '0.0') {
+                return r.rte_name && String(r.rte_name).trim();
+            }
+            return true;
+        });
+
         // Group by location_type into the shape the Hot Spots tab expects,
         // applying the requested limit per group.
         const intersections = [], segments = [];

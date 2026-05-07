@@ -60300,13 +60300,28 @@ async function _loadHotspotsFromMatview() {
         // Map matview row → renderHotspots() shape. perYear computed from
         // first_year/last_year. topType isn't in the matview — leave 'N/A'.
         const filtered = rows
-            .filter(r => (r.total_crashes || 0) >= minCrashes)
+            .filter(r => {
+                if ((r.total_crashes || 0) < minCrashes) return false;
+                // Bug 13a fix — defensive: drop placeholder "0" rows the
+                // data-client filter may have missed.
+                const ln = String(r.location_name || '').trim();
+                if ((!ln || ln === '0' || ln === '0.0')
+                    && !(r.rte_name && String(r.rte_name).trim())) {
+                    return false;
+                }
+                return true;
+            })
             .map(r => {
                 const total = r.total_crashes || 0;
                 const span = Math.max(1, ((r.last_year || 0) - (r.first_year || 0)) + 1);
                 const epdo = r.epdo || 0;
                 const K = r.k || 0, A = r.a || 0, B = r.b || 0, C = r.c || 0, O = r.o || 0;
-                const locName = r.location_name || r.intersection_name || r.rte_name || '';
+                // Also: when location_name is "0" but rte_name exists, show the route
+                // name as the display loc (so the Detail button has something to match).
+                let locName = r.location_name || r.intersection_name || r.rte_name || '';
+                if (String(locName).trim() === '0' || String(locName).trim() === '0.0') {
+                    locName = r.rte_name || r.intersection_name || '';
+                }
                 return {
                     loc: locName,
                     total: total,
@@ -62388,9 +62403,17 @@ async function _loadIntersectionsFromHotspots() {
                     }, { indexAxis: 'y' });
                 }
                 // Pivot 2 — traffic_control_type → total
+                // Bug 13c fix — filter out "Not at Intersection" rows (consistent
+                // with the Type Distribution chart's filter) so the donut shows
+                // ONLY real-intersection crashes. Relabel empty traffic_control_type
+                // as "Not Recorded" instead of "Unknown" — these are real
+                // intersections where the field wasn't filled in, not unclassified
+                // crashes.
                 const byCtrl = new Map();
                 summary.forEach(r => {
-                    const tc = r.traffic_control_type || 'Unknown';
+                    if (/not at intersection/i.test(r.intersection_type || '')) return;
+                    const raw = String(r.traffic_control_type || '').trim();
+                    const tc = raw ? raw : 'Not Recorded';
                     byCtrl.set(tc, (byCtrl.get(tc) || 0) + (r.total || 0));
                 });
                 const tcSorted = [...byCtrl.entries()].sort((a,b) => b[1] - a[1]).slice(0, 8);
