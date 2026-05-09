@@ -5985,6 +5985,26 @@ Your data stays private. All processing happens in your browser.
 🌍 Export KML
 </button>
 </div>
+<!-- Road-Type Filter Row (mirrors Upload tab — bug M1 fix) -->
+<div class="map-roadtype-row" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.4rem .75rem;background:#f8fafc;border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:.8rem">
+<span style="color:var(--gray);font-weight:600">Road Type:</span>
+<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<input type="radio" name="roadTypeFilterMap" id="filterAllRoadsMap" value="allRoads" onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9">
+All Roads
+</label>
+<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<input type="radio" name="roadTypeFilterMap" id="filterCountyOnlyMap" value="countyOnly" onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9">
+County Only
+</label>
+<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<input type="radio" name="roadTypeFilterMap" id="filterCityOnlyMap" value="cityOnly" onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9">
+City Only
+</label>
+<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<input type="radio" name="roadTypeFilterMap" id="filterCountyPlusVDOTMap" value="countyPlusVDOT" onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9">
+All No Interstate
+</label>
+</div>
 <div class="map-container" style="position:relative">
 <div id="map"></div>
 <!-- Fullscreen Toggle Button -->
@@ -26659,10 +26679,31 @@ function _debouncedBridgeRefresh() {
     }, 250);
 }
 
+// Mirror a road-type radio change between the Upload tab and the Map tab so
+// both surfaces stay in sync when the user toggles from either location.
+// PERFECTION_REPORT bug M1 — was forcing user to navigate to Upload tab to
+// change the road-type filter; the Map tab now has its own row of radios.
+// The two groups use different `name` attributes (roadTypeFilter vs
+// roadTypeFilterMap) so the browser's per-group exclusivity rule doesn't
+// blow them away; we mirror state explicitly here.
+function syncRoadTypeFilter(value) {
+    if (!value) return;
+    document.querySelectorAll('input[name="roadTypeFilter"], input[name="roadTypeFilterMap"]').forEach(function (el) {
+        el.checked = (el.value === value);
+    });
+    if (typeof saveFilterProfile === 'function') saveFilterProfile();
+}
+
 function saveFilterProfile(opts) {
     opts = opts || {};
     const selected = document.querySelector('input[name="roadTypeFilter"]:checked');
     if (!selected) return;
+    // Keep the Map tab's mirror radios in sync whenever the canonical Upload
+    // radios change (so that visiting the Map tab afterwards shows the right
+    // selection). Cheap and idempotent.
+    document.querySelectorAll('input[name="roadTypeFilterMap"]').forEach(function (el) {
+        el.checked = (el.value === selected.value);
+    });
 
     localStorage.setItem('selectedFilterProfile', selected.value);
     updateCurrentSelectionDisplay();
@@ -32155,6 +32196,14 @@ function showTab(tabId) {
     }
 
     if (tabId === 'map' && (crashState.loaded || _supabaseTabReady('getViewportCrashes'))) {
+        // Mirror the canonical road-type radio (Upload tab) into the Map
+        // tab's mirror radios so the user sees the right selection.
+        const _activeRoadType = document.querySelector('input[name="roadTypeFilter"]:checked');
+        if (_activeRoadType) {
+            document.querySelectorAll('input[name="roadTypeFilterMap"]').forEach(function (el) {
+                el.checked = (el.value === _activeRoadType.value);
+            });
+        }
         if (!crashMap) {
             setTimeout(initMap, 100);
         } else {
@@ -51157,6 +51206,14 @@ function setMapMode(mode) {
     document.getElementById('btnCluster').classList.toggle('active', mode === 'cluster');
     document.getElementById('btnHeat').classList.toggle('active', mode === 'heat');
     document.getElementById('btnMarkers').classList.toggle('active', mode === 'markers');
+    // Markers mode renders individual crash points and only makes sense at
+    // high zoom; otherwise the bridge returns clusters and the user sees
+    // nothing useful. Nudge them to zoom in.
+    if (mode === 'markers' && crashMap && crashMap.getZoom() < 14) {
+        showToast('Markers view requires zoom level 14+. Currently at zoom ' +
+                  crashMap.getZoom() + '. Zoom in to see individual crashes.',
+                  'info', 5000);
+    }
     updateMapDisplay();
 }
 
@@ -136669,6 +136726,7 @@ async function assetSaveNewAsset(locations, filename) {
         uploadDate: new Date().toISOString(),
         locationCount: locations.length,
         active: true,
+        jurisdiction: (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.jurisdictionName) || '',
         locations: locations
     };
 
@@ -136847,7 +136905,18 @@ function assetRenderList() {
     const list = document.getElementById('assetList');
     const clearBtn = document.getElementById('assetClearAllBtn');
 
-    if (assetState.assets.length === 0) {
+    // Filter cached uploads by current jurisdiction so prior-session entries
+    // (e.g. Henrico schools) don't leak into a different jurisdiction (e.g.
+    // Sussex DE). Untagged legacy assets stay visible for backwards compat.
+    const currentJuris = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.jurisdictionName)
+        ? String(jurisdictionContext.jurisdictionName).toLowerCase()
+        : '';
+    const visibleAssets = assetState.assets.filter(a => {
+        if (!a.jurisdiction) return true;
+        return String(a.jurisdiction).toLowerCase() === currentJuris;
+    });
+
+    if (visibleAssets.length === 0) {
         container.style.display = 'none';
         clearBtn.style.display = 'none';
         document.getElementById('assetRadiusCard').style.display = 'none';
@@ -136860,7 +136929,7 @@ function assetRenderList() {
     document.getElementById('assetRadiusCard').style.display = 'block';
     document.getElementById('assetResultsCard').style.display = 'block';
 
-    list.innerHTML = assetState.assets.map(asset => {
+    list.innerHTML = visibleAssets.map(asset => {
         const iconInfo = getAssetIconInfo(asset);
         const isActive = assetState.activeAssetIds.includes(asset.id);
         const uploadDate = new Date(asset.uploadDate).toLocaleDateString();
@@ -147402,6 +147471,7 @@ async function schoolsConfirmLoad() {
             type: 'school',
             source: 'urban_institute',
             uploadedAt: new Date().toISOString(),
+            jurisdiction: (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.jurisdictionName) || '',
             locations: schoolsState.data.map(school => ({
                 id: school.ncessch,  // Unique ID required for crash association
                 name: school.name,

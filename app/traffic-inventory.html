@@ -179,6 +179,12 @@
 </head>
 <body>
     <div class="toast-container" id="toastContainer"></div>
+    <!-- Mapillary Token Missing — Prominent Empty State -->
+    <div id="mapillaryTokenMissingBanner" style="display:none;background:#fef3c7;border-left:4px solid #f59e0b;padding:1rem 1.25rem;margin:0.75rem 1.5rem;border-radius:6px;font-size:0.9rem;line-height:1.4">
+        <strong>⚠️ Traffic Inventory requires a Mapillary API token.</strong><br>
+        Configure it in <strong>Settings → API Keys → Mapillary Token</strong>, then refresh this tab.
+        Without the token, no street-level signs, signals, or assets will render.
+    </div>
     <!-- Download Active Warning Banner -->
     <div class="download-warning-banner" id="downloadWarningBanner" style="margin:0.75rem 1.5rem">
         <div class="download-warning-icon">⚠️</div>
@@ -1001,7 +1007,13 @@
             if(saved){apiToken=saved;updateTokenStatus(true);console.log('[Traffic Inventory] Mapillary token from localStorage fallback');}
             else{updateTokenStatus(false);console.warn('[Traffic Inventory] No Mapillary token available');}
         }
-        function updateTokenStatus(v){const el=document.getElementById('tokenStatus');el.className=`badge ${v?'badge-success':'badge-warning'}`;el.textContent=v?'✓ Configured':'Not Configured';}
+        function updateTokenStatus(v){
+            const el=document.getElementById('tokenStatus');
+            el.className=`badge ${v?'badge-success':'badge-warning'}`;
+            el.textContent=v?'✓ Configured':'Not Configured';
+            const banner=document.getElementById('mapillaryTokenMissingBanner');
+            if(banner){banner.style.display=v?'none':'block';}
+        }
 
         function updateJurisdiction(){
             const v=document.getElementById('jurisdiction').value;

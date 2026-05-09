@@ -574,13 +574,16 @@ function applyLedger(){
 // ON DATA LOADED — build sidebar filters
 // ═══════════════════════════════════════════════
 function onDataLoaded(){
-  allMode=true;buildSubFilters();updateStats();applyFilters();
+  buildSubFilters();updateStats();
   $('hTotal').textContent=assets.length.toLocaleString()+' assets';
   // Populate category filter dropdown
   const catSel=$('fCat');if(catSel){
     const cats=[...new Set(assets.map(a=>CAT_LABEL[a._cat]||a._cat))].sort();
     catSel.innerHTML='<option value="">All</option>'+cats.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
   }
+  // Default to Show All on first paint so the user sees every loaded asset
+  // immediately, regardless of any stale column filters (fCat/fSign/etc).
+  showAll();
 }
 
 function buildSubFilters(){
