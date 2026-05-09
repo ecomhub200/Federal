@@ -1010,6 +1010,10 @@ class CrashLensDataClient {
    * Per-tier intersection breakdowns for the Intersections tab.
    * Source: mv_intersection_summary (deployed 2026-05-05).
    *
+   * Each row is one (state, county, region, mpo, PD, road_type, is_interstate,
+   * intersection_type, traffic_control_type, crash_year) bucket. Filter and
+   * pivot client-side for chart rendering.
+   *
    * @param {string} tier
    * @param {string} value
    * @param {object} opts - { roadType, roadTypes, noInterstate, yearFrom, yearTo }
