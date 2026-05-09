@@ -20980,6 +20980,17 @@ function setViewTier(tier) {
     updateTierSelectorUI(tier);
     console.log(`[Scope] View tier changed: ${prev} → ${tier}`);
 
+    // Round-4 Patch 1 — reset road-type radio to "allRoads" on tier change so
+    // the next bridge fetch under the new tier doesn't carry the previous
+    // tier's filter. Without this, state(countyOnly) → federal sends
+    // road_type=eq.dot_roads to dashboard_summary and paints 438,501 as the
+    // federal allRoads total (true value 569,829). Sub-handlers
+    // (handleMPOSelection / handleRegionSelection / etc.) inherit the reset
+    // because handleTierChange always calls setViewTier first.
+    if (prev !== tier && typeof _resetRoadTypeForTierChange === 'function') {
+        _resetRoadTypeForTierChange();
+    }
+
     // Fix 2 — clear stale per-row data on every tier change. Map / Hot Spots /
     // detail tabs read crashState.mapPoints / sampleRows directly — leaving
     // them in place causes "Map shows previous tier's points" bugs (e.g.
@@ -23516,8 +23527,32 @@ const AggregateLoader = (() => {
         return `${r2Base}/${path}`;
     }
 
+    // Round-4 Patch 4 — these path patterns have no R2 publication post-
+    // migration; Supabase dashboard_summary / federal_summary is the canonical
+    // source. Short-circuit BEFORE the fetch fires so the live console isn't
+    // littered with 404s on every tier change. The negative-cache path below
+    // already silenced repeat 404s, but the FIRST 404 per scope still hit
+    // the network.
+    function _isSupabaseOnlyAggregatePath(path) {
+        if (!path) return false;
+        if (path === '_national/state_comparison.json') return true;
+        if (path.endsWith('/_statewide/aggregates.json')) return true;
+        if (path.includes('/_region/') && path.endsWith('/aggregates.json')) return true;
+        if (path.includes('/_mpo/') && path.endsWith('/aggregates.json')) return true;
+        if (path.includes('/_planning_district/') && path.endsWith('/aggregates.json')) return true;
+        if (path.includes('/_city/') && path.endsWith('/aggregates.json')) return true;
+        if (path.includes('/_state/forecasts_') && path.endsWith('.json')) return true;
+        return false;
+    }
+
     async function _fetch(path) {
-        if (_cache[path]) return _cache[path];
+        if (_cache[path] !== undefined) return _cache[path];
+        // Round-4 Patch 4 — skip known-unpublished paths without firing a
+        // network request. Cache null so subsequent callers also short-circuit.
+        if (_isSupabaseOnlyAggregatePath(path)) {
+            _cache[path] = null;
+            return null;
+        }
         try {
             const url = _resolveR2Url(path);
             const resp = await fetch(url);
@@ -26624,14 +26659,17 @@ function _debouncedBridgeRefresh() {
     }, 250);
 }
 
-function saveFilterProfile() {
+function saveFilterProfile(opts) {
+    opts = opts || {};
     const selected = document.querySelector('input[name="roadTypeFilter"]:checked');
     if (!selected) return;
 
     localStorage.setItem('selectedFilterProfile', selected.value);
     updateCurrentSelectionDisplay();
 
-    console.log('[Config] Filter profile saved:', selected.value, '→ will load:', getDataFilePath());
+    if (!opts.silent) {
+        console.log('[Config] Filter profile saved:', selected.value, '→ will load:', getDataFilePath());
+    }
 
     // Reset prediction tab so it reloads the correct forecast file for the new road type
     // Note: only reset loadedFile/data/loaded — loadedJurisdiction hasn't changed
@@ -26639,6 +26677,15 @@ function saveFilterProfile() {
         predictionState.loadedFile = null;
         predictionState.data = null;
         predictionState.loaded = false;
+    }
+
+    // Round-4 Patch 1 — when the tier-change handler calls saveFilterProfile()
+    // to persist the auto-reset radio (allRoads), it passes skipBridge:true so
+    // the tier-change handler's own injectFastDashboard call is the single
+    // source of truth for the new spec. Without this, two fetches fire per
+    // tier change (one from saveFilterProfile, one from handleTierChange).
+    if (opts.skipBridge) {
+        return;
     }
 
     // Reload data with the new filter.
@@ -26676,6 +26723,25 @@ function saveFilterProfile() {
         showFilterLoadingState(true);
         autoLoadCrashData(true); // skipCache = true since filter changed and cache was just cleared
     }
+}
+
+// Round-4 Patch 1 — reset the road-type radio to "allRoads" on cross-tier
+// transitions, BEFORE any bridge fetch fires. Without this, switching from
+// state(countyOnly) → federal lets the bridge fetch federal+dot_roads
+// (438,501 for Delaware) and paint it as the federal allRoads total
+// (which should be 569,829). Persists silently to localStorage so the new
+// tier's first injectFastDashboard call sees the correct spec, but does
+// NOT fire its own bridge call (handleTierChange / sub-handlers fire one).
+function _resetRoadTypeForTierChange() {
+    try {
+        var radioAll = document.getElementById('filterAllRoads');
+        if (radioAll && !radioAll.checked) {
+            radioAll.checked = true;
+            if (typeof saveFilterProfile === 'function') {
+                saveFilterProfile({ silent: true, skipBridge: true });
+            }
+        }
+    } catch (e) { /* non-fatal */ }
 }
 
 // Save all user preferences (state, jurisdiction, road type) to localStorage
@@ -50138,8 +50204,22 @@ function toggleCountyHeatmap() {
 function createChart(id, type, data, opts = {}) {
     const ctx = document.getElementById(id);
     if (!ctx) return;
-    if (charts[id]) { charts[id].destroy(); }
-    
+    // Round-4 Patch 3 — defensively destroy ANY existing Chart on this canvas,
+    // not just one we tracked in `charts[id]`. The legacy row-pipe path
+    // created Chart instances directly on F&S / Ped-Bike / Intersection
+    // canvases without registering them in `charts[]`; the round-3 paint
+    // helpers then tripped Chart.js "Canvas is already in use" warnings on
+    // every tier change. Chart.getChart(canvas) returns the live instance
+    // attached to that canvas regardless of who created it.
+    if (charts[id]) {
+        try { charts[id].destroy(); } catch (e) { /* non-fatal */ }
+        delete charts[id];
+    }
+    try {
+        const stray = (typeof Chart !== 'undefined' && Chart.getChart) ? Chart.getChart(ctx) : null;
+        if (stray) stray.destroy();
+    } catch (e) { /* non-fatal */ }
+
     const defaults = {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { position: type === 'doughnut' ? 'right' : 'top', labels: { font: { size: 10 } } } }
@@ -50150,7 +50230,7 @@ function createChart(id, type, data, opts = {}) {
     if (opts.indexAxis === 'y') {
         defaults.scales = { x: { beginAtZero: true, ticks: { font: { size: 9 } } }, y: { ticks: { font: { size: 9 } } } };
     }
-    
+
     charts[id] = new Chart(ctx, { type, data, options: { ...defaults, ...opts } });
 }
 
