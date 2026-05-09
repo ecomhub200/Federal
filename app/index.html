@@ -63731,7 +63731,22 @@ async function exportIntersectionPDF() {
 
         const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         const dateStamp = new Date().toISOString().split('T')[0];
-        const yearRange = crashState.years && crashState.years.length > 0 ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}` : 'N/A';
+        // ROUND-8: in Supabase-only mode crashState.years is empty. Fall back
+        // to the year range exposed by aggregates (populated from
+        // dashboard_summary), then to the matview's own min/max if available,
+        // before giving up on "N/A".
+        let yearRange = (crashState.years && crashState.years.length > 0)
+            ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}`
+            : null;
+        if (!yearRange && crashState.aggregates && crashState.aggregates.yearRange) {
+            const yr = crashState.aggregates.yearRange;
+            if (yr.min && yr.max) yearRange = `${yr.min} - ${yr.max}`;
+        }
+        if (!yearRange && crashState.aggregates && crashState.aggregates.byYear) {
+            const ys = Object.keys(crashState.aggregates.byYear).map(y => parseInt(y, 10)).filter(y => y >= 2000).sort((a, b) => a - b);
+            if (ys.length > 0) yearRange = ys[0] + ' - ' + ys[ys.length - 1];
+        }
+        if (!yearRange) yearRange = 'N/A';
         const intEPDO = calcEPDO(int);
         const kaCount = int.K + int.A;
         const intPct = total > 0 ? (int.total / total * 100).toFixed(1) : '0';
@@ -63828,14 +63843,27 @@ async function exportIntersectionPDF() {
         let barX = margin;
         sevOrder.forEach(s => {
             if (s.count > 0) {
-                const segWidth = (s.count / int.total) * contentWidth;
+                const rawWidth = (s.count / int.total) * contentWidth;
+                // ROUND-8: bump the minimum visible width from 2mm to 4mm so
+                // tiny K-fractions (e.g. 253 of 77,715 ≈ 0.6mm) actually
+                // render as a discernible red sliver instead of disappearing.
+                const segWidth = Math.max(rawWidth, 4);
                 doc.setFillColor(...s.color);
-                doc.rect(barX, y, Math.max(segWidth, 2), barHeight, 'F');
-                if (segWidth > 12) {
+                doc.rect(barX, y, segWidth, barHeight, 'F');
+                if (rawWidth > 12) {
                     doc.setFontSize(6.5);
                     doc.setTextColor(255, 255, 255);
                     doc.setFont(undefined, 'bold');
                     doc.text(s.code + ':' + s.count, barX + segWidth / 2, y + 5.5, { align: 'center' });
+                } else if (s.code === 'K') {
+                    // ROUND-8: even with the 4mm floor a K segment is too
+                    // narrow for an inline label, so pin a callout above the
+                    // bar in K's own color. Without this the K severity
+                    // count silently vanishes from the visual.
+                    doc.setFontSize(6);
+                    doc.setTextColor(...s.color);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(s.code + ':' + s.count, barX + segWidth / 2, y - 1, { align: 'center' });
                 }
                 barX += segWidth;
             }
@@ -63865,6 +63893,25 @@ async function exportIntersectionPDF() {
         const chartH = 45;
         let chartCol = 0;
         let chartStartY = y;
+
+        // ROUND-8: when the user generates the PDF without first opening the
+        // Intersections tab, the four chart canvases are blank and toDataURL
+        // captures empty rectangles. Force-paint them by re-running the tab
+        // loader (mv_intersection_summary) and waiting briefly for Chart.js
+        // to finish animating before capture.
+        try {
+            const _intCanvas = document.getElementById('chartIntType');
+            const _intBlank = !_intCanvas || (_intCanvas.width <= 1 && _intCanvas.height <= 1);
+            if (_intBlank && typeof updateIntersectionTab === 'function') {
+                updateIntersectionTab();
+                await new Promise(r => setTimeout(r, 500));
+            } else if (_intBlank && typeof _loadIntersectionsFromHotspots === 'function') {
+                await _loadIntersectionsFromHotspots();
+                await new Promise(r => setTimeout(r, 250));
+            }
+        } catch (chartPrimeErr) {
+            console.warn('[Intersection PDF] Chart prime failed:', chartPrimeErr && chartPrimeErr.message);
+        }
 
         for (let i = 0; i < chartIds.length; i++) {
             const canvas = document.getElementById(chartIds[i]);
@@ -69645,11 +69692,43 @@ function generateReport() {
             return;
         }
 
+        // ROUND-8 (2026-05-09): in Supabase-only mode `crashState.sampleRows`
+        // is empty for every aggregate tier, which used to break all 15
+        // report types (infographic, comprehensive, pedbike, fatalspeed,
+        // hotspot, dashboard, corridor, safety, safetyfocus, trend,
+        // intersection, crashtree, prediction, deepdive, grantsupport).
+        // Hydrate row-level crashes from Supabase first; cap at 200k to
+        // keep the PDF/HTML generators responsive. The matview-driven tabs
+        // are unaffected — this is only used by the Reports-tab generators
+        // that iterate per-row for chart and table data.
+        let crashes = crashState.sampleRows;
+        let _hydratedFromSupabase = false;
+        if ((!crashes || crashes.length === 0) &&
+            window.crashLensClient &&
+            window.CL && window.CL.data && window.CL.data.supabaseBridge &&
+            typeof window.CL.data.supabaseBridge.resolveTier === 'function') {
+            try {
+                const t = window.CL.data.supabaseBridge.resolveTier();
+                const fetchOpts = { all: true, maxRows: 200000 };
+                if (route) fetchOpts.route = route;
+                if (startDate) fetchOpts.dateFrom = startDate;
+                if (endDate) fetchOpts.dateTo = endDate;
+                const result = await window.crashLensClient.getCrashes(t.tier, t.value, fetchOpts);
+                if (result && Array.isArray(result.rows) && result.rows.length > 0) {
+                    crashes = result.rows;
+                    _hydratedFromSupabase = true;
+                    console.log('[Report] Hydrated ' + crashes.length + ' crashes from Supabase for tier=' + t.tier);
+                }
+            } catch (e) {
+                console.warn('[Report] Hydration failed:', e && e.message);
+            }
+        }
+
         // For infographic, use dedicated generator
         if (type === 'infographic') {
             const agency = document.getElementById('reportAgency').value || getJurisdictionLabel();
             const department = document.getElementById('reportDepartment').value || 'Traffic Engineering Division';
-            await generateInfographic(crashState.sampleRows, title, agency, department, startDate, endDate);
+            await generateInfographic(crashes, title, agency, department, startDate, endDate);
             hideLoading();
             return;
         }
@@ -69658,15 +69737,26 @@ function generateReport() {
         if (type === 'comprehensive') {
             const agency = document.getElementById('reportAgency').value || getJurisdictionLabel();
             const department = document.getElementById('reportDepartment').value || 'Traffic Engineering Division';
-            generateComprehensiveReport(crashState.sampleRows, title, agency, department, author, startDate, endDate);
+            generateComprehensiveReport(crashes, title, agency, department, author, startDate, endDate);
             return;
         }
 
-        // Filter data for other report types
-        let crashes = crashState.sampleRows;
-        if (route) crashes = crashes.filter(r => r[COL.ROUTE] === route);
-        if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
-        if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
+        // Filter data for other report types. Skip post-filtering when we
+        // hydrated from Supabase — server-side already applied route +
+        // dateFrom/dateTo and the row date format differs (string ISO vs.
+        // legacy epoch milliseconds), which would otherwise null out the
+        // hydrated set.
+        if (!_hydratedFromSupabase) {
+            if (route) crashes = crashes.filter(r => r[COL.ROUTE] === route);
+            if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
+            if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
+        }
+
+        if (!crashes || crashes.length === 0) {
+            hideLoading();
+            alert('No crash data available for the current tier/filter. Try selecting a different tier or removing date filters.');
+            return;
+        }
 
         try {
             // Generate based on type
@@ -108122,8 +108212,82 @@ function getFSCMF(section) {
     showToast(`Finding countermeasures for ${fsFactorConfig[factor].name}`, 'success');
 }
 
-function exportFSToPDF(view) {
+async function exportFSToPDF(view) {
     showToast('Generating comprehensive PDF report...', 'info');
+
+    // ROUND-8 (2026-05-09): in Supabase-only mode `crashState.sampleRows` is
+    // empty, so processFSData() never ran — fd.byRoute / sd.byRoute /
+    // sd.byHour / sd.byYear and the K-only fd.byHour are absent. Hydrate
+    // row-level crashes from Supabase and aggregate the per-severity /
+    // per-factor distributions the matview can't expose.
+    try {
+        const _emptySamples = !crashState.sampleRows || crashState.sampleRows.length === 0;
+        const fdNeeds = !fatalSpeedingState.fatalData.byRoute || Object.keys(fatalSpeedingState.fatalData.byRoute).length === 0;
+        const sdNeeds = !fatalSpeedingState.speedData.byRoute || Object.keys(fatalSpeedingState.speedData.byRoute).length === 0;
+        if (_emptySamples && (fdNeeds || sdNeeds) &&
+            window.crashLensClient &&
+            window.CL && window.CL.data && window.CL.data.supabaseBridge &&
+            typeof window.CL.data.supabaseBridge.resolveTier === 'function') {
+            const t = window.CL.data.supabaseBridge.resolveTier();
+            const result = await window.crashLensClient.getCrashes(t.tier, t.value, { all: true, maxRows: 200000 });
+            const rows = (result && Array.isArray(result.rows)) ? result.rows : [];
+            if (rows.length > 0) {
+                console.log('[FS PDF] Hydrating ' + rows.length + ' crashes for byRoute/byHour/byYear aggregation');
+                const fdByRoute = {}, sdByRoute = {};
+                const fdByHour = {}, sdByHour = {};
+                const fdByYear = {}, sdByYear = {};
+                rows.forEach(r => {
+                    const sev = (r[COL.SEVERITY] || '').trim().toUpperCase().charAt(0);
+                    const isFatal = (sev === 'K');
+                    const isSpeed = isYes(r[COL.SPEED]);
+                    if (!isFatal && !isSpeed) return;
+                    const route = r[COL.ROUTE] || 'Unknown';
+                    const yearVal = r[COL.YEAR];
+                    const year = yearVal ? parseInt(yearVal, 10) : null;
+                    let hour = null;
+                    const ts = r[COL.TIME];
+                    if (ts !== null && ts !== undefined && ts !== '') {
+                        const tn = parseInt(String(ts).replace(/[^0-9]/g, ''), 10);
+                        if (!isNaN(tn)) hour = Math.floor(tn / 100);
+                        if (hour !== null && (hour < 0 || hour > 23)) hour = null;
+                    }
+                    if (isFatal) {
+                        if (!fdByRoute[route]) fdByRoute[route] = { total: 0, k: 0, fatalities: 0, a: 0, epdo: 0, crashes: [] };
+                        fdByRoute[route].total++;
+                        fdByRoute[route].k++;
+                        fdByRoute[route].fatalities++;
+                        fdByRoute[route].epdo += 883;
+                        if (year && year > 2000) fdByYear[year] = (fdByYear[year] || 0) + 1;
+                        if (hour !== null) fdByHour[hour] = (fdByHour[hour] || 0) + 1;
+                    }
+                    if (isSpeed) {
+                        if (!sdByRoute[route]) sdByRoute[route] = { total: 0, k: 0, a: 0, epdo: 0, crashes: [], severity: { K: 0, A: 0, B: 0, C: 0, O: 0 } };
+                        sdByRoute[route].total++;
+                        if (sdByRoute[route].severity[sev] !== undefined) sdByRoute[route].severity[sev]++;
+                        if (sev === 'K') { sdByRoute[route].k++; sdByRoute[route].epdo += 883; }
+                        else if (sev === 'A') { sdByRoute[route].a++; sdByRoute[route].epdo += 94; }
+                        else if (sev === 'B') sdByRoute[route].epdo += 21;
+                        else if (sev === 'C') sdByRoute[route].epdo += 11;
+                        else sdByRoute[route].epdo += 1;
+                        if (year && year > 2000) sdByYear[year] = (sdByYear[year] || 0) + 1;
+                        if (hour !== null) sdByHour[hour] = (sdByHour[hour] || 0) + 1;
+                    }
+                });
+                if (fdNeeds) {
+                    fatalSpeedingState.fatalData.byRoute = fdByRoute;
+                    fatalSpeedingState.fatalData.byHour = fdByHour;
+                    if (Object.keys(fdByYear).length > 0) fatalSpeedingState.fatalData.byYear = fdByYear;
+                }
+                if (sdNeeds) {
+                    fatalSpeedingState.speedData.byRoute = sdByRoute;
+                    fatalSpeedingState.speedData.byHour = sdByHour;
+                    fatalSpeedingState.speedData.byYear = sdByYear;
+                }
+            }
+        }
+    } catch (hydrationErr) {
+        console.warn('[FS PDF] Hydration failed:', hydrationErr && hydrationErr.message);
+    }
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'letter');
@@ -108170,7 +108334,16 @@ function exportFSToPDF(view) {
     const fd = fatalSpeedingState.fatalData;
     const sd = fatalSpeedingState.speedData;
     const cd = fatalSpeedingState.combinedData;
-    const totalCrashes = crashState.sampleRows?.length || 0;
+    // ROUND-8: in Supabase-only mode sampleRows is empty. Fall back to the
+    // matview-derived denominator (fatalSpeedingState.totalFilteredCrashes is
+    // the K+A+B+C+O sum from mv_safety_categories — see initFatalSpeedingFromMatview)
+    // so the cover page, fatalPct and speedPct render real numbers instead of zeros.
+    let totalCrashes = crashState.sampleRows?.length || 0;
+    if (totalCrashes === 0) {
+        totalCrashes = (fatalSpeedingState.totalFilteredCrashes || 0) ||
+                       (crashState.aggregates && crashState.aggregates.total) ||
+                       ((fd.severity?.K || 0) + (fd.severity?.A || 0) + (fd.severity?.B || 0) + (fd.severity?.C || 0) + (fd.severity?.O || 0));
+    }
 
     // Calculate total pages (always comprehensive report with all sections)
     const totalPages = 8;
@@ -108577,10 +108750,20 @@ function exportFSToPDF(view) {
     addSectionTitle('SPEED-RELATED CO-FACTORS', COLORS.speed);
     addSpacer(3);
 
+    // ROUND-8: in Supabase-only mode sd.byFactor[factor].count is the GLOBAL
+    // factor total (from mv_safety_categories) rather than the speed-only
+    // cross-tab count, so dividing by sd.totalCrashes produced 10000%+ values
+    // (e.g. Intersection 132125 / 1306 = 10116.8%). Without a cross-tab matview
+    // we can't recover the true speed×factor count, so present these as "% of
+    // All Crashes" using the global denominator and clamp at 100%. This makes
+    // the column meaningful (share of all crashes that involve this factor)
+    // without misleading the reader.
+    const _speedDenom = totalCrashes || sd.totalCrashes || 0;
     const speedFactorRows = Object.entries(sd.byFactor || {})
         .sort((a, b) => b[1].count - a[1].count)
         .map(([factor, data]) => {
-            const pct = sd.totalCrashes > 0 ? ((data.count / sd.totalCrashes) * 100).toFixed(1) : '0';
+            const rawPct = _speedDenom > 0 ? (data.count / _speedDenom) * 100 : 0;
+            const pct = Math.min(100, rawPct).toFixed(1);
             return [
                 getFactorName(factor),
                 data.count || 0,
@@ -108593,7 +108776,7 @@ function exportFSToPDF(view) {
     if (speedFactorRows.length > 0) {
         doc.autoTable({
             startY: yPos,
-            head: [['Co-Factor', 'Crashes', '% of Speed', 'K', 'A']],
+            head: [['Co-Factor', 'Crashes', '% of All', 'K', 'A']],
             body: speedFactorRows.slice(0, 18),
             headStyles: {
                 fillColor: [146, 64, 14],
