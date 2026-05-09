@@ -979,7 +979,7 @@ class CrashLensDataClient {
         // Rows are grouped by (state, county, district, mpo, planning_district,
         // dimension, dim_value). At any aggregate tier each (dimension, dim_value)
         // appears once per county — accumulate instead of overwrite.
-        const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byHour: {} };
+        const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byCollisionDetail: {}, byHour: {}, byFuncClass: {}, byWeather: {}, byLight: {} };
         (data || []).forEach(r => {
           const k = r.k || 0, a = r.a || 0, b = r.b || 0, c = r.c || 0, o = r.o || 0, total = r.total || 0;
           if (r.dimension === 'year') {
@@ -993,9 +993,31 @@ class CrashLensDataClient {
           } else if (r.dimension === 'severity') {
             if (out.bySeverity[r.dim_value] !== undefined) out.bySeverity[r.dim_value] += total;
           } else if (r.dimension === 'collision') {
+            // Round 3 follow-up (2026-05-09): also expose per-severity collision
+            // counts so F&S can pull K-only buckets for chartFSFatalCollision.
+            // The plain `byCollision[name] = total` is preserved for backwards
+            // compat with existing Crash Analysis chart consumers.
             out.byCollision[r.dim_value] = (out.byCollision[r.dim_value] || 0) + total;
+            if (!out.byCollisionDetail[r.dim_value]) out.byCollisionDetail[r.dim_value] = {total:0,K:0,A:0,B:0,C:0,O:0};
+            const cd = out.byCollisionDetail[r.dim_value];
+            cd.total += total; cd.K += k; cd.A += a; cd.B += b; cd.C += c; cd.O += o;
           } else if (r.dimension === 'hour') {
             out.byHour[r.dim_value] = (out.byHour[r.dim_value] || 0) + total;
+          } else if (r.dimension === 'funcclass') {
+            // Round 3 follow-up (2026-05-09): mv_analysis_summary now exposes
+            // funcclass / weather / light dimensions (8 total). Surface them
+            // as per-severity buckets following the same shape as byYear.
+            if (!out.byFuncClass[r.dim_value]) out.byFuncClass[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+            const f = out.byFuncClass[r.dim_value];
+            f.K += k; f.A += a; f.B += b; f.C += c; f.O += o; f.total += total;
+          } else if (r.dimension === 'weather') {
+            if (!out.byWeather[r.dim_value]) out.byWeather[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+            const w = out.byWeather[r.dim_value];
+            w.K += k; w.A += a; w.B += b; w.C += c; w.O += o; w.total += total;
+          } else if (r.dimension === 'light') {
+            if (!out.byLight[r.dim_value]) out.byLight[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+            const l = out.byLight[r.dim_value];
+            l.K += k; l.A += a; l.B += b; l.C += c; l.O += o; l.total += total;
           }
         });
         return out;
@@ -1033,8 +1055,11 @@ class CrashLensDataClient {
         if (opts.yearFrom && opts.yearTo) {
           allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
         }
+        // Round 3 follow-up (2026-05-09): include collision_type column added
+        // to mv_intersection_summary so chartIntCollision can render real data
+        // instead of a placeholder.
         const data = await this._supabaseQuery('mv_intersection_summary', {
-          select: 'intersection_type,traffic_control_type,crash_year,total,k,a,b,c,o,ka,epdo',
+          select: 'intersection_type,traffic_control_type,collision_type,crash_year,total,k,a,b,c,o,ka,epdo',
           filters: allFilters,
           limit: 50000,
         });
@@ -1043,6 +1068,154 @@ class CrashLensDataClient {
         return (data || []);
       } catch (e) {
         console.warn('[DataClient] getIntersectionSummary failed:', e.message);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * Round 3 follow-up (2026-05-09): top collision-type per Hot Spots location.
+   * Source: mv_hotspots_topcoll (deployed 2026-05-08).
+   *
+   * Returned shape: Map<key, top_collision_type> where
+   *   key = `${location_type}|${location_name}` so Hot Spots renders can do
+   *   `topcoll.get(key) ?? 'N/A'` against each row from getHotspots().
+   *
+   * @param {string} stateKey - state slug (e.g. 'delaware')
+   * @returns {Promise<Map<string,string>|null>}
+   */
+  async getHotspotsTopCollision(stateKey) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getHotspotsTopCollision', state: stateKey || this.state
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const filters = {};
+        const st = stateKey || this.state;
+        if (st) filters.state = `eq.${st}`;
+        const data = await this._supabaseQuery('mv_hotspots_topcoll', {
+          select: 'location_type,location_name,top_collision_type',
+          filters: filters,
+          limit: 50000,
+        });
+        this._source = 'supabase';
+        const map = new Map();
+        (data || []).forEach(r => {
+          const lt = r.location_type || '';
+          const ln = r.location_name || '';
+          const tc = r.top_collision_type || '';
+          if (ln && tc) map.set(lt + '|' + ln, tc);
+        });
+        return map;
+      } catch (e) {
+        console.warn('[DataClient] getHotspotsTopCollision failed (matview missing?):', e.message);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * Round 3 follow-up (2026-05-09): per-location factor counts for Hot Spots.
+   * Source: mv_hotspots_factors (deployed 2026-05-08).
+   *
+   * Returned shape: Map<key, {impaired,speed,distracted,unrestrained,motorcycle,night}>
+   * where key matches getHotspotsTopCollision().
+   *
+   * @param {string} stateKey
+   * @returns {Promise<Map<string,object>|null>}
+   */
+  async getHotspotsFactors(stateKey) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getHotspotsFactors', state: stateKey || this.state
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const filters = {};
+        const st = stateKey || this.state;
+        if (st) filters.state = `eq.${st}`;
+        const data = await this._supabaseQuery('mv_hotspots_factors', {
+          select: 'location_type,location_name,impaired_count,speed_count,distracted_count,unrestrained_count,motorcycle_count,night_count',
+          filters: filters,
+          limit: 50000,
+        });
+        this._source = 'supabase';
+        const map = new Map();
+        (data || []).forEach(r => {
+          const lt = r.location_type || '';
+          const ln = r.location_name || '';
+          if (!ln) return;
+          map.set(lt + '|' + ln, {
+            impaired: r.impaired_count || 0,
+            speed: r.speed_count || 0,
+            distracted: r.distracted_count || 0,
+            unrestrained: r.unrestrained_count || 0,
+            motorcycle: r.motorcycle_count || 0,
+            night: r.night_count || 0,
+          });
+        });
+        return map;
+      } catch (e) {
+        console.warn('[DataClient] getHotspotsFactors failed (matview missing?):', e.message);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * Round 3 follow-up (2026-05-09): per-mode (pedestrian|bicycle) breakdowns
+   * for the Ped/Bike tab's 7 per-mode charts.
+   * Source: mv_pedbike_breakdowns (deployed 2026-05-08).
+   *
+   * Each row: (state, physical_juris_name, dot_district, mpo_name,
+   *   planning_district, road_type, is_interstate, mode, dimension, dim_value,
+   *   total, k, a, o)
+   * Mode ∈ {pedestrian, bicycle}; Dimension ∈ {year, light, location}.
+   *
+   * @param {string} tier
+   * @param {string} value
+   * @returns {Promise<{pedestrian:object,bicycle:object}|null>} where each
+   *   side is { byYear: {...}, byLight: {...}, byLocation: {...} } and each
+   *   inner bucket is { K, A, O, total }.
+   */
+  async getPedBikeBreakdowns(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getPedBikeBreakdowns', state: this.state, tier, value, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value);
+        const allFilters = { ...tierFilters };
+        this._applyRoadTypeMatviewFilters(allFilters, opts);
+        const data = await this._supabaseQuery('mv_pedbike_breakdowns', {
+          filters: allFilters,
+          limit: 50000,
+        });
+        this._source = 'supabase';
+        const out = {
+          pedestrian: { byYear: {}, byLight: {}, byLocation: {} },
+          bicycle:    { byYear: {}, byLight: {}, byLocation: {} },
+        };
+        (data || []).forEach(r => {
+          const mode = r.mode;
+          if (mode !== 'pedestrian' && mode !== 'bicycle') return;
+          const dim = r.dimension;
+          let bucket;
+          if (dim === 'year')          bucket = out[mode].byYear;
+          else if (dim === 'light')    bucket = out[mode].byLight;
+          else if (dim === 'location') bucket = out[mode].byLocation;
+          else return;
+          const dv = r.dim_value;
+          if (dv === null || dv === undefined || dv === '') return;
+          if (!bucket[dv]) bucket[dv] = { K:0, A:0, O:0, total:0 };
+          const b = bucket[dv];
+          b.K += r.k || 0; b.A += r.a || 0; b.O += r.o || 0; b.total += r.total || 0;
+        });
+        return out;
+      } catch (e) {
+        console.warn('[DataClient] getPedBikeBreakdowns failed (matview missing?):', e.message);
         return null;
       }
     });

@@ -60520,7 +60520,16 @@ async function _loadHotspotsFromMatview() {
         const groupBy = (groupByEl && groupByEl.value) || 'route';
 
         showLoading('Analyzing hot spots…');
-        const data = await window.crashLensClient.getHotspots(t.tier, t.value, { limit: topN });
+        // Round 3 follow-up (2026-05-09): mv_hotspots_topcoll provides the
+        // top collision_type per location. Fetch in parallel with hotspots so
+        // the render shows real types instead of the muted '—' placeholder.
+        // Falls through to 'N/A' if the matview is unavailable.
+        const [data, topCollMap] = await Promise.all([
+            window.crashLensClient.getHotspots(t.tier, t.value, { limit: topN }),
+            (typeof window.crashLensClient.getHotspotsTopCollision === 'function'
+                ? window.crashLensClient.getHotspotsTopCollision(stateKey)
+                : Promise.resolve(null))
+        ]);
         if (!data || (!data.intersections.length && !data.segments.length)) {
             crashState.hotspots = [];
             setPaginationData('hotspots', []);
@@ -60591,6 +60600,16 @@ async function _loadHotspotsFromMatview() {
                     locName = _rteName || (_isPlaceholder ? '' : _nodeId) || _intName || '';
                 }
                 if (!locName) locName = _nodeId; // last-resort, preserves filter behavior
+                // Round 3 follow-up (2026-05-09): look up top_collision_type
+                // by (location_type, location_name) — the mv_hotspots_topcoll
+                // matview key. Use _nodeId here since the matview was built
+                // against the raw location_name (numeric or street-style),
+                // not our human-friendly locName composite.
+                let _topType = 'N/A';
+                if (topCollMap && _nodeId) {
+                    const k1 = (r.location_type || '') + '|' + _nodeId;
+                    if (topCollMap.has(k1)) _topType = topCollMap.get(k1);
+                }
                 return {
                     loc: locName,
                     nodeId: _nodeId,
@@ -60599,7 +60618,7 @@ async function _loadHotspotsFromMatview() {
                     epdo: epdo,
                     ka: K + A,
                     perYear: (total / span).toFixed(1),
-                    topType: 'N/A',
+                    topType: _topType,
                     route: _rteName,
                     county: r.county || '',
                     lat: r.lat_centroid,
@@ -62781,8 +62800,50 @@ async function _loadIntersectionsFromHotspots() {
                         buildCustomLegend('legendTrafficControl', tcLabels, tcData, tcColors, tcTotal);
                     }
                 }
+                // Round 3 follow-up (2026-05-09) — Pivot 3 — collision_type
+                // → total. Excludes "Not at Intersection" rows for parity
+                // with Pivots 1 and 2.
+                let intCollSorted = [];
+                if (summary[0] && Object.prototype.hasOwnProperty.call(summary[0], 'collision_type')) {
+                    const byColl = new Map();
+                    summary.forEach(r => {
+                        if (/not at intersection/i.test(r.intersection_type || '')) return;
+                        const raw = String(r.collision_type || '').trim();
+                        const ct = raw ? raw : 'Not Recorded';
+                        byColl.set(ct, (byColl.get(ct) || 0) + (r.total || 0));
+                    });
+                    intCollSorted = [...byColl.entries()].sort((a,b) => b[1] - a[1]).slice(0, 8);
+                    if (typeof createChart === 'function' && intCollSorted.length > 0) {
+                        if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartIntCollision');
+                        createChart('chartIntCollision', 'bar', {
+                            labels: intCollSorted.map(([name]) => String(name).substring(0, 20)),
+                            datasets: [{ label: 'Crashes', data: intCollSorted.map(([,n]) => n), backgroundColor: '#7c3aed' }]
+                        }, { indexAxis: 'y', plugins: { legend: { display: false } } });
+                    }
+                }
+
+                // Round 3 follow-up (2026-05-09) — Pivot 4 — crash_year →
+                // total. Excludes "Not at Intersection" rows so the year
+                // trend reflects only real intersection crashes.
+                const byYr = new Map();
+                summary.forEach(r => {
+                    if (/not at intersection/i.test(r.intersection_type || '')) return;
+                    const yr = parseInt(r.crash_year, 10);
+                    if (!yr || yr < 2000) return;
+                    byYr.set(yr, (byYr.get(yr) || 0) + (r.total || 0));
+                });
+                const yrSorted = [...byYr.entries()].sort((a,b) => a[0] - b[0]);
+                if (typeof createChart === 'function' && yrSorted.length > 0) {
+                    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartIntYearTrend');
+                    createChart('chartIntYearTrend', 'bar', {
+                        labels: yrSorted.map(([y]) => String(y)),
+                        datasets: [{ label: 'Intersection Crashes', data: yrSorted.map(([,n]) => n), backgroundColor: '#0ea5e9', borderColor: '#0284c7', borderWidth: 1 }]
+                    }, { plugins: { legend: { display: false } } });
+                }
+
                 console.log('[Intersections] Charts rendered from mv_intersection_summary (' + summary.length + ' rows; ' +
-                    intTypes.length + ' intersection types, ' + tcSorted.length + ' control types).');
+                    intTypes.length + ' intersection types, ' + tcSorted.length + ' control types, ' +
+                    intCollSorted.length + ' collision types, ' + yrSorted.length + ' years).');
             } else {
                 console.warn('[Intersections] mv_intersection_summary returned 0 rows for ' + t.tier + '=' + t.value);
             }
@@ -62832,14 +62893,11 @@ async function _loadIntersectionsFromHotspots() {
             console.log('[Intersections] Table populated from mv_hotspots (' + nodeSorted.length + ' rows with readable names).');
         }
 
-        // Bug fix (round 3, 2026-05-08): paint placeholders ONLY for the two
-        // chart canvases that don't yet have a backing matview. Bug 12 above
-        // (origin/main) now renders chartIntType and chartTrafficControl from
-        // mv_intersection_summary, so we must NOT overwrite those canvases.
-        if (typeof showChartPlaceholder === 'function') {
-            showChartPlaceholder('chartIntCollision', 'Collision-type breakdown for intersection crashes pending mv_intersection_collision_type');
-            showChartPlaceholder('chartIntYearTrend', 'Yearly intersection-crash trend pending mv_intersection_yoy');
-        }
+        // Round 3 follow-up (2026-05-09): chartIntCollision and chartIntYearTrend
+        // are now painted from mv_intersection_summary (collision_type column +
+        // crash_year pivot above). The previous placeholder-fallback is no
+        // longer needed — if the matview fetch fails, Chart.js leaves the
+        // canvases blank and the catch block above logs a warning.
 
         console.log('[Intersections] KPIs from mv_hotspots (' + intersections.length + ' locations).');
         return true;
@@ -67709,9 +67767,15 @@ async function updatePeopleFromMatview(tier) {
     const filter = document.getElementById('peopleInjuryFilter')?.value || 'all';
 
     try {
-        const [categories, analysis] = await Promise.all([
+        // Round 3 follow-up (2026-05-09): also fetch mv_pedbike_breakdowns so
+        // we can paint chartPedYear/chartPedLight/chartPedLocationType +
+        // bike equivalents + chartPedBikeCompare without sampleRows.
+        const [categories, analysis, pedbike] = await Promise.all([
             dc.getSafetyCategories(tierResolved.tier, tierResolved.value),
-            dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value)
+            dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value),
+            (typeof dc.getPedBikeBreakdowns === 'function'
+                ? dc.getPedBikeBreakdowns(tierResolved.tier, tierResolved.value)
+                : Promise.resolve(null))
         ]);
 
         if (!categories && !analysis) {
@@ -67921,6 +67985,193 @@ async function updatePeopleFromMatview(tier) {
             ['Driver', 'Pedestrian', 'Passenger', 'Other'],
             [Math.round(nonPedPeople * 0.7), pedPeople, Math.round(nonPedPeople * 0.3), 0],
             ['#3b82f6', '#f97316', '#64748b', '#cbd5e1']);
+
+        // Round 3 follow-up (2026-05-09): paint the 7 per-mode Ped/Bike charts
+        // from mv_pedbike_breakdowns. Each `pedbike[mode]` is { byYear, byLight,
+        // byLocation } where each inner bucket is { K, A, O, total } keyed by
+        // the dim_value (year integer / light_condition string / location string).
+        // Falls through to placeholder if pedbike isn't loaded.
+        if (pedbike && typeof createChart === 'function') {
+            try {
+                const pb = pedbike;
+                const lightColors = ['#fcd34d','#1e293b','#94a3b8','#f97316','#6366f1','#22c55e','#ec4899','#0ea5e9'];
+
+                // Helper: build sorted [label, total] entries from a dim bucket.
+                const _entriesByTotal = (bucket, limit) => {
+                    return Object.entries(bucket || {})
+                        .map(([k, v]) => [String(k), v && v.total ? v.total : 0])
+                        .filter(([, n]) => n > 0)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, limit || 10);
+                };
+                const _entriesByYear = (bucket) => {
+                    return Object.entries(bucket || {})
+                        .map(([k, v]) => [parseInt(k, 10), v && v.total ? v.total : 0])
+                        .filter(([y, n]) => y && y >= 2000 && n >= 0)
+                        .sort((a, b) => a[0] - b[0]);
+                };
+                const _populateLegend = (legendId, entries, total, colors) => {
+                    const el = document.getElementById(legendId);
+                    if (!el) return;
+                    let html = '';
+                    entries.forEach((e, i) => {
+                        const pctVal = total > 0 ? (e[1] / total * 100).toFixed(1) : '0';
+                        html += '<div style="display:flex;align-items:center;gap:.5rem">'
+                            + '<span style="width:12px;height:12px;background:' + colors[i % colors.length] + ';border-radius:2px"></span>'
+                            + '<span style="flex:1">' + String(e[0]).substring(0, 20) + '</span>'
+                            + '<span style="font-weight:600">' + e[1] + '</span>'
+                            + '<span style="color:#64748b">(' + pctVal + '%)</span>'
+                            + '</div>';
+                    });
+                    el.innerHTML = html;
+                };
+
+                // Pedestrian Year — bar
+                const pedYears = _entriesByYear(pb.pedestrian && pb.pedestrian.byYear);
+                if (pedYears.length) {
+                    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartPedYear');
+                    createChart('chartPedYear', 'bar', {
+                        labels: pedYears.map(([y]) => String(y)),
+                        datasets: [{ label: 'Pedestrian Crashes', data: pedYears.map(([, n]) => n), backgroundColor: '#0891b2', borderRadius: 4 }]
+                    }, { plugins: { legend: { display: false } } });
+                } else if (typeof showChartPlaceholder === 'function') {
+                    showChartPlaceholder('chartPedYear', 'No pedestrian crashes for this scope');
+                }
+
+                // Pedestrian Light Condition — doughnut
+                const pedLight = _entriesByTotal(pb.pedestrian && pb.pedestrian.byLight, 6);
+                if (pedLight.length) {
+                    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartPedLight');
+                    createChart('chartPedLight', 'doughnut', {
+                        labels: pedLight.map(([k]) => k),
+                        datasets: [{ data: pedLight.map(([, n]) => n), backgroundColor: lightColors, borderWidth: 2, borderColor: '#fff' }]
+                    }, { cutout: '50%', plugins: { legend: { display: false } } });
+                    const pedLightTotal = pedLight.reduce((s, e) => s + e[1], 0);
+                    _populateLegend('pedLightLegend', pedLight, pedLightTotal, lightColors);
+                } else if (typeof showChartPlaceholder === 'function') {
+                    showChartPlaceholder('chartPedLight', 'No pedestrian-by-light data for this scope');
+                }
+
+                // Pedestrian Location Type — doughnut. Bucket dim_value strings
+                // into Intersection vs Non-Intersection by keyword match.
+                const pedLocBucket = pb.pedestrian && pb.pedestrian.byLocation || {};
+                let pedIntCount = 0, pedNonIntCount = 0;
+                Object.entries(pedLocBucket).forEach(([k, v]) => {
+                    const total = v && v.total ? v.total : 0;
+                    if (/intersection|junction/i.test(k) && !/not at/i.test(k)) pedIntCount += total;
+                    else pedNonIntCount += total;
+                });
+                if (pedIntCount + pedNonIntCount > 0) {
+                    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartPedLocationType');
+                    createChart('chartPedLocationType', 'doughnut', {
+                        labels: ['At Intersection', 'Non-Intersection'],
+                        datasets: [{ data: [pedIntCount, pedNonIntCount], backgroundColor: ['#0891b2', '#94a3b8'], borderWidth: 2, borderColor: '#fff' }]
+                    }, { cutout: '50%', plugins: { legend: { display: false } } });
+                    const _pedLocTotal = (pedIntCount + pedNonIntCount) || 1;
+                    const _pedLocLegend = document.getElementById('pedLocationTypeLegend');
+                    if (_pedLocLegend) {
+                        _pedLocLegend.innerHTML =
+                            '<div style="display:flex;align-items:center;gap:.5rem">'
+                          +   '<span style="width:12px;height:12px;background:#0891b2;border-radius:2px"></span>'
+                          +   '<span style="flex:1">Intersection</span>'
+                          +   '<span style="font-weight:600">' + pedIntCount + '</span>'
+                          +   '<span style="color:#64748b">(' + (pedIntCount / _pedLocTotal * 100).toFixed(1) + '%)</span>'
+                          + '</div>'
+                          + '<div style="display:flex;align-items:center;gap:.5rem">'
+                          +   '<span style="width:12px;height:12px;background:#94a3b8;border-radius:2px"></span>'
+                          +   '<span style="flex:1">Non-Intersection</span>'
+                          +   '<span style="font-weight:600">' + pedNonIntCount + '</span>'
+                          +   '<span style="color:#64748b">(' + (pedNonIntCount / _pedLocTotal * 100).toFixed(1) + '%)</span>'
+                          + '</div>';
+                    }
+                } else if (typeof showChartPlaceholder === 'function') {
+                    showChartPlaceholder('chartPedLocationType', 'No pedestrian location-type data for this scope');
+                }
+
+                // Bicycle Year — bar
+                const bikeYears = _entriesByYear(pb.bicycle && pb.bicycle.byYear);
+                if (bikeYears.length) {
+                    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartBikeYear');
+                    createChart('chartBikeYear', 'bar', {
+                        labels: bikeYears.map(([y]) => String(y)),
+                        datasets: [{ label: 'Bicycle Crashes', data: bikeYears.map(([, n]) => n), backgroundColor: '#059669', borderRadius: 4 }]
+                    }, { plugins: { legend: { display: false } } });
+                } else if (typeof showChartPlaceholder === 'function') {
+                    showChartPlaceholder('chartBikeYear', 'No bicycle crashes for this scope');
+                }
+
+                // Bicycle Light Condition — doughnut
+                const bikeLight = _entriesByTotal(pb.bicycle && pb.bicycle.byLight, 6);
+                if (bikeLight.length) {
+                    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartBikeLight');
+                    createChart('chartBikeLight', 'doughnut', {
+                        labels: bikeLight.map(([k]) => k),
+                        datasets: [{ data: bikeLight.map(([, n]) => n), backgroundColor: lightColors, borderWidth: 2, borderColor: '#fff' }]
+                    }, { cutout: '50%', plugins: { legend: { display: false } } });
+                    const bikeLightTotal = bikeLight.reduce((s, e) => s + e[1], 0);
+                    _populateLegend('bikeLightLegend', bikeLight, bikeLightTotal, lightColors);
+                } else if (typeof showChartPlaceholder === 'function') {
+                    showChartPlaceholder('chartBikeLight', 'No bicycle-by-light data for this scope');
+                }
+
+                // Bicycle Location Type — doughnut
+                const bikeLocBucket = pb.bicycle && pb.bicycle.byLocation || {};
+                let bikeIntCount = 0, bikeNonIntCount = 0;
+                Object.entries(bikeLocBucket).forEach(([k, v]) => {
+                    const total = v && v.total ? v.total : 0;
+                    if (/intersection|junction/i.test(k) && !/not at/i.test(k)) bikeIntCount += total;
+                    else bikeNonIntCount += total;
+                });
+                if (bikeIntCount + bikeNonIntCount > 0) {
+                    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartBikeLocationType');
+                    createChart('chartBikeLocationType', 'doughnut', {
+                        labels: ['At Intersection', 'Non-Intersection'],
+                        datasets: [{ data: [bikeIntCount, bikeNonIntCount], backgroundColor: ['#059669', '#94a3b8'], borderWidth: 2, borderColor: '#fff' }]
+                    }, { cutout: '50%', plugins: { legend: { display: false } } });
+                    const _bikeLocTotal = (bikeIntCount + bikeNonIntCount) || 1;
+                    const _bikeLocLegend = document.getElementById('bikeLocationTypeLegend');
+                    if (_bikeLocLegend) {
+                        _bikeLocLegend.innerHTML =
+                            '<div style="display:flex;align-items:center;gap:.5rem">'
+                          +   '<span style="width:12px;height:12px;background:#059669;border-radius:2px"></span>'
+                          +   '<span style="flex:1">Intersection</span>'
+                          +   '<span style="font-weight:600">' + bikeIntCount + '</span>'
+                          +   '<span style="color:#64748b">(' + (bikeIntCount / _bikeLocTotal * 100).toFixed(1) + '%)</span>'
+                          + '</div>'
+                          + '<div style="display:flex;align-items:center;gap:.5rem">'
+                          +   '<span style="width:12px;height:12px;background:#94a3b8;border-radius:2px"></span>'
+                          +   '<span style="flex:1">Non-Intersection</span>'
+                          +   '<span style="font-weight:600">' + bikeNonIntCount + '</span>'
+                          +   '<span style="color:#64748b">(' + (bikeNonIntCount / _bikeLocTotal * 100).toFixed(1) + '%)</span>'
+                          + '</div>';
+                    }
+                } else if (typeof showChartPlaceholder === 'function') {
+                    showChartPlaceholder('chartBikeLocationType', 'No bicycle location-type data for this scope');
+                }
+
+                // Ped vs Bike Year-over-Year compare — line chart
+                const allYears = Array.from(new Set([
+                    ...pedYears.map(e => e[0]),
+                    ...bikeYears.map(e => e[0])
+                ])).sort((a, b) => a - b);
+                if (allYears.length) {
+                    const pedByYearMap = Object.fromEntries(pedYears);
+                    const bikeByYearMap = Object.fromEntries(bikeYears);
+                    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartPedBikeCompare');
+                    createChart('chartPedBikeCompare', 'line', {
+                        labels: allYears.map(String),
+                        datasets: [
+                            { label: '🚶 Pedestrian', data: allYears.map(y => pedByYearMap[y] || 0), borderColor: '#0891b2', backgroundColor: 'rgba(8,145,178,.1)', fill: true, tension: 0.3 },
+                            { label: '🚴 Bicycle',    data: allYears.map(y => bikeByYearMap[y] || 0), borderColor: '#059669', backgroundColor: 'rgba(5,150,105,.1)', fill: true, tension: 0.3 }
+                        ]
+                    }, { plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } });
+                } else if (typeof showChartPlaceholder === 'function') {
+                    showChartPlaceholder('chartPedBikeCompare', 'No ped/bike yearly trend data for this scope');
+                }
+            } catch (perModeErr) {
+                console.warn('[PedBike] Per-mode chart paint failed:', perModeErr && perModeErr.message);
+            }
+        }
     } catch (e) {
         console.warn('[PedBike] Matview load failed:', e.message, '— attempting sampleRows fallback');
         if (crashState.loaded && crashState.sampleRows && crashState.sampleRows.length > 0) {
@@ -105201,6 +105452,20 @@ async function initFatalSpeedingFromMatview(tier) {
 
             const byHour = analysis.byHour || {};
             fatalSpeedingState.fatalData.byHour = { ...byHour };
+
+            // Round 3 follow-up (2026-05-09): mv_analysis_summary now exposes
+            // byCollisionDetail (per-severity per-collision-type counts). Pull
+            // the K-only column for chartFSFatalCollision. The Speed view's
+            // collision chart still needs a cross-dimension matview so we
+            // leave fatalSpeedingState.speedData.byCollision empty; its
+            // placeholder will continue to render gracefully.
+            const byCollDetail = analysis.byCollisionDetail || {};
+            const fatalByColl = {};
+            Object.entries(byCollDetail).forEach(([name, sev]) => {
+                const k = sev && sev.K ? sev.K : 0;
+                if (k > 0) fatalByColl[name] = k;
+            });
+            fatalSpeedingState.fatalData.byCollision = fatalByColl;
         }
 
         // ---- From mv_safety_categories ----
