@@ -1,0 +1,24 @@
+{
+  "name": "crashlens-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "End-to-end tests that replace the manual audit loop. Runs against the live deployed app and the local dev server. Catches every empty-matrix regression automatically.",
+  "scripts": {
+    "install:browsers": "playwright install --with-deps chromium",
+    "auth": "playwright test auth.setup.ts --headed",
+    "test": "playwright test",
+    "test:matrix": "playwright test tests/02-tier-matrix.spec.ts",
+    "test:scan": "playwright test tests/01-empty-matrix-scan.spec.ts",
+    "test:visual": "playwright test tests/03-visual-regression.spec.ts --update-snapshots=missing",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.46.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.0.0",
+    "js-yaml": "^4.1.0",
+    "typescript": "^5.4.0"
+  }
+}

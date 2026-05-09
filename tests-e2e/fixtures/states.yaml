@@ -1,0 +1,74 @@
+# Per-state golden fixtures.
+# Each state declares the expected min row counts at each tier so the test
+# suite can assert "no empty matrices" without baking ranges into test code.
+#
+# Adding a new state = add a YAML entry. Test suite auto-extends.
+#
+# `known_null_categories` lists factor columns the source CSV does not
+# populate. The tests skip these — they are upstream-pipeline debt, not
+# matview gaps.
+
+delaware:
+    state_key: delaware           # crashLensClient.state value
+    state_name: Delaware
+    state_fips: '10'
+    default_jurisdiction: Sussex County
+    counties: [Kent County, New Castle County, Sussex County]
+    expected:
+        total_crashes_state: 569829
+        total_crashes_default_county: 134123
+        # K-only severity (Delaware has no B/C in source)
+        fatal_K_state_min: 1500
+        fatal_K_default_county_min: 400
+        # K+A combined
+        ka_state_min: 80000
+        ka_default_county_min: 18000
+        # Tabs that MUST render non-empty matrices at default fixture
+        required_populated_tabs:
+            - dashboard
+            - map
+            - crashtree
+            - scorecard
+            - safety
+            - fatalspeeding
+            - hotspots
+            - intersection
+            - pedestrian
+            - analysis
+        # Categories that MUST have non-zero counts
+        required_categories_non_zero:
+            - impaired
+            - speed
+            - distracted
+            - pedestrian
+            - bicycle
+            - motorcycle
+            - intersection
+            - nighttime
+            - weather
+            - animal
+            - unrestrained
+            - curves
+            - school
+            - guardrail
+            - roaddeparture
+    known_null_categories:        # blocked-upstream — test skips
+        - young
+        - senior
+        - lgtruck
+        - drowsy
+        - hitrun
+    notes:
+        - 'crash_severity column has only K/A/O values — no B/C exists. Any KPI labeled B+C will read 0 — by design.'
+
+# virginia:
+#     state_key: virginia
+#     state_name: Virginia
+#     state_fips: '51'
+#     default_jurisdiction: Fairfax County
+#     ...
+
+# colorado:
+#     state_key: colorado
+#     state_name: Colorado
+#     ...
