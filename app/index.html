@@ -88862,6 +88862,30 @@ function showToast(message, type = 'info', duration = 3000) {
     }, duration);
 }
 
+// Bug fix (round 2, 2026-05-08): UX hint when a Crash Tree filter click is
+// silently ignored in Supabase-only mode. Throttled to once per 5s per session
+// so rapid clicks don't spam.
+let _ctFilterToastLastShown = 0;
+function showCrashTreeFilterUnavailableToast() {
+    const now = Date.now();
+    if (now - _ctFilterToastLastShown < 5000) return;
+    _ctFilterToastLastShown = now;
+    if (typeof showToast === 'function') {
+        showToast('Filters use full-period matview data — upload a CSV to enable row-level filtering.', 'info');
+    }
+}
+
+// Same for Fatal & Speeding.
+let _fsFilterToastLastShown = 0;
+function showFSFilterUnavailableToast() {
+    const now = Date.now();
+    if (now - _fsFilterToastLastShown < 5000) return;
+    _fsFilterToastLastShown = now;
+    if (typeof showToast === 'function') {
+        showToast('Filters use full-period matview data — upload a CSV to enable row-level filtering.', 'info');
+    }
+}
+
 function loadLocationForCMF() {
     const select = document.getElementById('cmfLocationSelect');
     const value = select.value;
@@ -101902,6 +101926,26 @@ function refreshCrashTreeAnalysis() {
 
 // Build tree data from crash records
 function buildCrashTreeData() {
+    // Bug fix (round 2, 2026-05-08): in Supabase-only mode the row pipeline
+    // can't filter — sampleRows is []. Calling this function would reset the
+    // matview-built treeData to null. All callers (severity toggle, date
+    // filter, date presets, clear-date) trip this. Skip the row pipeline
+    // entirely and keep the matview-built state intact. The visible numbers
+    // remain the full-period / all-severity totals from mv_crash_tree, which
+    // is correct: matview-only mode cannot filter at row level.
+    var _ctSupabaseMode =
+        crashTreeState.source === 'supabase' ||
+        !(crashState.sampleRows && crashState.sampleRows.length > 0);
+    if (_ctSupabaseMode) {
+        if (typeof showCrashTreeFilterUnavailableToast === 'function') {
+            showCrashTreeFilterUnavailableToast();
+        }
+        // Re-paint from existing state. updateCrashTreeStats and renderCrashTree
+        // are pure reads — they don't mutate crashTreeState.
+        if (typeof renderCrashTree === 'function') renderCrashTree();
+        if (typeof updateCrashTreeStats === 'function') updateCrashTreeStats();
+        return;
+    }
     const rows = crashState.sampleRows;
     const sevFilter = crashTreeState.severityFilter;
 
@@ -105151,6 +105195,22 @@ function clearFSDateFilter() {
 }
 
 function processFSData() {
+    // Bug fix (round 2, 2026-05-08): in Supabase-only mode the row pipeline
+    // can't filter — sampleRows is []. Calling this function would reset
+    // fatalData/speedData/combinedData to zeros. All callers (date inputs,
+    // date presets, sub-tab switch, severity checkboxes, clearFSDateFilter)
+    // trip this. Skip the row pipeline; keep matview-built state intact.
+    var _fsSupabaseMode =
+        fatalSpeedingState.source === 'supabase' ||
+        !(crashState.sampleRows && crashState.sampleRows.length > 0);
+    if (_fsSupabaseMode) {
+        if (typeof showFSFilterUnavailableToast === 'function') {
+            showFSFilterUnavailableToast();
+        }
+        // updateFSDisplay() is a pure read — repaints the DOM from the
+        // existing fatalSpeedingState struct.
+        return;
+    }
     // Supabase-first: tab-loaders preloads K|A crashes into a tab cache so we
     // never have to download the full R2 parquet just to render this tab.
     // Falls back to crashState.sampleRows automatically when Supabase isn't
