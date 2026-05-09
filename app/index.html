@@ -63731,22 +63731,29 @@ async function exportIntersectionPDF() {
 
         const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         const dateStamp = new Date().toISOString().split('T')[0];
-        // ROUND-8: in Supabase-only mode crashState.years is empty. Fall back
-        // to the year range exposed by aggregates (populated from
-        // dashboard_summary), then to the matview's own min/max if available,
-        // before giving up on "N/A".
+        // Round 8 (2026-05-09) — crashState.years is empty in Supabase mode.
+        // Cascade through every available year-range source before giving up,
+        // and prefer "All Available Data" over "N/A" for users.
         let yearRange = (crashState.years && crashState.years.length > 0)
             ? `${crashState.years[0]} - ${crashState.years[crashState.years.length - 1]}`
             : null;
-        if (!yearRange && crashState.aggregates && crashState.aggregates.yearRange) {
+        if (!yearRange && crashState.aggregates) {
             const yr = crashState.aggregates.yearRange;
-            if (yr.min && yr.max) yearRange = `${yr.min} - ${yr.max}`;
+            if (yr && yr.min && yr.max) yearRange = `${yr.min} - ${yr.max}`;
+            else if (crashState.aggregates.yearMin && crashState.aggregates.yearMax) {
+                yearRange = `${crashState.aggregates.yearMin} - ${crashState.aggregates.yearMax}`;
+            } else if (crashState.aggregates.byYear) {
+                const ys = Object.keys(crashState.aggregates.byYear)
+                    .map(y => parseInt(y, 10)).filter(y => y >= 2000).sort((a, b) => a - b);
+                if (ys.length > 0) yearRange = ys[0] + ' - ' + ys[ys.length - 1];
+            }
         }
-        if (!yearRange && crashState.aggregates && crashState.aggregates.byYear) {
-            const ys = Object.keys(crashState.aggregates.byYear).map(y => parseInt(y, 10)).filter(y => y >= 2000).sort((a, b) => a - b);
-            if (ys.length > 0) yearRange = ys[0] + ' - ' + ys[ys.length - 1];
+        if (!yearRange) {
+            const rs = document.getElementById('reportStartDate')?.value;
+            const re = document.getElementById('reportEndDate')?.value;
+            if (rs || re) yearRange = `${rs || 'Start'} - ${re || 'Present'}`;
         }
-        if (!yearRange) yearRange = 'N/A';
+        if (!yearRange) yearRange = 'All Available Data';
         const intEPDO = calcEPDO(int);
         const kaCount = int.K + int.A;
         const intPct = total > 0 ? (int.total / total * 100).toFixed(1) : '0';
@@ -63844,9 +63851,9 @@ async function exportIntersectionPDF() {
         sevOrder.forEach(s => {
             if (s.count > 0) {
                 const rawWidth = (s.count / int.total) * contentWidth;
-                // ROUND-8: bump the minimum visible width from 2mm to 4mm so
-                // tiny K-fractions (e.g. 253 of 77,715 ≈ 0.6mm) actually
-                // render as a discernible red sliver instead of disappearing.
+                // Round 8 (2026-05-09) — bump min seg width from 2mm to 4mm
+                // so tiny K segments (e.g. 253 / 77,715 → ~0.6mm) stay
+                // visible as a discernible red sliver instead of disappearing.
                 const segWidth = Math.max(rawWidth, 4);
                 doc.setFillColor(...s.color);
                 doc.rect(barX, y, segWidth, barHeight, 'F');
@@ -63855,15 +63862,14 @@ async function exportIntersectionPDF() {
                     doc.setTextColor(255, 255, 255);
                     doc.setFont(undefined, 'bold');
                     doc.text(s.code + ':' + s.count, barX + segWidth / 2, y + 5.5, { align: 'center' });
-                } else if (s.code === 'K') {
-                    // ROUND-8: even with the 4mm floor a K segment is too
-                    // narrow for an inline label, so pin a callout above the
-                    // bar in K's own color. Without this the K severity
-                    // count silently vanishes from the visual.
+                } else if (s.code === 'K' && s.count > 0) {
+                    // Even with the 4mm floor a K segment is often too narrow
+                    // for an inside label — pin a callout above the bar in
+                    // K's own color so the fatal count never vanishes.
                     doc.setFontSize(6);
                     doc.setTextColor(...s.color);
                     doc.setFont(undefined, 'bold');
-                    doc.text(s.code + ':' + s.count, barX + segWidth / 2, y - 1, { align: 'center' });
+                    doc.text('K:' + s.count, barX + segWidth / 2, y - 1, { align: 'center' });
                 }
                 barX += segWidth;
             }
@@ -63887,6 +63893,23 @@ async function exportIntersectionPDF() {
         y += 12;
 
         // === CHARTS (2x2 grid) ===
+        // Round 8 (2026-05-09) — when the user opens Reports without first
+        // visiting the Intersections tab, the four chart canvases are blank
+        // and toDataURL returns empty PNGs. Force-paint them via the same
+        // path the Intersections tab uses, then wait a tick for Chart.js to
+        // finish rendering before capture.
+        try {
+            if (typeof updateIntersectionTab === 'function') {
+                await Promise.resolve(updateIntersectionTab());
+            } else if (typeof _loadIntersectionsFromHotspots === 'function') {
+                await _loadIntersectionsFromHotspots();
+            }
+        } catch (chartErr) {
+            console.warn('[Intersection PDF] chart prime failed:', chartErr && chartErr.message);
+        }
+        // Let Chart.js finish its draw frame before we capture.
+        await new Promise(r => setTimeout(r, 300));
+
         const chartIds = ['chartIntType', 'chartTrafficControl', 'chartIntCollision', 'chartIntYearTrend'];
         const chartTitles = ['Intersection Type', 'Traffic Control', 'Collision Types', 'Year Trend'];
         const chartW = (contentWidth - 5) / 2;
@@ -68334,6 +68357,15 @@ async function updatePeopleFromMatview(tier) {
                     <span style="color:#64748b;min-width:45px;text-align:right">(${pctVal}%)</span>
                 </div>`;
             });
+            // Round 8 (2026-05-09) — flag missing demographic data instead of
+            // letting "Senior wearing seatbelt: 0 (0.0%)" look like real data.
+            // Some states (e.g. Delaware) don't publish the Senior driver flag
+            // in their source CSV, so the matview's senior bucket is NULL.
+            if ((seniorCat.total || 0) === 0 && peopleData.seniorBelted === 0) {
+                legendHtml += `<div style="font-size:.7rem;color:#94a3b8;margin-top:.5rem;font-style:italic;line-height:1.4">
+                    Note: Senior driver data not published in source dataset for this state.
+                </div>`;
+            }
             legendEl.innerHTML = legendHtml;
         }
 
@@ -69692,35 +69724,40 @@ function generateReport() {
             return;
         }
 
-        // ROUND-8 (2026-05-09): in Supabase-only mode `crashState.sampleRows`
-        // is empty for every aggregate tier, which used to break all 15
-        // report types (infographic, comprehensive, pedbike, fatalspeed,
-        // hotspot, dashboard, corridor, safety, safetyfocus, trend,
-        // intersection, crashtree, prediction, deepdive, grantsupport).
-        // Hydrate row-level crashes from Supabase first; cap at 200k to
-        // keep the PDF/HTML generators responsive. The matview-driven tabs
-        // are unaffected — this is only used by the Reports-tab generators
-        // that iterate per-row for chart and table data.
-        let crashes = crashState.sampleRows;
-        let _hydratedFromSupabase = false;
-        if ((!crashes || crashes.length === 0) &&
-            window.crashLensClient &&
-            window.CL && window.CL.data && window.CL.data.supabaseBridge &&
-            typeof window.CL.data.supabaseBridge.resolveTier === 'function') {
+        // Round 8 (2026-05-09) — universal crash hydration. In Supabase-only
+        // mode crashState.sampleRows is empty, so every row-iterating report
+        // (15 of them) used to produce blank output. Pull rows once here from
+        // the active tier via fetchReportCrashes (data-client wrapper), reuse
+        // for all dispatch paths below. R2 / row mode skips this and uses
+        // sampleRows directly.
+        let crashes = crashState.sampleRows || [];
+        let _hydratedFromSupabase = false, _hydrationCapped = false, _hydrationFailed = false;
+        if (crashes.length === 0
+            && window.crashLensClient
+            && typeof window.crashLensClient.fetchReportCrashes === 'function'
+            && window.CL?.data?.supabaseBridge?.resolveTier) {
             try {
+                showLoading('Hydrating crash data for report…');
                 const t = window.CL.data.supabaseBridge.resolveTier();
-                const fetchOpts = { all: true, maxRows: 200000 };
-                if (route) fetchOpts.route = route;
-                if (startDate) fetchOpts.dateFrom = startDate;
-                if (endDate) fetchOpts.dateTo = endDate;
-                const result = await window.crashLensClient.getCrashes(t.tier, t.value, fetchOpts);
-                if (result && Array.isArray(result.rows) && result.rows.length > 0) {
-                    crashes = result.rows;
+                const stateKey = (typeof _resolveActiveState === 'function') ? _resolveActiveState() : null;
+                if (stateKey) window.crashLensClient.state = stateKey;
+                const fetched = await window.crashLensClient.fetchReportCrashes(t.tier, t.value, {
+                    startDate, endDate, route, limit: 100000
+                });
+                if (fetched && Array.isArray(fetched.rows) && fetched.rows.length > 0) {
+                    crashes = fetched.rows;
                     _hydratedFromSupabase = true;
-                    console.log('[Report] Hydrated ' + crashes.length + ' crashes from Supabase for tier=' + t.tier);
+                    _hydrationCapped = !!fetched.capped;
+                    console.log('[Report] Hydrated ' + crashes.length + ' crashes from Supabase for tier=' + t.tier +
+                        (t.value ? '/' + t.value : '') + (fetched.capped ? ' (CAPPED at limit)' : ''));
+                } else {
+                    console.warn('[Report] Supabase hydration returned 0 rows for tier=' + t.tier);
                 }
+                showLoading('Generating report…');
             } catch (e) {
+                _hydrationFailed = true;
                 console.warn('[Report] Hydration failed:', e && e.message);
+                showLoading('Generating report…');
             }
         }
 
@@ -69742,19 +69779,24 @@ function generateReport() {
         }
 
         // Filter data for other report types. Skip post-filtering when we
-        // hydrated from Supabase — server-side already applied route +
-        // dateFrom/dateTo and the row date format differs (string ISO vs.
-        // legacy epoch milliseconds), which would otherwise null out the
-        // hydrated set.
+        // hydrated from Supabase — the server already applied route + date
+        // filters, and the hydrated rows store dates as ISO strings rather
+        // than the legacy epoch-ms format that `new Date(Number(...))`
+        // expects, so re-applying client-side would null out the entire set.
         if (!_hydratedFromSupabase) {
             if (route) crashes = crashes.filter(r => r[COL.ROUTE] === route);
             if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
             if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
         }
 
+        // If hydration failed AND we have no rows, surface that to the user
+        // rather than producing a silent all-zeros report.
         if (!crashes || crashes.length === 0) {
             hideLoading();
-            alert('No crash data available for the current tier/filter. Try selecting a different tier or removing date filters.');
+            const msg = _hydrationFailed
+                ? 'Could not load crash data for this jurisdiction. Check the network tab for Supabase errors and try again.'
+                : 'No crash data available for the current tier and filter combination. Try a different tier, remove date filters, or pick a different route.';
+            alert(msg);
             return;
         }
 
@@ -69776,6 +69818,9 @@ function generateReport() {
 
             document.getElementById('reportOutput').style.display = 'block';
             document.getElementById('reportOutput').scrollIntoView({ behavior: 'smooth' });
+            if (_hydrationCapped) {
+                console.warn('[Report] Hydration was capped at 100k rows. Report may underrepresent the full jurisdiction.');
+            }
         } catch (err) {
             console.error('Report generation error:', err);
             alert('Error generating report: ' + err.message);
@@ -106277,8 +106322,25 @@ async function initFatalSpeedingFromMatview(tier) {
                 }
             }
 
-            const byHour = analysis.byHour || {};
-            fatalSpeedingState.fatalData.byHour = { ...byHour };
+            // Round 8 (2026-05-09) — mv_analysis_summary stores per-row K
+            // counts, but pre-Round-8 the data-client only exposed `byHour`
+            // (totals). It now also returns `byHourFatal` (K-only hours).
+            // Use that for fatalData.byHour so the "Peak Fatal Crash Hours"
+            // table reports truthful numbers instead of the previous wrong-
+            // by-50× values (e.g. "8 PM 10,373 fatal" vs ~250 actual K).
+            fatalSpeedingState.fatalData.byHour = analysis.byHourFatal
+                ? { ...analysis.byHourFatal } : {};
+            // Speed-only hours still need a backend matview extension
+            // (see docs/supabase/migrations/2026-05-09_round8_*.sql).
+            // Leave empty so the table renders "No data available"
+            // instead of a fabricated number.
+            fatalSpeedingState.speedData.byHour = {};
+
+            // Same problem for speedData.byYear — the existing code only
+            // populated fatalData.byYear (with counts.K, which IS K-only and
+            // therefore correct). For Speed-Year we'd need a per-year speed
+            // count which currently lives in dashboard_summary.speed_crashes
+            // grouped by crash_year. Pull that here in a follow-on fetch.
 
             // Round 3 follow-up (2026-05-09): mv_analysis_summary now exposes
             // byCollisionDetail (per-severity per-collision-type counts). Pull
@@ -106332,14 +106394,16 @@ async function initFatalSpeedingFromMatview(tier) {
                     };
                 }
 
-                // Speed view: factor counts (all severities) for speed-related crashes
-                if (factorKey && fatalSpeedingState.speedData.byFactor[factorKey]) {
-                    fatalSpeedingState.speedData.byFactor[factorKey].count = catData.total || 0;
-                    fatalSpeedingState.speedData.byFactor[factorKey].severity = {
-                        K: catData.K || 0, A: catData.A || 0, B: catData.B || 0,
-                        C: catData.C || 0, O: catData.O || 0
-                    };
-                }
+                // Round 8 (2026-05-09) — Speed view byFactor was being
+                // populated with the GLOBAL category total (e.g. weather =
+                // 124091) which is NOT the speed × weather cross-tab count.
+                // Downstream the Co-Factor table divided that by speed total
+                // and produced impossible percentages like 10,116.8%. The
+                // honest fix until mv_factor_pairs lands (see backlog SQL):
+                // leave speedData.byFactor[*].count at 0 except for 'speed'
+                // itself. The PDF render code now treats 0 as "not yet
+                // available" instead of a real zero.
+                // (Removed: the global-leak assignment that lived here.)
             }
 
             // Combined Venn approximation
@@ -106347,6 +106411,68 @@ async function initFatalSpeedingFromMatview(tier) {
             fatalSpeedingState.combinedData.both = speedCat.K || 0;
             fatalSpeedingState.combinedData.fatalOnly = (fatalSpeedingState.fatalData.totalCrashes || 0) - (speedCat.K || 0);
             fatalSpeedingState.combinedData.speedOnly = (speedCat.total || 0) - (speedCat.K || 0);
+        }
+
+        // Round 8 (2026-05-09) — Hotspot byRoute hydration. Round 7 already
+        // attached per-location K/A/factor counts to crashState.hotspots via
+        // _loadHotspotsFromMatview. Pull from there if available; fall back
+        // to a fresh getHotspots fetch otherwise. Used by the Fatal/Speed
+        // Hotspot Locations tables in both the Reports tab HTML and the
+        // exportFSToPDF "Hotspots" sections.
+        try {
+            let hsList = Array.isArray(crashState.hotspots) ? crashState.hotspots : [];
+            if (!hsList.length && typeof dc.getHotspots === 'function') {
+                const h = await dc.getHotspots(tierResolved.tier, tierResolved.value, { limit: 100 });
+                if (h) hsList = [...(h.intersections || []), ...(h.segments || [])]
+                    .map(r => {
+                        const intName = String(r['Intersection Name'] || r.intersection_name || '').trim();
+                        const rteName = String(r['RTE Name'] || r.rte_name || '').trim();
+                        const nodeId  = String(r.location_name || '').trim();
+                        const loc = (rteName && intName) ? rteName + ' / ' + intName
+                                  : intName || rteName || nodeId || 'Unknown';
+                        return {
+                            loc, route: rteName,
+                            total: r.total_crashes || 0,
+                            K: r.k || 0, A: r.a || 0, B: r.b || 0, C: r.c || 0, O: r.o || 0,
+                            epdo: r.epdo || 0,
+                            speed_count: 0  // Round 8: filled below if mv_hotspots_factors loaded
+                        };
+                    });
+            }
+            if (hsList.length) {
+                // Fatal byRoute = locations with K > 0, ranked by K then EPDO.
+                hsList.filter(h => (h.K || 0) > 0).slice(0, 50).forEach(h => {
+                    fatalSpeedingState.fatalData.byRoute[h.loc || h.route || 'Unknown'] = {
+                        total: h.total || 0,
+                        K: h.K || 0, A: h.A || 0,
+                        epdo: h.epdo || 0,
+                        crashes: [],
+                        years: {}
+                    };
+                });
+                // Speed byRoute uses speed_count from mv_hotspots_factors
+                // (Round 7 attached this to each row). When a location has
+                // no per-row speed count, fall back to EPDO ranking — better
+                // than leaving the table empty.
+                const withSpeed = hsList.filter(h => (h.speed_count || 0) > 0);
+                const speedRanked = withSpeed.length > 0
+                    ? withSpeed.sort((a, b) => (b.speed_count || 0) - (a.speed_count || 0))
+                    : hsList.slice().sort((a, b) => (b.epdo || 0) - (a.epdo || 0));
+                speedRanked.slice(0, 50).forEach(h => {
+                    fatalSpeedingState.speedData.byRoute[h.loc || h.route || 'Unknown'] = {
+                        total: h.total || 0,
+                        K: h.K || 0, A: h.A || 0,
+                        epdo: h.epdo || 0,
+                        severity: { K: h.K || 0, A: h.A || 0, B: h.B || 0, C: h.C || 0, O: h.O || 0 },
+                        crashes: []
+                    };
+                });
+                console.log('[FS] Hotspot byRoute hydrated: '
+                    + Object.keys(fatalSpeedingState.fatalData.byRoute).length + ' fatal, '
+                    + Object.keys(fatalSpeedingState.speedData.byRoute).length + ' speed.');
+            }
+        } catch (hsErr) {
+            console.warn('[FS] Hotspot byRoute hydration failed:', hsErr && hsErr.message);
         }
 
         fatalSpeedingState.loaded = true;
@@ -108334,15 +108460,22 @@ async function exportFSToPDF(view) {
     const fd = fatalSpeedingState.fatalData;
     const sd = fatalSpeedingState.speedData;
     const cd = fatalSpeedingState.combinedData;
-    // ROUND-8: in Supabase-only mode sampleRows is empty. Fall back to the
-    // matview-derived denominator (fatalSpeedingState.totalFilteredCrashes is
-    // the K+A+B+C+O sum from mv_safety_categories — see initFatalSpeedingFromMatview)
-    // so the cover page, fatalPct and speedPct render real numbers instead of zeros.
+    // Round 8 (2026-05-09) — totalCrashes was always reading
+    // crashState.sampleRows.length, which is 0 in Supabase-only mode and
+    // makes downstream "% of all crashes" calculations display 0% (divisor=0
+    // → guard returns 0) or overflow >100% (when divisor is the wrong tier).
+    // Prefer the matview-derived denominator (fatalSpeedingState.
+    // totalFilteredCrashes is the K+A+B+C+O sum from mv_safety_categories
+    // — see initFatalSpeedingFromMatview), then crashState.aggregates.total,
+    // then severity-sum as last resort.
     let totalCrashes = crashState.sampleRows?.length || 0;
     if (totalCrashes === 0) {
-        totalCrashes = (fatalSpeedingState.totalFilteredCrashes || 0) ||
-                       (crashState.aggregates && crashState.aggregates.total) ||
-                       ((fd.severity?.K || 0) + (fd.severity?.A || 0) + (fd.severity?.B || 0) + (fd.severity?.C || 0) + (fd.severity?.O || 0));
+        const sev = fd?.severity || {};
+        const sevSum = (sev.K || 0) + (sev.A || 0) + (sev.B || 0) + (sev.C || 0) + (sev.O || 0);
+        totalCrashes = fatalSpeedingState.totalFilteredCrashes
+            || (crashState.aggregates && crashState.aggregates.total)
+            || sevSum
+            || 0;
     }
 
     // Calculate total pages (always comprehensive report with all sections)

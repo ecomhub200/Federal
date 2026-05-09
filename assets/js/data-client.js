@@ -320,6 +320,39 @@ class CrashLensDataClient {
   }
 
   /**
+   * Round 8 (2026-05-09) — bulk-fetch crash rows for the Reports tab.
+   *
+   * generateReport() in app/index.html iterates `crashes = crashState.sampleRows`
+   * to derive per-report breakdowns (by year, by collision, by route, …). In
+   * Supabase-only mode sampleRows is empty so every report renders empty.
+   * This wrapper pulls a tier-scoped row set (with optional date / route
+   * filters) so the row-iteration generators keep working without a code
+   * rewrite.
+   *
+   * The cap defaults to 100k. At Sussex County (~135k) this still misses
+   * ~25 % of rows; the caller surfaces a banner when the cap is hit.
+   *
+   * @param {string} tier   - 'federal'|'state'|'region'|'mpo'|'planning_district'|'county'|'city'
+   * @param {string} value  - jurisdiction name
+   * @param {object} opts   - { startDate, endDate, route, limit }
+   * @returns {Promise<{rows: Array, total: number, capped: boolean}>}
+   */
+  async fetchReportCrashes(tier, value, opts = {}) {
+    const limit = opts.limit || 100000;
+    const filters = { all: true, maxRows: limit };
+    if (opts.route)     filters.route    = opts.route;
+    if (opts.startDate) filters.dateFrom = opts.startDate;
+    if (opts.endDate)   filters.dateTo   = opts.endDate;
+    const result = await this.getCrashes(tier, value, filters);
+    const rows   = (result && result.rows) || [];
+    return {
+      rows,
+      total: result?.total ?? rows.length,
+      capped: rows.length >= limit,
+    };
+  }
+
+  /**
    * Canonical form of a route/node name: uppercased, stripped of every
    * non-alphanumeric character. Used to compare values across the
    * client-side CSV and server-side Postgres when formatting rules differ.
@@ -979,7 +1012,7 @@ class CrashLensDataClient {
         // Rows are grouped by (state, county, district, mpo, planning_district,
         // dimension, dim_value). At any aggregate tier each (dimension, dim_value)
         // appears once per county — accumulate instead of overwrite.
-        const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byCollisionDetail: {}, byHour: {}, byFuncClass: {}, byWeather: {}, byLight: {} };
+        const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byCollisionDetail: {}, byHour: {}, byHourFatal: {}, byFuncClass: {}, byWeather: {}, byLight: {} };
         (data || []).forEach(r => {
           const k = r.k || 0, a = r.a || 0, b = r.b || 0, c = r.c || 0, o = r.o || 0, total = r.total || 0;
           if (r.dimension === 'year') {
@@ -1003,6 +1036,12 @@ class CrashLensDataClient {
             cd.total += total; cd.K += k; cd.A += a; cd.B += b; cd.C += c; cd.O += o;
           } else if (r.dimension === 'hour') {
             out.byHour[r.dim_value] = (out.byHour[r.dim_value] || 0) + total;
+            // Round 8 (2026-05-09) — also expose K-only hour counts so the
+            // Fatal & Speed PDF "Peak Fatal Crash Hours" table can render
+            // truthful numbers (the previous code copied the *total* hour
+            // count into fatalData.byHour, producing impossible figures
+            // like "8 PM (10,373 fatal crashes)" against ~250 K crashes).
+            out.byHourFatal[r.dim_value] = (out.byHourFatal[r.dim_value] || 0) + (k || 0);
           } else if (r.dimension === 'funcclass') {
             // Round 3 follow-up (2026-05-09): mv_analysis_summary now exposes
             // funcclass / weather / light dimensions (8 total). Surface them
