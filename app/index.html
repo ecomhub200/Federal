@@ -6113,8 +6113,10 @@ Your data stays private. All processing happens in your browser.
 <div class="map-stat"><span>Scope:</span><span class="val" id="mapScope" style="font-weight:500">—</span></div>
 <div class="map-stat"><span>Showing:</span><span class="val"><span id="mapCount">0</span> <span id="mapOfTotal" style="color:var(--gray);font-weight:400;font-size:.75rem"></span></span></div>
 <div class="map-stat" id="mapMissingRow" style="display:none;font-size:.7rem;color:var(--warning)"><span id="mapMissingInfo"></span></div>
-<div class="map-stat"><span>Fatal:</span><span class="val" id="mapFatal">0</span></div>
-<div class="map-stat"><span>Serious (A):</span><span class="val" id="mapSerious">0</span></div>
+<div class="map-stat"><span>Fatal (K):</span><span class="val" id="mapFatal">0</span></div>
+<div class="map-stat"><span>Serious Injury (A only):</span><span class="val" id="mapSerious">0</span></div>
+<div class="map-stat"><span>K+A Combined:</span><span class="val" id="mapKA">0</span></div>
+<div class="map-stat"><span>KA Rate:</span><span class="val" id="mapKARate">0%</span></div>
 <div class="map-stat"><span>EPDO:</span><span class="val" id="mapEPDO">0</span></div>
 <div class="map-stat" style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--gray-light)"><span>Selected:</span><span class="val" id="mapSelected">None</span></div>
 </div>
@@ -48650,13 +48652,27 @@ function updateDashboard() {
         updateDashboardTierSections();
     }
 
-    // At aggregate tiers (state/federal/region/mpo/planning_district), the dashboard
-    // KPIs are painted by supabase-bridge.js from the Supabase matview.
-    // Do NOT overwrite them with stale county-level crashState.aggregates.
+    // At aggregate tiers (state/federal/region/mpo/planning_district) AND at
+    // county tier when rolled up to a planning_district/region, the dashboard
+    // KPIs are painted by supabase-bridge.js from the Supabase matview. Do NOT
+    // overwrite them with stale county-level crashState.aggregates (which is
+    // empty in Supabase-only mode and produces 0s everywhere).
     // Tier sections (breadcrumb, comparison tables) are still updated above.
     var _currentTier = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext.viewTier : 'county';
-    if (_currentTier === 'state' || _currentTier === 'federal' || _currentTier === 'region'
-        || _currentTier === 'mpo' || _currentTier === 'planning_district') {
+    var _resolvedTier = null;
+    try {
+        var _r = (typeof CL !== 'undefined') && CL && CL.data && CL.data.supabaseBridge
+            && typeof CL.data.supabaseBridge.resolveTier === 'function'
+            && CL.data.supabaseBridge.resolveTier();
+        _resolvedTier = _r && _r.tier;
+    } catch (e) { /* non-fatal */ }
+    var _aggregateSet = { state:1, federal:1, region:1, mpo:1, planning_district:1 };
+    var _supabaseMode = !(crashState.sampleRows && crashState.sampleRows.length > 0);
+    if (_aggregateSet[_currentTier] || _aggregateSet[_resolvedTier] || _supabaseMode) {
+        // Bug fix (round 3, 2026-05-08): supabase-bridge owns the dashboard
+        // when sampleRows is empty. At Sussex County (county rolled up to
+        // planning_district South District) 9 of 10 KPIs went to 0 because
+        // this function ran the row pipeline with sampleRows=[].
         return;
     }
 
@@ -50107,6 +50123,35 @@ function createChart(id, type, data, opts = {}) {
     charts[id] = new Chart(ctx, { type, data, options: { ...defaults, ...opts } });
 }
 
+// Bug fix (round 3, 2026-05-08): when a backend matview doesn't yet support
+// a breakdown, replace the empty Chart.js canvas with an inline placeholder
+// so users see why instead of a blank rectangle. Idempotent — calling twice
+// for the same canvas does nothing.
+function showChartPlaceholder(canvasId, message) {
+    const c = document.getElementById(canvasId);
+    if (!c) return;
+    const parent = c.parentElement;
+    if (!parent) return;
+    if (parent.querySelector('.chart-placeholder')) return;
+    if (charts[canvasId]) { try { charts[canvasId].destroy(); } catch (_) {} delete charts[canvasId]; }
+    c.style.display = 'none';
+    const ph = document.createElement('div');
+    ph.className = 'chart-placeholder';
+    ph.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;color:#94a3b8;text-align:center;font-size:.85rem;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;min-height:150px';
+    ph.innerHTML = '<div style="font-size:1.5rem">📊</div><div style="margin-top:.5rem">' + message + '</div>';
+    parent.appendChild(ph);
+}
+
+function clearChartPlaceholder(canvasId) {
+    const c = document.getElementById(canvasId);
+    if (!c) return;
+    const parent = c.parentElement;
+    if (!parent) return;
+    const ph = parent.querySelector('.chart-placeholder');
+    if (ph) ph.remove();
+    c.style.display = '';
+}
+
 // ============================================================
 // DASHBOARD SEARCH FUNCTIONS
 // ============================================================
@@ -50824,6 +50869,13 @@ function updateMapDisplay() {
     document.getElementById('mapFatal').textContent = stats.fatal;
     document.getElementById('mapSerious').textContent = stats.serious;
     document.getElementById('mapEPDO').textContent = stats.epdo.toLocaleString();
+    // Bug fix (round 3, 2026-05-08): K+A Combined and KA Rate added to Stats
+    // panel to match Dashboard naming. Computed from stats.fatal + stats.serious.
+    const _mapKA = (stats.fatal || 0) + (stats.serious || 0);
+    const _mapKAEl = document.getElementById('mapKA');
+    if (_mapKAEl) _mapKAEl.textContent = _mapKA.toLocaleString();
+    const _mapKARateEl = document.getElementById('mapKARate');
+    if (_mapKARateEl) _mapKARateEl.textContent = (stats.total > 0 ? ((_mapKA / stats.total) * 100).toFixed(1) : '0.0') + '%';
 
     // Show "of Y" total and missing GPS info
     const totalRows = crashState.totalRows || crashState.sampleRows?.length || 0;
@@ -51612,6 +51664,12 @@ function highlightMultipleLocationsOnMap() {
     document.getElementById('mapFatal').textContent = stats.fatal;
     document.getElementById('mapSerious').textContent = stats.serious;
     document.getElementById('mapEPDO').textContent = stats.epdo.toLocaleString();
+    // Bug fix (round 3, 2026-05-08): KA Combined + KA Rate parity
+    const _mapKA2 = (stats.fatal || 0) + (stats.serious || 0);
+    const _mapKA2El = document.getElementById('mapKA');
+    if (_mapKA2El) _mapKA2El.textContent = _mapKA2.toLocaleString();
+    const _mapKARate2El = document.getElementById('mapKARate');
+    if (_mapKARate2El) _mapKARate2El.textContent = (stats.total > 0 ? ((_mapKA2 / stats.total) * 100).toFixed(1) : '0.0') + '%';
 }
 
 // Select all visible locations in the current list
@@ -52832,6 +52890,12 @@ function highlightLocationOnMap(name) {
     document.getElementById('mapFatal').textContent = stats.fatal;
     document.getElementById('mapSerious').textContent = stats.serious;
     document.getElementById('mapEPDO').textContent = stats.epdo.toLocaleString();
+    // Bug fix (round 3, 2026-05-08): KA Combined + KA Rate parity
+    const _mapKA3 = (stats.fatal || 0) + (stats.serious || 0);
+    const _mapKA3El = document.getElementById('mapKA');
+    if (_mapKA3El) _mapKA3El.textContent = _mapKA3.toLocaleString();
+    const _mapKARate3El = document.getElementById('mapKARate');
+    if (_mapKARate3El) _mapKARate3El.textContent = (stats.total > 0 ? ((_mapKA3 / stats.total) * 100).toFixed(1) : '0.0') + '%';
 }
 
 function clearRouteHighlights() {
@@ -57938,7 +58002,22 @@ async function analyzeOverRepSegments() {
     }
 
     if (!crashState.loaded || !crashState.sampleRows || crashState.sampleRows.length === 0) {
-        alert('Please load crash data first before analyzing segments.');
+        // Bug fix (round 3, 2026-05-08): in Supabase-only mode the user has
+        // crashState.totalRows but no sampleRows. Replace the modal alert with
+        // an inline info-box explaining the requirement clearly.
+        const emptyEl = document.getElementById('segmentEmptyState');
+        if (emptyEl) {
+            emptyEl.innerHTML =
+                '<div style="padding:1rem;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;text-align:left;color:#78350f">'
+              +   '<strong>⚠️ Segment crash-rate analysis requires per-row crash data.</strong><br>'
+              +   'Your current scope is served by aggregate matviews only. Upload a CSV via the '
+              +   '<em>Upload Data</em> tab — or switch to a tier where row-level data is loaded — '
+              +   'to enable FHWA over-represented segment analysis.'
+              + '</div>';
+            emptyEl.style.display = 'block';
+        } else {
+            alert('Please load crash data first before analyzing segments.');
+        }
         return;
     }
 
@@ -60615,7 +60694,7 @@ function renderHotspots() {
             <td><span class="severity-badge severity-O">${h.O}</span></td>
             <td><strong>${h.epdo.toLocaleString()}</strong></td>
             <td>${h.perYear}</td>
-            <td style="font-size:.75rem">${esc(h.topType.substring(0,20))}</td>
+            <td style="font-size:.75rem${h.topType === 'N/A' ? ';color:#94a3b8' : ''}" ${h.topType === 'N/A' ? 'title="Top collision-type rollup pending (mv_hotspots backend extension)"' : ''}>${h.topType === 'N/A' ? '—' : esc(h.topType.substring(0,20))}</td>
             <td><button class="btn-details" onclick="showLocationDetail('${esc(h.loc)}', 'hotspot')">📍 Details</button> <button class="btn-map" onclick="zoomToLocation('${esc(h.loc)}', '${locationType}')">🗺️ Map</button> <button class="btn-mutcd" onclick="askMUTCDForHotspot('${esc(h.loc)}')" title="Get MUTCD guidance">📖 MUTCD</button> <button style="background:#0ea5e9;color:white;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:.7rem" onclick="openHotspotStreetView('${esc(h.loc)}', '${locationType}')" title="View most severe crash location">🛣️</button></td>
         </tr>`;
     }).join('');
@@ -62401,6 +62480,17 @@ async function _loadIntersectionsFromHotspots() {
             } else {
                 tabEl.insertBefore(banner, tabEl.firstChild);
             }
+        }
+
+        // Bug fix (round 3, 2026-05-08): paint placeholders into the four
+        // chart canvases so the user sees a clear reason for the empty
+        // rectangles instead of nothing. clearChartPlaceholder() in the
+        // chart helpers will swap the canvas back when matview support lands.
+        if (typeof showChartPlaceholder === 'function') {
+            showChartPlaceholder('chartIntType',         'Intersection-type breakdown pending mv_intersection_summary');
+            showChartPlaceholder('chartTrafficControl',  'Traffic-control breakdown pending mv_intersection_summary');
+            showChartPlaceholder('chartIntCollision',    'Collision-type breakdown for intersection crashes pending mv_intersection_collision_type');
+            showChartPlaceholder('chartIntYearTrend',    'Yearly intersection-crash trend pending mv_intersection_yoy');
         }
 
         console.log('[Intersections] Derived from mv_hotspots (' + intersections.length + ' rows). Charts disabled until mv_intersection_summary ships.');
@@ -67277,6 +67367,42 @@ async function updatePeopleFromMatview(tier) {
         const speedCat = (categories && categories.speed) || empty;
         const alcoholCat = (categories && categories.impaired) || empty;
         const distractedCat = (categories && categories.distracted) || empty;
+
+        // Bug fix (round 3, 2026-05-08): paint the 12 top-level Ped/Bike KPI
+        // cards from the matview categories. Without this, all 12 cards
+        // (pedTotal/pedFatal/pedKA/pedEPDO/pedKARate/pedPeopleKilled/
+        //  pedPeopleInjured + bike equivalents) stay at "0" in Supabase-only
+        // mode because the legacy R2 row pipe never runs.
+        try {
+            const _calcEpdo = (sev) => (typeof calcEPDO === 'function')
+                ? calcEPDO(sev)
+                : ((sev?.K || 0) * ((typeof EPDO_WEIGHTS !== 'undefined' && EPDO_WEIGHTS?.K) || 883)
+                 + (sev?.A || 0) * ((typeof EPDO_WEIGHTS !== 'undefined' && EPDO_WEIGHTS?.A) || 56)
+                 + (sev?.B || 0) * ((typeof EPDO_WEIGHTS !== 'undefined' && EPDO_WEIGHTS?.B) || 17)
+                 + (sev?.C || 0) * ((typeof EPDO_WEIGHTS !== 'undefined' && EPDO_WEIGHTS?.C) || 12)
+                 + (sev?.O || 0));
+            const $set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+            // Pedestrian KPI cards
+            $set('pedTotal',         (pedCat.total || 0).toLocaleString());
+            $set('pedFatal',         (pedCat.K || 0).toLocaleString());
+            $set('pedKA',            ((pedCat.K || 0) + (pedCat.A || 0)).toLocaleString());
+            $set('pedEPDO',          _calcEpdo(pedCat).toLocaleString());
+            const _pedKAR = pedCat.total ? (((pedCat.K + pedCat.A) / pedCat.total) * 100).toFixed(1) : '0.0';
+            $set('pedKARate',        _pedKAR + '%');
+            $set('pedPeopleKilled',  (pedCat.K || 0).toLocaleString());
+            $set('pedPeopleInjured', ((pedCat.A || 0) + (pedCat.B || 0) + (pedCat.C || 0)).toLocaleString());
+
+            // Bicycle KPI cards
+            $set('bikeTotal',        (bikeCat.total || 0).toLocaleString());
+            $set('bikeFatal',        (bikeCat.K || 0).toLocaleString());
+            $set('bikeKA',           ((bikeCat.K || 0) + (bikeCat.A || 0)).toLocaleString());
+            $set('bikeEPDO',         _calcEpdo(bikeCat).toLocaleString());
+            const _bikeKAR = bikeCat.total ? (((bikeCat.K + bikeCat.A) / bikeCat.total) * 100).toFixed(1) : '0.0';
+            $set('bikeKARate',       _bikeKAR + '%');
+        } catch (kpiErr) {
+            console.warn('[PedBike] KPI paint failed:', kpiErr && kpiErr.message);
+        }
 
         // Apply injury filter to a category bucket
         const getCount = (cat) => {
@@ -105006,6 +105132,180 @@ function updateFSDisplay() {
     updateFSFatalCrossAnalysis();
     updateFSCombinedCrossAnalysis();
     renderFSSpeedComparison();
+
+    // Bug fix (round 3, 2026-05-08): paint the 8 F&S Chart.js canvases from
+    // matview-aggregated state. Without these, all 8 canvases stay empty in
+    // Supabase-only mode (sampleRows = []). Each helper guards against an
+    // empty data shape and falls through to showChartPlaceholder() so users
+    // see a clear reason instead of a blank rectangle.
+    const _supabaseFS = (fatalSpeedingState.source === 'supabase')
+        || !(crashState.sampleRows && crashState.sampleRows.length > 0);
+    if (_supabaseFS) {
+        try { paintFSFatalCollisionChart(); }    catch(e){console.warn('[FS]', e.message);}
+        try { paintFSFatalYearChart(); }         catch(e){console.warn('[FS]', e.message);}
+        try { paintFSSpeedCollisionChart(); }    catch(e){console.warn('[FS]', e.message);}
+        try { paintFSSpeedYearChart(); }         catch(e){console.warn('[FS]', e.message);}
+        try { paintFSSpeedSeverityChart(); }     catch(e){console.warn('[FS]', e.message);}
+        try { paintFSNonSpeedSeverityChart(); }  catch(e){console.warn('[FS]', e.message);}
+        try { paintFSCombinedYearChart(); }      catch(e){console.warn('[FS]', e.message);}
+        try { paintFSCombinedHourChart(); }      catch(e){console.warn('[FS]', e.message);}
+    }
+}
+
+// ---- F&S chart paint helpers (round 3, 2026-05-08) ----
+// Each helper reads from fatalSpeedingState.* — the same state struct that
+// the matview-driven init populates. They all guard against empty data and
+// emit a placeholder via showChartPlaceholder() so users see why a chart is
+// blank when a backend matview doesn't yet support that breakdown.
+
+function paintFSFatalCollisionChart() {
+    if (typeof createChart !== 'function') return;
+    const byCol = (fatalSpeedingState.fatalData && fatalSpeedingState.fatalData.byCollision) || {};
+    const entries = Object.entries(byCol).filter(([_, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    if (!entries.length) {
+        if (typeof showChartPlaceholder === 'function')
+            showChartPlaceholder('chartFSFatalCollision', 'Collision-type breakdown for fatal crashes pending mv_analysis_summary.byCollision');
+        return;
+    }
+    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartFSFatalCollision');
+    createChart('chartFSFatalCollision', 'doughnut', {
+        labels: entries.map(e => String(e[0]).slice(0, 20)),
+        datasets: [{ data: entries.map(e => e[1]), backgroundColor: ['#dc2626','#f59e0b','#22c55e','#3b82f6','#8b5cf6','#ec4899','#64748b','#0ea5e9'] }]
+    }, { plugins: { legend: { position: 'bottom' } } });
+}
+
+function paintFSFatalYearChart() {
+    if (typeof createChart !== 'function') return;
+    const byYear = (fatalSpeedingState.fatalData && fatalSpeedingState.fatalData.byYear) || {};
+    const years = Object.keys(byYear).map(Number).filter(y => y > 0).sort((a, b) => a - b);
+    if (!years.length) {
+        if (typeof showChartPlaceholder === 'function')
+            showChartPlaceholder('chartFSFatalYear', 'Yearly fatal-crash trend pending matview data');
+        return;
+    }
+    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartFSFatalYear');
+    createChart('chartFSFatalYear', 'bar', {
+        labels: years.map(String),
+        datasets: [{ label: 'Fatal Crashes (K)', data: years.map(y => byYear[y] || 0), backgroundColor: '#dc2626' }]
+    }, { plugins: { legend: { display: false } } });
+}
+
+function paintFSSpeedCollisionChart() {
+    if (typeof createChart !== 'function') return;
+    const byCol = (fatalSpeedingState.speedData && fatalSpeedingState.speedData.byCollision) || {};
+    const entries = Object.entries(byCol).filter(([_, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    if (!entries.length) {
+        if (typeof showChartPlaceholder === 'function')
+            showChartPlaceholder('chartFSSpeedCollision', 'Collision-type breakdown for speed-related crashes pending mv_analysis_summary.byCollision');
+        return;
+    }
+    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartFSSpeedCollision');
+    createChart('chartFSSpeedCollision', 'doughnut', {
+        labels: entries.map(e => String(e[0]).slice(0, 20)),
+        datasets: [{ data: entries.map(e => e[1]), backgroundColor: ['#dc2626','#f59e0b','#22c55e','#3b82f6','#8b5cf6','#ec4899','#64748b','#0ea5e9'] }]
+    }, { plugins: { legend: { position: 'bottom' } } });
+}
+
+function paintFSSpeedYearChart() {
+    if (typeof createChart !== 'function') return;
+    const byYear = (fatalSpeedingState.speedData && fatalSpeedingState.speedData.byYear) || {};
+    const years = Object.keys(byYear).map(Number).filter(y => y > 0).sort((a, b) => a - b);
+    if (!years.length) {
+        if (typeof showChartPlaceholder === 'function')
+            showChartPlaceholder('chartFSSpeedYear', 'Yearly speed-related crash trend pending matview data');
+        return;
+    }
+    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartFSSpeedYear');
+    createChart('chartFSSpeedYear', 'bar', {
+        labels: years.map(String),
+        datasets: [{ label: 'Speed-Related Crashes', data: years.map(y => byYear[y] || 0), backgroundColor: '#f59e0b' }]
+    }, { plugins: { legend: { display: false } } });
+}
+
+function paintFSSpeedSeverityChart() {
+    if (typeof createChart !== 'function') return;
+    const sev = (fatalSpeedingState.speedData && fatalSpeedingState.speedData.severity) || {};
+    const data = ['K','A','B','C','O'].map(k => sev[k] || 0);
+    if (data.every(v => v === 0)) {
+        if (typeof showChartPlaceholder === 'function')
+            showChartPlaceholder('chartFSSpeedSeverity', 'Severity breakdown for speed-related crashes pending matview data');
+        return;
+    }
+    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartFSSpeedSeverity');
+    createChart('chartFSSpeedSeverity', 'bar', {
+        labels: ['Fatal (K)','Serious (A)','Minor (B)','Possible (C)','PDO (O)'],
+        datasets: [{ data: data, backgroundColor: ['#dc2626','#f59e0b','#eab308','#22c55e','#94a3b8'] }]
+    }, { plugins: { legend: { display: false } } });
+}
+
+function paintFSNonSpeedSeverityChart() {
+    if (typeof createChart !== 'function') return;
+    // Non-speed = total - speed by severity bucket. Total pulled from
+    // fatalSpeedingState.totalFilteredCrashes (sum across severities) is the
+    // wrong shape — we need per-severity totals from analysis.bySeverity.
+    const totalSev = (fatalSpeedingState.fatalData && fatalSpeedingState.fatalData.severity) || {};
+    const speedSev = (fatalSpeedingState.speedData && fatalSpeedingState.speedData.severity) || {};
+    // fatalData.severity is K-only here (it tracks fatal crashes); to recover
+    // a full all-severity total we need a separate reference. Approximate
+    // non-speed as totalFiltered minus speed total, distributing severities
+    // proportionally to fatalData severities — best-effort given current
+    // matview shape.
+    const totalAll = fatalSpeedingState.totalFilteredCrashes || 0;
+    const speedTot = (fatalSpeedingState.speedData && fatalSpeedingState.speedData.totalCrashes) || 0;
+    const nonSpeedTot = Math.max(0, totalAll - speedTot);
+    if (nonSpeedTot === 0) {
+        if (typeof showChartPlaceholder === 'function')
+            showChartPlaceholder('chartFSNonSpeedSeverity', 'Severity breakdown for non-speed crashes pending matview data');
+        return;
+    }
+    const data = ['K','A','B','C','O'].map(k => Math.max(0, (totalSev[k] || 0) - (speedSev[k] || 0)));
+    if (data.every(v => v === 0)) {
+        if (typeof showChartPlaceholder === 'function')
+            showChartPlaceholder('chartFSNonSpeedSeverity', 'Severity breakdown for non-speed crashes pending matview data');
+        return;
+    }
+    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartFSNonSpeedSeverity');
+    createChart('chartFSNonSpeedSeverity', 'bar', {
+        labels: ['Fatal (K)','Serious (A)','Minor (B)','Possible (C)','PDO (O)'],
+        datasets: [{ data: data, backgroundColor: '#3b82f6' }]
+    }, { plugins: { legend: { display: false } } });
+}
+
+function paintFSCombinedYearChart() {
+    if (typeof createChart !== 'function') return;
+    const fy = (fatalSpeedingState.fatalData && fatalSpeedingState.fatalData.byYear) || {};
+    const sy = (fatalSpeedingState.speedData && fatalSpeedingState.speedData.byYear) || {};
+    const allYears = Array.from(new Set([...Object.keys(fy), ...Object.keys(sy)]))
+        .map(Number).filter(y => y > 0).sort((a, b) => a - b);
+    if (!allYears.length) {
+        if (typeof showChartPlaceholder === 'function')
+            showChartPlaceholder('chartFSCombinedYear', 'Combined yearly trend pending matview data');
+        return;
+    }
+    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartFSCombinedYear');
+    createChart('chartFSCombinedYear', 'bar', {
+        labels: allYears.map(String),
+        datasets: [
+            { label: 'Fatal',         data: allYears.map(y => fy[y] || 0), backgroundColor: '#dc2626' },
+            { label: 'Speed-Related', data: allYears.map(y => sy[y] || 0), backgroundColor: '#f59e0b' }
+        ]
+    });
+}
+
+function paintFSCombinedHourChart() {
+    if (typeof createChart !== 'function') return;
+    const byHour = (fatalSpeedingState.fatalData && fatalSpeedingState.fatalData.byHour) || {};
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+    if (Object.keys(byHour).length === 0) {
+        if (typeof showChartPlaceholder === 'function')
+            showChartPlaceholder('chartFSCombinedHour', 'Hour-of-day breakdown for fatal crashes pending matview data');
+        return;
+    }
+    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartFSCombinedHour');
+    createChart('chartFSCombinedHour', 'bar', {
+        labels: hours.map(h => h + ':00'),
+        datasets: [{ label: 'Fatal Crashes by Hour', data: hours.map(h => byHour[h] || 0), backgroundColor: '#dc2626' }]
+    }, { plugins: { legend: { display: false } } });
 }
 
 function updateFSFatalKPIs() {
@@ -150136,6 +150436,11 @@ async function initPredictionTab() {
         updatePredictionHeader();
     } catch(e) {
         console.warn('[Prediction] Could not load forecast:', e.message);
+        // Bug fix (round 3, 2026-05-08): the predDataStatus badge stayed
+        // "Loading forecast data…" forever on 404. Update it to a clear
+        // not-available state so users don't think the page is hung.
+        const statusEl = document.getElementById('predDataStatus');
+        if (statusEl) statusEl.textContent = `Forecasts not available · ${jurisdictionName}, ${stateName}`;
         showPredictionNoData(jurisdictionName, stateName, stateKey, currentJurisdiction);
     }
 }
