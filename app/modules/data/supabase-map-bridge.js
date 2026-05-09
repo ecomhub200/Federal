@@ -414,6 +414,11 @@ CL.data.mapBridge = (function () {
         el = document.getElementById('mapFatal');   if (el) el.textContent = stats.fatal;
         el = document.getElementById('mapSerious'); if (el) el.textContent = stats.serious;
         el = document.getElementById('mapEPDO');    if (el) el.textContent = stats.epdo.toLocaleString();
+        // Bug fix (round 3, 2026-05-08): K+A Combined + KA Rate added to Stats
+        // panel (matches Dashboard naming). Computed from fatal + serious.
+        var _ka = (stats.fatal || 0) + (stats.serious || 0);
+        el = document.getElementById('mapKA');     if (el) el.textContent = _ka.toLocaleString();
+        el = document.getElementById('mapKARate'); if (el) el.textContent = (stats.total > 0 ? ((_ka / stats.total) * 100).toFixed(1) : '0.0') + '%';
 
         // Show "viewport" label instead of "of Y" since we're showing viewport data
         el = document.getElementById('mapOfTotal'); if (el) el.textContent = '(viewport)';
