@@ -175,6 +175,17 @@ input,select{width:100%;padding:.3rem .45rem;border:1px solid var(--bd);border-r
 
 <div class="wrap">
 
+<!-- ═══ DEPENDENCY EMPTY-STATE — explains why the map is empty when nothing is loaded ═══ -->
+<div id="defDependencyHint" style="background:#fef3c7;border-left:4px solid #f59e0b;padding:1rem 1.25rem;border-radius:6px;margin-bottom:1rem;font-size:0.9rem;line-height:1.5">
+  <strong>🔧 Asset Deficiency Analysis Pending</strong><br>
+  This view identifies intersections where MUTCD-required signs are missing AND crashes have occurred. It depends on:
+  <ul style="margin:0.4rem 0 0 1.25rem;padding:0">
+    <li>A configured <strong>Mapillary API token</strong> (set in <strong>Settings → API Keys</strong>)</li>
+    <li>An asset inventory loaded via the <strong>Inventory Manager</strong> tab (or uploaded directly below)</li>
+  </ul>
+  Once both are in place — or after you click <strong>Run Analysis</strong> with the data sources above — this banner will hide automatically.
+</div>
+
 <!-- ═══ INPUT SECTION — collapsible after analysis ═══ -->
 <div id="inputSection">
 <div class="input-grid">
@@ -822,6 +833,7 @@ function pedTreatment(spd,fcCode){
 // ═══════════════════════════════════════════════════════════
 async function runAnalysis(){
   if(!CRASH.length){toast('Load crash data first','err');return}
+  const hint=document.getElementById('defDependencyHint');if(hint)hint.style.display='none';
   const btn=$('runBtn');btn.disabled=true;btn.innerHTML='<span class="spin"></span> Analyzing...';
   $('progW').classList.remove('hidden');$('logbox').innerHTML='';$('logbox').classList.remove('hidden');$('pS').textContent='Analyzing...';DEFS=[];
   $('mapProg').classList.remove('hidden');$('mapProgTxt').textContent='Parsing crashes...';

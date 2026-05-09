@@ -303,12 +303,26 @@ CL.data.mapBridge = (function () {
         var heatData = [];
         var isHeat = (typeof currentMapMode !== 'undefined' && currentMapMode === 'heat');
 
+        // For Heatmap mode, normalize cluster intensity by max cluster size so
+        // dense areas register visibly even when the K+A ratio is small.
+        var maxClusterCount = 1;
+        if (isHeat) {
+            for (var mi = 0; mi < rows.length; mi++) {
+                if (rows[mi].is_cluster && rows[mi].n > maxClusterCount) {
+                    maxClusterCount = rows[mi].n;
+                }
+            }
+        }
+
         for (var i = 0; i < rows.length; i++) {
             var r = rows[i];
             if (r.is_cluster) {
                 if (isHeat) {
-                    var intensity = ((r.fatals || 0) + (r.serious || 0)) / Math.max(r.n, 1);
-                    heatData.push([r.cy, r.cx, Math.max(intensity, 0.3)]);
+                    // Weight by cluster size (n / maxN) so density is visible
+                    var sizeWeight = Math.min(1.0, r.n / maxClusterCount);
+                    var sevWeight = ((r.fatals || 0) + (r.serious || 0)) / Math.max(r.n, 1);
+                    var intensity = Math.max(sizeWeight, sevWeight, 0.3);
+                    heatData.push([r.cy, r.cx, intensity]);
                 } else {
                     var synth = _synthMarkersForCluster(r);
                     for (var s = 0; s < synth.length; s++) allMarkers.push(synth[s]);
@@ -328,7 +342,7 @@ CL.data.mapBridge = (function () {
         if (isHeat && heatData.length > 0) {
             if (typeof L !== 'undefined' && L.heatLayer) {
                 heatLayer = L.heatLayer(heatData, {
-                    radius: 20, blur: 15, maxZoom: 17,
+                    radius: 25, blur: 18, maxZoom: 17, minOpacity: 0.4,
                     gradient: { 0.2: '#22c55e', 0.4: '#eab308', 0.6: '#f97316', 0.8: '#ef4444', 1.0: '#dc2626' }
                 }).addTo(crashMap);
             }
