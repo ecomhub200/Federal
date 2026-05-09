@@ -25,6 +25,7 @@ CL.data.mapBridge = (function () {
     var _lastZoom = null;
     var _lastBounds = null;
     var _totalInViewport = 0;           // total crash count from clusters (for stats overlay)
+    var _attachRetries = 0;             // Round-4 Patch 5 — retry counter for deferred attach
 
     // ── Severity colors (match createMarker) ────────────────
     var SEV_COLORS = { K: '#dc2626', A: '#ea580c', B: '#eab308', C: '#22c55e', O: '#64748b' };
@@ -36,10 +37,23 @@ CL.data.mapBridge = (function () {
      * Call this ONCE after initMap() creates the Leaflet map.
      */
     function attach() {
+        // Round-4 Patch 5 — defer attach until crashMap exists. Tier changes
+        // destroy + re-create the Leaflet map; the bridge's attach() can fire
+        // before the new instance is live in `crashMap`. Previously the bridge
+        // silently no-op'd and the user had to manually click Map again to
+        // re-trigger the attach.
         if (typeof crashMap === 'undefined' || !crashMap) {
-            console.warn('[MapBridge] crashMap not ready, skipping attach');
+            if (_attachRetries < 5) {
+                _attachRetries += 1;
+                console.log('[MapBridge] crashMap not ready, retrying in 250ms (attempt ' + _attachRetries + ')');
+                setTimeout(attach, 250);
+                return;
+            }
+            console.warn('[MapBridge] crashMap not ready after 5 retries; giving up. Tab open will re-trigger.');
+            _attachRetries = 0;
             return;
         }
+        _attachRetries = 0;
         if (!window.crashLensClient || typeof window.crashLensClient.getViewportCrashes !== 'function') {
             console.log('[MapBridge] No Supabase client with getViewportCrashes, disabled');
             return;

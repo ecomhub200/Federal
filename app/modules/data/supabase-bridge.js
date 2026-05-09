@@ -29,6 +29,14 @@ CL.data.supabaseBridge = (function () {
     var _workerSeq = 0;
     var _workerWaiting = {};   // id → {resolve, reject}
 
+    // Round-4 Patch 2 — in-flight dedup. Console showed
+    // "[Phase2] Fetching summary from Supabase" + "[Phase2] Supabase bridge
+    // injected" firing twice per filter change because saveFilterProfile and
+    // the tier-change handler both call injectFastDashboard. Collapse calls
+    // with the same {tier, value, spec} into a single fetch.
+    var _injectInflight = null;
+    var _injectLastSpecKey = null;
+
     /**
      * Lazily spin up the agg-worker. Returns null if Workers aren't supported
      * or the script can't be reached — callers fall back to main-thread
@@ -599,7 +607,41 @@ CL.data.supabaseBridge = (function () {
         if (el) el.remove();
     }
 
+    // Round-4 Patch 2 — dedup wrapper. Routes all callers through a single
+    // promise when {tier, value, spec} matches the in-flight request. force:true
+    // is honored: it cancels the dedup and forces a new fetch.
     async function injectFastDashboard(opts) {
+        var force = !!(opts && opts.force);
+        var specKey = '';
+        try {
+            var tDedup = resolveTier();
+            var specDedup = roadTypeSpec();
+            specKey = JSON.stringify([
+                tDedup && tDedup.tier, tDedup && tDedup.value,
+                specDedup && specDedup.roadType,
+                specDedup && specDedup.roadTypes,
+                specDedup && specDedup.noInterstate
+            ]);
+        } catch (e) { /* tolerable */ }
+
+        if (_injectInflight && specKey && specKey === _injectLastSpecKey) {
+            // Same spec already in flight — reuse it. Even with force:true we
+            // don't re-fire because the in-flight call IS the freshest fetch.
+            return _injectInflight;
+        }
+
+        _injectLastSpecKey = specKey;
+        _injectInflight = (async function () {
+            try {
+                return await _injectFastDashboardImpl(opts);
+            } finally {
+                _injectInflight = null;
+            }
+        })();
+        return _injectInflight;
+    }
+
+    async function _injectFastDashboardImpl(opts) {
         var force = !!(opts && opts.force);
 
         // Ensure Supabase client uses the currently active state.
@@ -819,6 +861,20 @@ CL.data.supabaseBridge = (function () {
             console.log('[Phase2] Supabase bridge injected', {
                 tier: t.tier, value: t.value, rows: rows.length, total: agg.total
             });
+
+            // Round-4 Patch 6 — log every successful inject (not just the
+            // tier-change ones) so the console clearly shows which filter spec
+            // produced the visible KPI numbers. Lets the user correlate a
+            // displayed KPI total with the road-type radio they clicked.
+            try {
+                console.log('[CrashLens] Bridge inject:', {
+                    state: window.crashLensClient && window.crashLensClient.state,
+                    tier: t.tier,
+                    value: t.value,
+                    spec: spec,
+                    totalCrashes: agg && agg.total
+                });
+            } catch (logErr) { /* non-fatal */ }
 
             // Bug G: ensure crashState.loaded = true so detail tabs (which all
             // gate on this flag) don't bail before their matview path runs.
