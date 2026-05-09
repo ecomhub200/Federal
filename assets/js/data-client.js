@@ -759,6 +759,22 @@ class CrashLensDataClient {
           rows = [...merged.values()].sort((a, b) => (b.epdo || 0) - (a.epdo || 0));
         }
 
+        // Bug 13a fix — drop "fake" hotspots where location_name is "0" (or
+        // empty / NaN). These are the matview's catch-all bucket for crashes
+        // that lack a specific node OR route — they aggregate per (county,
+        // road_type) and produce inflated EPDO scores that pile to the top
+        // of the ranking but aren't actionable locations. Detail PDFs on
+        // these rows fail because sampleRows can't match the placeholder.
+        // Jurisdiction-agnostic: keys on the "0" sentinel value, not on
+        // any state/county name.
+        rows = rows.filter(r => {
+            const ln = String(r.location_name || '').trim();
+            if (!ln || ln === '0' || ln === '0.0') {
+                return r.rte_name && String(r.rte_name).trim();
+            }
+            return true;
+        });
+
         // Group by location_type into the shape the Hot Spots tab expects,
         // applying the requested limit per group.
         const intersections = [], segments = [];
@@ -985,6 +1001,48 @@ class CrashLensDataClient {
         return out;
       } catch (e) {
         console.warn('[DataClient] getAnalysisBreakdown failed (matview missing?):', e.message);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * Per-tier intersection breakdowns for the Intersections tab.
+   * Source: mv_intersection_summary (deployed 2026-05-05).
+   *
+   * Each row is one (state, county, region, mpo, PD, road_type, is_interstate,
+   * intersection_type, traffic_control_type, crash_year) bucket. Filter and
+   * pivot client-side for chart rendering.
+   *
+   * @param {string} tier
+   * @param {string} value
+   * @param {object} opts - { roadType, roadTypes, noInterstate, yearFrom, yearTo }
+   * @returns {Promise<Array|null>} rows: { intersection_type, traffic_control_type,
+   *           crash_year, total, k, a, b, c, o, ka, epdo }
+   */
+  async getIntersectionSummary(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getIntersectionSummary', state: this.state, tier, value, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value);
+        const allFilters = { ...tierFilters };
+        this._applyRoadTypeMatviewFilters(allFilters, opts);
+        if (opts.yearFrom && opts.yearTo) {
+          allFilters.and = `(crash_year.gte.${opts.yearFrom},crash_year.lte.${opts.yearTo})`;
+        }
+        const data = await this._supabaseQuery('mv_intersection_summary', {
+          select: 'intersection_type,traffic_control_type,crash_year,total,k,a,b,c,o,ka,epdo',
+          filters: allFilters,
+          limit: 50000,
+        });
+        this._source = 'supabase';
+        this._warnIfZeroRows('mv_intersection_summary', data, tier, value, opts);
+        return (data || []);
+      } catch (e) {
+        console.warn('[DataClient] getIntersectionSummary failed:', e.message);
         return null;
       }
     });

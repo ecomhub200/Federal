@@ -6762,10 +6762,22 @@ Analyzing risk factors...
 
 <!-- Analysis Sub-Navigation -->
 <div class="analysis-subnav">
+<button class="analysis-subtab" data-subtab="crashanalysis" onclick="switchAnalysisSubtab('crashanalysis')">📊 Crash Analysis</button>
 <button class="analysis-subtab active" data-subtab="infrastructure" onclick="switchAnalysisSubtab('infrastructure')">🚦 Infrastructure Assets</button>
 <button class="analysis-subtab" data-subtab="trafficinventory" onclick="switchAnalysisSubtab('trafficinventory')">🗺️ Traffic Inventory</button>
 <button class="analysis-subtab" data-subtab="inventorymanager" onclick="switchAnalysisSubtab('inventorymanager')">📋 Inventory Manager</button>
 <button class="analysis-subtab" data-subtab="assetdeficiency" onclick="switchAnalysisSubtab('assetdeficiency')">🔧 Asset Deficiency</button>
+</div>
+
+<!-- CRASH ANALYSIS SUB-TAB (Bug 17 — populated from mv_analysis_summary at aggregate tiers) -->
+<div id="analysis-crashanalysis" class="analysis-subtab-content" style="display:none">
+<h3 style="margin:0 0 1rem 0">📊 Crash Analysis</h3>
+<div class="card-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:1rem">
+<div class="chart-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1rem"><div class="chart-title" style="font-weight:600;margin-bottom:.5rem">📅 Crashes by Year</div><div class="chart-container" style="height:240px"><canvas id="anaChartYear"></canvas></div></div>
+<div class="chart-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1rem"><div class="chart-title" style="font-weight:600;margin-bottom:.5rem">📆 Crashes by Month</div><div class="chart-container" style="height:240px"><canvas id="anaChartMonth"></canvas></div></div>
+<div class="chart-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1rem"><div class="chart-title" style="font-weight:600;margin-bottom:.5rem">⚠️ By Severity</div><div class="chart-container" style="height:240px"><canvas id="anaChartSeverity"></canvas></div></div>
+<div class="chart-card" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1rem"><div class="chart-title" style="font-weight:600;margin-bottom:.5rem">💥 By Collision Type</div><div class="chart-container" style="height:240px"><canvas id="anaChartCollision"></canvas></div></div>
+</div>
 </div>
 
 <!-- INFRASTRUCTURE ASSETS SUB-TAB -->
@@ -32076,7 +32088,7 @@ function showTab(tabId) {
         return; // Don't run tab init yet — data not ready
     }
 
-    if (tabId === 'map' && crashState.loaded) {
+    if (tabId === 'map' && (crashState.loaded || _supabaseTabReady('getViewportCrashes'))) {
         if (!crashMap) {
             setTimeout(initMap, 100);
         } else {
@@ -32236,14 +32248,37 @@ function showTab(tabId) {
             crashTreeState.loaded = false;
             initCrashTreeTab();
         } else {
-            buildCrashTreeData();
+            // Bug fix (2026-05-08): in Supabase-only mode, crashTreeState.treeData
+            // was built from mv_crash_tree by initCrashTreeFromMatview().
+            // buildCrashTreeData() reads crashState.sampleRows which is [] in
+            // Supabase mode and would null out treeData. Repaint from existing
+            // state instead of re-running the row pipeline.
+            var _ctSupabaseMode =
+                crashTreeState.source === 'supabase' ||
+                !(crashState.sampleRows && crashState.sampleRows.length > 0);
+            if (_ctSupabaseMode) {
+                if (typeof renderCrashTree === 'function') renderCrashTree();
+                if (typeof updateCrashTreeStats === 'function') updateCrashTreeStats();
+            } else {
+                buildCrashTreeData();
+            }
         }
     }
     if (tabId === 'analysis' && (crashState.loaded || _supabaseTabReady('getAnalysisBreakdown'))) updateAnalysis();
-    if (tabId === 'intersection' && crashState.loaded) updateIntersectionTab();
+    if (tabId === 'intersection' && (crashState.loaded || _supabaseTabReady('getHotspots'))) updateIntersectionTab();
     if (tabId === 'pedestrian' && crashState.loaded) updatePedBikeTab();
-    if (tabId === 'hotspots' && crashState.loaded && !crashState.hotspots.length) analyzeHotspots();
-    if (tabId === 'cmf' && !cmfState.loaded) loadCMFDatabase();
+    if (tabId === 'hotspots' && (crashState.loaded || _supabaseTabReady('getHotspots')) && !crashState.hotspots.length) analyzeHotspots();
+    if (tabId === 'cmf') {
+        if (!cmfState.loaded) {
+            loadCMFDatabase();
+        } else if (typeof populateCMFLocations === 'function') {
+            // Bug 7 fix — rebuild dropdown each time CMF is opened so a tier
+            // change between visits is reflected. populateCMFLocations() reads
+            // crashState.aggregates first and falls back to crashState.hotspots
+            // via the matview path inside buildLocationData().
+            populateCMFLocations();
+        }
+    }
     if (tabId === 'grants' && !grantState.loaded) initGrantModule();
     if (tabId === 'grants') initDistrictStatisticsOnGrantsTab();  // Initialize district stats section
     if (tabId === 'warrants') {
@@ -32262,7 +32297,7 @@ function showTab(tabId) {
         // Hide/show empty state based on data availability
         const safetyEmptyState = document.getElementById('safetyEmptyState');
         const safetyContainer = document.querySelector('.safety-focus-container');
-        if (crashState.loaded) {
+        if (crashState.loaded || _supabaseTabReady('getSafetyCategories')) {
             if (safetyEmptyState) safetyEmptyState.style.display = 'none';
             if (safetyContainer) safetyContainer.style.display = '';
             if (!safetyState.loaded) {
@@ -32298,7 +32333,19 @@ function showTab(tabId) {
             fatalSpeedingState.loaded = false;
             initFatalSpeedingTab();
         } else {
-            applyFSFilters();
+            // Bug fix (2026-05-08): in Supabase-only mode, fatalSpeedingState was
+            // populated from matviews by initFatalSpeedingFromMatview(). The
+            // legacy applyFSFilters() path resets state and iterates
+            // crashState.sampleRows, which is [] in Supabase mode — wiping the
+            // matview data we just loaded. Detect Supabase mode and just repaint.
+            var _fsSupabaseMode =
+                fatalSpeedingState.source === 'supabase' ||
+                !(crashState.sampleRows && crashState.sampleRows.length > 0);
+            if (_fsSupabaseMode) {
+                updateFSDisplay();
+            } else {
+                applyFSFilters();
+            }
         }
     }
     if (tabId === 'scorecard') {
@@ -36241,34 +36288,18 @@ function yieldToUI() {
 
 // Main ranking function - now async with chunked processing and caching
 async function rankLocationsForGrants() {
-    // Aggregate tiers have no row-level R2 data and mv_grants_baseline isn't
-    // yet populated for those tiers. Render the empty-state instead of
-    // ranking against stale county-tier sampleRows.
-    try {
-        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
-        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
-            const _container = document.getElementById('tab-grants');
-            if (_container) {
-                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
-                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
-                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
-                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
-                    '</div>';
-            }
-            return;
-        }
-    } catch (e) { /* non-fatal — fall through to normal init */ }
-
-    if (!crashState.loaded) return;
-
-    // Round 5 Fix 4 — at county-rollup tier sampleRows is empty.
-    // Pull grant-ready locations from mv_grants_baseline instead of running
-    // the row-level scoring path against the empty array.
+    // Try matview path first — mv_grants_baseline is populated at every tier
+    // (federal/state/region/MPO/PD/county/city) after PR #68's column-alias fix.
+    // The matview path doesn't depend on crashState.loaded (which only flips
+    // after sampleRows is hydrated, never at aggregate tiers where R2 is skipped).
     const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
-    if (!_hasSampleRows) {
+    const _matviewReady = !!(typeof CL !== 'undefined' && CL.data && CL.data.client && typeof CL.data.client.getGrantsBaseline === 'function');
+    if (_matviewReady && !_hasSampleRows) {
         await _loadGrantsFromMatview();
         return;
     }
+
+    if (!crashState.loaded) return;
 
     // Ensure sampleRows are loaded (lazy loading after Worker parse)
     if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
@@ -50416,24 +50447,6 @@ function isValidMapPoint(p) {
 function initMap() {
     if (crashMap) return;
 
-    // Aggregate tiers (region/MPO/PD/state/federal) have no row-level data on
-    // R2 and the map_viewport_crashes RPC currently times out at those tiers.
-    // Render an empty-state instead of running with stale data.
-    try {
-        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
-        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
-            const _container = document.getElementById('tab-map');
-            if (_container) {
-                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
-                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
-                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
-                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
-                    '</div>';
-            }
-            return;
-        }
-    } catch (e) { /* non-fatal — fall through to normal init */ }
-
     // Find center from data or use selected jurisdiction's center
     let center = MAP_CENTER; // Dynamic based on selected jurisdiction
     let zoom = MAP_ZOOM;
@@ -50625,6 +50638,65 @@ function initMap() {
             CL.data.mapBridge.refresh();
         }
     } catch (e) { /* non-fatal */ }
+
+    // Bug 18 fix v2 — defensive inline viewport loader that calls the PostGIS
+    // RPC (crashLensClient.getViewportCrashes) directly. mapBridge does this
+    // already when its module is loaded; this fallback covers the case where
+    // mapBridge isn't attached for some reason (boot order, detach not
+    // re-attached after a tier switch, etc.) so the Map tab is never blank
+    // at aggregate / rolled-up tiers. Returns clusters at low zoom and
+    // individual crash rows at high zoom (RPC behavior).
+    async function _loadViewportFromMatview() {
+        if (!window.crashLensClient || !crashMap) return false;
+        // Skip if mapBridge already owns the layers — no double-fetch.
+        if (CL.data && CL.data.mapBridge && CL.data.mapBridge.isActive
+            && CL.data.mapBridge.isActive()) return false;
+        try {
+            const _b = crashMap.getBounds();
+            const _bounds = {
+                south: _b.getSouth(), west: _b.getWest(),
+                north: _b.getNorth(), east: _b.getEast()
+            };
+            const _zoom = crashMap.getZoom();
+            const _tr = (window.CL && CL.data && CL.data.supabaseBridge
+                         && typeof CL.data.supabaseBridge.resolveTier === 'function')
+                         ? CL.data.supabaseBridge.resolveTier() : null;
+            const rows = await window.crashLensClient.getViewportCrashes(
+                _bounds, _zoom, { tier: _tr && _tr.tier, value: _tr && _tr.value }
+            );
+            if (Array.isArray(rows) && rows.length > 0) {
+                // RPC shape — cx=lng, cy=lat, is_cluster flag at low zoom.
+                const pts = rows.map(r => ({
+                    lat: r.cy,
+                    lng: r.cx,
+                    sev: r.crash_severity || 'O',
+                    cluster: !!r.is_cluster,
+                    n: r.n || 1,
+                    fatals: r.fatals || 0,
+                    serious: r.serious || 0,
+                    epdo: r.epdo || 0,
+                    route: r['RTE Name'] || r.rte_name || r.route || null,
+                    docNum: r.objectid || r.document_nbr || null,
+                    date: r.crash_date || null
+                }));
+                crashState.mapPoints = pts;
+                if (typeof updateMapDisplay === 'function') updateMapDisplay();
+                console.log('[Map] Loaded ' + pts.length + ' viewport rows from PostGIS RPC ' +
+                    '(tier=' + ((_tr && _tr.tier) || 'state') + ' zoom=' + _zoom + ')');
+                return true;
+            }
+        } catch (e) {
+            console.warn('[Map] Viewport RPC failed:', e && e.message);
+        }
+        return false;
+    }
+    if (!crashState.sampleRows || crashState.sampleRows.length === 0) {
+        _loadViewportFromMatview();
+        if (crashMap && !crashMap._viewportListenerAttached) {
+            crashMap.on('moveend', _loadViewportFromMatview);
+            crashMap._viewportListenerAttached = true;
+        }
+    }
 }
 
 /**
@@ -50842,6 +50914,18 @@ function updateMapDisplay() {
     // (city/region/county/etc.) every time the map repaints, regardless of
     // whether MapBridge or the local renderer ends up drawing the markers.
     if (typeof updateMapScopeLabel === 'function') updateMapScopeLabel();
+
+    // Bug 18 — when sampleRows is empty (R2 skipped at county-roll-up or any
+    // aggregate tier), the legacy renderer below would draw nothing and the
+    // user sees a blank map with "No valid crash points". Attach the viewport
+    // map bridge on the fly so points are fetched from the PostGIS RPC for
+    // every pan/zoom. Idempotent — attach() guards against duplicate listeners.
+    var _mb = CL.data && CL.data.mapBridge;
+    var _sampleRowsEmpty = !crashState.mapPoints || crashState.mapPoints.length === 0;
+    if (_mb && typeof _mb.attach === 'function' && _sampleRowsEmpty
+        && (!_mb.isActive || !_mb.isActive())) {
+        try { _mb.attach(); _mb.refresh(); } catch (e) { /* non-fatal */ }
+    }
 
     // When the Supabase viewport map bridge is active (aggregate tiers, no
     // R2 sampleRows), it owns the cluster/marker/heat layers — running our
@@ -59148,6 +59232,29 @@ function aggregateHotspotDetailData() {
         };
     });
 
+    // Bug 14b — when sampleRows is empty (data sourced from mv_hotspots at
+    // aggregate tier), the per-row filter below would aggregate to zeros and
+    // the Detail PDF would print all zeros. Seed totals/severity/epdo from the
+    // matched matview hotspot rows so the PDF reflects real numbers; richer
+    // dimensions (byYear, byCollision, factors, etc.) remain empty until
+    // R2 row-level data is loaded.
+    const _sampleRowsEmpty = !crashState.sampleRows || crashState.sampleRows.length === 0;
+    if (_sampleRowsEmpty && Array.isArray(crashState.hotspots) && crashState.hotspots.length > 0) {
+        hotspotDetailState.selectedLocations.forEach(loc => {
+            const hs = crashState.hotspots.find(h => h.loc === loc);
+            if (!hs) return;
+            const sev = { K: hs.K || 0, A: hs.A || 0, B: hs.B || 0, C: hs.C || 0, O: hs.O || 0 };
+            data.total += hs.total || 0;
+            data.severity.K += sev.K; data.severity.A += sev.A;
+            data.severity.B += sev.B; data.severity.C += sev.C; data.severity.O += sev.O;
+            data.byLocation[loc].total = hs.total || 0;
+            data.byLocation[loc].severity = sev;
+        });
+        data.epdo = calcEPDO(data.severity);
+        hotspotDetailState.aggregatedData = data;
+        return;
+    }
+
     // Filter and aggregate crashes
     crashState.sampleRows.forEach(row => {
         // Check location match
@@ -59935,8 +60042,50 @@ function exportHotspotDetailCSV() {
 }
 
 function exportHotspotDetailPDF() {
-    const data = hotspotDetailState.aggregatedData;
+    let data = hotspotDetailState.aggregatedData;
     if (!data) { alert('No data to export'); return; }
+
+    // Bug 14b fix v2 — when the Hot Spots tab was populated from mv_hotspots,
+    // crashState.hotspots[] already carries the per-location totals
+    // (total / K / A / B / C / O / epdo). aggregateHotspotDetailData() falls
+    // back to those totals when sampleRows is empty, but this guard
+    // re-derives them here so the PDF cover always reflects matview numbers
+    // even if the caller forgot to refresh aggregatedData first. Per-row
+    // breakdowns (byYear, byCollision, factors, vru) only exist when
+    // sampleRows is loaded; show them as available.
+    const _selectedLocs = Array.isArray(hotspotDetailState.selectedLocations)
+        ? hotspotDetailState.selectedLocations
+        : [];
+    const _selectedHotspots = (Array.isArray(crashState.hotspots) ? crashState.hotspots : [])
+        .filter(h => _selectedLocs.length === 0
+            ? false
+            : _selectedLocs.includes(h.loc) || _selectedLocs.includes(h.nodeId));
+    const matviewSourced = _selectedHotspots.length > 0 &&
+        (!crashState.sampleRows || crashState.sampleRows.length === 0) &&
+        _selectedHotspots.every(h => typeof h.total === 'number' &&
+            (h.total > 0 || h.K > 0 || h.A > 0));
+    if (matviewSourced) {
+        const agg = _selectedHotspots.reduce((s, h) => ({
+            total: s.total + (h.total || 0),
+            K: s.K + (h.K || 0),
+            A: s.A + (h.A || 0),
+            B: s.B + (h.B || 0),
+            C: s.C + (h.C || 0),
+            O: s.O + (h.O || 0),
+            epdo: s.epdo + (h.epdo || 0),
+        }), { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, epdo: 0 });
+        // Override the aggregatedData totals/severity/epdo so the PDF cover
+        // KPIs match the matview. Leave the rich byYear/byCollision/factor
+        // dicts intact (they're empty at aggregate tier — the PDF renders
+        // empty bands gracefully).
+        data = Object.assign({}, data, {
+            total: agg.total,
+            severity: { K: agg.K, A: agg.A, B: agg.B, C: agg.C, O: agg.O },
+            epdo: agg.epdo
+        });
+        console.log('[Detail PDF] matviewSourced: using crashState.hotspots totals (' +
+            _selectedHotspots.length + ' locations, ' + agg.total + ' crashes).');
+    }
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4');
@@ -60279,29 +60428,14 @@ document.addEventListener('click', function(e) {
 });
 
 function analyzeHotspots() {
-    // Aggregate tiers have no row-level R2 data and mv_hotspots isn't yet
-    // populated for those tiers. Render the empty-state instead of running
-    // hotspot scoring with stale sampleRows from a previous county tier.
-    try {
-        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
-        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
-            const _container = document.getElementById('tab-hotspots');
-            if (_container) {
-                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
-                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
-                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
-                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
-                    '</div>';
-            }
-            return;
-        }
-    } catch (e) { /* non-fatal — fall through to normal init */ }
-
-    // Round 5 Fix 2 — when sampleRows is empty (county-rollup or post-bridge
-    // load with no R2), pull top locations from mv_hotspots instead of running
-    // CL.analysis.hotspots.scoreAndRank() against the empty array.
+    // mv_hotspots is populated for every tier (federal/state/region/MPO/PD/county/city)
+    // after PR #68 fixed the physical_juris_name → county column-alias bug. Route
+    // aggregate tiers and the county-rollup case directly into the matview path.
+    const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+    const _isAggregate = new Set(['federal','state','region','mpo','planning_district']).has(_tabTier);
     const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
-    if (!_hasSampleRows && crashState.loaded) {
+    const _hasMatview = !!(typeof CL !== 'undefined' && CL.data && CL.data.client && typeof CL.data.client.getHotspots === 'function');
+    if (_hasMatview && (_isAggregate || !_hasSampleRows)) {
         _loadHotspotsFromMatview();
         return;
     }
@@ -60398,28 +60532,75 @@ async function _loadHotspotsFromMatview() {
 
         // Pick intersections vs segments based on the Group By UI control.
         // 'node' / 'intersection' → intersections; everything else → segments.
+        // Bug 11 fix — mv_hotspots currently emits 0 segment rows for every state
+        // (Delaware data has no crashes with null node + non-null rte_name; this
+        // is data shape, not a matview bug). When the user-selected bucket is
+        // empty, auto-fallback to the non-empty one. Jurisdiction-agnostic.
         const useIntersections = (groupBy === 'node' || groupBy === 'intersection');
-        const rows = useIntersections ? data.intersections : data.segments;
+        let rows = useIntersections ? data.intersections : data.segments;
+        if (!rows || rows.length === 0) {
+            const fallback = useIntersections ? data.segments : data.intersections;
+            if (fallback && fallback.length > 0) {
+                console.log('[Hot Spots] Group By="' + groupBy + '" returned 0 rows; auto-falling back to ' +
+                    (useIntersections ? 'segments' : 'intersections') + ' (' + fallback.length + ' rows)');
+                rows = fallback;
+            } else {
+                rows = [];
+            }
+        }
 
         // Map matview row → renderHotspots() shape. perYear computed from
         // first_year/last_year. topType isn't in the matview — leave 'N/A'.
         const filtered = rows
-            .filter(r => (r.total_crashes || 0) >= minCrashes)
+            .filter(r => {
+                if ((r.total_crashes || 0) < minCrashes) return false;
+                // Bug 13a fix — defensive: drop placeholder "0" rows the
+                // data-client filter may have missed.
+                const ln = String(r.location_name || '').trim();
+                if ((!ln || ln === '0' || ln === '0.0')
+                    && !(r.rte_name && String(r.rte_name).trim())) {
+                    return false;
+                }
+                return true;
+            })
             .map(r => {
                 const total = r.total_crashes || 0;
                 const span = Math.max(1, ((r.last_year || 0) - (r.first_year || 0)) + 1);
                 const epdo = r.epdo || 0;
                 const K = r.k || 0, A = r.a || 0, B = r.b || 0, C = r.c || 0, O = r.o || 0;
-                const locName = r.location_name || r.intersection_name || r.rte_name || '';
+                // Bug 14a v2 — assets/js/data-client.js _pgToFrontend converts
+                // these specific columns to Title-Case-with-space keys via the
+                // COL_MAP reverse lookup. Read bracket-form first, fall back to
+                // snake_case for safety. Then prefer human-readable street
+                // names over location_name (which frequently holds a numeric
+                // node ID like "12345" or a "0" placeholder). For intersection
+                // rows, combine rte_name with the cross-street name when both
+                // are present. For segment rows, rte_name is the most readable.
+                const _intName = String(r['Intersection Name'] || r.intersection_name || '').trim();
+                const _rteName = String(r['RTE Name'] || r.rte_name || '').trim();
+                const _nodeId  = String(r.location_name || '').trim();
+                const _isNumericNode = /^\d+(\.\d+)?$/.test(_nodeId);
+                const _isPlaceholder = !_nodeId || _nodeId === '0' || _nodeId === '0.0' || _isNumericNode;
+                let locName;
+                if (r.location_type === 'intersection') {
+                    if (_rteName && _intName)      locName = _rteName + ' / ' + _intName;
+                    else if (_intName)             locName = _intName;
+                    else if (_rteName)             locName = _rteName;
+                    else                            locName = _isPlaceholder ? '' : _nodeId;
+                } else {
+                    locName = _rteName || (_isPlaceholder ? '' : _nodeId) || _intName || '';
+                }
+                if (!locName) locName = _nodeId; // last-resort, preserves filter behavior
                 return {
                     loc: locName,
+                    nodeId: _nodeId,
                     total: total,
                     K: K, A: A, B: B, C: C, O: O,
                     epdo: epdo,
                     ka: K + A,
                     perYear: (total / span).toFixed(1),
                     topType: 'N/A',
-                    route: r.rte_name || '',
+                    route: _rteName,
                     county: r.county || '',
                     lat: r.lat_centroid,
                     lon: r.lon_centroid
@@ -61121,11 +61302,18 @@ function updateAnalysis() {
     var _dcReady = (window.CL && CL.data && CL.data.client &&
                     typeof CL.data.client.getAnalysisBreakdown === 'function');
     if (!crashState.loaded && !_dcReady) return;
-    // Summary content has been moved to Dashboard tab
-    // Analysis tab contains Infrastructure Assets sub-tab
-    // Initialize default sub-tab (infrastructure) if not already set
+    // Bug 17 — at aggregate tiers (or county-rolled-up-to-PD), default to the
+    // new Crash Analysis sub-tab (which renders from mv_analysis_summary) so
+    // engineers see real data on first visit. Infrastructure Assets requires
+    // row-level / city-tier data, so keep that as the default at city tier.
     if (!currentAnalysisSubtab) {
-        switchAnalysisSubtab('infrastructure');
+        var tr = (window.CL && CL.data && CL.data.supabaseBridge &&
+                  typeof CL.data.supabaseBridge.resolveTier === 'function')
+                  ? CL.data.supabaseBridge.resolveTier() : null;
+        var isAggregate = tr && (tr.tier === 'state' || tr.tier === 'region' ||
+                                  tr.tier === 'planning_district' || tr.tier === 'mpo' ||
+                                  tr.rolledUpFrom === 'county');
+        switchAnalysisSubtab(isAggregate ? 'crashanalysis' : 'infrastructure');
     }
 }
 
@@ -61162,7 +61350,57 @@ function switchAnalysisSubtab(subtab) {
     if (targetContent) targetContent.style.display = 'block';
 
     // Initialize and soft-activate layers for school/transit subtabs
-    if (subtab === 'schools') {
+    if (subtab === 'crashanalysis') {
+        // Bug 17 — render the four crash-analysis charts from mv_analysis_summary.
+        // No row-level dependency: works at every aggregate tier.
+        (async () => {
+            try {
+                const dc = window.crashLensClient;
+                const tr = window.CL && CL.data && CL.data.supabaseBridge
+                           && typeof CL.data.supabaseBridge.resolveTier === 'function'
+                           ? CL.data.supabaseBridge.resolveTier() : null;
+                if (!dc || !tr) return;
+                const data = await dc.getAnalysisBreakdown(tr.tier, tr.value);
+                if (!data) return;
+                if (typeof createChart !== 'function') return;
+                // byYear → line
+                const years = Object.entries(data.byYear || {}).sort((a, b) => Number(a[0]) - Number(b[0]));
+                createChart('anaChartYear', 'line', {
+                    labels: years.map(y => y[0]),
+                    datasets: [{ label: 'Crashes', data: years.map(y => y[1].total || 0),
+                                 borderColor: '#1e40af', backgroundColor: 'rgba(30,64,175,0.1)',
+                                 fill: true, tension: 0.2 }]
+                });
+                // byMonth → bar
+                const monthNames = ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const months = Object.entries(data.byMonth || {}).sort((a, b) => Number(a[0]) - Number(b[0]));
+                createChart('anaChartMonth', 'bar', {
+                    labels: months.map(m => monthNames[Number(m[0])] || m[0]),
+                    datasets: [{ label: 'Crashes', data: months.map(m => m[1].total || 0),
+                                 backgroundColor: '#1e40af' }]
+                });
+                // bySeverity → doughnut (data-client returns flat counts: {K, A, B, C, O})
+                const sev = data.bySeverity || {};
+                createChart('anaChartSeverity', 'doughnut', {
+                    labels: ['K','A','B','C','O'],
+                    datasets: [{ data: ['K','A','B','C','O'].map(k => Number(sev[k]) || 0),
+                                 backgroundColor: ['#dc2626','#f59e0b','#fde047','#3b82f6','#94a3b8'] }]
+                });
+                // byCollision (top 8) → horizontal bar (data-client returns flat counts)
+                const collisions = Object.entries(data.byCollision || {})
+                    .sort((a, b) => Number(b[1]) - Number(a[1]))
+                    .slice(0, 8);
+                createChart('anaChartCollision', 'bar', {
+                    labels: collisions.map(c => String(c[0]).substring(0, 24)),
+                    datasets: [{ label: 'Crashes', data: collisions.map(c => Number(c[1]) || 0),
+                                 backgroundColor: '#7c3aed' }]
+                }, { indexAxis: 'y' });
+                console.log('[Analysis] Crash analysis charts rendered from mv_analysis_summary');
+            } catch (e) {
+                console.warn('[Analysis] Crash analysis render failed:', e && e.message);
+            }
+        })();
+    } else if (subtab === 'schools') {
         initSchoolSafetyTab();
         softActivateSchoolLayer();
     } else if (subtab === 'transit') {
@@ -62456,44 +62694,154 @@ async function _loadIntersectionsFromHotspots() {
             intA += (r.a || 0);
         });
 
-        const total = (typeof crashState !== 'undefined' && crashState.totalRows) || intTotal;
+        // Bug 14c part 2 — KPIs MUST come from the same matview the on-screen
+        // charts consume so total + chart sum agree at every tier. Sum
+        // mv_intersection_summary excluding "Not at Intersection" rows
+        // (matches the Type Distribution + Traffic Control chart filters).
+        let _kpiAgg = null;
+        try {
+            if (window.crashLensClient && typeof window.crashLensClient.getIntersectionSummary === 'function') {
+                const _summary = await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+                if (Array.isArray(_summary) && _summary.length > 0) {
+                    _kpiAgg = _summary.reduce((s, r) => {
+                        if (/not at intersection/i.test(r.intersection_type || '')) return s;
+                        return {
+                            total: s.total + (r.total || 0),
+                            K: s.K + (r.k || 0),
+                            A: s.A + (r.a || 0),
+                        };
+                    }, { total: 0, K: 0, A: 0 });
+                }
+            }
+        } catch (_e) { /* fall back to mv_hotspots-derived values below */ }
+
+        const finalTotal = (_kpiAgg && _kpiAgg.total > 0) ? _kpiAgg.total : intTotal;
+        const finalK     = (_kpiAgg && _kpiAgg.total > 0) ? _kpiAgg.K     : intK;
+        const finalA     = (_kpiAgg && _kpiAgg.total > 0) ? _kpiAgg.A     : intA;
+        const baseTotal  = (typeof crashState !== 'undefined' && crashState.totalRows) || finalTotal;
         const intTotalEl = document.getElementById('intTotal');
         const intFatalEl = document.getElementById('intFatal');
         const intSeriousEl = document.getElementById('intSerious');
         const intPctEl = document.getElementById('intPct');
-        if (intTotalEl) intTotalEl.textContent = intTotal.toLocaleString();
-        if (intFatalEl) intFatalEl.textContent = intK;
-        if (intSeriousEl) intSeriousEl.textContent = intA;
-        if (intPctEl) intPctEl.textContent = (typeof pct === 'function' ? pct(intTotal, total) : ((total > 0 ? (intTotal/total*100) : 0).toFixed(1))) + '%';
+        if (intTotalEl) intTotalEl.textContent = finalTotal.toLocaleString();
+        if (intFatalEl) intFatalEl.textContent = finalK;
+        if (intSeriousEl) intSeriousEl.textContent = finalA;
+        if (intPctEl) intPctEl.textContent = (typeof pct === 'function' ? pct(finalTotal, baseTotal) : ((baseTotal > 0 ? (finalTotal/baseTotal*100) : 0).toFixed(1))) + '%';
 
-        // Inject a status banner so the user knows the 3 chart cards aren't
-        // populated because the dedicated matview hasn't shipped.
+        // Bug 12 fix — the matview ships now. Remove any stale banner from a
+        // previous load and render the 2 unblocked charts (Intersection Type
+        // Distribution + Traffic Control Type) from mv_intersection_summary.
+        // The Collision-Types chart still needs a separate aggregation — leave
+        // its canvas alone here so it gracefully shows nothing at aggregate tiers.
         const tabEl = document.getElementById('tab-intersection');
-        if (tabEl && !tabEl.querySelector('.int-matview-banner')) {
-            const banner = document.createElement('div');
-            banner.className = 'int-matview-banner';
-            banner.style.cssText = 'margin:.75rem 1rem;padding:.6rem .85rem;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;font-size:.85rem;color:#78350f';
-            banner.textContent = 'Intersection-level charts (Type Distribution, Traffic Control, Collision Types) require the mv_intersection_summary matview which is not yet deployed. The 4 KPIs above are derived from mv_hotspots.';
-            const firstCard = tabEl.querySelector('.card, .kpi-row, .grid');
-            if (firstCard && firstCard.parentNode) {
-                firstCard.parentNode.insertBefore(banner, firstCard);
+        const staleBanner = tabEl && tabEl.querySelector('.int-matview-banner');
+        if (staleBanner) staleBanner.remove();
+        try {
+            const summary = await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+            if (Array.isArray(summary) && summary.length > 0) {
+                // Pivot 1 — intersection_type → total (exclude "Not at Intersection")
+                const byType = new Map();
+                summary.forEach(r => {
+                    const it = r.intersection_type || 'Unknown';
+                    if (/not at intersection/i.test(it)) return;
+                    byType.set(it, (byType.get(it) || 0) + (r.total || 0));
+                });
+                const intTypes = [...byType.entries()].sort((a,b) => b[1] - a[1]).slice(0, 8);
+                if (typeof createChart === 'function' && intTypes.length > 0) {
+                    createChart('chartIntType', 'bar', {
+                        labels: intTypes.map(([name]) => String(name).substring(0, 20)),
+                        datasets: [{ label: 'Crashes', data: intTypes.map(([,n]) => n), backgroundColor: '#1e40af' }]
+                    }, { indexAxis: 'y' });
+                }
+                // Pivot 2 — traffic_control_type → total
+                // Bug 13c fix — filter out "Not at Intersection" rows (consistent
+                // with the Type Distribution chart's filter) so the donut shows
+                // ONLY real-intersection crashes. Relabel empty traffic_control_type
+                // as "Not Recorded" instead of "Unknown" — these are real
+                // intersections where the field wasn't filled in, not unclassified
+                // crashes.
+                const byCtrl = new Map();
+                summary.forEach(r => {
+                    if (/not at intersection/i.test(r.intersection_type || '')) return;
+                    const raw = String(r.traffic_control_type || '').trim();
+                    const tc = raw ? raw : 'Not Recorded';
+                    byCtrl.set(tc, (byCtrl.get(tc) || 0) + (r.total || 0));
+                });
+                const tcSorted = [...byCtrl.entries()].sort((a,b) => b[1] - a[1]).slice(0, 8);
+                const tcLabels = tcSorted.map(([name]) => String(name).substring(0, 20));
+                const tcData   = tcSorted.map(([, n]) => n);
+                const tcColors = ['#dc2626','#f59e0b','#22c55e','#3b82f6','#8b5cf6','#ec4899','#64748b','#0ea5e9'];
+                const tcTotal  = tcData.reduce((a,b) => a + b, 0);
+                if (typeof createChart === 'function' && tcSorted.length > 0) {
+                    createChart('chartTrafficControl', 'doughnut', {
+                        labels: tcLabels,
+                        datasets: [{ data: tcData, backgroundColor: tcColors, borderWidth: 2, borderColor: '#fff' }]
+                    }, { cutout: '50%', plugins: { legend: { display: false } } });
+                    if (typeof buildCustomLegend === 'function') {
+                        buildCustomLegend('legendTrafficControl', tcLabels, tcData, tcColors, tcTotal);
+                    }
+                }
+                console.log('[Intersections] Charts rendered from mv_intersection_summary (' + summary.length + ' rows; ' +
+                    intTypes.length + ' intersection types, ' + tcSorted.length + ' control types).');
             } else {
-                tabEl.insertBefore(banner, tabEl.firstChild);
+                console.warn('[Intersections] mv_intersection_summary returned 0 rows for ' + t.tier + '=' + t.value);
             }
+        } catch (e) {
+            console.warn('[Intersections] mv_intersection_summary fetch failed:', e && e.message);
         }
 
-        // Bug fix (round 3, 2026-05-08): paint placeholders into the four
-        // chart canvases so the user sees a clear reason for the empty
-        // rectangles instead of nothing. clearChartPlaceholder() in the
-        // chart helpers will swap the canvas back when matview support lands.
+        // Bug 14a v2 (origin/main) — populate the All Intersection Crash
+        // Locations table from mv_hotspots when sampleRows is empty
+        // (aggregate / rolled-up tier). Build a byNode-shaped array so
+        // _renderIntersectionRows can render it, with displayName carrying
+        // the readable street name.
+        const _sampleEmpty = !crashState.sampleRows || crashState.sampleRows.length === 0;
+        if (_sampleEmpty && typeof setPaginationData === 'function' && typeof _renderIntersectionRows === 'function') {
+            const nodeSorted = intersections
+                .map(r => {
+                    // Read Title-Case-with-space keys produced by _pgToFrontend
+                    // (defense-in-depth: also accept snake_case if upstream changes).
+                    const intName = String(r['Intersection Name'] || r.intersection_name || '').trim();
+                    const rteName = String(r['RTE Name'] || r.rte_name || '').trim();
+                    const nodeId  = String(r.location_name || '').trim();
+                    if (!nodeId || nodeId === '0' || nodeId === '0.0') return null;
+                    let displayName;
+                    if (rteName && intName)      displayName = rteName + ' / ' + intName;
+                    else if (intName)            displayName = intName;
+                    else if (rteName)            displayName = rteName;
+                    else                          displayName = formatNodeId(nodeId);
+                    const routesSet = new Set();
+                    if (rteName) routesSet.add(rteName);
+                    return [nodeId, {
+                        total: r.total_crashes || 0,
+                        K: r.k || 0, A: r.a || 0, B: r.b || 0, C: r.c || 0, O: r.o || 0,
+                        epdo: r.epdo || 0,
+                        routes: routesSet,
+                        ctrl: '',
+                        displayName: displayName,
+                        jurisdiction: r.county || ''
+                    }];
+                })
+                .filter(Boolean)
+                .sort((a, b) => (b[1].total || 0) - (a[1].total || 0));
+            setPaginationData('intersection', nodeSorted);
+            try {
+                if (typeof _updateIntersectionThead === 'function') _updateIntersectionThead();
+            } catch (_) { /* non-fatal */ }
+            _renderIntersectionRows();
+            console.log('[Intersections] Table populated from mv_hotspots (' + nodeSorted.length + ' rows with readable names).');
+        }
+
+        // Bug fix (round 3, 2026-05-08): paint placeholders ONLY for the two
+        // chart canvases that don't yet have a backing matview. Bug 12 above
+        // (origin/main) now renders chartIntType and chartTrafficControl from
+        // mv_intersection_summary, so we must NOT overwrite those canvases.
         if (typeof showChartPlaceholder === 'function') {
-            showChartPlaceholder('chartIntType',         'Intersection-type breakdown pending mv_intersection_summary');
-            showChartPlaceholder('chartTrafficControl',  'Traffic-control breakdown pending mv_intersection_summary');
-            showChartPlaceholder('chartIntCollision',    'Collision-type breakdown for intersection crashes pending mv_intersection_collision_type');
-            showChartPlaceholder('chartIntYearTrend',    'Yearly intersection-crash trend pending mv_intersection_yoy');
+            showChartPlaceholder('chartIntCollision', 'Collision-type breakdown for intersection crashes pending mv_intersection_collision_type');
+            showChartPlaceholder('chartIntYearTrend', 'Yearly intersection-crash trend pending mv_intersection_yoy');
         }
 
-        console.log('[Intersections] Derived from mv_hotspots (' + intersections.length + ' rows). Charts disabled until mv_intersection_summary ships.');
+        console.log('[Intersections] KPIs from mv_hotspots (' + intersections.length + ' locations).');
         return true;
     } catch (e) {
         console.warn('[Intersections] Matview path failed:', e && e.message);
@@ -62604,29 +62952,15 @@ function getFilteredIntersectionData() {
 }
 
 function updateIntersectionTab() {
-    // Aggregate tiers have no row-level R2 data. Render the empty-state so
-    // we don't show a per-intersection table built from stale sampleRows.
-    try {
-        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
-        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
-            const _container = document.getElementById('tab-intersection');
-            if (_container) {
-                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
-                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
-                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
-                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
-                    '</div>';
-            }
-            return;
-        }
-    } catch (e) { /* non-fatal — fall through to normal init */ }
-
-    // Round 5 Fix 3 — at county-rollup tier sampleRows is empty.
-    // mv_intersection_summary doesn't exist yet (backend ticket), so derive
-    // the 4 KPIs from the intersection subset of mv_hotspots. Charts stay
-    // empty until the dedicated matview ships.
+    // mv_intersection_summary doesn't exist yet (backend ticket A1), so derive
+    // the 4 KPIs from the intersection subset of mv_hotspots for any tier where
+    // we don't have row-level sampleRows (every aggregate tier + county-rollup).
+    // Chart cards stay empty until the dedicated matview ships.
+    const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+    const _isAggregate = new Set(['federal','state','region','mpo','planning_district']).has(_tabTier);
     const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
-    if (!_hasSampleRows && crashState.loaded) {
+    const _hasMatview = !!(typeof CL !== 'undefined' && CL.data && CL.data.client && typeof CL.data.client.getHotspots === 'function');
+    if (_hasMatview && (_isAggregate || !_hasSampleRows)) {
         _loadIntersectionsFromHotspots();
         return;
     }
@@ -62756,9 +63090,14 @@ function _renderIntersectionRows() {
         const isSelected = intDetailState.selectedLocations.some(loc => loc.node === node);
         const checkboxDisabled = !isSelected && intDetailState.selectedLocations.length >= intDetailState.maxSelections;
         const countyCell = showCounty ? `<td style="font-size:.75rem" class="tier-county-col">${esc(d.jurisdiction || '')}</td>` : '';
+        // Bug 14a v2 — when populated from mv_hotspots, d.displayName carries the
+        // readable cross-street/route name (e.g. "DE 24 / Chrisandrea Drive").
+        // Sampler-rows path leaves displayName undefined, so fall back to the
+        // legacy node-id formatting which preserves city-tier behavior.
+        const nodeLabel = d.displayName ? d.displayName : formatNodeId(node);
         return `<tr class="${isSelected ? 'int-row-selected' : ''}">
         <td><input type="checkbox" class="int-checkbox" data-node="${esc(node)}" data-routes="${esc(d.routes ? [...d.routes].join(', ') : '')}" data-total="${d.total}" data-k="${d.K||0}" data-a="${d.A||0}" data-epdo="${calcEPDO(d)}" data-ctrl="${esc((d.ctrl||'').substring(0,20))}" onchange="toggleIntSelection(this)" ${isSelected ? 'checked' : ''} ${checkboxDisabled ? 'disabled' : ''}></td>
-        <td style="font-weight:600;text-align:center">${globalIndex + 1}</td><td>${esc(formatNodeId(node))}</td><td style="font-size:.75rem">${esc(d.routes ? [...d.routes].join(', ') : '')}</td>${countyCell}<td>${d.total}</td>
+        <td style="font-weight:600;text-align:center">${globalIndex + 1}</td><td>${esc(nodeLabel)}</td><td style="font-size:.75rem">${esc(d.routes ? [...d.routes].join(', ') : '')}</td>${countyCell}<td>${d.total}</td>
         <td><span class="severity-badge severity-K">${d.K||0}</span></td>
         <td><span class="severity-badge severity-A">${d.A||0}</span></td>
         <td>${calcEPDO(d)}</td><td style="font-size:.75rem">${esc((d.ctrl||'').substring(0,20))}</td>
@@ -62877,8 +63216,34 @@ function exportIntersectionCSV() {
 // Export intersection analysis to PDF
 async function exportIntersectionPDF() {
     const data = getFilteredIntersectionData();
-    const int = data.intersection;
-    const total = data.totalRows;
+    let int = data.intersection;
+    let total = data.totalRows;
+
+    // Bug 14c — at aggregate tiers sampleRows is empty so getFilteredIntersectionData()
+    // returns int.total=0 even though the on-screen charts (sourced from
+    // mv_intersection_summary) have data. Pull KPIs from the same matview the
+    // charts use so the PDF KPIs and charts agree on tier.
+    if ((int.total === 0) && window.crashLensClient && window.CL?.data?.supabaseBridge?.resolveTier) {
+        try {
+            const t = window.CL.data.supabaseBridge.resolveTier();
+            const summary = await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+            if (Array.isArray(summary) && summary.length > 0) {
+                const kpi = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+                summary.forEach(r => {
+                    if (/not at intersection/i.test(r.intersection_type || '')) return;
+                    kpi.total += r.total || 0;
+                    kpi.K += r.k || 0; kpi.A += r.a || 0;
+                    kpi.B += r.b || 0; kpi.C += r.c || 0; kpi.O += r.o || 0;
+                });
+                if (kpi.total > 0) {
+                    int = kpi;
+                    if (!total || total === 0) total = kpi.total;
+                    data.intersection = kpi;
+                    console.log('[Intersection PDF] KPIs sourced from mv_intersection_summary (tier=' + t.tier + ')');
+                }
+            }
+        } catch (e) { console.warn('[Intersection PDF] matview KPI fetch failed:', e && e.message); }
+    }
 
     if (int.total === 0) {
         alert('No intersection crash data to export.');
@@ -88124,6 +88489,59 @@ function getLocationDisplayName(type, value) {
  * @param {boolean} options.sortByCrashes - Sort by crash count (default: true)
  * @returns {Object} { segments: [], intersections: [], all: [] }
  */
+/**
+ * Bug 7 fix helper — derives the location-dropdown shape from
+ * crashState.hotspots (matview-loaded), without needing the legacy R2
+ * crashState.aggregates. Used as a fallback inside buildLocationData()
+ * when aggregates is missing (rolled-up county tier, MPO tier, etc.).
+ *
+ * crashState.hotspots row shape (set by _loadHotspotsFromMatview):
+ *   { loc, total, K, A, B, C, O, epdo, ka, perYear, topType,
+ *     route, county, lat, lon }
+ *
+ * State-agnostic: keys on data shape only, never on a jurisdiction literal.
+ */
+function _buildLocationDataFromHotspots(opts) {
+    const result = { segments: [], intersections: [], all: [] };
+    const rows = Array.isArray(crashState.hotspots) ? crashState.hotspots : [];
+    const isNodeId = (s) => /^\d+(\.\d+)?$/.test(String(s || '').trim());
+
+    rows.forEach(r => {
+        const total = r.total || 0;
+        if (isNodeId(r.loc)) {
+            result.intersections.push({
+                type: 'intersection',
+                value: r.loc,
+                displayName: r.route || r.loc,
+                nodeId: r.loc,
+                routes: new Set(r.route ? [r.route] : []),
+                intType: '',
+                trafficCtrl: '',
+                crashes: total,
+            });
+        } else {
+            result.segments.push({
+                type: 'segment',
+                value: r.loc,
+                displayName: typeof formatRouteName === 'function' ? formatRouteName(r.loc) : (r.loc || ''),
+                funcClass: '',
+                areaType: '',
+                crashes: total,
+            });
+        }
+    });
+
+    if (opts.sortByCrashes) {
+        result.segments.sort((a, b) => b.crashes - a.crashes);
+        result.intersections.sort((a, b) => b.crashes - a.crashes);
+    }
+    result.segments = result.segments.slice(0, opts.maxSegments || 150);
+    result.intersections = result.intersections.slice(0, opts.maxIntersections || 100);
+    result.all = [...result.segments, ...result.intersections];
+    if (opts.sortByCrashes) result.all.sort((a, b) => b.crashes - a.crashes);
+    return result;
+}
+
 function buildLocationData(options = {}) {
     const opts = {
         includeSegments: true,
@@ -88136,6 +88554,16 @@ function buildLocationData(options = {}) {
 
     const result = { segments: [], intersections: [], all: [] };
 
+    // Bug 7 fix — at rolled-up tiers (county→PD, etc.) R2 is skipped and
+    // crashState.aggregates is never built. crashState.hotspots IS populated
+    // by _loadHotspotsFromMatview from mv_hotspots and contains the same
+    // location-level data. Fall back to it when aggregates is missing so the
+    // dropdown still renders. Jurisdiction-agnostic: keys on data shape, not
+    // on any state/county/city literal.
+    if ((!crashState.loaded || !crashState.aggregates)
+        && Array.isArray(crashState.hotspots) && crashState.hotspots.length > 0) {
+        return _buildLocationDataFromHotspots(opts);
+    }
     if (!crashState.loaded || !crashState.aggregates) return result;
 
     // Build road segment data from pre-calculated aggregates for consistency
@@ -88557,6 +88985,30 @@ function showToast(message, type = 'info', duration = 3000) {
         toast.style.animation = 'slideUp 0.3s ease';
         setTimeout(() => toast.remove(), 300);
     }, duration);
+}
+
+// Bug fix (round 2, 2026-05-08): UX hint when a Crash Tree filter click is
+// silently ignored in Supabase-only mode. Throttled to once per 5s per session
+// so rapid clicks don't spam.
+let _ctFilterToastLastShown = 0;
+function showCrashTreeFilterUnavailableToast() {
+    const now = Date.now();
+    if (now - _ctFilterToastLastShown < 5000) return;
+    _ctFilterToastLastShown = now;
+    if (typeof showToast === 'function') {
+        showToast('Filters use full-period matview data — upload a CSV to enable row-level filtering.', 'info');
+    }
+}
+
+// Same for Fatal & Speeding.
+let _fsFilterToastLastShown = 0;
+function showFSFilterUnavailableToast() {
+    const now = Date.now();
+    if (now - _fsFilterToastLastShown < 5000) return;
+    _fsFilterToastLastShown = now;
+    if (typeof showToast === 'function') {
+        showToast('Filters use full-period matview data — upload a CSV to enable row-level filtering.', 'info');
+    }
 }
 
 function loadLocationForCMF() {
@@ -95578,30 +96030,14 @@ function enrichMissingCrashFields(rows) {
 
 // Initialize Safety Focus module
 function initSafetyFocus() {
-    // Aggregate tiers have no row-level R2 data. Render the empty-state so
-    // we don't run with stale county-tier sampleRows from a previous tier.
-    try {
-        const _tabTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
-        if (new Set(['federal','state','region','mpo','planning_district']).has(_tabTier)) {
-            const _container = document.getElementById('tab-safety');
-            if (_container) {
-                _container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
-                    '<div style="font-size:2rem;margin-bottom:.5rem">📍</div>' +
-                    '<div style="font-weight:600;margin-bottom:.25rem">Pick a county or city to see this analysis</div>' +
-                    '<div style="font-size:.85rem;color:#94a3b8">This tab needs row-level crash data, which is only available at county and city tiers right now. Aggregate matviews for ' + _tabTier + ' are on the backend roadmap.</div>' +
-                    '</div>';
-            }
-            return;
-        }
-    } catch (e) { /* non-fatal — fall through to normal init */ }
-
-    // Round 5 Fix 1 — at county/city tier with rollup-active or empty
-    // sampleRows (post-bridge load), pull per-category counts from
-    // mv_safety_categories instead of the row-level processSafetyData() path.
-    // The matview returns 15 of the 22 categories the UI shows; the rest
-    // render as 0 with a "(matview pending)" badge.
+    // mv_safety_categories is populated at every tier (federal/state/region/
+    // MPO/PD/county/city). Try the matview path whenever sampleRows are absent
+    // — the legacy processSafetyData() path is reserved for the county/city
+    // case where R2 sampleRows actually loaded. Doesn't require crashState.loaded
+    // (false at aggregate tiers because R2 is skipped — see PR #64).
     const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
-    if (!_hasSampleRows && crashState.loaded) {
+    const _matviewReady = !!(typeof CL !== 'undefined' && CL.data && CL.data.client && typeof CL.data.client.getSafetyCategories === 'function');
+    if (_matviewReady && !_hasSampleRows) {
         _loadSafetyFromMatview().then(function (ok) {
             if (!ok) {
                 const _container = document.getElementById('tab-safety');
@@ -101615,6 +102051,26 @@ function refreshCrashTreeAnalysis() {
 
 // Build tree data from crash records
 function buildCrashTreeData() {
+    // Bug fix (round 2, 2026-05-08): in Supabase-only mode the row pipeline
+    // can't filter — sampleRows is []. Calling this function would reset the
+    // matview-built treeData to null. All callers (severity toggle, date
+    // filter, date presets, clear-date) trip this. Skip the row pipeline
+    // entirely and keep the matview-built state intact. The visible numbers
+    // remain the full-period / all-severity totals from mv_crash_tree, which
+    // is correct: matview-only mode cannot filter at row level.
+    var _ctSupabaseMode =
+        crashTreeState.source === 'supabase' ||
+        !(crashState.sampleRows && crashState.sampleRows.length > 0);
+    if (_ctSupabaseMode) {
+        if (typeof showCrashTreeFilterUnavailableToast === 'function') {
+            showCrashTreeFilterUnavailableToast();
+        }
+        // Re-paint from existing state. updateCrashTreeStats and renderCrashTree
+        // are pure reads — they don't mutate crashTreeState.
+        if (typeof renderCrashTree === 'function') renderCrashTree();
+        if (typeof updateCrashTreeStats === 'function') updateCrashTreeStats();
+        return;
+    }
     const rows = crashState.sampleRows;
     const sevFilter = crashTreeState.severityFilter;
 
@@ -104864,6 +105320,22 @@ function clearFSDateFilter() {
 }
 
 function processFSData() {
+    // Bug fix (round 2, 2026-05-08): in Supabase-only mode the row pipeline
+    // can't filter — sampleRows is []. Calling this function would reset
+    // fatalData/speedData/combinedData to zeros. All callers (date inputs,
+    // date presets, sub-tab switch, severity checkboxes, clearFSDateFilter)
+    // trip this. Skip the row pipeline; keep matview-built state intact.
+    var _fsSupabaseMode =
+        fatalSpeedingState.source === 'supabase' ||
+        !(crashState.sampleRows && crashState.sampleRows.length > 0);
+    if (_fsSupabaseMode) {
+        if (typeof showFSFilterUnavailableToast === 'function') {
+            showFSFilterUnavailableToast();
+        }
+        // updateFSDisplay() is a pure read — repaints the DOM from the
+        // existing fatalSpeedingState struct.
+        return;
+    }
     // Supabase-first: tab-loaders preloads K|A crashes into a tab cache so we
     // never have to download the full R2 parquet just to render this tab.
     // Falls back to crashState.sampleRows automatically when Supabase isn't
