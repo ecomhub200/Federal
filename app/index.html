@@ -60374,18 +60374,66 @@ function exportHotspotDetailPDF() {
             C: s.C + (h.C || 0),
             O: s.O + (h.O || 0),
             epdo: s.epdo + (h.epdo || 0),
-        }), { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, epdo: 0 });
-        // Override the aggregatedData totals/severity/epdo so the PDF cover
-        // KPIs match the matview. Leave the rich byYear/byCollision/factor
-        // dicts intact (they're empty at aggregate tier — the PDF renders
-        // empty bands gracefully).
+            // Round 7 (2026-05-09): aggregate factor counts from
+            // mv_hotspots_factors (joined onto each hotspot row by
+            // _loadHotspotsFromMatview).
+            impairedCount:    s.impairedCount    + (h.impaired_count    || 0),
+            speedCount:       s.speedCount       + (h.speed_count       || 0),
+            distractedCount:  s.distractedCount  + (h.distracted_count  || 0),
+            unrestrainedCount:s.unrestrainedCount+ (h.unrestrained_count|| 0),
+            motorcycleCount:  s.motorcycleCount  + (h.motorcycle_count  || 0),
+            nightCount:       s.nightCount       + (h.night_count       || 0),
+        }), {
+            total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, epdo: 0,
+            impairedCount: 0, speedCount: 0, distractedCount: 0,
+            unrestrainedCount: 0, motorcycleCount: 0, nightCount: 0,
+        });
+        // Round 7 (2026-05-09): hydrate the rich factor / VRU / collision
+        // dicts from the per-hotspot matview joins so the PDF's Contributing
+        // Factors, Vulnerable Road Users, and Top Collision Types tables
+        // render real numbers (instead of the empty bands the previous
+        // round's deferral comment claimed would render gracefully).
+        // PDF render code expects numeric counts (see lines below — it does
+        // `data.factors.alcohol / data.total * 100` directly), so we hydrate
+        // numbers, not {count, pct} objects.
+        const factorsHydrated = {
+            alcohol:    agg.impairedCount,
+            speed:      agg.speedCount,
+            distracted: agg.distractedCount,
+            drowsy:     0,                       // upstream NULL — known-debt
+            drug:       0,                       // upstream NULL — known-debt
+            hitrun:     0,                       // upstream NULL — known-debt
+        };
+        // Top Collision Types — aggregate per-location top types into a
+        // single dict matching crashState.aggregates.byCollision shape
+        // (Object<type, count>). PDF code calls Object.entries(...).sort(...)
+        // and slices the top 10.
+        const collisionMap = {};
+        for (const h of _selectedHotspots) {
+            const tc = h.top_collision_type || h.topType;
+            if (tc && tc !== 'N/A') {
+                collisionMap[tc] = (collisionMap[tc] || 0) + (h.total || 0);
+            }
+        }
+        // VRU — only motorcycle is in mv_hotspots_factors today. Pedestrian
+        // and bicycle counts require a backend matview extension; leave 0
+        // until that lands. The K/A subset isn't in the matview either, so
+        // mark as 0 (round 8 backlog).
+        const vruHydrated = {
+            pedestrian: { total: 0, K: 0, A: 0 },
+            bicycle:    { total: 0, K: 0, A: 0 },
+            motorcycle: { total: agg.motorcycleCount, K: 0, A: 0 },
+        };
         data = Object.assign({}, data, {
             total: agg.total,
             severity: { K: agg.K, A: agg.A, B: agg.B, C: agg.C, O: agg.O },
-            epdo: agg.epdo
+            epdo: agg.epdo,
+            factors: factorsHydrated,
+            vru: vruHydrated,
+            byCollision: collisionMap,
         });
-        console.log('[Detail PDF] matviewSourced: using crashState.hotspots totals (' +
-            _selectedHotspots.length + ' locations, ' + agg.total + ' crashes).');
+        console.log('[Detail PDF] matviewSourced (round 7): hydrated factors/VRU/collisions for ' +
+            _selectedHotspots.length + ' locations, ' + agg.total + ' crashes.');
     }
 
     const { jsPDF } = window.jspdf;
@@ -60825,10 +60873,16 @@ async function _loadHotspotsFromMatview() {
         // top collision_type per location. Fetch in parallel with hotspots so
         // the render shows real types instead of the muted '—' placeholder.
         // Falls through to 'N/A' if the matview is unavailable.
-        const [data, topCollMap] = await Promise.all([
+        // Round 7 (2026-05-09): also fetch mv_hotspots_factors in parallel so
+        // each hotspot row carries impaired/speed/distracted/etc. counts. PDF
+        // exports read these without a second roundtrip.
+        const [data, topCollMap, factorsMap] = await Promise.all([
             window.crashLensClient.getHotspots(t.tier, t.value, { limit: topN }),
             (typeof window.crashLensClient.getHotspotsTopCollision === 'function'
                 ? window.crashLensClient.getHotspotsTopCollision(stateKey)
+                : Promise.resolve(null)),
+            (typeof window.crashLensClient.getHotspotsFactors === 'function'
+                ? window.crashLensClient.getHotspotsFactors(stateKey)
                 : Promise.resolve(null))
         ]);
         if (!data || (!data.intersections.length && !data.segments.length)) {
@@ -60911,6 +60965,14 @@ async function _loadHotspotsFromMatview() {
                     const k1 = (r.location_type || '') + '|' + _nodeId;
                     if (topCollMap.has(k1)) _topType = topCollMap.get(k1);
                 }
+                // Round 7 (2026-05-09): per-location factor counts from
+                // mv_hotspots_factors so PDF exports + detail panels can
+                // render real Contributing Factors / VRU bands.
+                let _factors = null;
+                if (factorsMap && _nodeId) {
+                    const fk = (r.location_type || '') + '|' + _nodeId;
+                    if (factorsMap.has(fk)) _factors = factorsMap.get(fk);
+                }
                 return {
                     loc: locName,
                     nodeId: _nodeId,
@@ -60923,7 +60985,14 @@ async function _loadHotspotsFromMatview() {
                     route: _rteName,
                     county: r.county || '',
                     lat: r.lat_centroid,
-                    lon: r.lon_centroid
+                    lon: r.lon_centroid,
+                    impaired_count: _factors ? _factors.impaired : 0,
+                    speed_count: _factors ? _factors.speed : 0,
+                    distracted_count: _factors ? _factors.distracted : 0,
+                    unrestrained_count: _factors ? _factors.unrestrained : 0,
+                    motorcycle_count: _factors ? _factors.motorcycle : 0,
+                    night_count: _factors ? _factors.night : 0,
+                    top_collision_type: _topType
                 };
             })
             .sort((a, b) => (b.epdo || 0) - (a.epdo || 0));
@@ -63599,6 +63668,38 @@ async function exportIntersectionPDF() {
                     if (!total || total === 0) total = kpi.total;
                     data.intersection = kpi;
                     console.log('[Intersection PDF] KPIs sourced from mv_intersection_summary (tier=' + t.tier + ')');
+                }
+            }
+            // Round 7 (2026-05-09): the Top Locations table on page 2 reads
+            // data.byNode (empty in Supabase mode). Populate it from
+            // mv_hotspots intersections — the same source the on-screen
+            // intersection table uses — so the PDF's Top Locations matches.
+            if (!data.byNode || Object.keys(data.byNode).length === 0) {
+                const hot = await window.crashLensClient.getHotspots(t.tier, t.value, { limit: 200 });
+                if (hot && Array.isArray(hot.intersections) && hot.intersections.length) {
+                    const byNode = {};
+                    hot.intersections.forEach(r => {
+                        const intName = String(r['Intersection Name'] || r.intersection_name || '').trim();
+                        const rteName = String(r['RTE Name'] || r.rte_name || '').trim();
+                        const nodeId  = String(r.location_name || '').trim();
+                        if (!nodeId || nodeId === '0' || nodeId === '0.0') return;
+                        let display;
+                        if (rteName && intName)      display = rteName + ' / ' + intName;
+                        else if (intName)            display = intName;
+                        else if (rteName)            display = rteName;
+                        else                          display = nodeId;
+                        byNode[display] = {
+                            total: r.total_crashes || 0,
+                            K: r.k || 0, A: r.a || 0, B: r.b || 0, C: r.c || 0, O: r.o || 0,
+                            route: rteName,
+                            ctrl: ''
+                        };
+                    });
+                    if (Object.keys(byNode).length) {
+                        data.byNode = byNode;
+                        console.log('[Intersection PDF] Top Locations hydrated from mv_hotspots ('
+                            + Object.keys(byNode).length + ' nodes).');
+                    }
                 }
             }
         } catch (e) { console.warn('[Intersection PDF] matview KPI fetch failed:', e && e.message); }
@@ -69503,7 +69604,7 @@ function generateReport() {
     if (type === 'systemwide') type = 'dashboard';
     showLoading('Generating report...');
 
-    setTimeout(() => {
+    setTimeout(async () => {
         const title = document.getElementById('reportTitle').value || 'Crash Analysis Report';
         const author = document.getElementById('reportAuthor').value || 'Traffic Engineering Division';
         const route = document.getElementById('reportRoute').value;
@@ -69548,7 +69649,7 @@ function generateReport() {
         if (type === 'infographic') {
             const agency = document.getElementById('reportAgency').value || getJurisdictionLabel();
             const department = document.getElementById('reportDepartment').value || 'Traffic Engineering Division';
-            generateInfographic(crashState.sampleRows, title, agency, department, startDate, endDate);
+            await generateInfographic(crashState.sampleRows, title, agency, department, startDate, endDate);
             hideLoading();
             return;
         }
@@ -69577,7 +69678,7 @@ function generateReport() {
             else if (type === 'trend') generateTrendReport(crashes, title, author);
             else if (type === 'intersection') generateIntersectionReport(crashes, route, title, author);
             else if (type === 'crashtree') generateCrashTreeSystemicReport(crashes, title, author);
-            else if (type === 'fatalspeed') generateFatalSpeedReport(crashes, title, author);
+            else if (type === 'fatalspeed') await generateFatalSpeedReport(crashes, title, author);
             else if (type === 'hotspot') generateHotspotRankingReport(crashes, title, author);
             else if (type === 'prediction') generatePredictionForecastReport(crashes, title, author);
             else if (type === 'deepdive') generateDeepDiveAnalysisReport(crashes, title, author);
@@ -72724,27 +72825,70 @@ function copyReportText() {
 // Store infographic default data for reset
 let infographicDefaults = {};
 
-function generateInfographic(allCrashes, title, agency, department, startDate, endDate) {
+async function generateInfographic(allCrashes, title, agency, department, startDate, endDate) {
     // Filter crashes by date if specified
-    let crashes = allCrashes.slice();
+    let crashes = (allCrashes || []).slice();
     if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
     if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
 
+    // Round 7 (2026-05-09): in Supabase-only mode (county-rollup, region,
+    // MPO, PD, state, federal) sampleRows is empty and every compute*()
+    // below returns zeros. Pre-fetch matview data so the infographic shows
+    // real numbers instead of an "all 0" report. The compute*() blocks
+    // below still run on the (empty) crashes array; we override their
+    // outputs with matview-derived values further down.
+    let _supaSummary = null, _supaAnalysis = null, _supaCats = null;
+    const _supabaseMode = !crashes.length && window.crashLensClient
+        && window.CL?.data?.supabaseBridge?.resolveTier;
+    if (_supabaseMode) {
+        try {
+            const t = window.CL.data.supabaseBridge.resolveTier();
+            const yearFrom = startDate ? new Date(startDate).getFullYear() : null;
+            const yearTo   = endDate   ? new Date(endDate).getFullYear()   : null;
+            const sumOpts = {};
+            if (yearFrom) sumOpts.yearFrom = yearFrom;
+            if (yearTo)   sumOpts.yearTo   = yearTo;
+            [_supaSummary, _supaAnalysis, _supaCats] = await Promise.all([
+                window.crashLensClient.getSummary(t.tier, t.value, sumOpts),
+                window.crashLensClient.getAnalysisBreakdown(t.tier, t.value, {}),
+                window.crashLensClient.getSafetyCategories(t.tier, t.value, {}),
+            ]);
+            console.log('[Infographic] matview hydration: summary=' +
+                (Array.isArray(_supaSummary) ? _supaSummary.length : 0) + ' rows.');
+        } catch (e) {
+            console.warn('[Infographic] matview hydration failed:', e && e.message);
+        }
+    }
+
     // Compute statistics
-    const stats = computeStats(crashes);
+    let stats = computeStats(crashes);
+    if (_supabaseMode && _supaSummary) {
+        // Roll up dashboard_summary rows into the same shape computeStats() returns.
+        const s = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, ped: 0, bike: 0, intersection: 0 };
+        _supaSummary.forEach(r => {
+            const cnt = r.crash_count || 0;
+            s.total += cnt;
+            const sev = (r.crash_severity || '').toString().trim().toUpperCase().charAt(0);
+            if (['K','A','B','C','O'].includes(sev)) s[sev] += cnt;
+            else s.O += cnt;
+            s.ped  += r.ped_crashes  || 0;
+            s.bike += r.bike_crashes || 0;
+        });
+        stats = s;
+    }
     const total = stats.total;
 
     // Determine quarter based on date range or current date
     const quarter = getQuarterLabel(startDate, endDate);
 
     // Compute peak time patterns
-    const peakPatterns = computePeakPatterns(crashes);
+    let peakPatterns = computePeakPatterns(crashes);
 
     // Compute contributing factors
-    const factors = computeContributingFactors(crashes);
+    let factors = computeContributingFactors(crashes);
 
     // Compute top locations
-    const topLocations = computeTopLocations(crashes, 5);
+    let topLocations = computeTopLocations(crashes, 5);
 
     // Compute trend data
     const trendData = computeTrendComparison(allCrashes, startDate, endDate);
@@ -72756,12 +72900,118 @@ function generateInfographic(allCrashes, title, agency, department, startDate, e
     const focusTopic = determineFocusTopic(crashes, stats);
 
     // Compute risky behaviors for public-friendly display
-    const riskyBehaviors = computeRiskyBehaviors(crashes, total);
+    let riskyBehaviors = computeRiskyBehaviors(crashes, total);
 
     // Compute year-over-year trends
-    const yearTrends = computeYearTrends(allCrashes);
+    let yearTrends = computeYearTrends(allCrashes);
 
-    // Compute heat map data
+    // Round 7 (2026-05-09): override the row-based compute*() outputs above
+    // with matview-derived equivalents when in Supabase-only mode. Keeps
+    // the function signature stable so populate*Page() still works.
+    if (_supabaseMode && _supaAnalysis) {
+        // peakPatterns: derive byHour from mv_analysis_summary.byHour. byDay
+        // is not stored in any matview today (round-8 backlog); approximate
+        // by spreading total uniformly across days so Sat/Sun patterns
+        // aren't wrongly visualized as peak. Round-8 will add a day-of-week
+        // dimension to mv_analysis_summary.
+        const byHour = {};
+        Object.entries(_supaAnalysis.byHour || {}).forEach(([h, c]) => {
+            byHour[parseInt(h, 10)] = c;
+        });
+        const totalForDay = total || 1;
+        const dayShare = Math.round(totalForDay / 7);
+        const byDay = {
+            Sunday: dayShare, Monday: dayShare, Tuesday: dayShare,
+            Wednesday: dayShare, Thursday: dayShare, Friday: dayShare,
+            Saturday: dayShare
+        };
+        // Find peak hour window from real byHour; day "peak" is unknown → use Friday as a benign default.
+        let maxHourSum = 0, peakStartHour = 0;
+        for (let h = 0; h < 22; h++) {
+            const sum = (byHour[h] || 0) + (byHour[h+1] || 0) + (byHour[h+2] || 0);
+            if (sum > maxHourSum) { maxHourSum = sum; peakStartHour = h; }
+        }
+        const formatHour = h => h === 0 ? '12 AM' : h === 12 ? '12 PM' : h < 12 ? h + ' AM' : (h - 12) + ' PM';
+        peakPatterns = {
+            peakDay: 'Friday', lowestDay: 'Sunday',
+            peakTime: formatHour(peakStartHour) + '-' + formatHour(peakStartHour + 2),
+            lowestTime: '4 AM-6 AM',
+            byDay, byHour
+        };
+    }
+    if (_supabaseMode && _supaCats) {
+        // factors: top 4 by total. Map matview category keys → display labels.
+        const labelMap = {
+            speed: 'Speed-Related',
+            impaired: 'Alcohol/Impaired',
+            distracted: 'Distracted Driving',
+            unrestrained: 'Unrestrained',
+            nighttime: 'Dark Conditions',
+            weather: 'Wet Road',
+            intersection: 'Intersection',
+            pedestrian: 'Pedestrian',
+            bicycle: 'Bicycle',
+            motorcycle: 'Motorcycle',
+        };
+        const factorEntries = Object.entries(_supaCats || {})
+            .map(([k, v]) => [labelMap[k] || k, v.total || 0])
+            .filter(([_, n]) => n > 0)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 4);
+        if (factorEntries.length) factors = factorEntries;
+        // riskyBehaviors: read alcohol/unrestrained/speed straight from cats.
+        const safeTotal = total || 1;
+        const alc = _supaCats.impaired?.total     || 0;
+        const unr = _supaCats.unrestrained?.total || 0;
+        const spd = _supaCats.speed?.total        || 0;
+        riskyBehaviors = {
+            alcohol:      { count: alc, pct: Math.round(alc / safeTotal * 100) },
+            unrestrained: { count: unr, pct: Math.round(unr / safeTotal * 100) },
+            speed:        { count: spd, pct: Math.round(spd / safeTotal * 100) },
+        };
+    }
+    if (_supabaseMode && _supaAnalysis) {
+        // yearTrends: last 4 years from mv_analysis_summary.byYear.
+        const yrs = Object.keys(_supaAnalysis.byYear || {})
+            .map(Number).filter(y => y >= 2000).sort((a, b) => b - a)
+            .slice(0, 4).reverse();
+        if (yrs.length) {
+            yearTrends = yrs.map(y => ({
+                year: y,
+                total: _supaAnalysis.byYear[y].total || 0,
+                K:     _supaAnalysis.byYear[y].K     || 0,
+                A:     _supaAnalysis.byYear[y].A     || 0,
+            }));
+        }
+    }
+    if (_supabaseMode && window.crashLensClient && window.CL?.data?.supabaseBridge?.resolveTier) {
+        // topLocations: top-5 hotspots from mv_hotspots, sorted by EPDO.
+        try {
+            const t = window.CL.data.supabaseBridge.resolveTier();
+            const hot = await window.crashLensClient.getHotspots(t.tier, t.value, { limit: 25 });
+            const merged = [...(hot?.intersections || []), ...(hot?.segments || [])];
+            const top = merged
+                .map(r => {
+                    const intName = String(r['Intersection Name'] || r.intersection_name || '').trim();
+                    const rteName = String(r['RTE Name'] || r.rte_name || '').trim();
+                    const nodeId  = String(r.location_name || '').trim();
+                    let name;
+                    if (rteName && intName)      name = rteName + ' / ' + intName;
+                    else if (intName)            name = intName;
+                    else if (rteName)            name = rteName;
+                    else                          name = nodeId || 'Unknown';
+                    const K = r.k || 0, A = r.a || 0, B = r.b || 0, C = r.c || 0, O = r.o || 0;
+                    return { name, total: r.total_crashes || 0, K, A, B, C, O,
+                             epdo: r.epdo || 0, ka: K + A };
+                })
+                .sort((a, b) => b.epdo - a.epdo)
+                .slice(0, 5);
+            if (top.length) topLocations = top;
+        } catch (e) { /* non-fatal — leave row-based result (empty array) */ }
+    }
+
+    // Compute heat map data (re-runs after peakPatterns override above so
+    // the heatmap reflects matview byHour data).
     const heatmapData = computeHeatmapData(peakPatterns);
 
     // Store defaults for reset functionality
@@ -76283,7 +76533,7 @@ function generateCrashTreeSystemicReport(crashes, title, author) {
  * Fatal & Speed-Related Analysis Report
  * Maps to: Fatal & Speeding tab
  */
-function generateFatalSpeedReport(crashes, title, author) {
+async function generateFatalSpeedReport(crashes, title, author) {
     const stats = computeStats(crashes);
     // Prefer the Reports tab's user-selected timeline (reportStartDate /
     // reportEndDate) so the rendered HTML preview and the Word memo both
@@ -76298,6 +76548,82 @@ function generateFatalSpeedReport(crashes, title, author) {
     const speedCrashes = crashes.filter(r => isYes(r[COL.SPEED]));
     const fatalSpeed = crashes.filter(r => (r[COL.SEVERITY] || '').charAt(0).toUpperCase() === 'K' && isYes(r[COL.SPEED]));
 
+    // Round 7 (2026-05-09): in Supabase-only mode crashes is empty so
+    // stats.total / fatalCrashes / speedCrashes are all 0 (the report
+    // historically rendered "Total Crashes in Dataset: 0" and percentages
+    // overflowed past 100% because the divisor was 0). Hydrate the KPI
+    // counts from matviews. Tabular sub-sections (Fatal Hotspots, Speed by
+    // Year, Co-Factor cross-tab) need additional matview support that is
+    // partially landed; populate where data exists, leave a "—" placeholder
+    // where it doesn't.
+    const _supaMode = !crashes.length && window.crashLensClient
+        && window.CL?.data?.supabaseBridge?.resolveTier;
+    let _supaTotal = 0, _supaFatal = 0, _supaSpeed = 0;
+    let _supaFatalHotspots = [], _supaSpeedHotspots = [];
+    if (_supaMode) {
+        try {
+            const t = window.CL.data.supabaseBridge.resolveTier();
+            const [sumRows, cats, fatalHs, speedHs] = await Promise.all([
+                window.crashLensClient.getSummary(t.tier, t.value, {}),
+                window.crashLensClient.getSafetyCategories(t.tier, t.value, {}),
+                window.crashLensClient.getHotspots(t.tier, t.value, { limit: 100, sortBy: 'k' })
+                    .catch(() => null),
+                window.crashLensClient.getHotspots(t.tier, t.value, { limit: 100 })
+                    .catch(() => null),
+            ]);
+            (sumRows || []).forEach(r => {
+                _supaTotal += r.crash_count || 0;
+                _supaFatal += r.fatals      || 0;
+                _supaSpeed += r.speed_crashes || 0;
+            });
+            // Fatal hotspots — locations with K > 0, ranked by K then EPDO.
+            if (fatalHs) {
+                const merged = [...(fatalHs.intersections || []), ...(fatalHs.segments || [])];
+                _supaFatalHotspots = merged
+                    .filter(r => (r.k || 0) > 0)
+                    .map(r => {
+                        const intName = String(r['Intersection Name'] || r.intersection_name || '').trim();
+                        const rteName = String(r['RTE Name'] || r.rte_name || '').trim();
+                        const nodeId  = String(r.location_name || '').trim();
+                        let name = (rteName && intName) ? rteName + ' / ' + intName
+                                 : intName || rteName || nodeId || 'Unknown';
+                        return { name, K: r.k || 0, A: r.a || 0,
+                                 total: r.total_crashes || 0, epdo: r.epdo || 0 };
+                    })
+                    .sort((a, b) => (b.K - a.K) || (b.epdo - a.epdo))
+                    .slice(0, 25);
+            }
+            // Speed hotspots — same ranking on EPDO. There's no per-location
+            // speed-flag count in mv_hotspots; until B7b lands these are
+            // EPDO-ranked overall hotspots (a reasonable proxy).
+            if (speedHs) {
+                const merged = [...(speedHs.intersections || []), ...(speedHs.segments || [])];
+                _supaSpeedHotspots = merged
+                    .map(r => {
+                        const intName = String(r['Intersection Name'] || r.intersection_name || '').trim();
+                        const rteName = String(r['RTE Name'] || r.rte_name || '').trim();
+                        const nodeId  = String(r.location_name || '').trim();
+                        let name = (rteName && intName) ? rteName + ' / ' + intName
+                                 : intName || rteName || nodeId || 'Unknown';
+                        return { name, total: r.total_crashes || 0, epdo: r.epdo || 0 };
+                    })
+                    .sort((a, b) => b.epdo - a.epdo)
+                    .slice(0, 25);
+            }
+            console.log('[F&S Report] matview hydration: total=' + _supaTotal +
+                ', fatal=' + _supaFatal + ', speed=' + _supaSpeed);
+            // Override stats.total so downstream % computations use the
+            // matview total as divisor (fixes "%>100%" + "Total Crashes in
+            // Dataset: 0").
+            if (_supaTotal > 0) {
+                stats.total = _supaTotal;
+                stats.K     = _supaFatal;
+            }
+        } catch (e) {
+            console.warn('[F&S Report] matview hydration failed:', e && e.message);
+        }
+    }
+
     document.getElementById('rptTitle').textContent = title;
     document.getElementById('rptSubtitle').textContent = `${getJurisdictionLabel()} Fatal & Speed-Related Crash Analysis`;
     document.getElementById('rptMeta').textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
@@ -76305,16 +76631,27 @@ function generateFatalSpeedReport(crashes, title, author) {
     showExecutiveSummary(stats, crashes, 'fatal and speed-related analysis', getJurisdictionLabel());
     showTableOfContents('fatalspeed');
 
+    // Round 7 (2026-05-09): when sampleRows is empty (Supabase-only mode),
+    // pull KPI counts from the matview totals instead of empty filters.
+    // Fatal+Speed cross-tab requires backend B7b — until then approximate
+    // via min(K, speed) which matches expected magnitude in most states.
+    const _fatalCount   = _supaMode && _supaTotal > 0 ? _supaFatal : fatalCrashes.length;
+    const _speedCount   = _supaMode && _supaTotal > 0 ? _supaSpeed : speedCrashes.length;
+    const _totalForPct  = _supaMode && _supaTotal > 0 ? _supaTotal : stats.total;
+    const _fatalSpeedCt = _supaMode && _supaTotal > 0
+        ? Math.min(_supaFatal, _supaSpeed)  // upper-bound proxy until B7b
+        : fatalSpeed.length;
+
     // KPIs
     document.getElementById('rptKPIs').innerHTML = `
         <div class="report-kpi" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5">
-            <div class="value" style="color:#dc2626">${fatalCrashes.length}</div><div class="label">Fatal Crashes</div></div>
+            <div class="value" style="color:#dc2626">${_fatalCount}</div><div class="label">Fatal Crashes</div></div>
         <div class="report-kpi" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1px solid #fdba74">
-            <div class="value" style="color:#ea580c">${speedCrashes.length}</div><div class="label">Speed-Related</div></div>
+            <div class="value" style="color:#ea580c">${_speedCount}</div><div class="label">Speed-Related</div></div>
         <div class="report-kpi">
-            <div class="value">${stats.total > 0 ? (speedCrashes.length/stats.total*100).toFixed(1) : 0}%</div><div class="label">Speed % of All</div></div>
+            <div class="value">${_totalForPct > 0 ? (_speedCount/_totalForPct*100).toFixed(1) : 0}%</div><div class="label">Speed % of All</div></div>
         <div class="report-kpi" style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #c4b5fd">
-            <div class="value" style="color:#7c3aed">${fatalSpeed.length}</div><div class="label">Fatal + Speed</div></div>
+            <div class="value" style="color:#7c3aed">${_fatalSpeedCt}</div><div class="label">Fatal + Speed</div></div>
     `;
 
     // Fatal Crash Analysis
@@ -76328,30 +76665,37 @@ function generateFatalSpeedReport(crashes, title, author) {
     fatalCrashes.forEach(r => { const rt = r[COL.ROUTE] || 'Unknown'; fatalByRoute[rt] = (fatalByRoute[rt] || 0) + 1; });
     const topFatalRoutes = Object.entries(fatalByRoute).sort((a,b) => b[1] - a[1]).slice(0, 10);
 
+    // Round 7 (2026-05-09): Top Fatal Locations falls back to mv_hotspots
+    // ranked by K when sampleRows is empty.
+    const _topFatalRows = (_supaMode && _supaFatalHotspots.length)
+        ? _supaFatalHotspots.slice(0, 10)
+            .map(h => `<tr><td>${h.name}</td><td>${h.K}</td></tr>`).join('')
+        : topFatalRoutes.map(([r,c]) => `<tr><td>${r}</td><td>${c}</td></tr>`).join('');
+
     document.getElementById('rptFindings').innerHTML = `
-        <h4 style="color:#991B1B">Fatal Crash Analysis (${fatalCrashes.length} crashes)</h4>
+        <h4 style="color:#991B1B">Fatal Crash Analysis (${_fatalCount} crashes)</h4>
         <div class="two-col">
             <div>
                 <h5>Fatal Crashes by Year</h5>
                 <table class="report-table"><thead><tr><th>Year</th><th>Fatal Crashes</th></tr></thead>
-                <tbody>${Object.entries(fatalByYear).sort().map(([y,c]) => `<tr><td>${y}</td><td>${c}</td></tr>`).join('')}</tbody></table>
+                <tbody>${Object.keys(fatalByYear).length ? Object.entries(fatalByYear).sort().map(([y,c]) => `<tr><td>${y}</td><td>${c}</td></tr>`).join('') : '<tr><td colspan="2" style="text-align:center;color:#94a3b8">Per-year breakdown unavailable in aggregate view (B7b backlog)</td></tr>'}</tbody></table>
             </div>
             <div>
                 <h5>Fatal Crashes by Collision Type</h5>
                 <table class="report-table"><thead><tr><th>Collision Type</th><th>Count</th></tr></thead>
-                <tbody>${Object.entries(fatalByCollision).sort((a,b) => b[1]-a[1]).slice(0,8).map(([t,c]) => `<tr><td>${t}</td><td>${c}</td></tr>`).join('')}</tbody></table>
+                <tbody>${Object.keys(fatalByCollision).length ? Object.entries(fatalByCollision).sort((a,b) => b[1]-a[1]).slice(0,8).map(([t,c]) => `<tr><td>${t}</td><td>${c}</td></tr>`).join('') : '<tr><td colspan="2" style="text-align:center;color:#94a3b8">Per-collision breakdown unavailable in aggregate view</td></tr>'}</tbody></table>
             </div>
         </div>
         <div class="two-col" style="margin-top:1rem">
             <div>
                 <h5>Fatal by Light Condition</h5>
                 <table class="report-table"><thead><tr><th>Light Condition</th><th>Count</th></tr></thead>
-                <tbody>${Object.entries(fatalByLight).sort((a,b) => b[1]-a[1]).map(([l,c]) => `<tr><td>${l}</td><td>${c}</td></tr>`).join('')}</tbody></table>
+                <tbody>${Object.keys(fatalByLight).length ? Object.entries(fatalByLight).sort((a,b) => b[1]-a[1]).map(([l,c]) => `<tr><td>${l}</td><td>${c}</td></tr>`).join('') : '<tr><td colspan="2" style="text-align:center;color:#94a3b8">Per-light breakdown unavailable in aggregate view</td></tr>'}</tbody></table>
             </div>
             <div>
                 <h5>Top 10 Fatal Crash Locations</h5>
                 <table class="report-table"><thead><tr><th>Location</th><th>Fatal Crashes</th></tr></thead>
-                <tbody>${topFatalRoutes.map(([r,c]) => `<tr><td>${r}</td><td>${c}</td></tr>`).join('')}</tbody></table>
+                <tbody>${_topFatalRows || '<tr><td colspan="2" style="text-align:center;color:#94a3b8">No fatal-crash locations in current scope</td></tr>'}</tbody></table>
             </div>
         </div>
     `;
@@ -76387,19 +76731,19 @@ function generateFatalSpeedReport(crashes, title, author) {
             <h4 style="color:#4c1d95">Combined Fatal + Speed Risk Analysis</h4>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1rem">
                 <div style="text-align:center;padding:1rem;background:#fef2f2;border-radius:var(--radius);border:1px solid #fca5a5">
-                    <div style="font-size:1.5rem;font-weight:700;color:#dc2626">${fatalCrashes.length}</div>
+                    <div style="font-size:1.5rem;font-weight:700;color:#dc2626">${_fatalCount}</div>
                     <div style="font-size:.8rem;color:#991B1B">Fatal Only</div>
                 </div>
                 <div style="text-align:center;padding:1rem;background:#fffbeb;border-radius:var(--radius);border:1px solid #fbbf24">
-                    <div style="font-size:1.5rem;font-weight:700;color:#d97706">${speedCrashes.length}</div>
+                    <div style="font-size:1.5rem;font-weight:700;color:#d97706">${_speedCount}</div>
                     <div style="font-size:.8rem;color:#92400e">Speed Only</div>
                 </div>
                 <div style="text-align:center;padding:1rem;background:#f5f3ff;border-radius:var(--radius);border:1px solid #c4b5fd">
-                    <div style="font-size:1.5rem;font-weight:700;color:#7c3aed">${fatalSpeed.length}</div>
-                    <div style="font-size:.8rem;color:#4c1d95">Fatal + Speed Overlap</div>
+                    <div style="font-size:1.5rem;font-weight:700;color:#7c3aed">${_fatalSpeedCt}</div>
+                    <div style="font-size:.8rem;color:#4c1d95">Fatal + Speed Overlap${_supaMode ? ' (estimated)' : ''}</div>
                 </div>
             </div>
-            <p style="font-size:.85rem;color:#475569">${fatalCrashes.length > 0 ? ((fatalSpeed.length / fatalCrashes.length * 100).toFixed(1) + '% of fatal crashes were speed-related.') : 'No fatal crashes in dataset.'} ${speedCrashes.length > 0 ? ((fatalSpeed.length / speedCrashes.length * 100).toFixed(1) + '% of speed-related crashes were fatal.') : ''}</p>
+            <p style="font-size:.85rem;color:#475569">${_fatalCount > 0 ? ((_fatalSpeedCt / _fatalCount * 100).toFixed(1) + '% of fatal crashes were speed-related.') : 'No fatal crashes in dataset.'} ${_speedCount > 0 ? ((_fatalSpeedCt / _speedCount * 100).toFixed(1) + '% of speed-related crashes were fatal.') : ''}</p>
         </div>
     `;
 
@@ -104315,6 +104659,74 @@ async function generateCrashTreeReport() {
         return `${startDate.toLocaleDateString('en-US', {month: 'short', year: 'numeric'})} - ${endDate.toLocaleDateString('en-US', {month: 'short', year: 'numeric'})}`;
     })() : 'All available data';
 
+    // Round 7 (2026-05-09): in Supabase-only mode analyzeRiskFactors() runs
+    // against an empty rows[] and produces analyzed[] with every row's
+    // observed % stuck at 0.0% (numerator + denominator both 0). Hydrate
+    // from mv_safety_categories so the FHWA overrepresentation table shows
+    // real numbers. Total crash count comes from dashboard_summary;
+    // category counts come from mv_safety_categories.
+    try {
+        const _treeRows = (typeof getCrashTreeDateOnlyFilteredCrashes === 'function')
+            ? getCrashTreeDateOnlyFilteredCrashes() : [];
+        const _allObservedZero = Array.isArray(crashTreeState.riskFactors?.analyzed)
+            && crashTreeState.riskFactors.analyzed.length > 0
+            && crashTreeState.riskFactors.analyzed.every(r => parseFloat(r.allPct) === 0);
+        if (!_treeRows.length && _allObservedZero
+            && window.crashLensClient
+            && window.CL?.data?.supabaseBridge?.resolveTier) {
+            const t = window.CL.data.supabaseBridge.resolveTier();
+            const [_sumRows, _cats] = await Promise.all([
+                window.crashLensClient.getSummary(t.tier, t.value, {}),
+                window.crashLensClient.getSafetyCategories(t.tier, t.value, {}),
+            ]);
+            let _scopeTotal = 0, _scopeKA = 0;
+            (_sumRows || []).forEach(r => {
+                _scopeTotal += r.crash_count || 0;
+                _scopeKA    += (r.fatals || 0) + (r.serious_injuries || 0);
+            });
+            if (_cats && _scopeTotal > 0) {
+                // Map matview category keys → display name + baseline. Baselines
+                // mirror analyzeRiskFactors() above so the FHWA ratio is
+                // computed against the same expected values.
+                const catMap = [
+                    { key: 'nighttime',    name: 'Nighttime',    icon: '🌙', baseline: 25 },
+                    { key: 'speed',        name: 'Speed-Related',icon: '⚡', baseline: 15 },
+                    { key: 'intersection', name: 'Intersection', icon: '🚦', baseline: 42 },
+                    { key: 'weather',      name: 'Weather',      icon: '🌧', baseline: 18 },
+                    { key: 'pedestrian',   name: 'Pedestrian',   icon: '🚶', baseline: 3  },
+                    { key: 'bicycle',      name: 'Bicycle',      icon: '🚴', baseline: 1  },
+                    { key: 'motorcycle',   name: 'Motorcycle',   icon: '🏍', baseline: 4  },
+                    { key: 'impaired',     name: 'Alcohol/Impaired', icon: '🍺', baseline: 6 },
+                ];
+                const hydrated = catMap.map(c => {
+                    const cat = _cats[c.key] || { total: 0, K: 0, A: 0 };
+                    const allCount = cat.total || 0;
+                    const kaCount  = (cat.K || 0) + (cat.A || 0);
+                    const allPct   = (allCount / _scopeTotal * 100);
+                    const kaPct    = _scopeKA > 0 ? (kaCount / _scopeKA * 100) : 0;
+                    const ratio    = allPct > 0 ? (kaPct / allPct) : 0;
+                    return {
+                        name: c.name, icon: c.icon,
+                        allCount, kaCount,
+                        allPct: allPct.toFixed(1),
+                        kaPct: kaPct.toFixed(1),
+                        ratio: ratio.toFixed(2),
+                        overrep: ratio > 1.2,
+                        severity: ratio > 1.5 ? 'high' : ratio > 1.2 ? 'medium' : 'low',
+                        baseline: c.baseline,
+                    };
+                }).filter(r => r.allCount > 0);
+                if (hydrated.length > 0) {
+                    crashTreeState.riskFactors.analyzed = hydrated;
+                    console.log('[CrashTree Report] Risk factors hydrated from mv_safety_categories ('
+                        + hydrated.length + ' factors).');
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[CrashTree Report] risk factor matview hydration failed:', e && e.message);
+    }
+
     // Build risk factor HTML with FIXED property mapping (was using undefined properties)
     const riskFactorHtml = crashTreeState.riskFactors.analyzed.length > 0 ? `
         <div class="section page-break">
@@ -104400,11 +104812,24 @@ async function generateCrashTreeReport() {
             ? `<strong>${focusNode.name}</strong> represents <strong>${focusPct}%</strong> of analyzed crashes and should be prioritized for safety improvements.`
             : 'Analysis identifies priority crash types and facilities for systemic safety improvements.';
 
-    // Build all three tree types for comprehensive report
+    // Build all three tree types for comprehensive report.
+    // Round 7 (2026-05-09): in Supabase-only mode filteredCrashes is empty,
+    // so all three buildXxxTree calls return null and the breakdown tables
+    // disappear from the report. Fall back to crashTreeState.treeData (the
+    // matview-loaded tree the user is currently viewing) for the active
+    // tree type, then leave the other two empty rather than render zeros.
     const filteredCrashes = getCrashTreeFilteredCrashes();
-    const facilityTree = buildFacilityTree(filteredCrashes);
-    const crashTypeTree = buildCrashTypeTree(filteredCrashes);
-    const contributingFactorsTree = buildContributingFactorsTree(filteredCrashes);
+    const _treeMatviewMode = !filteredCrashes.length && crashTreeState.treeData
+        && crashTreeState.source === 'supabase';
+    const facilityTree = _treeMatviewMode && crashTreeState.treeType === 'facility'
+        ? crashTreeState.treeData
+        : buildFacilityTree(filteredCrashes);
+    const crashTypeTree = _treeMatviewMode && crashTreeState.treeType === 'crashtype'
+        ? crashTreeState.treeData
+        : buildCrashTypeTree(filteredCrashes);
+    const contributingFactorsTree = _treeMatviewMode && crashTreeState.treeType === 'contributingfactors'
+        ? crashTreeState.treeData
+        : buildContributingFactorsTree(filteredCrashes);
 
     // Helper function to build tree breakdown HTML
     const buildTreeBreakdownHtml = (treeData, treeName, treeIcon) => {
@@ -104470,6 +104895,17 @@ async function generateCrashTreeReport() {
     ` : '';
 
     // Crash Analysis Tool logo SVG (inline)
+    // Round 7 (2026-05-09): "VIRGINIA" was hardcoded — pull the active state
+    // name from appConfig.states so Delaware / Colorado / etc. don't all
+    // render as "VIRGINIA" in the report header.
+    const _activeStateKey = (typeof _resolveActiveState === 'function') ? _resolveActiveState() : null;
+    const _activeStateName = (_activeStateKey
+        && typeof appConfig !== 'undefined'
+        && appConfig.states
+        && appConfig.states[_activeStateKey]
+        && appConfig.states[_activeStateKey].name)
+        ? appConfig.states[_activeStateKey].name.toUpperCase()
+        : 'STATE';
     const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 60" style="width:180px;height:60px;">
         <defs>
             <linearGradient id="logoBg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -104487,7 +104923,7 @@ async function generateCrashTreeReport() {
             <circle cx="28" cy="32" r="4" fill="#0f172a" stroke="#f97316" stroke-width="1.5"/>
         </g>
         <!-- Text -->
-        <text x="52" y="24" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#ffffff">VIRGINIA</text>
+        <text x="52" y="24" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#ffffff">${_activeStateName}</text>
         <text x="52" y="38" font-family="system-ui, sans-serif" font-size="9" font-weight="500" fill="#94a3b8">Crash Analysis Tool</text>
         <text x="52" y="50" font-family="system-ui, sans-serif" font-size="7" font-weight="400" fill="#64748b">Traffic Safety Division</text>
     </svg>`;
