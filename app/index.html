@@ -13033,6 +13033,15 @@ Enhanced generation with validation, program-specific optimization, and reviewer
 </div>
 </div>
 <div class="ai-chat-messages" id="aiChatMessages">
+<!-- Round 13 — Location picker for MUTCD AI -->
+<div id="mutcdLocationBar" style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.5rem 1rem;border-bottom:1px solid var(--border)">
+<span style="font-size:.85rem;color:var(--gray-dark);font-weight:500">📍 Location:</span>
+<select id="mutcdLocationSelect" onchange="loadMUTCDLocation(this.value)"
+        style="flex:1;min-width:240px;padding:.4rem .6rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.85rem">
+<option value="">All Jurisdiction (no specific location)</option>
+</select>
+<button onclick="clearMUTCDLocation()" style="font-size:.75rem;padding:.3rem .6rem;border:1px solid var(--border);background:white;border-radius:var(--radius);cursor:pointer">Clear</button>
+</div>
 <!-- Location Context Bar (persists across welcome/chat) -->
 <div id="aiLocationContext" class="ai-location-bar ghost">
 <span class="ghost-text">Select a location from Map or Hotspots for intersection-specific analysis</span>
@@ -32430,7 +32439,10 @@ function showTab(tabId) {
     if (tabId === 'deepdive' && crashState.loaded) initDeepDiveTab();
     if (tabId === 'prediction') initPredictionTab();
     if (tabId === 'upload') loadValidatorIframe();  // Load/reload validator iframe when upload tab is shown
-    if (tabId === 'ai') updateAIContextIndicator();  // Update AI context when tab is shown
+    if (tabId === 'ai') {
+        updateAIContextIndicator();  // Update AI context when tab is shown
+        if (typeof initMUTCDLocationDropdown === 'function') initMUTCDLocationDropdown();
+    }
     if (tabId === 'domain-knowledge' && crashState.loaded) initDomainKnowledge();  // Initialize Domain Knowledge tab
     if (tabId === 'safety') {
         // Hide/show empty state based on data availability
@@ -35093,6 +35105,21 @@ function initReportLocationDropdown() {
 // Update Report location dropdown based on selected type
 function updateReportLocationDropdown() {
     const locationType = getSelectedLocationType('reportLocationType');
+    const lpType = locationType === 'all' ? null : locationType;
+
+    // Round 13 — Supabase-backed picker so the Reports dropdown populates at
+    // rolled-up tiers without a local R2 hydrate.
+    if (window.LocationPicker && window.crashLensClient && window.crashLensClient.preferSupabase) {
+        window.LocationPicker.register('reportLocationSelect', {
+            placeholder: '-- Select Location (optional) --',
+            locationType: lpType,
+            useOptgroups: lpType === null,
+            showCrashCount: true,
+            segmentLabel: '🛣️ Road Segments',
+            intersectionLabel: '🚦 Intersections'
+        });
+        return;
+    }
 
     populateLocationDropdown('reportLocationSelect', {
         placeholder: '-- Select Location (optional) --',
@@ -36746,6 +36773,58 @@ async function _loadGrantsFromMatview() {
         if (!stateKey) return false;
         const t = CL.data.supabaseBridge.resolveTier();
         window.crashLensClient.state = stateKey;
+
+        // Round 13 — prefer the pre-aggregated mv_grant_ready_locations (per-
+        // location, includes vru_count + score_balanced) when available. Falls
+        // back to mv_grants_baseline (per-location-per-year) for jurisdictions
+        // where the new matview hasn't been refreshed yet.
+        if (typeof window.crashLensClient.getGrantReadyLocations === 'function') {
+            showGrantRankingProgress(true, 'Querying mv_grant_ready_locations…', 0);
+            const rt = (CL.data.supabaseBridge.roadTypeSpec && CL.data.supabaseBridge.roadTypeSpec()) || {};
+            const grOpts = {
+                state: stateKey,
+                roadType: rt.noInterstate ? 'all_no_interstate'
+                          : (rt.roadType || (Array.isArray(rt.roadTypes) && rt.roadTypes[0]) || 'all'),
+                minCrashes: grantState.minCrashThreshold || 3,
+                limit: 200
+            };
+            if (t.tier === 'county')             grOpts.county = t.value;
+            else if (t.tier === 'mpo')            grOpts.mpo = t.value;
+            else if (t.tier === 'planning_district') grOpts.pd = t.value;
+            const grRows = await window.crashLensClient.getGrantReadyLocations(grOpts);
+            if (Array.isArray(grRows) && grRows.length > 0) {
+                const ranked = grRows.map(r => {
+                    const K = +r.k || 0, A = +r.a || 0;
+                    const ped = +r.ped_count || 0, bike = +r.bike_count || 0;
+                    const epdo = +r.epdo || 0;
+                    return {
+                        name: r.display_name || r.location_name,
+                        type: r.location_type || 'segment',
+                        crashes: +r.total_crashes || 0,
+                        K, A, B: 0, C: 0, O: 0,
+                        epdo, ped, bike, vru: ped + bike,
+                        lat: r.lat, lon: r.lon,
+                        nodeId: r.node_id || r.location_name,
+                        matchingGrants: [],
+                        bestMatch: K > 0 ? 'ss4a' : (A > 0 ? 'hsip' : '402'),
+                        patterns: { night: 0, impaired: 0, speed: 0, angle: 0 },
+                        score: Math.round(epdo),
+                        needScore: Math.round(epdo),
+                        patternScore: 0,
+                        feasibilityScore: +r.score_balanced || 0,
+                        confidence: r.confidence_high ? 'high' : ((K + A) > 0 ? 'medium' : 'low')
+                    };
+                });
+                grantState.allRankedLocations = ranked;
+                grantState.rankingCache = { key: getGrantRankingCacheKey(), locations: ranked };
+                applyLocationLimit();
+                displayGrantLocations();
+                showGrantRankingProgress(false);
+                console.log('[Grants] Loaded ' + ranked.length + ' locations from mv_grant_ready_locations');
+                return true;
+            }
+            console.log('[Grants] mv_grant_ready_locations empty — falling back to mv_grants_baseline');
+        }
 
         showGrantRankingProgress(true, 'Querying mv_grants_baseline…', 0);
         const rows = await CL.data.cachedMatview('mv_grants_baseline', t.tier, t.value,
@@ -40374,6 +40453,17 @@ function analyzeLocation(idx) {
 }
 
 function populateLocationDropdowns() {
+    // Round 13 — prefer Supabase-backed picker so the dropdown populates at
+    // rolled-up tiers even when the local rankedLocations array is empty.
+    if (window.LocationPicker && window.crashLensClient && window.crashLensClient.preferSupabase) {
+        window.LocationPicker.register('appLocation', {
+            placeholder: 'Select Location...',
+            locationType: null,
+            useOptgroups: true,
+            showCrashCount: true
+        });
+        return;
+    }
     const options = grantState.rankedLocations.map(loc => `<option value="${loc.name}">${loc.name} (${loc.crashes} crashes)</option>`).join('');
     document.getElementById('appLocation').innerHTML = '<option value="">Select Location...</option>' + options;
 }
@@ -42131,24 +42221,48 @@ function scrollToWritingAssistant() {
 // MY APPLICATIONS - MANAGEMENT & EXPORT
 // ============================================================
 function openNewAppModal() {
-    // Populate location dropdown
     const locationSelect = document.getElementById('newAppLocation');
+
+    // Round 13 — Supabase-backed picker. Falls back to the legacy ranked-list
+    // when LocationPicker isn't loaded (file:// reviews, hard caching).
+    if (window.LocationPicker && window.crashLensClient && window.crashLensClient.preferSupabase) {
+        window.LocationPicker.register('newAppLocation', {
+            placeholder: 'Select Location...',
+            locationType: null,
+            useOptgroups: true,
+            showCrashCount: true,
+            onPopulated: function () {
+                // Pre-select the first checked row from the Grant-Ready table if any
+                if (grantState.selectedLocationIndices && grantState.selectedLocationIndices.length > 0) {
+                    const firstSelected = grantState.rankedLocations[grantState.selectedLocationIndices[0]];
+                    if (firstSelected) {
+                        const opt = Array.from(locationSelect.options).find(function (o) {
+                            return o.value && o.value.split(':').pop() === firstSelected.name;
+                        });
+                        if (opt) locationSelect.value = opt.value;
+                    }
+                }
+            }
+        });
+        document.getElementById('newAppModal').classList.add('visible');
+        return;
+    }
+
     locationSelect.innerHTML = '<option value="">Select Location...</option>';
-    
+
     if (grantState.rankedLocations && grantState.rankedLocations.length > 0) {
         grantState.rankedLocations.forEach((loc, idx) => {
             locationSelect.innerHTML += `<option value="${loc.name}">${loc.name} (${loc.crashes} crashes)</option>`;
         });
     }
-    
-    // If a location is selected in the main table, pre-select it
+
     if (grantState.selectedLocationIndices.length > 0) {
         const firstSelected = grantState.rankedLocations[grantState.selectedLocationIndices[0]];
         if (firstSelected) {
             locationSelect.value = firstSelected.name;
         }
     }
-    
+
     document.getElementById('newAppModal').classList.add('visible');
 }
 
@@ -79111,8 +79225,31 @@ function updateBALocationDropdown() {
     if (!select) return;
 
     const locationType = getSelectedLocationType('baLocationType');
+    const lpType = locationType === 'all' ? null : locationType;
 
-    // Use universal location dropdown builder
+    // Round 13 — Supabase-backed picker. Map-selection option is appended in
+    // the onPopulated callback so the LocationPicker's repaint doesn't wipe it.
+    if (window.LocationPicker && window.crashLensClient && window.crashLensClient.preferSupabase) {
+        window.LocationPicker.register('baLocationSelect', {
+            placeholder: '-- Select a route or intersection --',
+            locationType: lpType,
+            useOptgroups: lpType === null,
+            showCrashCount: true,
+            segmentLabel: '🛣️ Road Segments (sorted by crashes)',
+            intersectionLabel: '🚦 Intersections (sorted by crashes)',
+            onPopulated: function () {
+                if (typeof selectedCrashesFromDrawing !== 'undefined' &&
+                    selectedCrashesFromDrawing && selectedCrashesFromDrawing.length > 0) {
+                    var mapOpt = document.createElement('option');
+                    mapOpt.value = 'map:selection';
+                    mapOpt.textContent = '🗺️ Map Selection (' + selectedCrashesFromDrawing.length + ' crashes)';
+                    select.appendChild(mapOpt);
+                }
+            }
+        });
+        return;
+    }
+
     populateLocationDropdown('baLocationSelect', {
         placeholder: '-- Select a route or intersection --',
         locationType: locationType,
@@ -79122,7 +79259,6 @@ function updateBALocationDropdown() {
         intersectionLabel: '🚦 Intersections (sorted by crashes)'
     });
 
-    // Add map selection option if available
     if (selectedCrashesFromDrawing && selectedCrashesFromDrawing.length > 0) {
         const mapOpt = document.createElement('option');
         mapOpt.value = 'map:selection';
@@ -82079,6 +82215,40 @@ function buildCrashDataContext() {
 // ============================================================
 // MUTCD AI INTEGRATION FUNCTIONS
 // ============================================================
+
+// Round 13 — universal LocationPicker for the MUTCD AI tab. Until now this
+// tab had no location dropdown — users could only pick a location via Map
+// or Hot Spots and have it pushed into context. Now they can pick one inline.
+function initMUTCDLocationDropdown() {
+    if (!window.LocationPicker) return;
+    window.LocationPicker.register('mutcdLocationSelect', {
+        placeholder: 'All Jurisdiction (no specific location)',
+        locationType: null,
+        useOptgroups: true,
+        showCrashCount: true
+    });
+}
+function loadMUTCDLocation(value) {
+    const row = value && window.LocationPicker ? window.LocationPicker.resolveValue(value) : null;
+    const ctx = document.getElementById('aiLocationContext');
+    if (ctx) {
+        if (row) {
+            ctx.classList.remove('ghost');
+            ctx.innerHTML = '<span style="font-weight:600">📍 ' + row.display_name + '</span>' +
+                ' <span style="color:var(--gray);margin-left:.5rem">(' + row.total_crashes + ' crashes)</span>';
+        } else {
+            ctx.classList.add('ghost');
+            ctx.innerHTML = '<span class="ghost-text">Select a location from Map or Hotspots for intersection-specific analysis</span>';
+        }
+    }
+    // Stash for the AI prompt builder to pick up
+    window._mutcdSelectedLocation = row;
+}
+function clearMUTCDLocation() {
+    const sel = document.getElementById('mutcdLocationSelect');
+    if (sel) sel.value = '';
+    loadMUTCDLocation('');
+}
 
 // Load MUTCD index files (called on app initialization)
 async function loadMUTCDIndex() {
@@ -85320,12 +85490,28 @@ function populateDKLocationDropdown() {
 // Update location dropdown based on location type filter
 function updateDKLocationDropdown() {
     const select = document.getElementById('dkLocationSelect');
-    if (!select || !crashState.aggregates) return;
+    if (!select) return;
 
     const locationType = getSelectedLocationType('dkLocationType');
+    const lpType = locationType === 'all' ? null : locationType;
+
+    // Round 13 — Supabase-backed, state-agnostic. Drops the
+    // crashState.aggregates gate so the dropdown populates at rolled-up
+    // tiers (county/MPO/PD) without needing an R2 hydrate.
+    if (window.LocationPicker && window.crashLensClient && window.crashLensClient.preferSupabase) {
+        window.LocationPicker.register('dkLocationSelect', {
+            placeholder: '-- Select a route or intersection --',
+            locationType: lpType,
+            useOptgroups: lpType === null,
+            showCrashCount: true
+        });
+        return;
+    }
+
+    // Legacy R2-aggregate path
+    if (!crashState.aggregates) return;
     select.innerHTML = '<option value="">-- Select a route or intersection --</option>';
 
-    // Add routes (segments) if showing all or segments
     if ((locationType === 'all' || locationType === 'segment') && crashState.aggregates.byRoute) {
         const routes = Object.keys(crashState.aggregates.byRoute).sort();
         if (routes.length > 0) {
@@ -85342,7 +85528,6 @@ function updateDKLocationDropdown() {
         }
     }
 
-    // Add intersections if showing all or intersections
     if ((locationType === 'all' || locationType === 'intersection') && crashState.aggregates.byIntersection) {
         const intersections = Object.keys(crashState.aggregates.byIntersection).sort();
         if (intersections.length > 0) {
@@ -89745,8 +89930,43 @@ function updateCMFLocationDropdown() {
     if (!select) return;
 
     const locationType = getSelectedLocationType('cmfLocationType');
+    const lpType = locationType === 'all' ? null : locationType;
 
-    // Use universal location dropdown builder
+    // Round 13 — Supabase-backed, state-agnostic.
+    // Falls back to the legacy R2-aggregate path when LocationPicker hasn't
+    // loaded (file:// reviews, hard caching), so the existing code path stays
+    // intact.
+    if (window.LocationPicker && window.crashLensClient && window.crashLensClient.preferSupabase) {
+        window.LocationPicker.register('cmfLocationSelect', {
+            placeholder: '-- Select a route or intersection --',
+            locationType: lpType,
+            useOptgroups: lpType === null,
+            showCrashCount: true,
+            onPopulated: function (rows) {
+                // Mirror rows into legacy cmfState.routeData/nodeData so the
+                // existing search box (filterCMFLocations) keeps working.
+                cmfState.routeData = rows
+                    .filter(function (r) { return r.location_type === 'segment'; })
+                    .map(function (r) {
+                        return { name: r.location_name, funcClass: '', facilityType: '', areaType: '', crashes: r.total_crashes };
+                    });
+                cmfState.nodeData = rows
+                    .filter(function (r) { return r.location_type === 'intersection'; })
+                    .map(function (r) {
+                        return {
+                            id: r.location_name,
+                            routes: new Set((r.routes_array || [])),
+                            intType: '',
+                            trafficCtrl: '',
+                            crashes: r.total_crashes
+                        };
+                    });
+            }
+        });
+        return;
+    }
+
+    // Legacy path
     populateLocationDropdown('cmfLocationSelect', {
         placeholder: '-- Select a route or intersection --',
         locationType: locationType,
@@ -89754,7 +89974,6 @@ function updateCMFLocationDropdown() {
         showCrashCount: true
     });
 
-    // Also build and store route/node data for search functionality
     buildCMFSearchData();
 }
 
@@ -110985,11 +111204,38 @@ function populateWarrantLocations() {
 // Update Warrant location dropdown based on selected type
 function updateWarrantLocationDropdown() {
     const select = document.getElementById('warrantLocationSelect');
-    if (!select || !crashState.loaded) return;
+    if (!select) return;
 
     const locationType = getSelectedLocationType('warrantLocationType');
+    const lpType = locationType === 'all' ? null : locationType;
 
-    // Use universal location dropdown builder
+    // Round 13 — Supabase-backed, state-agnostic. Drops the crashState.loaded
+    // gate so the dropdown populates at rolled-up tiers (county/MPO/PD)
+    // even without a local R2 hydrate.
+    if (window.LocationPicker && window.crashLensClient && window.crashLensClient.preferSupabase) {
+        window.LocationPicker.register('warrantLocationSelect', {
+            placeholder: '-- Select a route or intersection --',
+            locationType: lpType,
+            useOptgroups: lpType === null,
+            showCrashCount: true,
+            segmentLabel: '🛣️ Road Segments (sorted by crashes)',
+            intersectionLabel: '🚦 Intersections (sorted by crashes)',
+            onPopulated: function (rows) {
+                warrantsState.routeData = rows
+                    .filter(function (r) { return r.location_type === 'segment'; })
+                    .map(function (r) { return { name: r.location_name, crashes: r.total_crashes }; });
+                warrantsState.nodeData = rows
+                    .filter(function (r) { return r.location_type === 'intersection'; })
+                    .map(function (r) {
+                        return { id: r.location_name, routes: new Set(r.routes_array || []), crashes: r.total_crashes };
+                    });
+            }
+        });
+        return;
+    }
+
+    // Legacy R2-aggregate path
+    if (!crashState.loaded) return;
     populateLocationDropdown('warrantLocationSelect', {
         placeholder: '-- Select a route or intersection --',
         locationType: locationType,
@@ -110999,7 +111245,6 @@ function updateWarrantLocationDropdown() {
         intersectionLabel: '🚦 Intersections (sorted by crashes)'
     });
 
-    // Store route/node data in warrantsState for other functions
     const locationData = buildLocationData({
         includeSegments: locationType === 'all' || locationType === 'segment',
         includeIntersections: locationType === 'all' || locationType === 'intersection'
@@ -158534,6 +158779,8 @@ if ('serviceWorker' in navigator) {
 </script>
 <script src="modules/data/road-type-mapping.js"></script>
 <script src="../assets/js/data-client.js"></script>
+<!-- Round 13 — Universal LocationPicker -->
+<script src="../assets/js/location-picker.js"></script>
 <script src="modules/data/matview-cache.js"></script>
 <script src="modules/data/prewarm.js"></script>
 <script src="modules/data/chunk-loader.js"></script>
