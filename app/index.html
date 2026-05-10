@@ -157862,6 +157862,7 @@ if ('serviceWorker' in navigator) {
 <script src="modules/data/road-type-mapping.js"></script>
 <script src="../assets/js/data-client.js"></script>
 <script src="modules/data/matview-cache.js"></script>
+<script src="modules/data/prewarm.js"></script>
 <script src="modules/data/chunk-loader.js"></script>
 <script src="modules/data/supabase-bridge.js"></script>
 <script src="modules/data/lazy-loader.js"></script>
@@ -158001,6 +158002,18 @@ function setScorecardTier(tier) {
     if (evt && evt.detail && evt.detail.source === 'supabase') _invalidateScorecard('crashDataLoaded');
   });
 })();
+
+// Round-11 — debounced pre-warm on jurisdiction change (catches county/city
+// switches that don't go through full state-change). schedule() is a no-op
+// if user has already navigated off Upload tab.
+document.addEventListener('jurisdictionChanged', function () {
+    try {
+        var t = (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+            ? CL.data.supabaseBridge.resolveTier()
+            : null;
+        if (t && CL.data.prewarm) CL.data.prewarm.schedule(t.tier, t.value);
+    } catch (e) { /* non-fatal */ }
+});
 
 /**
  * Initialize the scorecard tab — populate year dropdowns, load data.
