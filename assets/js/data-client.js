@@ -1631,7 +1631,18 @@ class CrashLensDataClient {
     });
     return this._swr(swrKey, async () => {
       try {
-        const filters = this._tierFilter(tier, value);
+        // Round 15 §12.1 — county-tier filter uses the new canonical
+        // jurisdiction_county column (mv v2). Other tiers fall through
+        // to _tierFilter (physical_juris_name / mpo_name / planning_district).
+        let filters;
+        if (tier === 'county' && value) {
+          const canonical = String(value).endsWith(' County') ? value : value + ' County';
+          filters = {};
+          if (this.state) filters.state = `eq.${this.state}`;
+          filters.jurisdiction_county = `eq.${canonical}`;
+        } else {
+          filters = this._tierFilter(tier, value);
+        }
         if (opts.roadType === 'all_no_interstate') {
           filters.is_interstate = 'eq.false';
         } else if (opts.roadType && opts.roadType !== 'all') {
@@ -1658,7 +1669,17 @@ class CrashLensDataClient {
     });
     return this._swr(swrKey, async () => {
       try {
-        const filters = this._tierFilter(tier, value);
+        // Round 15 §12.1 — county-tier filter uses the new canonical
+        // jurisdiction_county column (mv v2). See getFatalFactors above.
+        let filters;
+        if (tier === 'county' && value) {
+          const canonical = String(value).endsWith(' County') ? value : value + ' County';
+          filters = {};
+          if (this.state) filters.state = `eq.${this.state}`;
+          filters.jurisdiction_county = `eq.${canonical}`;
+        } else {
+          filters = this._tierFilter(tier, value);
+        }
         if (opts.roadType === 'all_no_interstate') {
           filters.is_interstate = 'eq.false';
         } else if (opts.roadType && opts.roadType !== 'all') {
@@ -1873,6 +1894,235 @@ class CrashLensDataClient {
       return await resp.json();
     } catch (e) {
       console.warn('[DataClient] createScheduledReport failed:', e.message);
+      return null;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  ROUND 15 — AADT rates / forecasts / knowledge corpus / email queue
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * mv_hotspots_with_rates — Hot Spots with crash-rate-per-MVMT.
+   * State-agnostic; filters by jurisdiction_county / road_type / location_type.
+   * @param {object} opts {state?, roadType?, locationType?, county?, minRate?, requireAadt?, limit?}
+   */
+  async getHotspotsWithRates(opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const stateKey = (opts.state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      state: 'eq.' + stateKey,
+      select: '*',
+      order: 'crash_rate_mvmt.desc.nullslast',
+      limit: String(opts.limit || 50),
+    });
+    const rt = opts.roadType || 'all_no_interstate';
+    if (rt === 'all_no_interstate') {
+      params.set('is_interstate', 'eq.false');
+    } else if (rt && rt !== 'all') {
+      params.set('road_type', 'eq.' + rt);
+    }
+    if (opts.locationType) params.set('location_type', 'eq.' + opts.locationType);
+    if (opts.county) {
+      const canonical = String(opts.county).endsWith(' County') ? opts.county : opts.county + ' County';
+      params.set('jurisdiction_county', 'eq.' + canonical);
+    }
+    if (opts.minRate) params.set('crash_rate_mvmt', 'gte.' + opts.minRate);
+    if (opts.requireAadt) params.set('aadt', 'not.is.null');
+    const url = `${this.supabaseUrl}/mv_hotspots_with_rates?${params.toString()}`;
+    const headers = { 'apikey': this.supabaseKey, 'Authorization': `Bearer ${this.supabaseKey}` };
+    try {
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        if (resp.status === 404 || /relation .* does not exist/i.test(text)) return null;
+        throw new Error(text || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('[DataClient] getHotspotsWithRates failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * mv_forecasts — least-squares linear-trend forecast per (state, jurisdiction, metric).
+   * Drives the Crash Prediction tab.
+   * @param {object} opts {state?, jurisdiction?, metric?}
+   */
+  async getForecasts(opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const stateKey = (opts.state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      state: 'eq.' + stateKey,
+      select: '*',
+    });
+    if (opts.jurisdiction) params.set('jurisdiction', 'eq.' + opts.jurisdiction);
+    if (opts.metric)       params.set('metric', 'eq.' + opts.metric);
+    const url = `${this.supabaseUrl}/mv_forecasts?${params.toString()}`;
+    const headers = { 'apikey': this.supabaseKey, 'Authorization': `Bearer ${this.supabaseKey}` };
+    try {
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        if (resp.status === 404 || /relation .* does not exist/i.test(text)) return null;
+        throw new Error(text || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('[DataClient] getForecasts failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * search_knowledge_corpus RPC — pgvector-backed RAG retrieval.
+   * @param {object} opts {embedding (number[1536]), state?, sources?, topK?, minSimilarity?}
+   */
+  async searchKnowledgeCorpus(opts) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    if (!opts || !Array.isArray(opts.embedding)) return null;
+    const body = {
+      p_query_embedding: opts.embedding,
+      p_state:           (opts.state || this.state || '').toLowerCase() || null,
+      p_sources:         opts.sources || null,
+      p_top_k:           opts.topK || 8,
+      p_min_similarity:  opts.minSimilarity != null ? opts.minSimilarity : 0.5,
+    };
+    const url = `${this.supabaseUrl}/rpc/search_knowledge_corpus`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    try {
+      const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        if (resp.status === 404 || /function .* does not exist/i.test(text)) return null;
+        throw new Error(text || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('[DataClient] searchKnowledgeCorpus failed:', e.message);
+      return null;
+    }
+  }
+
+  /** Manually trigger the scheduled-email fan-out (admin / debug). */
+  async enqueueDueScheduledReports() {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const url = `${this.supabaseUrl}/rpc/enqueue_due_scheduled_reports`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    try {
+      const resp = await fetch(url, { method: 'POST', headers, body: '{}' });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(text || `HTTP ${resp.status}`);
+      }
+      return await resp.json();
+    } catch (e) {
+      console.warn('[DataClient] enqueueDueScheduledReports failed:', e.message);
+      return null;
+    }
+  }
+
+  /** Pending email queue introspection. */
+  async listPendingEmails(state) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const stateKey = (state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      state: 'eq.' + stateKey,
+      sent_at: 'is.null',
+      select: '*',
+      order: 'scheduled_for.asc',
+    });
+    const url = `${this.supabaseUrl}/email_send_queue?${params.toString()}`;
+    const headers = { 'apikey': this.supabaseKey, 'Authorization': `Bearer ${this.supabaseKey}` };
+    try {
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      console.warn('[DataClient] listPendingEmails failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * mv_dashboard_comparisons — per-(state, scope, jurisdiction) Dashboard
+   * comparison rows for region/MPO/county tables.
+   * @param {object} opts {state?, scope ('county'|'mpo'|'planning_district'), limit?}
+   */
+  async getDashboardComparisons(opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const stateKey = (opts.state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      state: 'eq.' + stateKey,
+      scope: 'eq.' + (opts.scope || 'county'),
+      select: '*',
+      order: 'crash_count.desc',
+    });
+    if (opts.limit) params.set('limit', String(opts.limit));
+    const url = `${this.supabaseUrl}/mv_dashboard_comparisons?${params.toString()}`;
+    const headers = { 'apikey': this.supabaseKey, 'Authorization': `Bearer ${this.supabaseKey}` };
+    try {
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        if (resp.status === 404 || /relation .* does not exist/i.test(text)) return null;
+        throw new Error(text || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('[DataClient] getDashboardComparisons failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * mv_speed_severity_matrix — Year × Severity speed-related crash matrix
+   * for the F&S Speed-Related sub-tab.
+   * @param {object} opts {state?, county?}
+   */
+  async getSpeedSeverityMatrix(opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const stateKey = (opts.state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      state: 'eq.' + stateKey,
+      select: '*',
+      order: 'crash_year.asc',
+    });
+    if (opts.county) {
+      const canonical = String(opts.county).endsWith(' County') ? opts.county : opts.county + ' County';
+      params.set('jurisdiction_county', 'eq.' + canonical);
+    }
+    const url = `${this.supabaseUrl}/mv_speed_severity_matrix?${params.toString()}`;
+    const headers = { 'apikey': this.supabaseKey, 'Authorization': `Bearer ${this.supabaseKey}` };
+    try {
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        if (resp.status === 404 || /relation .* does not exist/i.test(text)) return null;
+        throw new Error(text || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('[DataClient] getSpeedSeverityMatrix failed:', e.message);
       return null;
     }
   }
@@ -2290,11 +2540,18 @@ class CrashLensDataClient {
    * it and let it decide. We NEVER fall back to `.csv` — if the .parquet
    * isn't there, the fetch throws.
    */
-  async _r2LoadCrashes(tier, value) {
+  async _r2LoadCrashes(tier, value, opts = {}) {
     const path = this._r2Path(tier, value);        // always ends in .parquet
     const url = `${this.r2BaseUrl}/${path}`;
 
-    const resp = await fetch(url);
+    // Round 15 §12.12 — accept an optional AbortSignal so a parallel race
+    // (e.g. Supabase vs R2) can cancel the in-flight R2 download once the
+    // winner returns. Bandwidth saved: ~50–250 MB per discarded race when
+    // the parquet for a multi-county jurisdiction is fetched in parallel
+    // with a Supabase summary that finishes first.
+    const fetchOpts = {};
+    if (opts && opts.signal) fetchOpts.signal = opts.signal;
+    const resp = await fetch(url, fetchOpts);
     if (!resp.ok) throw new Error(`R2 parquet fetch failed (${resp.status}): ${url}`);
     const buf = await resp.arrayBuffer();
 
