@@ -13225,55 +13225,21 @@ Search across traffic safety standards with AI-powered retrieval. Select a locat
 </div>
 </div>
 
-<!-- Knowledge Sources Bar -->
+<!-- Knowledge Sources Bar (Round 14 §6 — populated state-aware via renderDomainKnowledgeSources) -->
 <div class="card" style="margin-bottom:1rem;padding:.75rem 1rem;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border:1px solid #f59e0b">
-<div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem">
+<div id="dkSourceFilters" style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem">
 <span style="font-weight:600;color:#92400e;font-size:.85rem">📚 Sources:</span>
 
-<!-- Virginia Standards -->
-<div style="display:flex;align-items:center;gap:.5rem;padding:.25rem .5rem;background:rgba(255,255,255,0.7);border-radius:var(--radius)">
-<span style="font-size:.75rem;color:#92400e;font-weight:500">Virginia</span>
-<label class="dk-source-toggle" title="Virginia MUTCD (Pinecone)">
-<input type="checkbox" id="dkSrc_va_mutcd" checked onchange="toggleDKSource('va_mutcd')">
-<span>🏛️ VA MUTCD</span>
-</label>
-<label class="dk-source-toggle" title="VDOT Road Design Manual">
-<input type="checkbox" id="dkSrc_vdot" checked onchange="toggleDKSource('vdot')">
-<span>📘 VDOT</span>
-</label>
-<label class="dk-source-toggle" title="Henrico County Standards">
-<input type="checkbox" id="dkSrc_henrico" onchange="toggleDKSource('henrico')">
-<span>📍 Henrico</span>
-</label>
-</div>
-
-<!-- Federal Standards -->
+<!-- Default fallback (replaced on init by renderDomainKnowledgeSources) -->
 <div style="display:flex;align-items:center;gap:.5rem;padding:.25rem .5rem;background:rgba(255,255,255,0.7);border-radius:var(--radius)">
 <span style="font-size:.75rem;color:#92400e;font-weight:500">Federal</span>
-<label class="dk-source-toggle" title="Federal MUTCD (Qdrant)">
-<input type="checkbox" id="dkSrc_federal_mutcd" onchange="toggleDKSource('federal_mutcd')">
-<span>🇺🇸 Fed MUTCD</span>
-</label>
-<label class="dk-source-toggle" title="AASHTO Green Book">
-<input type="checkbox" id="dkSrc_aashto" checked onchange="toggleDKSource('aashto')">
-<span>📗 AASHTO</span>
-</label>
-<label class="dk-source-toggle" title="ADA Accessibility Guidelines">
-<input type="checkbox" id="dkSrc_ada" onchange="toggleDKSource('ada')">
-<span>♿ ADA</span>
-</label>
+<label class="dk-source-toggle" title="Federal MUTCD"><input type="checkbox" id="dkSrc_fed_mutcd" checked onchange="toggleDKSource('fed_mutcd')"><span>🇺🇸 Federal MUTCD</span></label>
+<label class="dk-source-toggle" title="AASHTO"><input type="checkbox" id="dkSrc_aashto" checked onchange="toggleDKSource('aashto')"><span>📗 AASHTO</span></label>
+<label class="dk-source-toggle" title="HSM"><input type="checkbox" id="dkSrc_hsm" checked onchange="toggleDKSource('hsm')"><span>📕 HSM</span></label>
+<label class="dk-source-toggle" title="ADA"><input type="checkbox" id="dkSrc_ada" onchange="toggleDKSource('ada')"><span>♿ ADA</span></label>
 </div>
 
-<!-- Safety -->
-<div style="display:flex;align-items:center;gap:.5rem;padding:.25rem .5rem;background:rgba(255,255,255,0.7);border-radius:var(--radius)">
-<span style="font-size:.75rem;color:#92400e;font-weight:500">Safety</span>
-<label class="dk-source-toggle" title="Highway Safety Manual">
-<input type="checkbox" id="dkSrc_hsm" onchange="toggleDKSource('hsm')">
-<span>📙 HSM</span>
-</label>
-</div>
-
-<button class="btn-soft btn-soft-warning btn-soft-sm" onclick="autoSelectDKSources()" title="Auto-select based on crash profile">🎯 Auto</button>
+<button class="btn-soft btn-soft-warning btn-soft-sm" onclick="autoSelectDKSources()" title="Auto-select based on crash profile" style="margin-left:auto">🎯 Auto</button>
 </div>
 </div>
 
@@ -42220,8 +42186,124 @@ function scrollToWritingAssistant() {
 // ============================================================
 // MY APPLICATIONS - MANAGEMENT & EXPORT
 // ============================================================
+
+/**
+ * Round 14 §5 — Populate the New Application "Grant Program" dropdown from
+ * the grant_programs lookup table (federal-scope OR matching the active
+ * state). State-agnostic — adding a new state means INSERTing rows in the
+ * database, never a code branch. Returns a Promise that resolves when the
+ * dropdown is populated.
+ */
+async function populateGrantProgramDropdown(selectId = 'newAppGrant') {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    if (!window.crashLensClient || typeof window.crashLensClient.getGrantPrograms !== 'function') return;
+
+    const stateKey = (window.crashLensClient.state || '').toLowerCase();
+    let programs = null;
+    try {
+        programs = await window.crashLensClient.getGrantPrograms({ state: stateKey });
+    } catch (e) {
+        console.warn('[Grants] populateGrantProgramDropdown failed:', e && e.message);
+        return;
+    }
+    if (!Array.isArray(programs) || programs.length === 0) {
+        // Backend returned nothing — leave the existing hard-coded options in place.
+        return;
+    }
+    const escapeHtml = (s) => String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const buildOpt = (p) => {
+        const opt = document.createElement('option');
+        opt.value = p.program_id || p.id || p.program_name;
+        const fed = p.federal_share_pct ? ' (' + p.federal_share_pct + '% federal)' : '';
+        opt.textContent = (p.program_name || 'Program') + fed;
+        if (p.agency)             opt.dataset.agency   = p.agency;
+        if (p.max_award_amount)   opt.dataset.maxAward = p.max_award_amount;
+        if (p.typical_deadline)   opt.dataset.deadline = p.typical_deadline;
+        if (p.scope)              opt.dataset.scope    = p.scope;
+        return opt;
+    };
+    const federal = programs.filter(p => p.scope === 'federal');
+    const stateP  = programs.filter(p => p.scope === 'state');
+    sel.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '-- Select Grant Program --';
+    sel.appendChild(placeholder);
+    if (federal.length) {
+        const g = document.createElement('optgroup');
+        g.label = '🇺🇸 Federal Programs';
+        federal.forEach(p => g.appendChild(buildOpt(p)));
+        sel.appendChild(g);
+    }
+    if (stateP.length) {
+        const g = document.createElement('optgroup');
+        g.label = '🏛️ State Programs';
+        stateP.forEach(p => g.appendChild(buildOpt(p)));
+        sel.appendChild(g);
+    }
+}
+
+/**
+ * Round 14 §5 — Build a crash-context bundle from the user's currently
+ * checked rows in the Grant-Ready table. Used to enrich AI grant-writing
+ * prompts with hard data (location names, crash counts, top collision types,
+ * VRU exposure). Returns null when no row is checked.
+ */
+async function buildGrantWritingContext() {
+    if (!window.crashLensClient || typeof window.crashLensClient.getHotspotDetail !== 'function') {
+        return null;
+    }
+    const stateKey = (window.crashLensClient.state || '').toLowerCase();
+    // Pull from the authoritative selection state used by the Grant-Ready table.
+    const indices = (typeof grantState !== 'undefined' && Array.isArray(grantState.selectedLocationIndices))
+        ? grantState.selectedLocationIndices : [];
+    if (!indices.length) return null;
+    const all = (grantState && grantState.rankedLocations) || [];
+    const picked = indices.map(i => all[i]).filter(Boolean);
+    if (!picked.length) return null;
+
+    const details = await Promise.all(picked.map(loc => {
+        const t = loc.type === 'intersection' ? 'intersection' : 'segment';
+        return window.crashLensClient.getHotspotDetail(stateKey, t, loc.name)
+            .then(r => Array.isArray(r) ? r[0] : r)
+            .catch(() => null);
+    }));
+
+    return {
+        state: stateKey,
+        locations: picked.map((loc, i) => {
+            const d = details[i] || {};
+            const byColl = d.by_collision || {};
+            const top = Object.entries(byColl).sort((a, b) => Number(b[1]) - Number(a[1]))[0];
+            return {
+                name:           loc.name,
+                type:           loc.type,
+                display_name:   d.display_name || loc.name,
+                total:          d.total != null ? d.total : (loc.crashes || 0),
+                k:              d.k != null ? d.k : (loc.K || 0),
+                a:              d.a != null ? d.a : (loc.A || 0),
+                ped_count:      d.ped_count  || loc.ped  || 0,
+                bike_count:     d.bike_count || loc.bike || 0,
+                top_collision:  top ? top[0] : 'unknown',
+            };
+        }),
+    };
+}
+
 function openNewAppModal() {
     const locationSelect = document.getElementById('newAppLocation');
+
+    // Round 14 §5 — populate the Grant Program dropdown from grant_programs
+    // (federal + active-state scope). Awaiting is not necessary: the modal
+    // shows immediately and the dropdown fills as the request returns.
+    if (typeof populateGrantProgramDropdown === 'function') {
+        populateGrantProgramDropdown('newAppGrant').catch(e => {
+            console.warn('[Grants] program dropdown populate failed:', e && e.message);
+        });
+    }
+
 
     // Round 13 — Supabase-backed picker. Falls back to the legacy ranked-list
     // when LocationPicker isn't loaded (file:// reviews, hard caching).
@@ -48459,19 +48541,30 @@ function sendGrantWritingPrompt() {
     const input = document.getElementById('grantWritingPrompt');
     const prompt = input.value.trim();
     if (!prompt) return;
-    
+
     input.value = '';
-    
+
+    // Round 14 §7 — prepend the shared AI context (state, tier, jurisdiction,
+    // active LocationPicker selection) so the assistant always knows what the
+    // user is currently looking at, even before any location is checked in
+    // the Grant-Ready table.
+    let aiHeader = '';
+    try {
+        if (typeof buildAIContext === 'function') {
+            aiHeader = 'User-selected context:\n' + JSON.stringify(buildAIContext(), null, 2) + '\n\n---\n\n';
+        }
+    } catch (e) { /* non-fatal */ }
+
     // Build enriched context with crash patterns, financial impact, and grant info
-    let contextPrompt = prompt;
+    let contextPrompt = aiHeader + prompt;
     if (grantState.selectedLocationIndices.length > 0) {
         const combined = getCombinedSelectionStats();
         const selectedLocs = grantState.selectedLocationIndices.map(idx => grantState.rankedLocations[idx]);
         const grantProgram = document.getElementById('appGrantProgram')?.value;
         const context = buildEnrichedGrantContext(selectedLocs, combined, { grantProgram });
-        contextPrompt = `Question: ${prompt}\n${context}`;
+        contextPrompt = aiHeader + `Question: ${prompt}\n${context}`;
     }
-    
+
     addGrantWritingMessage('user', prompt);
     processGrantWritingQuery(contextPrompt);
 }
@@ -70215,11 +70308,216 @@ function updateReportOptions() {
     document.getElementById('reportTitle').value = titles[type] || 'Crash Analysis Report';
 }
 
+/**
+ * Round 14 §7 — shared AI context builder used by the 5 AI chats
+ * (Countermeasure, Domain Knowledge, MUTCD, Grant Search, Grant Writing).
+ * Each chat now starts every prompt with a JSON header that captures the
+ * user's active state, jurisdiction, road-type, and selected location row
+ * (when one of the LocationPicker dropdowns has a value). State-agnostic.
+ *
+ * Returns an object — callers JSON.stringify it and prepend to the user
+ * prompt. Lookups are best-effort: missing pieces simply land as null in
+ * the context.
+ */
+function buildAIContext() {
+    const stateKey = (window.crashLensClient && window.crashLensClient.state)
+        ? String(window.crashLensClient.state).toLowerCase() : '';
+
+    let tier = null, jurisdiction = null, roadType = null;
+    try {
+        if (window.CL && CL.data && CL.data.supabaseBridge && typeof CL.data.supabaseBridge.resolveTier === 'function') {
+            const t = CL.data.supabaseBridge.resolveTier();
+            if (t) { tier = t.tier; jurisdiction = t.value; }
+            const rt = (CL.data.supabaseBridge.roadTypeSpec && CL.data.supabaseBridge.roadTypeSpec()) || {};
+            roadType = rt.noInterstate ? 'all_no_interstate'
+                       : (rt.roadType || (Array.isArray(rt.roadTypes) && rt.roadTypes[0]) || 'all');
+        }
+    } catch (e) { /* fall through */ }
+
+    const ctx = {
+        state: stateKey,
+        tier: tier,
+        jurisdiction: jurisdiction,
+        road_type: roadType,
+        active_location: null,
+    };
+
+    // Locate the active LocationPicker selection from any of the 7 dropdowns
+    // wired in Round 13 (cmf, warrant, dk, report, ba, newApp, mutcd).
+    const ids = [
+        'cmfLocationSelect', 'warrantLocationSelect', 'dkLocationSelect',
+        'reportLocationSelect', 'baLocationSelect', 'newAppLocation',
+        'mutcdLocationSelect',
+    ];
+    if (window.LocationPicker && typeof window.LocationPicker.resolveValue === 'function') {
+        for (const id of ids) {
+            const el = document.getElementById(id);
+            if (!el || !el.value) continue;
+            const row = window.LocationPicker.resolveValue(el.value);
+            if (row) {
+                ctx.active_location = {
+                    type:    row.location_type,
+                    name:    row.location_name,
+                    display: row.display_name,
+                    total:   row.total_crashes,
+                    k:       row.k,
+                    a:       row.a,
+                    county:  row.jurisdiction_county || null,
+                    mpo:     row.jurisdiction_mpo || null,
+                };
+                break;
+            }
+        }
+    }
+    return ctx;
+}
+
+/**
+ * Round 14 §0.2 — defensive accessor for crashState.aggregates paths used
+ * across the Reports tab. In Supabase-only mode the aggregates object can be
+ * partially initialised (e.g. byCollision is empty when no row hydration ran),
+ * which crashed Comprehensive Quarterly with "Cannot read properties of
+ * undefined (reading 'count')". _safeAgg returns the requested nested value
+ * or the supplied fallback when any segment is missing.
+ *
+ * Usage: _safeAgg('byCollision.Angle.count', 0)
+ */
+function _safeAgg(path, fallback) {
+    try {
+        if (typeof crashState === 'undefined' || !crashState || !crashState.aggregates) return fallback;
+        const parts = String(path).split('.');
+        let v = crashState.aggregates;
+        for (const p of parts) {
+            if (v == null) return fallback;
+            v = v[p];
+        }
+        return v == null ? fallback : v;
+    } catch (e) {
+        return fallback;
+    }
+}
+
+/**
+ * Round 14 §0.3 — per-type Supabase data dispatcher for the Reports tab.
+ * Returns a Promise that resolves to a payload bundle the matching report
+ * generator can read from window._reportDataCache, OR returns null to let
+ * the legacy row-hydration code-path render the report (for types that
+ * already work end-to-end without a Supabase pre-fetch — comprehensive,
+ * infographic, executive_summary).
+ *
+ * Each report type maps to an existing data-client method. State-agnostic —
+ * keys on tier resolved from the supabase-bridge.
+ */
+async function fetchReportDataForType(reportType, ctx) {
+    if (!window.crashLensClient || !window.CL || !CL.data || !CL.data.supabaseBridge) return null;
+    const t = CL.data.supabaseBridge.resolveTier();
+    const stateKey = (window.crashLensClient.state || '').toLowerCase();
+    const c = window.crashLensClient;
+    const rt = (CL.data.supabaseBridge.roadTypeSpec && CL.data.supabaseBridge.roadTypeSpec()) || {};
+    const roadType = rt.noInterstate ? 'all_no_interstate'
+                    : (rt.roadType || (Array.isArray(rt.roadTypes) && rt.roadTypes[0]) || 'all');
+    ctx = ctx || {};
+
+    try {
+        switch (reportType) {
+            case 'comprehensive':
+            case 'infographic':
+            case 'executive_summary':
+                return null; // existing flow (with _safeAgg) handles these
+            case 'corridor':
+            case 'segment_analysis':
+                if (!ctx.locationName) return { error: 'Select a location.' };
+                return c.getHotspotDetail(stateKey, 'segment', ctx.locationName);
+            case 'crashtree':
+            case 'systemic':
+                return c.getCrashTree(t.tier, t.value, { roadType });
+            case 'safety':
+            case 'safety_focus':
+            case 'safetyfocus':
+                return c.getSafetyCategories(t.tier, t.value, { roadType });
+            case 'fatal_speed':
+            case 'fatalspeed':
+                return Promise.all([
+                    c.getFatalFactors(t.tier, t.value, { roadType }),
+                    c.getSpeedSummary(t.tier, t.value, { roadType }),
+                    c.getSafetyFocusLocations(t.tier, t.value, 'speed', { limit: 25 }),
+                ]).then(([fatal, speed, locs]) => ({ fatal, speed, locs }));
+            case 'hotspot':
+                return c.getHotspots(t.tier, t.value, { roadType, limit: 25 });
+            case 'intersection':
+                return c.getIntersectionSummary(t.tier, t.value, { roadType });
+            case 'pedbike':
+                return Promise.all([
+                    c.getPedBikeLocations(t.tier, t.value, 'pedestrian', { limit: 25 }),
+                    c.getPedBikeLocations(t.tier, t.value, 'bicycle',    { limit: 25 }),
+                ]).then(([ped, bike]) => ({ ped, bike }));
+            case 'prediction':
+                return { warning: 'Forecasts not yet generated for this jurisdiction.' };
+            case 'deepdive':
+                return Promise.all([
+                    c.getAnalysisBreakdown ? c.getAnalysisBreakdown(t.tier, t.value, { dimension: 'all' }) : null,
+                    c.getAnalysisExtra    ? c.getAnalysisExtra(t.tier, t.value)                          : null,
+                ]).then(([sum, extra]) => ({ sum, extra }));
+            case 'countermeasures':
+                // Countermeasures uses the in-memory cmfLibrary; no matview wiring needed.
+                return null;
+            case 'beforeafter':
+                if (!ctx.locationName || !ctx.installDate) return { error: 'Provide Treatment Date and Location.' };
+                return c.runBeforeAfterStudy({
+                    state: stateKey,
+                    locationName: ctx.locationName,
+                    locationType: ctx.locationType || 'segment',
+                    installDate: ctx.installDate,
+                });
+            case 'grant':
+            case 'grantsupport':
+                return c.getGrantReadyLocations({ roadType, limit: 50 });
+            case 'performance':
+            case 'trend':
+                return c.getSafetyCategories(t.tier, t.value, { roadType });
+            default:
+                return null;
+        }
+    } catch (e) {
+        console.warn('[Report] fetchReportDataForType(' + reportType + ') failed:', e && e.message);
+        return null;
+    }
+}
+
 function generateReport() {
     let type = document.getElementById('reportType').value;
     // Backward compatibility: map systemwide to dashboard
     if (type === 'systemwide') type = 'dashboard';
     showLoading('Generating report...');
+
+    // Round 14 §0.3 — kick off the per-type Supabase pre-fetch in parallel
+    // with the row hydration. The result lands on window._reportDataCache for
+    // generators that opt in; legacy generators continue to read crashState
+    // unchanged. Errors here are non-fatal — generators fall back to the
+    // legacy data path.
+    try {
+        const reportLocSelect = document.getElementById('reportLocationSelect');
+        const installDateEl = document.getElementById('baTreatmentDate');
+        const pickerRow = (window.LocationPicker && reportLocSelect)
+            ? window.LocationPicker.resolveValue(reportLocSelect.value)
+            : null;
+        const ctx = {
+            locationName: pickerRow ? pickerRow.location_name : null,
+            locationType: pickerRow ? pickerRow.location_type : null,
+            installDate:  installDateEl ? installDateEl.value : null,
+        };
+        Promise.resolve(fetchReportDataForType(type, ctx))
+            .then(data => {
+                if (data && data.error) {
+                    console.warn('[Report] Pre-fetch error for', type, ':', data.error);
+                    return;
+                }
+                if (data) window._reportDataCache = data;
+            })
+            .catch(e => console.warn('[Report] Pre-fetch failed:', e && e.message));
+    } catch (e) {
+        console.warn('[Report] Pre-fetch setup failed:', e && e.message);
+    }
 
     setTimeout(async () => {
         const title = document.getElementById('reportTitle').value || 'Crash Analysis Report';
@@ -84850,16 +85148,24 @@ const dkState = {
     polygonSelection: null,
     polygonCrashes: [],
 
-    // Knowledge sources - user selects which to query
-    enabledSources: ['va_mutcd', 'aashto', 'vdot'],
+    // Knowledge sources - user selects which to query.
+    // Round 14 §6 — registry now includes Delaware sources. The visible bar
+    // is rendered state-aware by renderDomainKnowledgeSources(); this registry
+    // catalogs every known source so syncDKSourcesFromUI() can iterate.
+    enabledSources: ['fed_mutcd', 'aashto', 'hsm'],
     sources: {
-        va_mutcd:      { db: 'pinecone', name: 'Virginia MUTCD', icon: '🏛️', category: 'virginia' },
-        federal_mutcd: { db: 'qdrant',   name: 'Federal MUTCD', icon: '🇺🇸', category: 'federal' },
-        aashto:        { db: 'qdrant',   name: 'AASHTO Green Book', icon: '📗', category: 'federal' },
-        vdot:          { db: 'qdrant',   name: 'VDOT Road Design', icon: '📘', category: 'virginia' },
-        hsm:           { db: 'qdrant',   name: 'Highway Safety Manual', icon: '📙', category: 'safety' },
-        ada:           { db: 'qdrant',   name: 'ADA Guidelines', icon: '♿', category: 'federal' },
-        henrico:       { db: 'qdrant',   name: 'Henrico Standards', icon: '📍', category: 'local' }
+        // Federal / national
+        fed_mutcd:     { db: 'qdrant',   name: 'Federal MUTCD',         icon: '🇺🇸', category: 'federal' },
+        federal_mutcd: { db: 'qdrant',   name: 'Federal MUTCD (alias)', icon: '🇺🇸', category: 'federal' },
+        aashto:        { db: 'qdrant',   name: 'AASHTO Green Book',     icon: '📗', category: 'federal' },
+        hsm:           { db: 'qdrant',   name: 'Highway Safety Manual', icon: '📕', category: 'federal' },
+        ada:           { db: 'qdrant',   name: 'ADA Guidelines',        icon: '♿', category: 'federal' },
+        // State catalogs (rendered only for matching active state)
+        va_mutcd:      { db: 'pinecone', name: 'Virginia MUTCD',        icon: '🦃', category: 'virginia' },
+        vdot:          { db: 'qdrant',   name: 'VDOT Road Design',      icon: '🛣️', category: 'virginia' },
+        henrico:       { db: 'qdrant',   name: 'Henrico Standards',     icon: '🌳', category: 'virginia' },
+        de_mutcd:      { db: 'qdrant',   name: 'Delaware MUTCD',        icon: '🦋', category: 'delaware' },
+        deldot:        { db: 'qdrant',   name: 'DelDOT Standards',      icon: '🛣️', category: 'delaware' },
     },
 
     // Qdrant configuration
@@ -84932,6 +85238,13 @@ function initDomainKnowledge() {
 
     // Populate location dropdown from crashState
     populateDKLocationDropdown();
+
+    // Round 14 §6 — render the source filter bar state-aware (federal +
+    // matching state catalog), then sync. State-agnostic: STATE_CATALOG is
+    // a lookup keyed on the state, never a `state ===` branch.
+    if (typeof renderDomainKnowledgeSources === 'function') {
+        renderDomainKnowledgeSources();
+    }
 
     // Sync enabled sources from checkboxes
     syncDKSourcesFromUI();
@@ -85859,8 +86172,70 @@ function buildDKCrashProfile() {
 }
 
 // Toggle knowledge source
+/**
+ * Round 14 §6 — render the Domain Knowledge source-filter bar so each state
+ * sees its own canonical sources alongside the always-on federal/national
+ * sources. Adding a new state means INSERTing into STATE_CATALOG, never
+ * branching on `state === 'foo'`. State-agnostic.
+ */
+function renderDomainKnowledgeSources() {
+    const container = document.getElementById('dkSourceFilters');
+    if (!container) return;
+
+    const stateKey = (window.crashLensClient && window.crashLensClient.state)
+        ? String(window.crashLensClient.state).toLowerCase() : '';
+
+    const FEDERAL = [
+        { id: 'fed_mutcd', label: '🇺🇸 Federal MUTCD',  default: true,  group: 'Federal' },
+        { id: 'aashto',    label: '📗 AASHTO',          default: true,  group: 'Federal' },
+        { id: 'hsm',       label: '📕 HSM',             default: true,  group: 'Federal' },
+        { id: 'ada',       label: '♿ ADA',              default: false, group: 'Federal' },
+    ];
+    const STATE_CATALOG = {
+        delaware: [
+            { id: 'de_mutcd', label: '🦋 DE MUTCD', default: true,  group: 'State' },
+            { id: 'deldot',   label: '🛣️ DelDOT',   default: true,  group: 'State' },
+        ],
+        virginia: [
+            { id: 'va_mutcd', label: '🦃 VA MUTCD', default: true,  group: 'State' },
+            { id: 'vdot',     label: '🛣️ VDOT',     default: true,  group: 'State' },
+            { id: 'henrico',  label: '🌳 Henrico',  default: false, group: 'County' },
+        ],
+        // Add new states with an INSERT here — no code branching.
+    };
+    const stateSources = STATE_CATALOG[stateKey] || [];
+    const all = [...FEDERAL, ...stateSources];
+
+    const groups = {};
+    for (const s of all) {
+        if (!groups[s.group]) groups[s.group] = [];
+        groups[s.group].push(s);
+    }
+
+    const escapeHtml = (str) => String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    let html = '<span style="font-weight:600;color:#92400e;font-size:.85rem">📚 Sources:</span>';
+    for (const groupName of Object.keys(groups)) {
+        html += '<div style="display:flex;align-items:center;gap:.5rem;padding:.25rem .5rem;background:rgba(255,255,255,0.7);border-radius:var(--radius)">';
+        html += '<span style="font-size:.75rem;color:#92400e;font-weight:500">' + escapeHtml(groupName) + '</span>';
+        for (const s of groups[groupName]) {
+            const checked = s.default ? 'checked' : '';
+            html += '<label class="dk-source-toggle" title="' + escapeHtml(s.label) + '">'
+                  + '<input type="checkbox" id="dkSrc_' + escapeHtml(s.id) + '" data-source="' + escapeHtml(s.id) + '" ' + checked
+                  + ' onchange="toggleDKSource(\'' + escapeHtml(s.id) + '\')">'
+                  + '<span>' + escapeHtml(s.label) + '</span>'
+                  + '</label>';
+        }
+        html += '</div>';
+    }
+    html += '<button class="btn-soft btn-soft-warning btn-soft-sm" onclick="autoSelectDKSources()" title="Auto-select based on crash profile" style="margin-left:auto">🎯 Auto</button>';
+    container.innerHTML = html;
+}
+
 function toggleDKSource(sourceId) {
     const checkbox = document.getElementById(`dkSrc_${sourceId}`);
+    if (!checkbox) return;
     if (checkbox.checked) {
         if (!dkState.enabledSources.includes(sourceId)) {
             dkState.enabledSources.push(sourceId);
@@ -85895,21 +86270,33 @@ function autoSelectDKSources() {
         if (checkbox) checkbox.checked = false;
     });
 
-    // Always enable VA MUTCD and AASHTO
-    document.getElementById('dkSrc_va_mutcd').checked = true;
-    document.getElementById('dkSrc_aashto').checked = true;
+    // Round 14 §6 — defensive: each `dkSrc_*` element only exists when the
+    // active state catalog rendered it. Skip missing ones silently rather
+    // than crashing for jurisdictions that don't have e.g. `dkSrc_vdot`.
+    const _dkCheck = (id) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = true;
+    };
+    // Always enable AASHTO + Federal MUTCD as the universal defaults.
+    _dkCheck('dkSrc_aashto');
+    _dkCheck('dkSrc_fed_mutcd');
+    _dkCheck('dkSrc_hsm');
+    // State-specific MUTCDs (only one will exist per active state)
+    _dkCheck('dkSrc_va_mutcd');
+    _dkCheck('dkSrc_de_mutcd');
 
     // Enable based on crash profile
     const profile = dkState.crashProfile;
 
     // Pedestrian crashes - enable ADA
     if (parseFloat(profile.pedPercent) > 5) {
-        document.getElementById('dkSrc_ada').checked = true;
+        _dkCheck('dkSrc_ada');
     }
 
-    // Enable VDOT for geometric issues
+    // Enable state DOT manuals for geometric issues
     if (profile.collisionTypes && (profile.collisionTypes['Angle'] > 3 || profile.collisionTypes['Rear End'] > 5)) {
-        document.getElementById('dkSrc_vdot').checked = true;
+        _dkCheck('dkSrc_vdot');
+        _dkCheck('dkSrc_deldot');
     }
 
     // Sync state
@@ -106997,11 +107384,27 @@ async function initFatalSpeedingFromMatview(tier) {
     } catch (e) { /* fall through */ }
 
     try {
-        const [categories, analysis] = await Promise.all([
+        // Round 14 §4 — pull mv_fatal_factors + mv_speed_summary in parallel
+        // alongside the existing matviews. These add per-jurisdiction co-factor
+        // combos (speed×impaired, night×speed, …) and the Non-Speed Severity
+        // pie data. Both are optional — if they fail, the rest of the F&S tab
+        // continues to paint from mv_safety_categories + mv_analysis_summary.
+        const _fsFetchFatalFactors = (typeof dc.getFatalFactors === 'function')
+            ? CL.data.cachedMatview('mv_fatal_factors', tierResolved.tier, tierResolved.value,
+                () => dc.getFatalFactors(tierResolved.tier, tierResolved.value))
+            : Promise.resolve(null);
+        const _fsFetchSpeedSummary = (typeof dc.getSpeedSummary === 'function')
+            ? CL.data.cachedMatview('mv_speed_summary', tierResolved.tier, tierResolved.value,
+                () => dc.getSpeedSummary(tierResolved.tier, tierResolved.value))
+            : Promise.resolve(null);
+
+        const [categories, analysis, fatalFactors, speedSummary] = await Promise.all([
             CL.data.cachedMatview('mv_safety_categories', tierResolved.tier, tierResolved.value,
                 () => dc.getSafetyCategories(tierResolved.tier, tierResolved.value)),
             CL.data.cachedMatview('mv_analysis_summary', tierResolved.tier, tierResolved.value,
-                () => dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value))
+                () => dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value)),
+            _fsFetchFatalFactors,
+            _fsFetchSpeedSummary,
         ]);
 
         if (!categories && !analysis) {
@@ -107128,6 +107531,50 @@ async function initFatalSpeedingFromMatview(tier) {
             fatalSpeedingState.combinedData.both = speedCat.K || 0;
             fatalSpeedingState.combinedData.fatalOnly = (fatalSpeedingState.fatalData.totalCrashes || 0) - (speedCat.K || 0);
             fatalSpeedingState.combinedData.speedOnly = (speedCat.total || 0) - (speedCat.K || 0);
+        }
+
+        // Round 14 §4 — fold mv_fatal_factors rollups into state. Each row is
+        // per-jurisdiction-per-something; the F&S tab paints the totals across
+        // the full filter set, so we sum here. Stored under
+        // fatalSpeedingState.fatalFactorsRollup; the cross-tab co-factor
+        // panels read it directly. State-agnostic.
+        if (Array.isArray(fatalFactors) && fatalFactors.length > 0) {
+            const rollup = {};
+            const NUMERIC_KEYS = [
+                'fatal_total', 'fatal_impaired', 'fatal_speed', 'fatal_distracted',
+                'fatal_unrestrained', 'fatal_nighttime', 'fatal_intersection',
+                'fatal_weather', 'fatal_animal',
+                'fatal_speed_impaired', 'fatal_night_speed', 'fatal_night_impaired',
+                'fatal_speed_unrestrained', 'fatal_speed_distracted',
+                'fatal_impaired_distracted',
+            ];
+            for (const r of fatalFactors) {
+                for (const k of NUMERIC_KEYS) {
+                    rollup[k] = (rollup[k] || 0) + (Number(r[k]) || 0);
+                }
+            }
+            fatalSpeedingState.fatalFactorsRollup = rollup;
+            console.log('[FS] mv_fatal_factors rollup:', rollup);
+        } else {
+            fatalSpeedingState.fatalFactorsRollup = null;
+        }
+
+        // Round 14 §4 — fold mv_speed_summary into state. Drives the Speed
+        // Co-Factor panels and the Non-Speed Severity pie. Sum across the
+        // matview rows for the active tier — same pattern as fatalFactors.
+        if (Array.isArray(speedSummary) && speedSummary.length > 0) {
+            const sRoll = {};
+            for (const r of speedSummary) {
+                for (const k of Object.keys(r)) {
+                    if (typeof r[k] === 'number') {
+                        sRoll[k] = (sRoll[k] || 0) + Number(r[k]);
+                    }
+                }
+            }
+            fatalSpeedingState.speedSummaryRollup = sRoll;
+            console.log('[FS] mv_speed_summary rollup:', sRoll);
+        } else {
+            fatalSpeedingState.speedSummaryRollup = null;
         }
 
         // Round 12: hydrate fatal/speed hotspot tables from
@@ -107686,6 +108133,31 @@ function paintFSSpeedSeverityChart() {
 
 function paintFSNonSpeedSeverityChart() {
     if (typeof createChart !== 'function') return;
+
+    // Round 14 §4 — when mv_speed_summary is available, draw the Non-Speed
+    // Severity pie directly from `nonspeed_*` rollup keys. Falls back to the
+    // legacy "approximate by subtracting speed from total" path when the new
+    // matview hasn't been refreshed yet for the active jurisdiction.
+    const sRoll = fatalSpeedingState.speedSummaryRollup;
+    if (sRoll && (sRoll.nonspeed_total || sRoll.nonspeed_fatal || sRoll.nonspeed_serious)) {
+        const data = [
+            sRoll.nonspeed_fatal   || 0,
+            sRoll.nonspeed_serious || 0,
+            // Older rollup may only expose fatal/serious/other; bucket the rest.
+            Math.max(0, (sRoll.nonspeed_total || 0)
+                - (sRoll.nonspeed_fatal || 0)
+                - (sRoll.nonspeed_serious || 0)),
+        ];
+        if (data.some(v => v > 0)) {
+            if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartFSNonSpeedSeverity');
+            createChart('chartFSNonSpeedSeverity', 'doughnut', {
+                labels: ['Fatal','Serious','Other'],
+                datasets: [{ data: data, backgroundColor: ['#dc2626','#ea580c','#94a3b8'] }],
+            }, { plugins: { legend: { display: true } } });
+            return;
+        }
+    }
+
     // Non-speed = total - speed by severity bucket. Total pulled from
     // fatalSpeedingState.totalFilteredCrashes (sum across severities) is the
     // wrong shape — we need per-severity totals from analysis.bySeverity.
@@ -108218,6 +108690,36 @@ function updateFSCombinedCrossAnalysis() {
 
     const fd = fatalSpeedingState.fatalData;
     const sd = fatalSpeedingState.speedData;
+
+    // Round 14 §4 — when mv_fatal_factors rollup is available, paint the
+    // co-factor combo cards directly from pre-aggregated counts. The legacy
+    // sampleRows-based path runs only when the rollup is missing AND there's
+    // row data (i.e. county tier with hydrated samples).
+    const rRoll = fatalSpeedingState.fatalFactorsRollup;
+    if (rRoll) {
+        const comboFromRollup = [
+            { name: 'Fatal + Speed + Impaired',     kCount: rRoll.fatal_speed_impaired      || 0, count: rRoll.fatal_speed_impaired      || 0 },
+            { name: 'Fatal + Speed + Night',        kCount: rRoll.fatal_night_speed         || 0, count: rRoll.fatal_night_speed         || 0 },
+            { name: 'Fatal + Night + Impaired',     kCount: rRoll.fatal_night_impaired      || 0, count: rRoll.fatal_night_impaired      || 0 },
+            { name: 'Fatal + Speed + Unrestrained', kCount: rRoll.fatal_speed_unrestrained  || 0, count: rRoll.fatal_speed_unrestrained  || 0 },
+            { name: 'Fatal + Speed + Distracted',   kCount: rRoll.fatal_speed_distracted    || 0, count: rRoll.fatal_speed_distracted    || 0 },
+            { name: 'Fatal + Impaired + Distracted',kCount: rRoll.fatal_impaired_distracted || 0, count: rRoll.fatal_impaired_distracted || 0 },
+        ].sort((a, b) => b.kCount - a.kCount);
+        if (comboFromRollup.some(c => c.kCount > 0)) {
+            container.innerHTML = comboFromRollup.map(r => `
+                <div class="fs-cross-card theme-combined">
+                    <div class="fs-cross-card-header"><div class="fs-cross-card-title">${r.name}</div></div>
+                    <div class="fs-cross-card-body">
+                        <div class="fs-cross-card-stats">
+                            <div class="fs-cross-card-value fatal">${r.kCount} fatal</div>
+                        </div>
+                        <div class="fs-cross-card-category">Pre-aggregated co-factor</div>
+                    </div>
+                </div>
+            `).join('');
+            return;
+        }
+    }
 
     // High-risk combinations involving both fatal and speed factors
     const combinations = [
@@ -111969,6 +112471,19 @@ function loadLocationForWarrants() {
         const tierInfo = (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
             ? CL.data.supabaseBridge.resolveTier()
             : { tier: 'state', value: null };
+
+        // Round 14 §0.1 — kick off mv_hotspots_detail in parallel for the
+        // per-warrant auto-fill panels (Stop Sign Crit B, Pedestrian Crossing,
+        // Speed Study). This is a pure UI enhancement on top of the legacy
+        // crash-row pipeline; failures are non-fatal.
+        try {
+            const stateKey = (window.crashLensClient.state || '').toLowerCase();
+            const detailType = type === 'route' ? 'segment' : 'intersection';
+            window.crashLensClient.getHotspotDetail(stateKey, detailType, name)
+                .then(detail => _applyWarrantHotspotDetail(detail))
+                .catch(e => console.warn('[Warrant] hotspot detail load failed:', e && e.message));
+        } catch (e) { /* non-fatal */ }
+
         window.crashLensClient.getCrashesByLocation(tierInfo.tier, tierInfo.value, type, name)
             .then(rows => {
                 // Empty-response guard: if aggregates say this location has crashes but
@@ -112010,6 +112525,77 @@ function loadLocationForWarrants() {
     });
 
     loadLocationDataForWarrants(name, type, crashes, aggregateCount, displayName);
+}
+
+/**
+ * Round 14 §0.1 — apply mv_hotspots_detail JSONB breakdowns to whatever
+ * per-warrant auto-fill UI is present in the DOM. Each section is gated on
+ * its element existing, so this works whether or not the active sub-tab
+ * (Signal / Stop Sign / Ped Crossing / Speed Study / Roundabout) is currently
+ * rendered. State-agnostic — keys on data shape, never on jurisdiction.
+ */
+function _applyWarrantHotspotDetail(detail) {
+    const d = (Array.isArray(detail) ? detail[0] : detail) || null;
+    if (!d) return;
+    const total = Number(d.total) || 0;
+    const k = Number(d.k) || 0, a = Number(d.a) || 0;
+    const ka = k + a;
+    const byColl = d.by_collision || {};
+    const byLight = d.by_light || {};
+    const ped = Number(d.ped_count) || 0;
+
+    const num = key => {
+        const v = byColl[key];
+        return typeof v === 'number' ? v : (v ? Number(v) : 0);
+    };
+    const angle = num('Angle') + num('Right-Angle');
+    const leftTurn = num('Left Turn') + num('Left-Turn');
+    const rightTurn = num('Right Turn') + num('Right-Turn');
+
+    // Stop-Sign Multi-Way Criterion B (auto-populated)
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(value);
+    };
+    setText('stopsignCrashAngle',       angle);
+    setText('stopsignCrashLeftTurn',    leftTurn);
+    setText('stopsignCrashRightTurn',   rightTurn);
+    const susceptible = angle + leftTurn + rightTurn;
+    setText('stopsignCrashSusceptible', susceptible);
+    setText('stopsignCrashTotal',       total);
+    setText('stopsignCritBActual',      susceptible);
+
+    // Pedestrian Crossing — at least the ped crash count if a slot exists
+    const pedTotalEls = document.querySelectorAll('[data-warrant-ped-total]');
+    pedTotalEls.forEach(el => { el.textContent = String(ped); });
+
+    // Speed Study — fill the Crash Count input if the form has one
+    const ssCrashCount = document.getElementById('speedStudyCrashCount');
+    if (ssCrashCount) ssCrashCount.value = total;
+
+    // Light-condition table (e.g. Street Light warrant). Look for any tbody
+    // that opted in via data-warrant-light="1".
+    const lightContainer = document.querySelector('[data-warrant-light="1"]');
+    if (lightContainer && byLight && typeof byLight === 'object') {
+        const rows = Object.entries(byLight)
+            .filter(([, v]) => Number(v) > 0)
+            .sort((x, y) => Number(y[1]) - Number(x[1]));
+        if (rows.length) {
+            lightContainer.innerHTML = rows.map(([k, v]) => {
+                const safeK = String(k).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return '<tr><td>' + safeK + '</td><td>' + Number(v) + '</td></tr>';
+            }).join('');
+        }
+    }
+
+    // KA-derived overlays for the Warrant 7 criteria table. The criteria
+    // table is built dynamically by buildWarrantCriteriaTable() — exposing
+    // KA helps any future panel that asks for the angle-K+A intersection.
+    const angleKAFraction = total > 0 ? (ka * (angle / Math.max(1, total))) : 0;
+    setText('warrantAngleInjury', Math.round(angleKAFraction));
+    setText('warrantAngleCrashes', angle);
+    setText('warrantPedCrashes',  ped);
+    setText('warrantPedInjury',   Math.round(total > 0 ? ped * (ka / Math.max(1, total)) : 0));
 }
 
 // Load location data for warrants
@@ -142550,9 +143136,99 @@ function updateDistrictStatisticsUI() {
 }
 
 /**
+ * Round 14 §0.4 — Magisterial-district / CCD breakdown via Supabase, with an
+ * honest banner when the underlying matview hasn't been wired for the active
+ * jurisdiction yet (BLOCKED-UPSTREAM sentinel: getMagisterialDistricts returns
+ * null when mv_grants_ccd is missing). State-agnostic.
+ *
+ * Renders into #districtStatisticsContainer. Falls through to the legacy
+ * client-side path (districtState) when Supabase isn't reachable.
+ */
+async function renderMagisterialDistricts() {
+    const container = document.getElementById('districtStatisticsContainer');
+    if (!container) return;
+    if (!window.crashLensClient || !window.CL || !CL.data || !CL.data.supabaseBridge) return false;
+    let t;
+    try { t = CL.data.supabaseBridge.resolveTier(); } catch (e) { return false; }
+    if (!t || t.tier !== 'county') {
+        container.innerHTML = '<div style="padding:.75rem;color:var(--gray);font-size:.85rem">'
+            + 'Magisterial-district breakdown is available only at the county tier.</div>';
+        return true;
+    }
+    const rt = (CL.data.supabaseBridge.roadTypeSpec && CL.data.supabaseBridge.roadTypeSpec()) || {};
+    const roadType = rt.noInterstate ? 'all_no_interstate'
+                    : (rt.roadType || (Array.isArray(rt.roadTypes) && rt.roadTypes[0]) || 'all');
+    let data;
+    try {
+        data = await window.crashLensClient.getMagisterialDistricts({ county: t.value, roadType });
+    } catch (e) {
+        console.warn('[MagDist] fetch failed:', e && e.message);
+        return false;
+    }
+    if (data === null) {
+        // BLOCKED-UPSTREAM sentinel — matview missing for this jurisdiction.
+        container.innerHTML = '<div style="padding:.75rem;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--radius);font-size:.85rem">'
+            + '⚠️ Magisterial-district (CCD) breakdown is not yet wired for this jurisdiction. '
+            + 'It requires a TIGERweb spatial join during data ingest. Once <code>crashes.ccd_name</code> '
+            + 'is populated, the cards will populate automatically.</div>';
+        return true;
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+        container.innerHTML = '<div style="padding:.75rem;color:var(--gray);font-size:.85rem">'
+            + 'No CCD data for this filter set.</div>';
+        return true;
+    }
+    const totalCrashes = data.reduce((s, d) => s + (Number(d.crash_count) || 0), 0);
+    container.innerHTML = data.map(r => {
+        const pct = totalCrashes > 0
+            ? ((Number(r.crash_count) || 0) / totalCrashes * 100).toFixed(1)
+            : '0.0';
+        const k = Number(r.k) || 0, a = Number(r.a) || 0;
+        const b = Number(r.b) || 0, cc = Number(r.c) || 0, o = Number(r.o) || 0;
+        const epdoStr = Number(r.epdo || 0).toLocaleString();
+        const safeName = String(r.ccd_name || '(unnamed)')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return '<div class="ccd-card" style="background:var(--bg-secondary);border-radius:8px;padding:.75rem;margin-bottom:.5rem;border-left:4px solid #7c3aed">'
+            +   '<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+            +     '<div><div style="font-weight:600;color:#7c3aed">' + safeName + '</div>'
+            +     '<div style="font-size:.8rem;color:var(--gray);margin-top:.25rem">'
+            +       (Number(r.crash_count) || 0).toLocaleString() + ' crashes (' + pct + '%)'
+            +     '</div></div>'
+            +     '<div style="text-align:right"><div style="font-size:.9rem;font-weight:600">' + epdoStr + '</div>'
+            +     '<div style="font-size:.7rem;color:var(--gray)">EPDO</div></div>'
+            +   '</div>'
+            +   '<div style="display:flex;gap:.5rem;margin-top:.5rem;font-size:.75rem">'
+            +     '<span style="color:#dc2626">K:' + k + '</span>'
+            +     '<span style="color:#f97316">A:' + a + '</span>'
+            +     '<span style="color:#eab308">B:' + b + '</span>'
+            +     '<span style="color:#22c55e">C:' + cc + '</span>'
+            +     '<span style="color:#6b7280">O:' + o + '</span>'
+            +   '</div>'
+            + '</div>';
+    }).join('');
+    return true;
+}
+
+/**
  * Render district statistics into a container
  */
 function renderDistrictStatistics(container) {
+    // Round 14 §0.4 — try the Supabase-backed renderer first. If it succeeds,
+    // it owns the container and we exit early. If it returns false, fall
+    // through to the legacy districtState-based render below.
+    if (typeof renderMagisterialDistricts === 'function') {
+        Promise.resolve(renderMagisterialDistricts())
+            .then(ok => {
+                if (ok) return;
+                _renderDistrictStatisticsLegacy(container);
+            })
+            .catch(() => _renderDistrictStatisticsLegacy(container));
+        return;
+    }
+    _renderDistrictStatisticsLegacy(container);
+}
+
+function _renderDistrictStatisticsLegacy(container) {
     if (!districtState.loaded || Object.keys(districtState.statistics.byDistrict).length === 0) {
         container.innerHTML = `
             <div style="text-align:center;padding:1rem;color:var(--gray);">
