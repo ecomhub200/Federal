@@ -44,11 +44,17 @@
 <script src="../states/fips_database.js"></script>
 <script src="../states/state_adapter.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
-<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<!-- Round-9 Fix 6 — defer-load PDF / DOCX / markdown libraries. None of these
+     are referenced at module-load time (every call site is inside a button
+     handler or async function), so deferring them unblocks HTML parsing
+     and cuts ~700 KB off the cold-boot critical path. They still finish
+     loading before DOMContentLoaded fires, which is well before any user
+     could click a Generate-PDF button. -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script defer src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Turf.js for geospatial operations (road clipping) -->
@@ -157852,6 +157858,7 @@ if ('serviceWorker' in navigator) {
 <script src="modules/data/road-type-mapping.js"></script>
 <script src="../assets/js/data-client.js"></script>
 <script src="modules/data/matview-cache.js"></script>
+<script src="modules/data/chunk-loader.js"></script>
 <script src="modules/data/supabase-bridge.js"></script>
 <script src="modules/data/lazy-loader.js"></script>
 <script src="modules/data/tab-loaders.js"></script>
