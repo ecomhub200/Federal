@@ -37,6 +37,39 @@ CL.data.supabaseBridge = (function () {
     var _injectInflight = null;
     var _injectLastSpecKey = null;
 
+    // Round-9 Fix 1A — 60-second result cache for getSummary so that repeat
+    // tier/state clicks within a minute don't re-issue the slow PostgREST
+    // request. Cache is keyed by (tier, value, summaryFilters) and capped
+    // at 50 entries with oldest-first eviction.
+    var _summaryCache = new Map();
+    var SUMMARY_TTL_MS = 60000;
+    var SUMMARY_CACHE_MAX = 50;
+
+    function _summaryCacheKey(tier, value, filters) {
+        return tier + ':' + value + ':' + JSON.stringify(filters || {});
+    }
+
+    function _summaryCachePut(key, rows) {
+        _summaryCache.set(key, { ts: Date.now(), rows: rows });
+        if (_summaryCache.size > SUMMARY_CACHE_MAX) {
+            var oldestKey = null, oldestTs = Infinity;
+            _summaryCache.forEach(function (v, k) {
+                if (v.ts < oldestTs) { oldestTs = v.ts; oldestKey = k; }
+            });
+            if (oldestKey) _summaryCache.delete(oldestKey);
+        }
+    }
+
+    function _summaryCacheGet(key) {
+        var hit = _summaryCache.get(key);
+        if (!hit) return null;
+        if ((Date.now() - hit.ts) >= SUMMARY_TTL_MS) {
+            _summaryCache.delete(key);
+            return null;
+        }
+        return hit;
+    }
+
     /**
      * Lazily spin up the agg-worker. Returns null if Workers aren't supported
      * or the script can't be reached — callers fall back to main-thread
@@ -754,12 +787,31 @@ CL.data.supabaseBridge = (function () {
                     CL.upload.tierUI.updateTierSwitchProgress(15, 'Fetching dashboard summary…');
                 }
             } catch (e) { /* non-fatal */ }
+            // Round-9 Fix 3 — show shimmer skeletons in all KPI cards while
+            // the matview fetch is in flight. Existing paintKPIs() will
+            // overwrite textContent and naturally drop the skeleton spans.
+            try {
+                if (CL.ui && CL.ui.skeletons && CL.ui.skeletons.showKpis) {
+                    CL.ui.skeletons.showKpis();
+                }
+            } catch (e) { /* non-fatal */ }
             var startTime = Date.now();
             var summaryFilters = {};
             if (spec.roadType) summaryFilters.roadType = spec.roadType;
             if (spec.roadTypes) summaryFilters.roadTypes = spec.roadTypes;
             if (spec.noInterstate) summaryFilters.noInterstate = true;
-            var rows = await window.crashLensClient.getSummary(t.tier, t.value, summaryFilters);
+
+            // Round-9 Fix 1A — try the 60s result cache first.
+            var rows;
+            var _cacheKey = _summaryCacheKey(t.tier, t.value, summaryFilters);
+            var _cacheHit = _summaryCacheGet(_cacheKey);
+            if (_cacheHit) {
+                rows = _cacheHit.rows;
+                console.log('[Phase2] summary cache hit, age=' + (Date.now() - _cacheHit.ts) + 'ms, rows=' + (rows && rows.length));
+            } else {
+                rows = await window.crashLensClient.getSummary(t.tier, t.value, summaryFilters);
+                if (Array.isArray(rows) && rows.length > 0) _summaryCachePut(_cacheKey, rows);
+            }
             var fetchMs = Date.now() - startTime;
 
             // Fix 1 — when the matview returns 0 rows AND the tier is one
@@ -784,7 +836,16 @@ CL.data.supabaseBridge = (function () {
                     // Brief wait for any in-flight DOM/state propagation, then retry.
                     await new Promise(function (r) { setTimeout(r, 250); });
                     var _retryStart = Date.now();
-                    var rowsRetry = await window.crashLensClient.getSummary(t.tier, t.value, summaryFilters);
+                    var _retryKey = _summaryCacheKey(t.tier, t.value, summaryFilters);
+                    var _retryHit = _summaryCacheGet(_retryKey);
+                    var rowsRetry;
+                    if (_retryHit) {
+                        rowsRetry = _retryHit.rows;
+                        console.log('[Phase2] Retry cache hit, age=' + (Date.now() - _retryHit.ts) + 'ms');
+                    } else {
+                        rowsRetry = await window.crashLensClient.getSummary(t.tier, t.value, summaryFilters);
+                        if (Array.isArray(rowsRetry) && rowsRetry.length > 0) _summaryCachePut(_retryKey, rowsRetry);
+                    }
                     var retryMs = Date.now() - _retryStart;
                     if (Array.isArray(rowsRetry) && rowsRetry.length > 0) {
                         console.log('[Phase2] Retry succeeded — ' + rowsRetry.length + ' rows in ' + retryMs + 'ms (was 0 in ' + fetchMs + 'ms).');

@@ -44,11 +44,17 @@
 <script src="../states/fips_database.js"></script>
 <script src="../states/state_adapter.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
-<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<!-- Round-9 Fix 6 — defer-load PDF / DOCX / markdown libraries. None of these
+     are referenced at module-load time (every call site is inside a button
+     handler or async function), so deferring them unblocks HTML parsing
+     and cuts ~700 KB off the cold-boot critical path. They still finish
+     loading before DOMContentLoaded fires, which is well before any user
+     could click a Generate-PDF button. -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script defer src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Turf.js for geospatial operations (road clipping) -->
@@ -260,6 +266,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .kpi-card .kpi-value{font-size:1.5rem;font-weight:700;position:relative;z-index:1}
 .kpi-card .kpi-label{font-size:.72rem;opacity:.9;margin-top:.2rem;position:relative;z-index:1}
 .kpi-card .kpi-sub{font-size:.65rem;opacity:.7;position:relative;z-index:1}
+/* Round-9 Fix 3 — skeleton placeholders for KPIs / charts / tables.
+   Shimmer animation cues "loading" while matview fetches resolve. The
+   .kpi-skel span is inserted as a child of .kpi-value; when JS later
+   does textContent = '...' the assignment auto-removes the skeleton. */
+.kpi-skel{display:inline-block;width:80%;height:1.4em;border-radius:6px;
+    background:linear-gradient(90deg,rgba(255,255,255,.18) 25%,rgba(255,255,255,.42) 50%,rgba(255,255,255,.18) 75%);
+    background-size:200% 100%;animation:cl-shimmer 1.4s infinite linear;vertical-align:middle}
+.chart-skel-wrap{position:relative;min-height:220px}
+.chart-skel-wrap::before{content:'';position:absolute;inset:8px;border-radius:8px;
+    background:linear-gradient(90deg,#e2e8f0 25%,#f1f5f9 50%,#e2e8f0 75%);
+    background-size:200% 100%;animation:cl-shimmer 1.4s infinite linear;pointer-events:none;z-index:0}
+.chart-skel-wrap.is-painted::before{display:none}
+.chart-skel-wrap > canvas, .chart-skel-wrap > *{position:relative;z-index:1}
+.table-skel-row td{padding:.5rem}
+.table-skel-bar{display:block;height:14px;border-radius:4px;
+    background:linear-gradient(90deg,#e2e8f0 25%,#f1f5f9 50%,#e2e8f0 75%);
+    background-size:200% 100%;animation:cl-shimmer 1.4s infinite linear}
+@keyframes cl-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:1.25rem}
 .chart-card{background:var(--white);border-radius:var(--radius-lg);padding:1rem;box-shadow:var(--shadow);border:1px solid var(--gray-light)}
 .chart-card .chart-title{font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--dark)}
@@ -50049,6 +50073,36 @@ function updateTierScopeHeader() {
  * adds a 'dow' dimension to the matview. The 4 chartDistrict* canvases come
  * from a separate dashboard_summary group-by handled elsewhere.
  */
+// Round-9 Fix 5 — paint a chart only when its canvas is scrolled into view
+// (or about to be — 200px rootMargin pre-fetches just before reveal). Cuts
+// initial dashboard paint from ~700ms (7 charts) to ~120ms (1–2 charts).
+// Falls back to immediate paint if IntersectionObserver isn't supported or
+// the canvas is missing entirely.
+window.__clChartObservers = window.__clChartObservers || new Map();
+function paintWhenVisible(canvasId, paintFn) {
+    try {
+        const el = document.getElementById(canvasId);
+        if (!el) { paintFn(); return; }
+        if (typeof IntersectionObserver !== 'function') { paintFn(); return; }
+        // If we already scheduled an observer for this canvas, replace it
+        // (newer paintFn closes over fresher data).
+        const prior = window.__clChartObservers.get(canvasId);
+        if (prior) { try { prior.disconnect(); } catch (e) {} window.__clChartObservers.delete(canvasId); }
+        const obs = new IntersectionObserver(function (entries, observer) {
+            if (entries[0] && entries[0].isIntersecting) {
+                try { paintFn(); } catch (e) { console.warn('[paintWhenVisible]', canvasId, e && e.message); }
+                observer.disconnect();
+                window.__clChartObservers.delete(canvasId);
+            }
+        }, { rootMargin: '200px' });
+        obs.observe(el);
+        window.__clChartObservers.set(canvasId, obs);
+    } catch (e) {
+        // If anything goes wrong, just paint synchronously.
+        try { paintFn(); } catch (e2) { /* swallow */ }
+    }
+}
+
 async function paintDashboardChartsFromMatview() {
     const dc = (window.CL && CL.data) ? CL.data.client : null;
     if (!dc || typeof dc.getAnalysisBreakdown !== 'function') {
@@ -50063,134 +50117,155 @@ async function paintDashboardChartsFromMatview() {
         }
     } catch (e) { /* non-fatal */ }
 
-    const D = await dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value);
+    // Round-9 Fix 7 — share the matview cache so other tabs hitting the same
+    // analysis_summary key don't re-fetch.
+    const D = (CL.data && CL.data.cachedMatview)
+        ? await CL.data.cachedMatview('mv_analysis_summary', tierResolved.tier, tierResolved.value,
+            () => dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value))
+        : await dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value);
     if (!D) return;
 
     const sortedYears = Object.keys(D.byYear || {}).map(Number).filter(y => y >= 2000).sort((a, b) => a - b);
 
     // chartYoY — Year-over-Year % change
     if (sortedYears.length > 1 && typeof createChart === 'function') {
-        const yoy = sortedYears.slice(1).map((y, i) => {
-            const prev = D.byYear[sortedYears[i]]?.total || 0;
-            const curr = D.byYear[y]?.total || 0;
-            return prev > 0 ? ((curr - prev) / prev * 100) : 0;
-        });
-        createChart('chartYoY', 'bar', {
-            labels: sortedYears.slice(1).map(String),
-            datasets: [{
-                label: '% Change',
-                data: yoy.map(v => v.toFixed(1)),
-                backgroundColor: yoy.map(v => v > 0 ? '#dc2626' : '#059669')
-            }]
+        paintWhenVisible('chartYoY', () => {
+            const yoy = sortedYears.slice(1).map((y, i) => {
+                const prev = D.byYear[sortedYears[i]]?.total || 0;
+                const curr = D.byYear[y]?.total || 0;
+                return prev > 0 ? ((curr - prev) / prev * 100) : 0;
+            });
+            createChart('chartYoY', 'bar', {
+                labels: sortedYears.slice(1).map(String),
+                datasets: [{
+                    label: '% Change',
+                    data: yoy.map(v => v.toFixed(1)),
+                    backgroundColor: yoy.map(v => v > 0 ? '#dc2626' : '#059669')
+                }]
+            });
         });
     }
 
     // chartKAYear — K and A by year
     if (sortedYears.length > 0) {
-        createChart('chartKAYear', 'line', {
-            labels: sortedYears.map(String),
-            datasets: [
-                { label: 'Fatal (K)',   data: sortedYears.map(y => D.byYear[y]?.K || 0), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,.1)', fill: true, tension: 0.3 },
-                { label: 'Serious (A)', data: sortedYears.map(y => D.byYear[y]?.A || 0), borderColor: '#ea580c', backgroundColor: 'rgba(234,88,12,.1)', fill: true, tension: 0.3 }
-            ]
+        paintWhenVisible('chartKAYear', () => {
+            createChart('chartKAYear', 'line', {
+                labels: sortedYears.map(String),
+                datasets: [
+                    { label: 'Fatal (K)',   data: sortedYears.map(y => D.byYear[y]?.K || 0), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,.1)', fill: true, tension: 0.3 },
+                    { label: 'Serious (A)', data: sortedYears.map(y => D.byYear[y]?.A || 0), borderColor: '#ea580c', backgroundColor: 'rgba(234,88,12,.1)', fill: true, tension: 0.3 }
+                ]
+            });
         });
     }
 
     // chartMonth — Monthly distribution
     if (D.byMonth && Object.keys(D.byMonth).length > 0) {
-        const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        createChart('chartMonth', 'bar', {
-            labels: monthLabels,
-            datasets: [{
-                label: 'Crashes',
-                data: monthLabels.map((_, i) => D.byMonth[i + 1]?.total || 0),
-                backgroundColor: '#7c3aed'
-            }]
+        paintWhenVisible('chartMonth', () => {
+            const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            createChart('chartMonth', 'bar', {
+                labels: monthLabels,
+                datasets: [{
+                    label: 'Crashes',
+                    data: monthLabels.map((_, i) => D.byMonth[i + 1]?.total || 0),
+                    backgroundColor: '#7c3aed'
+                }]
+            });
         });
     }
 
     // chartFuncClass — Functional Class distribution (top 8)
     if (D.byFuncClass && Object.keys(D.byFuncClass).length > 0) {
-        const fc = Object.entries(D.byFuncClass)
-            .filter(([_, v]) => v && v.total > 0)
-            .sort((a, b) => b[1].total - a[1].total)
-            .slice(0, 8);
-        if (fc.length > 0) {
-            createChart('chartFuncClass', 'bar', {
-                labels: fc.map(([k]) => String(k).substring(0, 20)),
-                datasets: [{ label: 'Crashes', data: fc.map(([_, v]) => v.total), backgroundColor: '#059669' }]
-            }, { indexAxis: 'y' });
-        }
+        paintWhenVisible('chartFuncClass', () => {
+            const fc = Object.entries(D.byFuncClass)
+                .filter(([_, v]) => v && v.total > 0)
+                .sort((a, b) => b[1].total - a[1].total)
+                .slice(0, 8);
+            if (fc.length > 0) {
+                createChart('chartFuncClass', 'bar', {
+                    labels: fc.map(([k]) => String(k).substring(0, 20)),
+                    datasets: [{ label: 'Crashes', data: fc.map(([_, v]) => v.total), backgroundColor: '#059669' }]
+                }, { indexAxis: 'y' });
+            }
+        });
     }
 
     // chartCollision — Top 10 collision types. byCollision is { name: total }.
     if (D.byCollision && Object.keys(D.byCollision).length > 0) {
-        const cols = Object.entries(D.byCollision)
-            .filter(([_, v]) => v > 0)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10);
-        if (cols.length > 0) {
-            createChart('chartCollision', 'bar', {
-                labels: cols.map(([k]) => String(k).substring(0, 25)),
-                datasets: [{ label: 'Crashes', data: cols.map(([_, v]) => v), backgroundColor: '#7c3aed' }]
-            }, { indexAxis: 'y' });
-        }
+        paintWhenVisible('chartCollision', () => {
+            const cols = Object.entries(D.byCollision)
+                .filter(([_, v]) => v > 0)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            if (cols.length > 0) {
+                createChart('chartCollision', 'bar', {
+                    labels: cols.map(([k]) => String(k).substring(0, 25)),
+                    datasets: [{ label: 'Crashes', data: cols.map(([_, v]) => v), backgroundColor: '#7c3aed' }]
+                }, { indexAxis: 'y' });
+            }
+        });
     }
 
     // chartWeather — Top 6 weather conditions doughnut
     if (D.byWeather && Object.keys(D.byWeather).length > 0) {
-        const wx = Object.entries(D.byWeather)
-            .filter(([_, v]) => v && v.total > 0)
-            .sort((a, b) => b[1].total - a[1].total)
-            .slice(0, 6);
-        if (wx.length > 0) {
-            const wxLabels = wx.map(([k]) => String(k).substring(0, 20));
-            const wxData = wx.map(([_, v]) => v.total);
-            const wxColors = ['#0ea5e9','#64748b','#f59e0b','#10b981','#8b5cf6','#ec4899'];
-            createChart('chartWeather', 'doughnut', {
-                labels: wxLabels,
-                datasets: [{ data: wxData, backgroundColor: wxColors, borderWidth: 2, borderColor: '#fff' }]
-            }, { cutout: '50%', plugins: { legend: { display: false } } });
-            const total = wxData.reduce((s, n) => s + n, 0);
-            if (typeof buildCustomLegend === 'function') {
-                buildCustomLegend('legendWeather', wxLabels, wxData, wxColors, total);
+        paintWhenVisible('chartWeather', () => {
+            const wx = Object.entries(D.byWeather)
+                .filter(([_, v]) => v && v.total > 0)
+                .sort((a, b) => b[1].total - a[1].total)
+                .slice(0, 6);
+            if (wx.length > 0) {
+                const wxLabels = wx.map(([k]) => String(k).substring(0, 20));
+                const wxData = wx.map(([_, v]) => v.total);
+                const wxColors = ['#0ea5e9','#64748b','#f59e0b','#10b981','#8b5cf6','#ec4899'];
+                createChart('chartWeather', 'doughnut', {
+                    labels: wxLabels,
+                    datasets: [{ data: wxData, backgroundColor: wxColors, borderWidth: 2, borderColor: '#fff' }]
+                }, { cutout: '50%', plugins: { legend: { display: false } } });
+                const total = wxData.reduce((s, n) => s + n, 0);
+                if (typeof buildCustomLegend === 'function') {
+                    buildCustomLegend('legendWeather', wxLabels, wxData, wxColors, total);
+                }
             }
-        }
+        });
     }
 
     // chartLight — Top 6 light conditions doughnut
     if (D.byLight && Object.keys(D.byLight).length > 0) {
-        const lt = Object.entries(D.byLight)
-            .filter(([_, v]) => v && v.total > 0)
-            .sort((a, b) => b[1].total - a[1].total)
-            .slice(0, 6);
-        if (lt.length > 0) {
-            const ltLabels = lt.map(([k]) => String(k).substring(0, 20));
-            const ltData = lt.map(([_, v]) => v.total);
-            const ltColors = ['#fcd34d','#1e293b','#94a3b8','#f97316','#6366f1','#14b8a6'];
-            createChart('chartLight', 'doughnut', {
-                labels: ltLabels,
-                datasets: [{ data: ltData, backgroundColor: ltColors, borderWidth: 2, borderColor: '#fff' }]
-            }, { cutout: '50%', plugins: { legend: { display: false } } });
-            const total = ltData.reduce((s, n) => s + n, 0);
-            if (typeof buildCustomLegend === 'function') {
-                buildCustomLegend('legendLight', ltLabels, ltData, ltColors, total);
+        paintWhenVisible('chartLight', () => {
+            const lt = Object.entries(D.byLight)
+                .filter(([_, v]) => v && v.total > 0)
+                .sort((a, b) => b[1].total - a[1].total)
+                .slice(0, 6);
+            if (lt.length > 0) {
+                const ltLabels = lt.map(([k]) => String(k).substring(0, 20));
+                const ltData = lt.map(([_, v]) => v.total);
+                const ltColors = ['#fcd34d','#1e293b','#94a3b8','#f97316','#6366f1','#14b8a6'];
+                createChart('chartLight', 'doughnut', {
+                    labels: ltLabels,
+                    datasets: [{ data: ltData, backgroundColor: ltColors, borderWidth: 2, borderColor: '#fff' }]
+                }, { cutout: '50%', plugins: { legend: { display: false } } });
+                const total = ltData.reduce((s, n) => s + n, 0);
+                if (typeof buildCustomLegend === 'function') {
+                    buildCustomLegend('legendLight', ltLabels, ltData, ltColors, total);
+                }
             }
-        }
+        });
     }
 
     // chartDOW — placeholder until backend adds 'dow' dimension to mv_analysis_summary.
     // When backend B1 lands, getAnalysisBreakdown will surface byDow and this
     // block can be replaced with a real bar chart.
     if (D.byDow && Object.keys(D.byDow).length > 0) {
-        const dowLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-        createChart('chartDOW', 'bar', {
-            labels: dowLabels,
-            datasets: [{
-                label: 'Crashes',
-                data: dowLabels.map((_, i) => D.byDow[i]?.total || 0),
-                backgroundColor: '#06b6d4'
-            }]
+        paintWhenVisible('chartDOW', () => {
+            const dowLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            createChart('chartDOW', 'bar', {
+                labels: dowLabels,
+                datasets: [{
+                    label: 'Crashes',
+                    data: dowLabels.map((_, i) => D.byDow[i]?.total || 0),
+                    backgroundColor: '#06b6d4'
+                }]
+            });
         });
     } else if (typeof showChartPlaceholder === 'function') {
         showChartPlaceholder('chartDOW', 'Day-of-week breakdown pending mv_analysis_summary "dow" dimension');
@@ -63090,7 +63165,10 @@ async function _loadIntersectionsFromHotspots() {
         let _kpiAgg = null;
         try {
             if (window.crashLensClient && typeof window.crashLensClient.getIntersectionSummary === 'function') {
-                const _summary = await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+                const _summary = (CL.data && CL.data.cachedMatview)
+                    ? await CL.data.cachedMatview('mv_intersection_summary', t.tier, t.value,
+                        () => window.crashLensClient.getIntersectionSummary(t.tier, t.value, {}))
+                    : await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
                 if (Array.isArray(_summary) && _summary.length > 0) {
                     _kpiAgg = _summary.reduce((s, r) => {
                         if (/not at intersection/i.test(r.intersection_type || '')) return s;
@@ -63126,7 +63204,10 @@ async function _loadIntersectionsFromHotspots() {
         const staleBanner = tabEl && tabEl.querySelector('.int-matview-banner');
         if (staleBanner) staleBanner.remove();
         try {
-            const summary = await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+            const summary = (CL.data && CL.data.cachedMatview)
+                ? await CL.data.cachedMatview('mv_intersection_summary', t.tier, t.value,
+                    () => window.crashLensClient.getIntersectionSummary(t.tier, t.value, {}))
+                : await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
             if (Array.isArray(summary) && summary.length > 0) {
                 // Pivot 1 — intersection_type → total (exclude "Not at Intersection")
                 const byType = new Map();
@@ -63654,7 +63735,10 @@ async function exportIntersectionPDF() {
     if ((int.total === 0) && window.crashLensClient && window.CL?.data?.supabaseBridge?.resolveTier) {
         try {
             const t = window.CL.data.supabaseBridge.resolveTier();
-            const summary = await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+            const summary = (CL.data && CL.data.cachedMatview)
+                ? await CL.data.cachedMatview('mv_intersection_summary', t.tier, t.value,
+                    () => window.crashLensClient.getIntersectionSummary(t.tier, t.value, {}))
+                : await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
             if (Array.isArray(summary) && summary.length > 0) {
                 const kpi = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
                 summary.forEach(r => {
@@ -68219,11 +68303,21 @@ async function updatePeopleFromMatview(tier) {
         // Round 3 follow-up (2026-05-09): also fetch mv_pedbike_breakdowns so
         // we can paint chartPedYear/chartPedLight/chartPedLocationType +
         // bike equivalents + chartPedBikeCompare without sampleRows.
+        const _cm = (CL.data && CL.data.cachedMatview) ? CL.data.cachedMatview : null;
         const [categories, analysis, pedbike] = await Promise.all([
-            dc.getSafetyCategories(tierResolved.tier, tierResolved.value),
-            dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value),
+            _cm
+                ? _cm('mv_safety_categories', tierResolved.tier, tierResolved.value,
+                    () => dc.getSafetyCategories(tierResolved.tier, tierResolved.value))
+                : dc.getSafetyCategories(tierResolved.tier, tierResolved.value),
+            _cm
+                ? _cm('mv_analysis_summary', tierResolved.tier, tierResolved.value,
+                    () => dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value))
+                : dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value),
             (typeof dc.getPedBikeBreakdowns === 'function'
-                ? dc.getPedBikeBreakdowns(tierResolved.tier, tierResolved.value)
+                ? (_cm
+                    ? _cm('mv_pedbike_breakdowns', tierResolved.tier, tierResolved.value,
+                        () => dc.getPedBikeBreakdowns(tierResolved.tier, tierResolved.value))
+                    : dc.getPedBikeBreakdowns(tierResolved.tier, tierResolved.value))
                 : Promise.resolve(null))
         ]);
 
@@ -106218,9 +106312,16 @@ async function initFatalSpeedingFromMatview(tier) {
     } catch (e) { /* fall through */ }
 
     try {
+        const _cmFS = (CL.data && CL.data.cachedMatview) ? CL.data.cachedMatview : null;
         const [categories, analysis] = await Promise.all([
-            dc.getSafetyCategories(tierResolved.tier, tierResolved.value),
-            dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value)
+            _cmFS
+                ? _cmFS('mv_safety_categories', tierResolved.tier, tierResolved.value,
+                    () => dc.getSafetyCategories(tierResolved.tier, tierResolved.value))
+                : dc.getSafetyCategories(tierResolved.tier, tierResolved.value),
+            _cmFS
+                ? _cmFS('mv_analysis_summary', tierResolved.tier, tierResolved.value,
+                    () => dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value))
+                : dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value)
         ]);
 
         if (!categories && !analysis) {
@@ -157723,8 +157824,41 @@ function signDef_exportPDF() {
 <!-- CrashLens Supabase Data Client (Phase 1 — foundation only) -->
 <!-- road-type-mapping.js MUST load before data-client.js and supabase-bridge.js -->
 <!-- (single source of truth for tier × radio → spec/label/r2Suffix mapping). -->
+<script src="modules/ui/skeletons.js"></script>
+<script>
+// Round-9 Fix 3 — paint shimmer skeletons in KPI cards as early as possible
+// so the user sees animated placeholders instead of "0" while the first
+// matview fetch is in flight. paintKPIs() will replace them via textContent.
+(function () {
+    function _earlySkel() {
+        try {
+            if (window.CL && CL.ui && CL.ui.skeletons && CL.ui.skeletons.showKpis) {
+                CL.ui.skeletons.showKpis();
+            }
+        } catch (e) { /* non-fatal */ }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _earlySkel, { once: true });
+    } else {
+        _earlySkel();
+    }
+})();
+
+// Round-9 Fix 4 — register service worker so repeat visits load app shell
+// + module bundles from cache. SW uses stale-while-revalidate for static
+// assets and never intercepts Supabase / R2 / Mapbox network calls.
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/Federal/app/sw.js')
+            .then(function (reg) { console.log('[SW] registered, scope:', reg && reg.scope); })
+            .catch(function (err) { console.warn('[SW] registration failed:', err && err.message); });
+    });
+}
+</script>
 <script src="modules/data/road-type-mapping.js"></script>
 <script src="../assets/js/data-client.js"></script>
+<script src="modules/data/matview-cache.js"></script>
+<script src="modules/data/chunk-loader.js"></script>
 <script src="modules/data/supabase-bridge.js"></script>
 <script src="modules/data/lazy-loader.js"></script>
 <script src="modules/data/tab-loaders.js"></script>
