@@ -1615,6 +1615,269 @@ class CrashLensDataClient {
   }
 
   // ─────────────────────────────────────────────────────────
+  //  ROUND 14 — Fatal/Speed factor matviews + grant programs +
+  //             EB Before/After RPC + email subscribers + scheduled reports
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * mv_fatal_factors — per-jurisdiction fatal-only factor breakdowns and
+   * high-risk co-factor combos (speed×impaired, night×speed, …). Drives the
+   * Fatal Crashes multi-factor panels and the Combined Analysis tab.
+   */
+  async getFatalFactors(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getFatalFactors', state: this.state, tier, value, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const filters = this._tierFilter(tier, value);
+        if (opts.roadType === 'all_no_interstate') {
+          filters.is_interstate = 'eq.false';
+        } else if (opts.roadType && opts.roadType !== 'all') {
+          filters.road_type = `eq.${opts.roadType}`;
+        }
+        const data = await this._supabaseQuery('mv_fatal_factors', { filters });
+        this._source = 'supabase';
+        return Array.isArray(data) ? data : [];
+      } catch (e) {
+        console.warn('[DataClient] getFatalFactors failed (matview missing?):', e.message);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * mv_speed_summary — per-jurisdiction speed-vs-non-speed breakdowns. Drives
+   * the F&S Speed-Related sub-tab and the Non-Speed Severity pie.
+   */
+  async getSpeedSummary(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getSpeedSummary', state: this.state, tier, value, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const filters = this._tierFilter(tier, value);
+        if (opts.roadType === 'all_no_interstate') {
+          filters.is_interstate = 'eq.false';
+        } else if (opts.roadType && opts.roadType !== 'all') {
+          filters.road_type = `eq.${opts.roadType}`;
+        }
+        const data = await this._supabaseQuery('mv_speed_summary', { filters });
+        this._source = 'supabase';
+        return Array.isArray(data) ? data : [];
+      } catch (e) {
+        console.warn('[DataClient] getSpeedSummary failed (matview missing?):', e.message);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * grant_programs lookup table. Returns federal-scope programs OR the
+   * caller's state-scope programs in one round-trip. State-agnostic — adding
+   * new states is an INSERT to the lookup table, never a code change.
+   */
+  async getGrantPrograms(opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const stateKey = (opts.state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      active: 'eq.true',
+      select: '*',
+      order: 'scope.asc,program_name.asc',
+    });
+    if (opts.scope) params.set('scope', `eq.${opts.scope}`);
+    // jurisdiction-aware: federal-scope OR matching this state
+    if (stateKey) {
+      params.append('or', `(scope.eq.federal,state.eq.${stateKey})`);
+    }
+    const url = `${this.supabaseUrl}/grant_programs?${params.toString()}`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const resp = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(timer);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[DataClient] getGrantPrograms failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * run_before_after_study RPC — Empirical-Bayes Before/After analysis.
+   * @param {object} opts {state, locationType, locationName, installDate,
+   *                       beforeMonths=36, afterMonths=36, constructionMonths=3}
+   * @returns {Promise<object|null>} {observed_before, observed_after,
+   *   predicted_after_no_treatment, eb_estimate, cmf_observed, pct_change, method}
+   */
+  async runBeforeAfterStudy(opts) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    if (!opts || !opts.locationName || !opts.installDate) return null;
+    const body = {
+      p_state:               (opts.state || this.state || '').toLowerCase(),
+      p_location_type:       opts.locationType,
+      p_location_name:       opts.locationName,
+      p_install_date:        opts.installDate,
+      p_before_months:       opts.beforeMonths || 36,
+      p_after_months:        opts.afterMonths || 36,
+      p_construction_months: opts.constructionMonths || 3,
+    };
+    const url = `${this.supabaseUrl}/rpc/run_before_after_study`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const resp = await fetch(url, {
+        method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return data;
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[DataClient] runBeforeAfterStudy failed:', e.message);
+      return null;
+    }
+  }
+
+  // Email subscribers (per-state, per-user)
+  async listEmailSubscribers(state) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const stateKey = (state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      state: `eq.${stateKey}`,
+      active: 'eq.true',
+      select: '*',
+      order: 'created_at.desc',
+    });
+    const url = `${this.supabaseUrl}/email_subscribers?${params.toString()}`;
+    const headers = { 'apikey': this.supabaseKey, 'Authorization': `Bearer ${this.supabaseKey}` };
+    try {
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      console.warn('[DataClient] listEmailSubscribers failed:', e.message);
+      return null;
+    }
+  }
+
+  async addEmailSubscriber(subscriber) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    if (!subscriber || !subscriber.email) return null;
+    const url = `${this.supabaseUrl}/email_subscribers`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    };
+    const body = JSON.stringify([{
+      email: subscriber.email,
+      state: (subscriber.state || this.state || '').toLowerCase(),
+      label: subscriber.label || null,
+      user_id: subscriber.user_id || null,
+    }]);
+    try {
+      const resp = await fetch(url, { method: 'POST', headers, body });
+      if (!resp.ok) {
+        const err = await resp.text().catch(() => '');
+        throw new Error(err || `HTTP ${resp.status}`);
+      }
+      return await resp.json();
+    } catch (e) {
+      console.warn('[DataClient] addEmailSubscriber failed:', e.message);
+      return null;
+    }
+  }
+
+  async removeEmailSubscriber(id) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    if (!id) return null;
+    const url = `${this.supabaseUrl}/email_subscribers?id=eq.${encodeURIComponent(id)}`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+    };
+    try {
+      const resp = await fetch(url, { method: 'DELETE', headers });
+      return resp.ok;
+    } catch (e) {
+      console.warn('[DataClient] removeEmailSubscriber failed:', e.message);
+      return false;
+    }
+  }
+
+  // Scheduled reports
+  async listScheduledReports(state) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const stateKey = (state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      state: `eq.${stateKey}`,
+      active: 'eq.true',
+      select: '*',
+      order: 'next_run_at.asc',
+    });
+    const url = `${this.supabaseUrl}/scheduled_reports?${params.toString()}`;
+    const headers = { 'apikey': this.supabaseKey, 'Authorization': `Bearer ${this.supabaseKey}` };
+    try {
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      console.warn('[DataClient] listScheduledReports failed:', e.message);
+      return null;
+    }
+  }
+
+  async createScheduledReport(cfg) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    if (!cfg) return null;
+    const url = `${this.supabaseUrl}/scheduled_reports`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    };
+    try {
+      const resp = await fetch(url, {
+        method: 'POST', headers, body: JSON.stringify([cfg]),
+      });
+      if (!resp.ok) {
+        const err = await resp.text().catch(() => '');
+        throw new Error(err || `HTTP ${resp.status}`);
+      }
+      return await resp.json();
+    } catch (e) {
+      console.warn('[DataClient] createScheduledReport failed:', e.message);
+      return null;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
   //  SUPABASE INTERNALS
   // ─────────────────────────────────────────────────────────
 
