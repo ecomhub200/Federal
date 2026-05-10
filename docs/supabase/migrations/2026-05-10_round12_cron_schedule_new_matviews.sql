@@ -1,0 +1,21 @@
+-- =============================================================================
+-- Round 12 — Cron schedule for new matviews (2026-05-10)
+-- =============================================================================
+-- PLACEHOLDER: applied live by Murad against srv1503081.hstgr.cloud on
+-- 2026-05-10.
+--
+-- Schedules nightly REFRESH MATERIALIZED VIEW CONCURRENTLY for the five
+-- new/extended matviews. All five are slotted between 06:00 and 06:45 UTC
+-- so they finish before US Pacific business hours.
+--
+-- Cron entries added (pg_cron):
+--   - mv_safety_categories     06:00 UTC nightly
+--   - mv_analysis_extra        06:10 UTC nightly
+--   - mv_hotspots_detail       06:20 UTC nightly  (largest; ~30s)
+--   - mv_pedbike_locations     06:30 UTC nightly
+--   - mv_safety_focus_locations 06:40 UTC nightly
+--
+-- Apply against: self-hosted Supabase on srv1503081.hstgr.cloud
+-- =============================================================================
+
+-- (full SQL body to be inserted from Cowork apply log)

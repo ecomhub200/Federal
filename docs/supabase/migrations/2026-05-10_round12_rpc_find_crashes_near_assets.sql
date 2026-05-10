@@ -1,0 +1,41 @@
+-- =============================================================================
+-- Round 12 — RPC: find_crashes_near_assets (2026-05-10)
+-- =============================================================================
+-- PLACEHOLDER: applied live by Murad against srv1503081.hstgr.cloud on
+-- 2026-05-10. Verified on Delaware: 228 crashes (41 serious, EPDO 3508)
+-- within 300 ft of a Dover transit stop test point.
+--
+-- Purpose: server-side spatial join for the Asset Deficiency tab so the
+-- Prioritized Infrastructure Locations table can populate without the
+-- frontend pulling row-level crashes for every state.
+--
+-- Signature:
+--   find_crashes_near_assets(
+--     p_state         text,                                       -- 'delaware'
+--     p_assets        jsonb,                                      -- [{id,type,lat,lng}, ...]
+--     p_radius_ft     int     DEFAULT 300,
+--     p_start_date    date    DEFAULT NULL,                       -- crash date filter
+--     p_end_date      date    DEFAULT NULL,
+--     p_ped_bike_only boolean DEFAULT false                       -- restrict to PED OR BIKE
+--   ) RETURNS TABLE (
+--     asset_id     text,
+--     asset_type   text,
+--     lat          double precision,
+--     lng          double precision,
+--     crash_count  int,
+--     k_count      int,
+--     a_count      int,
+--     bc_count     int,
+--     o_count      int,
+--     epdo         numeric
+--   )
+--
+-- Implementation: PostGIS ST_DWithin against ST_MakePoint over the crashes
+-- table, with the radius in feet converted to meters (1 ft ≈ 0.3048 m) and
+-- expressed as a degrees buffer at the asset's latitude. EPDO uses the
+-- FHWA-2025 weights (K=883, A=94, B+C=21+11, O=1).
+--
+-- Apply against: self-hosted Supabase on srv1503081.hstgr.cloud
+-- =============================================================================
+
+-- (full SQL body to be inserted from Cowork apply log)

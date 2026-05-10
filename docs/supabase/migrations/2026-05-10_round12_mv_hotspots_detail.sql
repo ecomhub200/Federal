@@ -1,0 +1,34 @@
+-- =============================================================================
+-- Round 12 — mv_hotspots_detail (2026-05-10)
+-- =============================================================================
+-- PLACEHOLDER: applied live by Murad against srv1503081.hstgr.cloud on
+-- 2026-05-10. Delaware row count: 31,160.
+--
+-- Purpose: per (state, location_type, location_name) JSONB breakdowns to
+-- feed the Hot Spots, Intersection, and F&S detail panels. One row per
+-- selected location supplies every chart in the panel without a second
+-- round-trip.
+--
+-- Row schema:
+--   state, location_type, location_name, total, k, a,
+--   by_year         JSONB  e.g. {"2020": 12, "2021": 19, ...}
+--   by_month        JSONB  {"1": 4, "2": 6, ..., "12": 9}
+--   by_dow          JSONB  {"0": 8, "1": 11, ..., "6": 7}     -- 0=Sun
+--   by_hour         JSONB  {"00": 2, ..., "23": 1}
+--   by_collision    JSONB  {"Rear End": 21, "Angle": 8, ...}
+--   by_weather      JSONB
+--   by_light        JSONB
+--   by_roadsurface  JSONB
+--   by_trafficctrl  JSONB
+--   by_firstevent   JSONB
+--   alcohol_count, speed_count, distracted_count, drowsy_count,
+--   drug_count, hitrun_count, ped_count, bike_count, moto_count,
+--   senior_count, young_count, unrestrained_count, workzone_count,
+--   school_count, night_count, adverse_weather_count
+--
+-- Refresh: nightly cron.
+--
+-- Apply against: self-hosted Supabase on srv1503081.hstgr.cloud
+-- =============================================================================
+
+-- (full SQL body to be inserted from Cowork apply log)

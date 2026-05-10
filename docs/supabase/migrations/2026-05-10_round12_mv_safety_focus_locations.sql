@@ -1,0 +1,28 @@
+-- =============================================================================
+-- Round 12 — mv_safety_focus_locations (2026-05-10)
+-- =============================================================================
+-- PLACEHOLDER: applied live by Murad against srv1503081.hstgr.cloud on
+-- 2026-05-10. Delaware row count: 173,151.
+--
+-- Purpose: top crash locations per Safety Focus category so the per-
+-- category "Top Locations" table and the F&S Fatal/Speed/Combined hotspot
+-- tables can populate at aggregate tier without sampleRows.
+--
+-- Row schema (same as mv_pedbike_locations, plus a `category` column):
+--   state, dot_district, planning_district, mpo_name, physical_juris_name,
+--   category    -- one of:
+--      curves, pedestrian, bicycle, speed, alcohol, drug, impaired,
+--      distracted, motorcycle, animal, guardrail, nighttime, school,
+--      intersection, weather, roaddeparture, unrestrained
+--   location_type   ('intersection' | 'segment'),
+--   location_name,
+--   total, k, a,
+--   at_intersection, night_count,
+--   first_year, last_year
+--
+-- Refresh: nightly cron.
+--
+-- Apply against: self-hosted Supabase on srv1503081.hstgr.cloud
+-- =============================================================================
+
+-- (full SQL body to be inserted from Cowork apply log)

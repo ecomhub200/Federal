@@ -979,8 +979,25 @@ class CrashLensDataClient {
         // Rows are grouped by (state, county, district, mpo, planning_district,
         // dimension, dim_value). At any aggregate tier each (dimension, dim_value)
         // appears once per county — accumulate instead of overwrite.
-        const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byCollisionDetail: {}, byHour: {}, byFuncClass: {}, byWeather: {}, byLight: {} };
-        (data || []).forEach(r => {
+        const out = { byYear: {}, byMonth: {}, bySeverity: {K:0,A:0,B:0,C:0,O:0}, byCollision: {}, byCollisionDetail: {}, byHour: {}, byFuncClass: {}, byWeather: {}, byLight: {}, byDow: {}, byRoadSurface: {}, byTrafficControl: {}, byFirstEvent: {} };
+        // Round 12: union mv_analysis_extra (dow/roadsurface/trafficcontrol/
+        // firstevent) into the same response so existing placeholders (e.g.
+        // Dashboard chartDOW) light up without callers having to coordinate
+        // two fetches. mv_analysis_extra shares the same row schema as
+        // mv_analysis_summary, so we merge on the same dim_value bucket.
+        let extraData = [];
+        try {
+          extraData = await this._supabaseQuery('mv_analysis_extra', {
+            filters: allFilters,
+            limit: 10000,
+          });
+        } catch (extraErr) {
+          // mv_analysis_extra may not exist on every state's instance.
+          // Surface as a soft warning and continue with the base matview.
+          console.warn('[DataClient] mv_analysis_extra unavailable:', extraErr && extraErr.message);
+        }
+        const allRows = [...(data || []), ...(extraData || [])];
+        allRows.forEach(r => {
           const k = r.k || 0, a = r.a || 0, b = r.b || 0, c = r.c || 0, o = r.o || 0, total = r.total || 0;
           if (r.dimension === 'year') {
             if (!out.byYear[r.dim_value]) out.byYear[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
@@ -1018,6 +1035,24 @@ class CrashLensDataClient {
             if (!out.byLight[r.dim_value]) out.byLight[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
             const l = out.byLight[r.dim_value];
             l.K += k; l.A += a; l.B += b; l.C += c; l.O += o; l.total += total;
+          } else if (r.dimension === 'dow') {
+            // Round 12: dow comes from mv_analysis_extra. dim_value is 0-6
+            // (Sun..Sat per Postgres EXTRACT(DOW FROM date)).
+            if (!out.byDow[r.dim_value]) out.byDow[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+            const d = out.byDow[r.dim_value];
+            d.K += k; d.A += a; d.B += b; d.C += c; d.O += o; d.total += total;
+          } else if (r.dimension === 'roadsurface') {
+            if (!out.byRoadSurface[r.dim_value]) out.byRoadSurface[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+            const rs = out.byRoadSurface[r.dim_value];
+            rs.K += k; rs.A += a; rs.B += b; rs.C += c; rs.O += o; rs.total += total;
+          } else if (r.dimension === 'trafficcontrol') {
+            if (!out.byTrafficControl[r.dim_value]) out.byTrafficControl[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+            const tc = out.byTrafficControl[r.dim_value];
+            tc.K += k; tc.A += a; tc.B += b; tc.C += c; tc.O += o; tc.total += total;
+          } else if (r.dimension === 'firstevent') {
+            if (!out.byFirstEvent[r.dim_value]) out.byFirstEvent[r.dim_value] = {K:0,A:0,B:0,C:0,O:0,total:0};
+            const fe = out.byFirstEvent[r.dim_value];
+            fe.K += k; fe.A += a; fe.B += b; fe.C += c; fe.O += o; fe.total += total;
           }
         });
         return out;
@@ -1219,6 +1254,193 @@ class CrashLensDataClient {
         return null;
       }
     });
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  ROUND 12 — NEW MATVIEW ACCESSORS
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * mv_analysis_extra — extra dimensions (dow, roadsurface, trafficcontrol,
+   * firstevent) that share the same row shape as mv_analysis_summary.
+   *
+   * Returns the same envelope as getAnalysisBreakdown, but only the four
+   * extra-dimension buckets are populated:
+   *   { byDow, byRoadSurface, byTrafficControl, byFirstEvent }
+   */
+  async getAnalysisExtra(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getAnalysisExtra', state: this.state, tier, value, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value);
+        const allFilters = { ...tierFilters };
+        if (opts.dimension) allFilters.dimension = `eq.${opts.dimension}`;
+        const data = await this._supabaseQuery('mv_analysis_extra', {
+          filters: allFilters,
+          limit: 10000,
+        });
+        this._source = 'supabase';
+        const out = { byDow: {}, byRoadSurface: {}, byTrafficControl: {}, byFirstEvent: {} };
+        (data || []).forEach(r => {
+          const k = r.k || 0, a = r.a || 0, b = r.b || 0, c = r.c || 0, o = r.o || 0, total = r.total || 0;
+          let bucket;
+          if (r.dimension === 'dow')               bucket = out.byDow;
+          else if (r.dimension === 'roadsurface')  bucket = out.byRoadSurface;
+          else if (r.dimension === 'trafficcontrol') bucket = out.byTrafficControl;
+          else if (r.dimension === 'firstevent')   bucket = out.byFirstEvent;
+          else return;
+          const dv = r.dim_value;
+          if (dv === null || dv === undefined || dv === '') return;
+          if (!bucket[dv]) bucket[dv] = { K:0, A:0, B:0, C:0, O:0, total:0 };
+          const slot = bucket[dv];
+          slot.K += k; slot.A += a; slot.B += b; slot.C += c; slot.O += o; slot.total += total;
+        });
+        return out;
+      } catch (e) {
+        console.warn('[DataClient] getAnalysisExtra failed (matview missing?):', e.message);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * mv_hotspots_detail — per-location JSONB breakdown for a single hot
+   * spot / intersection. Returns the single row (or null) for the requested
+   * (state, location_type, location_name) tuple. Each row exposes:
+   *   by_year, by_month, by_dow, by_hour, by_collision, by_weather,
+   *   by_light, by_roadsurface, by_trafficctrl, by_firstevent
+   * plus per-factor counts (alcohol_count, speed_count, ...).
+   */
+  async getHotspotDetail(stateKey, locationType, locationName) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getHotspotDetail', state: stateKey || this.state, locationType, locationName
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const filters = {
+          state: `eq.${stateKey || this.state}`,
+          location_type: `eq.${locationType}`,
+          location_name: `eq.${locationName}`,
+        };
+        const data = await this._supabaseQuery('mv_hotspots_detail', {
+          filters,
+          limit: 1,
+        });
+        this._source = 'supabase';
+        return Array.isArray(data) && data.length > 0 ? data[0] : null;
+      } catch (e) {
+        console.warn('[DataClient] getHotspotDetail failed (matview missing?):', e.message);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * mv_pedbike_locations — top ped/bike crash locations.
+   * @param {string} mode - 'pedestrian' | 'bicycle'
+   */
+  async getPedBikeLocations(tier, value, mode, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getPedBikeLocations', state: this.state, tier, value, mode, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value);
+        const allFilters = { ...tierFilters, mode: `eq.${mode}` };
+        const data = await this._supabaseQuery('mv_pedbike_locations', {
+          filters: allFilters,
+          order: 'total.desc',
+          limit: opts.limit || 50,
+        });
+        this._source = 'supabase';
+        return data || [];
+      } catch (e) {
+        console.warn('[DataClient] getPedBikeLocations failed (matview missing?):', e.message);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * mv_safety_focus_locations — top crash locations per Safety Focus
+   * category (curves, speed, alcohol, drug, distracted, motorcycle,
+   * intersection, pedestrian, bicycle, ...).
+   */
+  async getSafetyFocusLocations(tier, value, category, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const swrKey = CrashLensDataClient._swrKey({
+      op: 'getSafetyFocusLocations', state: this.state, tier, value, category, opts
+    });
+    return this._swr(swrKey, async () => {
+      try {
+        const tierFilters = this._tierFilter(tier, value);
+        const allFilters = { ...tierFilters, category: `eq.${category}` };
+        const data = await this._supabaseQuery('mv_safety_focus_locations', {
+          filters: allFilters,
+          order: 'total.desc',
+          limit: opts.limit || 25,
+        });
+        this._source = 'supabase';
+        return data || [];
+      } catch (e) {
+        console.warn('[DataClient] getSafetyFocusLocations failed (matview missing?):', e.message);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * find_crashes_near_assets RPC — Asset Deficiency spatial join.
+   * @param {string} stateKey
+   * @param {Array<{id,type,lat,lng}>} assets
+   * @param {object} opts - { radius_ft, start_date, end_date, ped_bike_only }
+   * @returns {Promise<Array>} rows with asset_id, asset_type, lat, lng,
+   *   crash_count, k_count, a_count, bc_count, o_count, epdo
+   */
+  async findCrashesNearAssets(stateKey, assets, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    if (!Array.isArray(assets) || assets.length === 0) return [];
+    const body = {
+      p_state: stateKey || this.state,
+      p_assets: assets,
+      p_radius_ft: opts.radius_ft || 300,
+      p_start_date: opts.start_date || null,
+      p_end_date: opts.end_date || null,
+      p_ped_bike_only: !!opts.ped_bike_only,
+    };
+    const url = `${this.supabaseUrl}/rpc/find_crashes_near_assets`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[DataClient] findCrashesNearAssets failed:', e.message);
+      return null;
+    }
   }
 
   // ─────────────────────────────────────────────────────────

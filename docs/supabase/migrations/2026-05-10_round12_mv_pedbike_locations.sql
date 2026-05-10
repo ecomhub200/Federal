@@ -1,0 +1,25 @@
+-- =============================================================================
+-- Round 12 — mv_pedbike_locations (2026-05-10)
+-- =============================================================================
+-- PLACEHOLDER: applied live by Murad against srv1503081.hstgr.cloud on
+-- 2026-05-10. Delaware row count: 6,129.
+--
+-- Purpose: top ped/bike crash locations per (state, tier) so the Ped/Bike
+-- "Pedestrian High-Crash Locations" and "Bicycle High-Crash Locations"
+-- tables can populate at aggregate tier without sampleRows.
+--
+-- Row schema:
+--   state, dot_district, planning_district, mpo_name, physical_juris_name,
+--   mode             ('pedestrian' | 'bicycle'),
+--   location_type    ('intersection' | 'segment'),
+--   location_name,
+--   total, k, a,
+--   at_intersection, night_count,
+--   first_year, last_year
+--
+-- Refresh: nightly cron.
+--
+-- Apply against: self-hosted Supabase on srv1503081.hstgr.cloud
+-- =============================================================================
+
+-- (full SQL body to be inserted from Cowork apply log)

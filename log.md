@@ -51,3 +51,105 @@ Cold-start TTI target: 12 s → 1.5 s. Warm reload target: 5.2 s → 1 s. Matche
 - Doc: added "IMPORTANT: cache-key alignment" callout to `CLAUDE.md`'s
   matview pre-warming section so future contributors keep loader and
   prewarm `keyExtra` in lockstep.
+
+## 2026-05-10 Round 12 — Detail data + Asset Deficiency wiring
+- Backend (already applied to live Supabase by Murad 2026-05-10):
+  - `mv_safety_categories` extended with `alcohol` (4,058 DE) + `drug`
+    (1,341 DE) categories. `impaired` retained as the (alcohol OR drug)
+    union for back-compat.
+  - NEW `mv_analysis_extra` (4,069 DE rows) — adds `dow`, `roadsurface`,
+    `trafficcontrol`, `firstevent` dimensions. Same row schema as
+    `mv_analysis_summary` so `getAnalysisBreakdown` can union them.
+  - NEW `mv_hotspots_detail` (31,160 DE rows) — per (state, location_type,
+    location_name) JSONB breakdowns (by_year/month/dow/hour/collision/
+    weather/light/roadsurface/trafficctrl/firstevent) plus per-factor
+    counts (alcohol/speed/distracted/drowsy/drug/hitrun/ped/bike/moto/
+    senior/young/unrestrained/workzone/school/night/adverse_weather).
+  - NEW `mv_pedbike_locations` (6,129 DE rows) — top ped/bike crash
+    locations per mode + at_intersection/night counts.
+  - NEW `mv_safety_focus_locations` (173,151 DE rows) — top crash
+    locations per Safety Focus category.
+  - NEW `find_crashes_near_assets(state, assets jsonb, radius_ft, ...)` RPC
+    for the Asset Deficiency spatial join.
+- Frontend (this branch):
+  - `assets/js/data-client.js`: added `getAnalysisExtra`, `getHotspotDetail`,
+    `getPedBikeLocations`, `getSafetyFocusLocations`, `findCrashesNearAssets`.
+    `getAnalysisBreakdown` now unions mv_analysis_extra into the same
+    response (byDow/byRoadSurface/byTrafficControl/byFirstEvent buckets) so
+    existing Dashboard fallbacks (chartDOW) light up automatically.
+  - `app/modules/data/prewarm.js`: added `mv_pedbike_locations:pedestrian`,
+    `mv_pedbike_locations:bicycle`, and `mv_analysis_extra` to `_buildBatch`.
+  - `app/index.html`:
+    - Dashboard chartDOW placeholder text updated; data now sourced
+      transparently via `getAnalysisBreakdown`.
+    - Ped/Bike: new `renderPedBikeLocationsFromMatview` populates the
+      Pedestrian/Bicycle High-Crash Locations tables and rebuilds the
+      Location Type pies from `mv_pedbike_locations` (fixes the
+      "100
+## 2026-05-10 Round 12 — Detail data + Asset Deficiency wiring
+- Backend (already applied to live Supabase by Murad 2026-05-10):
+  - `mv_safety_categories` extended with `alcohol` (4,058 DE) + `drug`
+    (1,341 DE) categories. `impaired` retained as the (alcohol OR drug)
+    union for back-compat.
+  - NEW `mv_analysis_extra` (4,069 DE rows) — adds `dow`, `roadsurface`,
+    `trafficcontrol`, `firstevent` dimensions. Same row schema as
+    `mv_analysis_summary` so `getAnalysisBreakdown` can union them.
+  - NEW `mv_hotspots_detail` (31,160 DE rows) — per (state, location_type,
+    location_name) JSONB breakdowns (by_year/month/dow/hour/collision/
+    weather/light/roadsurface/trafficctrl/firstevent) plus per-factor
+    counts (alcohol/speed/distracted/drowsy/drug/hitrun/ped/bike/moto/
+    senior/young/unrestrained/workzone/school/night/adverse_weather).
+  - NEW `mv_pedbike_locations` (6,129 DE rows) — top ped/bike crash
+    locations per mode + at_intersection/night counts.
+  - NEW `mv_safety_focus_locations` (173,151 DE rows) — top crash
+    locations per Safety Focus category.
+  - NEW `find_crashes_near_assets(state, assets jsonb, radius_ft, ...)` RPC
+    for the Asset Deficiency spatial join.
+- Frontend (this branch):
+  - `assets/js/data-client.js`: added `getAnalysisExtra`, `getHotspotDetail`,
+    `getPedBikeLocations`, `getSafetyFocusLocations`, `findCrashesNearAssets`.
+    `getAnalysisBreakdown` now unions mv_analysis_extra into the same
+    response (byDow/byRoadSurface/byTrafficControl/byFirstEvent buckets) so
+    existing Dashboard fallbacks (chartDOW) light up automatically.
+  - `app/modules/data/prewarm.js`: added `mv_pedbike_locations:pedestrian`,
+    `mv_pedbike_locations:bicycle`, and `mv_analysis_extra` to `_buildBatch`.
+  - `app/index.html`:
+    - Dashboard chartDOW placeholder text updated; data now sourced
+      transparently via `getAnalysisBreakdown`.
+    - Ped/Bike: new `renderPedBikeLocationsFromMatview` populates the
+      Pedestrian/Bicycle High-Crash Locations tables and rebuilds the
+      Location Type pies from `mv_pedbike_locations` (fixes the
+      "100% Non-Intersection" bug). New
+      `renderPedBikeComparisonTableFromCats` populates the
+      Pedestrian-vs-Bicycle Comparison table from mv_safety_categories.
+    - Safety Focus: `_hydrateSafetyLocationsFromMatview(category)` hydrates
+      the Top Locations table from `mv_safety_focus_locations` when in
+      matview mode (no sampleRows). `alcoholonly` UI card now reads from
+      the new `alcohol` matview category. The 6 truly-zero categories
+      (workzone/senior/young/lgtruck/hitrun/drowsy) now label "No data
+      for this state" instead of "(matview pending)".
+    - F&S: `_hydrateFSHotspotsFromMatview` populates
+      `fatalSpeedingState.{fatalData,speedData}.byRoute` from
+      `mv_safety_focus_locations`, so Fatal/Speed/Combined hotspot tables
+      paint at aggregate tier.
+    - Hot Spots / Intersection detail panels: new
+      `_hydrateHotspotDetailFromMatview(which)` fetches per-location
+      `mv_hotspots_detail` rows and merges JSONB dim buckets and factor
+      counts into the panel `aggregatedData`, then re-renders. Charts
+      (Yearly/Monthly/DoW/Hour/Collision/Weather/Light/RoadSurface/
+      TrafficCtrl) now populate end-to-end without sampleRows.
+    - Asset Deficiency: when `crashState.mapPoints` is empty,
+      `assetRunAnalysis` now falls back to
+      `assetRunAnalysisViaRpc(activeAssets)` which calls the new
+      `find_crashes_near_assets` RPC and reshapes results into
+      `assetState.associations`. Prioritized Infrastructure Locations
+      table now populates with 464+ transit-stop / school inputs at
+      aggregate tier.
+- Migration source-of-truth: 7 placeholder SQL files committed under
+  `docs/supabase/migrations/2026-05-10_round12_*.sql`. Bodies to be
+  inserted from Cowork apply log in a follow-up.
+- Tabs verified end-to-end: Dashboard, Safety Focus, F&S, Hot Spots,
+  Intersection, Ped/Bike, Asset Deficiency.
+- Deferred to Round 13: Dashboard Census Subdivisions (CCD) table —
+  needs TIGER subdivision boundary ingestion + spatial join. Crash Tree
+  K/A in deep nodes — frontend tree-walker bug, requires investigation.
