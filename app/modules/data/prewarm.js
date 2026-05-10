@@ -106,6 +106,19 @@ CL.data = CL.data || {};
                 return client.getHotspots(tier, value, { limit: topN });
             }, { limit: topN });   // keyExtra — must match the tab loader's cachedMatview call
         }
+        // Round 15 §3 — Hot Spots crash-rate matview (per tier/value).
+        // keyExtra MUST match _loadHotspotsFromMatview (county + limit).
+        if (typeof client.getHotspotsWithRates === 'function') {
+            var topNEl2 = document.getElementById('hsTopN');
+            var topN2 = parseInt(topNEl2 && topNEl2.value, 10) || 25;
+            var rateLimit = Math.max(200, topN2 * 4);
+            push('mv_hotspots_with_rates', function () {
+                return client.getHotspotsWithRates({
+                    county: tier === 'county' ? value : undefined,
+                    limit: rateLimit
+                });
+            }, { county: tier === 'county' ? value : null, limit: rateLimit });
+        }
         // Hot Spots — top collision per location (STATE-SCOPED, not tier/value)
         if (typeof client.getHotspotsTopCollision === 'function') {
             var stateKey = (client.state || (typeof window.crashLensClient !== 'undefined' && window.crashLensClient.state) || '').toLowerCase();
@@ -182,36 +195,34 @@ CL.data = CL.data || {};
         }
 
         var t0 = Date.now();
-        console.log('[Prewarm] kicking off ' + batch.length + ' matview fetches in waves for tier=' + tier + ' value=' + value);
+        console.log('[Prewarm] kicking off ' + batch.length + ' matview fetches (parallel) for tier=' + tier + ' value=' + value);
 
-        // ROUND-11.1 — fire in 3-at-a-time waves instead of all-at-once. This
-        // avoids saturating the self-hosted Supabase connection pool, which
-        // throttled the concurrent dashboard_summary fetch to 14.5s in live
-        // testing. WAVE_SIZE leaves spare connections for the foreground summary.
-        var WAVE_SIZE = 3;
-        var results = [];
-        (async function () {
-            for (var i = 0; i < batch.length; i += WAVE_SIZE) {
-                var wave = batch.slice(i, i + WAVE_SIZE);
-                var wavePromises = wave.map(function (item) {
-                    return CL.data.cachedMatview(item.mvName, item.tier, item.value, item.fetcher, item.keyExtra)
-                        .then(function () { _stats.hits++; return { mv: item.mvName, ok: true }; })
-                        .catch(function (err) {
-                            _stats.misses++;
-                            console.warn('[Prewarm] ' + item.mvName + ' failed (non-fatal):', err && err.message);
-                            return { mv: item.mvName, ok: false, error: err && err.message };
-                        });
+        // Round 15 §12.10 — fire all matviews in parallel. The earlier
+        // 3-at-a-time wave throttle (Round 11.1) was added to spare the
+        // self-hosted Supabase connection pool, but live profiling in
+        // Round 14 showed the pool now has headroom for 9-12 concurrent
+        // matview reads, and the wave structure costs ~108s wall-clock vs
+        // ~25s for the parallel form. The foreground dashboard_summary
+        // request is debounced separately by the bridge, so it isn't
+        // starved by this fan-out.
+        var promises = batch.map(function (item) {
+            return CL.data.cachedMatview(item.mvName, item.tier, item.value, item.fetcher, item.keyExtra)
+                .then(function () { _stats.hits++; return { mv: item.mvName, ok: true }; })
+                .catch(function (err) {
+                    _stats.misses++;
+                    console.warn('[Prewarm] ' + item.mvName + ' failed (non-fatal):', err && err.message);
+                    return { mv: item.mvName, ok: false, error: err && err.message };
                 });
-                var waveResults = await Promise.allSettled(wavePromises);
-                results = results.concat(waveResults);
-            }
+        });
+        Promise.allSettled(promises).then(function (results) {
             var elapsed = Date.now() - t0;
             _stats.lastRunMs = elapsed;
             _stats.lastBatchSize = batch.length;
             _stats.lastTier = tier + ':' + value;
+            try { window.crashState && (window.crashState._prewarmElapsedMs = elapsed); } catch (e) { /* non-fatal */ }
             var ok = results.filter(function (r) { return r.value && r.value.ok; }).length;
-            console.log('[Prewarm] complete: ' + ok + '/' + batch.length + ' matviews warm in ' + elapsed + 'ms (waves of ' + WAVE_SIZE + ')');
-        })();
+            console.log('[Prewarm] complete: ' + ok + '/' + batch.length + ' matviews warm in ' + elapsed + 'ms (parallel)');
+        });
         return Promise.resolve();   // outer schedule() doesn't await; fire-and-forget
     }
 

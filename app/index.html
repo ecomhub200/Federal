@@ -6348,7 +6348,7 @@ All No Interstate
 </div>
 <div class="table-wrapper" style="max-height:480px;overflow-y:auto">
 <table class="hotspot-table" id="hotspotTable">
-<thead><tr><th style="width:40px"><span class="help-tooltip" data-tooltip="Select up to 5 locations for detailed analysis">✓</span></th><th style="width:50px">Rank</th><th>Location</th><th>Total</th><th>K</th><th>A</th><th>B</th><th>C</th><th>O</th><th>EPDO</th><th>Per Year</th><th>Top Type</th><th style="width:150px">Action</th></tr></thead>
+<thead><tr><th style="width:40px"><span class="help-tooltip" data-tooltip="Select up to 5 locations for detailed analysis">✓</span></th><th style="width:50px">Rank</th><th>Location</th><th>Total</th><th>K</th><th>A</th><th>B</th><th>C</th><th>O</th><th>EPDO</th><th><span class="help-tooltip" data-tooltip="Annual Average Daily Traffic (AADT) from agency traffic counts. Locations without seeded AADT show '—' until counts are loaded.">AADT</span></th><th><span class="help-tooltip" data-tooltip="Crashes per Million Vehicle Miles Traveled. Length assumed: 0.1 mi at intersections, 1.0 mi for segments. Locations without AADT show '—' until counts are loaded.">Rate / MVMT</span></th><th>Per Year</th><th>Top Type</th><th style="width:150px">Action</th></tr></thead>
 <tbody id="hotspotBody"></tbody>
 </table>
 </div>
@@ -35359,6 +35359,13 @@ async function initGrantModule() {
     // Load grants from CSV first
     await loadGrantsCSV();
 
+    // Round 15 §12.8 — merge grant_programs lookup-table rows into the
+    // opportunities list so the Grants tab shows all 8 active programs
+    // (federal + state-specific) instead of just the CSV's 1-2 entries.
+    // State-agnostic — adding a new state means INSERTing rows in the
+    // database, never a code branch.
+    await mergeGrantProgramsFromSupabase();
+
     loadCrashCosts();
     loadApplications();
     loadGrantAISettings();
@@ -35373,6 +35380,66 @@ async function initGrantModule() {
         document.getElementById('grantWritingDataBadge').innerHTML = '✅ Data Loaded';
     }
     grantState.loaded = true;
+}
+
+/**
+ * Round 15 §12.8 — fetch grant_programs from Supabase and merge any rows
+ * that aren't already in grantState.opportunities (deduped by program_id).
+ * Maps the lookup-table column shape to the front-end card shape so
+ * displayStateGrants / renderGrantCard work without modification.
+ */
+async function mergeGrantProgramsFromSupabase() {
+    try {
+        if (!window.crashLensClient || typeof window.crashLensClient.getGrantPrograms !== 'function') {
+            return;
+        }
+        const stateKey = (window.crashLensClient.state
+                          || (typeof _getActiveStateKey === 'function' ? _getActiveStateKey() : '')
+                          || '').toLowerCase();
+        const programs = await window.crashLensClient.getGrantPrograms({ state: stateKey });
+        if (!Array.isArray(programs) || programs.length === 0) return;
+        const stateInfo = (typeof FIPSDatabase !== 'undefined' && jurisdictionContext.stateFips)
+            ? FIPSDatabase.getState(String(jurisdictionContext.stateFips).padStart(2, '0'))
+            : null;
+        const stateAbbr = stateInfo?.abbr || jurisdictionContext.stateCode || '';
+        const have = new Set((grantState.opportunities || []).map(g => g.id));
+        const mapped = programs
+            .filter(p => p && (p.program_id || p.id))
+            .map(p => {
+                const id = p.program_id || p.id;
+                const stateSpecific = (p.scope === 'state');
+                const fundingStr = p.max_award_amount
+                    ? 'Up to $' + Number(p.max_award_amount).toLocaleString()
+                    : 'Varies';
+                const fedShareStr = p.federal_share_pct
+                    ? p.federal_share_pct + '%'
+                    : 'Varies';
+                return {
+                    id: id,
+                    title: p.program_name || id,
+                    agency: p.agency || (stateSpecific ? (stateAbbr + ' DOT') : 'USDOT'),
+                    description: p.description || '',
+                    funding: fundingStr,
+                    federalShare: fedShareStr,
+                    deadline: p.typical_deadline || null,
+                    deadlineNote: p.deadline_note || (p.typical_deadline ? 'See agency NOFO' : 'Rolling / TBD'),
+                    status: p.status || 'forecasted',
+                    website: p.learn_more_url || p.website || '',
+                    focus: Array.isArray(p.focus_areas) ? p.focus_areas
+                        : (typeof p.focus_areas === 'string' ? [p.focus_areas] : []),
+                    stateSpecific: stateSpecific,
+                    stateCode: stateSpecific ? (stateAbbr || (p.state || '').toUpperCase()) : null,
+                    _source: 'grant_programs'
+                };
+            })
+            .filter(g => !have.has(g.id));
+        if (mapped.length > 0) {
+            grantState.opportunities = (grantState.opportunities || []).concat(mapped);
+            console.log('[Grants] merged', mapped.length, 'programs from grant_programs lookup (state=' + stateKey + ')');
+        }
+    } catch (e) {
+        console.warn('[Grants] mergeGrantProgramsFromSupabase failed (non-fatal):', e && e.message);
+    }
 }
 
 // Legacy function kept for compatibility - no longer populates dropdowns
@@ -38916,6 +38983,14 @@ function saveEmailNotificationSettings() {
     // Sync schedule to server (non-blocking)
     syncScheduleToServer();
 
+    // Round 15 §6 — also persist subscribers + scheduled report to Supabase.
+    // Non-blocking; failures are logged but don't surface to the user (the
+    // local + R2 paths above remain authoritative until the Edge-Function
+    // delivery transport ships in Round 16).
+    syncEmailScheduleToSupabase().catch(e =>
+        console.warn('[Notifications] Supabase sync failed (non-fatal):', e && e.message)
+    );
+
     // Log to history
     notificationState.history.push({
         type: 'settings_updated',
@@ -38928,6 +39003,83 @@ function saveEmailNotificationSettings() {
     showEmailSuccessPopup();
 
     console.log('[Notifications] Preferences saved:', notificationState.preferences);
+}
+
+/**
+ * Round 15 §6 — Supabase-backed email schedule persistence.
+ * Writes one email_subscribers row per recipient (idempotent on email+state)
+ * and one scheduled_reports row capturing the cadence + jurisdiction context.
+ * The 5-minute enqueue_due_scheduled_reports cron picks it up and fans out
+ * to email_send_queue for the external transport to ship.
+ */
+async function syncEmailScheduleToSupabase() {
+    if (!window.crashLensClient
+        || typeof window.crashLensClient.addEmailSubscriber !== 'function'
+        || typeof window.crashLensClient.createScheduledReport !== 'function') {
+        return;
+    }
+    const prefs = (notificationState && notificationState.preferences) || {};
+    const stateKey = ((window.crashLensClient && window.crashLensClient.state) || '').toLowerCase();
+    if (!stateKey) return;
+    const userId = (window.currentUserId || (window.firebase && firebase.auth && firebase.auth().currentUser && firebase.auth().currentUser.uid)) || null;
+
+    // 1. Persist subscribers (idempotent — server-side unique on (state, email))
+    const emails = Array.isArray(prefs.emails) ? prefs.emails : [];
+    for (const e of emails) {
+        try {
+            await window.crashLensClient.addEmailSubscriber({
+                email: e, state: stateKey, user_id: userId
+            });
+        } catch (err) { /* non-fatal */ }
+    }
+
+    // 2. Build scheduled-report config from the modal state
+    const reports = prefs.reports || {};
+    if (!reports.enabled) return;
+    const cadence = reports.frequency || 'quarterly';
+    const cadenceDays = { weekly: 7, monthly: 30, quarterly: 90, biannual: 180, annual: 365 }[cadence] || 30;
+    const nextRunAt = new Date(Date.now() + cadenceDays * 24 * 3600 * 1000).toISOString();
+
+    let tier = null, value = null;
+    try {
+        if (window.CL && CL.data && CL.data.supabaseBridge && typeof CL.data.supabaseBridge.resolveTier === 'function') {
+            const t = CL.data.supabaseBridge.resolveTier();
+            if (t && t.tier && t.tier !== 'state' && t.tier !== 'federal') {
+                tier = t.tier;
+                value = t.value;
+            }
+        }
+    } catch (e) { /* non-fatal */ }
+
+    try {
+        await window.crashLensClient.createScheduledReport({
+            user_id: userId,
+            state: stateKey,
+            jurisdiction_kind: tier,
+            jurisdiction_value: value,
+            report_type: reports.reportType || 'comprehensive',
+            cadence: cadence,
+            next_run_at: nextRunAt,
+            active: true,
+            config: {
+                time_frame:   reports.timeFrame || null,
+                start_date:   reports.startDate || null,
+                end_date:     reports.endDate || null,
+                agency:       reports.agency || null,
+                department:   reports.department || null,
+                prepared_by:  reports.preparedBy || null,
+                format:       reports.format || 'pdf',
+                location:     reports.location || 'all',
+                day_of_week:  reports.dayOfWeek || null,
+                day_of_month: reports.dayOfMonth || null,
+                time:         reports.time || null,
+                timezone:     reports.timezone || null
+            }
+        });
+        console.log('[Notifications] Supabase: scheduled_reports row created for', stateKey, cadence);
+    } catch (err) {
+        console.warn('[Notifications] createScheduledReport failed:', err && err.message);
+    }
 }
 
 // Show a prominent success popup overlay when settings are saved
@@ -50052,6 +50204,85 @@ function renderCountyComparisonTable() {
 }
 
 /**
+ * Round 15 §12.3 — Hydrate the Dashboard region/MPO/county comparison tables
+ * from mv_dashboard_comparisons. Used at aggregate tiers (state/federal/region/
+ * MPO) where sampleRows is empty in Supabase-only mode and the legacy
+ * buildRegionComparison/etc. return [].
+ *
+ * State-agnostic — keys on (state, scope, jurisdiction_name) from the matview.
+ */
+async function hydrateComparisonsFromMatview(tier) {
+    if (!window.crashLensClient || typeof window.crashLensClient.getDashboardComparisons !== 'function') {
+        return;
+    }
+    const c = window.crashLensClient;
+    // Only paint scopes that are visible at the active tier:
+    //   state/federal: all three (region/MPO/county)
+    //   region/MPO:    only county breakdown
+    const scopes = (tier === 'region' || tier === 'mpo') ? ['county'] : ['planning_district', 'mpo', 'county'];
+    const results = await Promise.all(scopes.map(scope =>
+        c.getDashboardComparisons({ scope }).catch(e => {
+            console.warn('[Comparisons] mv_dashboard_comparisons scope=' + scope + ' failed:', e && e.message);
+            return null;
+        })
+    ));
+    const map = Object.fromEntries(scopes.map((s, i) => [s, results[i]]));
+    const _toItem = (r) => {
+        const ka = (Number(r.fatals) || 0) + (Number(r.serious) || 0);
+        // Fabricate a single-year byYear so existing helpers (sparkline, trend)
+        // don't crash. They tolerate length-1 by returning ''.
+        const fakeYear = String(r.last_year || r.crash_year || new Date().getFullYear());
+        return {
+            id: r.jurisdiction_name,
+            name: r.jurisdiction_name,
+            shortName: r.jurisdiction_name,
+            stats: {
+                total: Number(r.crash_count) || 0,
+                K:     Number(r.fatals) || 0,
+                A:     Number(r.serious) || 0,
+                ka:    ka,
+                epdo:  Number(r.epdo) || 0,
+                ped:   Number(r.ped_count) || 0,
+                bike:  Number(r.bike_count) || 0,
+                byYear: { [fakeYear]: { total: Number(r.crash_count) || 0 } }
+            }
+        };
+    };
+    const counties = Array.isArray(map.county) ? map.county.map(_toItem) : [];
+    const mpos     = Array.isArray(map.mpo)    ? map.mpo.map(_toItem)    : [];
+    const pds      = Array.isArray(map.planning_district)
+                        ? map.planning_district.map(_toItem) : [];
+
+    // Stash for sort/expand handlers and re-render.
+    if (counties.length) {
+        _lastComparisonItems['countyComparisonBody'] = counties;
+        const container = document.getElementById('countyComparisonContainer');
+        if (container) container.style.display = '';
+        const maxDisplay = (tier === 'state' || tier === 'federal') ? 20 : 0;
+        renderComparisonRows('countyComparisonBody', counties, 'county', maxDisplay);
+        renderComparisonFooter('countyComparisonFooter', counties);
+        const summary = document.getElementById('countyComparisonSummary');
+        if (summary) summary.textContent = counties.length + ' jurisdictions with crash data. Click a row to drill into that jurisdiction.';
+    }
+    if (mpos.length) {
+        _lastComparisonItems['mpoComparisonBody'] = mpos;
+        const container = document.getElementById('mpoComparisonContainer');
+        if (container) container.style.display = '';
+        renderComparisonRows('mpoComparisonBody', mpos, 'mpo', 0);
+        renderComparisonFooter('mpoComparisonFooter', mpos);
+    }
+    if (pds.length) {
+        _lastComparisonItems['regionComparisonBody'] = pds;
+        const container = document.getElementById('regionComparisonContainer');
+        if (container) container.style.display = '';
+        renderComparisonRows('regionComparisonBody', pds, 'region', 0);
+        renderComparisonFooter('regionComparisonFooter', pds);
+    }
+    console.log('[Comparisons] mv_dashboard_comparisons:', counties.length, 'counties /',
+                mpos.length, 'MPOs /', pds.length, 'PDs');
+}
+
+/**
  * Export comparison table data to CSV.
  * @param {string} tableType - 'region'|'mpo'|'county'
  */
@@ -50523,6 +50754,16 @@ function updateDashboardTierSections() {
                 if (regionContainer) regionContainer.style.display = 'none';
                 if (mpoContainer) mpoContainer.style.display = 'none';
                 renderCountyComparisonTable();
+            }
+            // Round 15 §12.3 — also hydrate from mv_dashboard_comparisons so the
+            // tables paint at aggregate tiers when sampleRows is empty (Supabase
+            // mode). Async + non-blocking — overrides the legacy renders if data
+            // is available.
+            if (typeof hydrateComparisonsFromMatview === 'function'
+                && (tier === 'state' || tier === 'federal' || tier === 'region' || tier === 'mpo')) {
+                hydrateComparisonsFromMatview(tier).catch(e =>
+                    console.warn('[Comparisons] matview hydration failed (non-fatal):', e && e.message)
+                );
             }
 
             const elapsed = (performance.now() - startTime).toFixed(1);
@@ -51036,6 +51277,12 @@ function initMap() {
     }
 
     crashMap = L.map('map', { zoomControl: false }).setView(center, zoom);
+    // Round 15 §12.11 — broadcast that the Leaflet map is live so the map
+    // bridge (and any other deferred consumer) can attach immediately
+    // instead of polling for `crashMap` to appear.
+    try {
+        document.dispatchEvent(new CustomEvent('crashlens:mapready', { detail: { map: crashMap } }));
+    } catch (e) { /* non-fatal */ }
 
     // Fix 8 — replay any pending region-boundary draw that was deferred while
     // the Leaflet map was still initializing. Without this, picking a region
@@ -52017,11 +52264,57 @@ function setSelectionMode(mode) {
     mapSelectionMode = mode;
     document.getElementById('btnSelectRoute').classList.toggle('active', mode === 'route');
     document.getElementById('btnSelectNode').classList.toggle('active', mode === 'node');
-    document.getElementById('mapSearchInput').placeholder = mode === 'route' ? 'Search routes...' : 'Search intersections...';
+    // Round 15 §12.14 — tier-aware placeholder (e.g. "Search routes in Kent County…")
+    const _scope = (typeof getMapSearchScopeLabel === 'function')
+        ? getMapSearchScopeLabel() : '';
+    const _suffix = _scope ? (' in ' + _scope) : '';
+    document.getElementById('mapSearchInput').placeholder = (mode === 'route'
+        ? ('Search routes' + _suffix + '…')
+        : ('Search intersections' + _suffix + '…'));
     document.getElementById('mapSearchInput').value = ''; // Clear search when switching modes
 
     populateMapList();
 }
+
+/**
+ * Round 15 §12.14 — derive the human-readable scope (e.g. "Kent County",
+ * "Delaware", "Wilmington") for the map search placeholder. Empty string
+ * for federal tier (no jurisdiction scope).
+ */
+function getMapSearchScopeLabel() {
+    try {
+        const stateName = (typeof appConfig !== 'undefined' && appConfig?.states
+            && appConfig.states[(window.crashLensClient && window.crashLensClient.state) || '']
+            && appConfig.states[(window.crashLensClient && window.crashLensClient.state) || ''].name) || '';
+        if (window.CL && CL.data && CL.data.supabaseBridge
+            && typeof CL.data.supabaseBridge.resolveTier === 'function') {
+            const t = CL.data.supabaseBridge.resolveTier();
+            if (!t || !t.tier || t.tier === 'federal') return '';
+            if (t.tier === 'state') return stateName || '';
+            if (!t.value) return stateName || '';
+            if (t.tier === 'county') {
+                const v = String(t.value);
+                return v.endsWith(' County') ? v : (v + ' County');
+            }
+            return String(t.value);
+        }
+    } catch (e) { /* fall through */ }
+    return '';
+}
+
+/** Round 15 §12.14 — refresh the map search placeholder when tier changes. */
+function updateMapSearchPlaceholder() {
+    const input = document.getElementById('mapSearchInput');
+    if (!input) return;
+    const mode = (typeof mapSelectionMode !== 'undefined' && mapSelectionMode) ? mapSelectionMode : 'route';
+    const scope = getMapSearchScopeLabel();
+    const suffix = scope ? (' in ' + scope) : '';
+    input.placeholder = (mode === 'route'
+        ? ('Search routes' + suffix + '…')
+        : ('Search intersections' + suffix + '…'));
+}
+document.addEventListener('tierChanged',         updateMapSearchPlaceholder);
+document.addEventListener('jurisdictionChanged', updateMapSearchPlaceholder);
 
 function populateMapList() {
     const container = document.getElementById('mapList');
@@ -61309,7 +61602,17 @@ async function _loadHotspotsFromMatview() {
         // Round 7 (2026-05-09): also fetch mv_hotspots_factors in parallel so
         // each hotspot row carries impaired/speed/distracted/etc. counts. PDF
         // exports read these without a second roundtrip.
-        const [data, topCollMap, factorsMap] = await Promise.all([
+        // Round 15 §3 — fetch AADT-rate matview in parallel. Used to enrich
+        // each row with crash_rate_mvmt + AADT for the new rate columns.
+        const _ratesPromise = (typeof window.crashLensClient.getHotspotsWithRates === 'function')
+            ? CL.data.cachedMatview('mv_hotspots_with_rates', t.tier, t.value,
+                () => window.crashLensClient.getHotspotsWithRates({
+                    county: t.tier === 'county' ? t.value : undefined,
+                    limit: Math.max(200, topN * 4)
+                }),
+                { county: t.tier === 'county' ? t.value : null, limit: Math.max(200, topN * 4) })
+            : Promise.resolve(null);
+        const [data, topCollMap, factorsMap, ratesRows] = await Promise.all([
             CL.data.cachedMatview('mv_hotspots', t.tier, t.value,
                 () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: topN }),
                 { limit: topN }),
@@ -61320,8 +61623,16 @@ async function _loadHotspotsFromMatview() {
             (typeof window.crashLensClient.getHotspotsFactors === 'function'
                 ? CL.data.cachedMatview('mv_hotspots_factors', 'state', stateKey,
                     () => window.crashLensClient.getHotspotsFactors(stateKey))
-                : Promise.resolve(null))
+                : Promise.resolve(null)),
+            _ratesPromise
         ]);
+        const ratesMap = new Map();
+        if (Array.isArray(ratesRows)) {
+            ratesRows.forEach(r => {
+                const k = (r.location_type || '') + '|' + (r.location_name || '');
+                ratesMap.set(k, r);
+            });
+        }
         if (!data || (!data.intersections.length && !data.segments.length)) {
             crashState.hotspots = [];
             setPaginationData('hotspots', []);
@@ -61410,6 +61721,19 @@ async function _loadHotspotsFromMatview() {
                     const fk = (r.location_type || '') + '|' + _nodeId;
                     if (factorsMap.has(fk)) _factors = factorsMap.get(fk);
                 }
+                // Round 15 §3 — AADT-rate enrichment (mv_hotspots_with_rates).
+                // Locations without AADT seed pass through with null rate fields.
+                let _aadt = null, _aadtYear = null, _crashRate = null, _epdoRate = null;
+                if (ratesMap && _nodeId) {
+                    const rk = (r.location_type || '') + '|' + _nodeId;
+                    const rr = ratesMap.get(rk);
+                    if (rr) {
+                        _aadt      = (rr.aadt != null) ? rr.aadt : null;
+                        _aadtYear  = rr.aadt_year != null ? rr.aadt_year : null;
+                        _crashRate = rr.crash_rate_mvmt != null ? rr.crash_rate_mvmt : null;
+                        _epdoRate  = rr.epdo_rate_mvmt != null ? rr.epdo_rate_mvmt : null;
+                    }
+                }
                 return {
                     loc: locName,
                     nodeId: _nodeId,
@@ -61423,6 +61747,10 @@ async function _loadHotspotsFromMatview() {
                     county: r.county || '',
                     lat: r.lat_centroid,
                     lon: r.lon_centroid,
+                    aadt: _aadt,
+                    aadtYear: _aadtYear,
+                    crashRateMvmt: _crashRate,
+                    epdoRateMvmt: _epdoRate,
                     impaired_count: _factors ? _factors.impaired : 0,
                     speed_count: _factors ? _factors.speed : 0,
                     distracted_count: _factors ? _factors.distracted : 0,
@@ -61687,6 +62015,13 @@ function renderHotspots() {
     document.getElementById('hotspotBody').innerHTML = pageData.map((h, pageIndex) => {
         const globalIndex = startIndex + pageIndex;
         const countyCell = showCounty ? `<td style="font-size:.75rem;" class="tier-county-col">${esc(h.county || '')}</td>` : '';
+        // Round 15 §3 — AADT + Crash Rate columns. Empty/null shows '—'.
+        const aadtCell = (h.aadt != null)
+            ? `<td style="font-size:.78rem">${Number(h.aadt).toLocaleString()}${h.aadtYear ? ` <span style="color:#94a3b8;font-size:.7rem">(${h.aadtYear})</span>` : ''}</td>`
+            : `<td style="color:#94a3b8" title="No AADT seeded for this location yet">—</td>`;
+        const rateCell = (h.crashRateMvmt != null)
+            ? `<td style="font-size:.78rem;font-weight:600">${Number(h.crashRateMvmt).toFixed(2)}</td>`
+            : `<td style="color:#94a3b8">—</td>`;
         return `
         <tr>
             <td><input type="checkbox" class="hotspot-checkbox" data-location="${esc(h.loc)}" data-index="${globalIndex}" onchange="toggleHotspotSelection(this)" ${hotspotDetailState.selectedLocations.includes(h.loc) ? 'checked' : ''}></td>
@@ -61700,6 +62035,8 @@ function renderHotspots() {
             <td><span class="severity-badge severity-C">${h.C}</span></td>
             <td><span class="severity-badge severity-O">${h.O}</span></td>
             <td><strong>${h.epdo.toLocaleString()}</strong></td>
+            ${aadtCell}
+            ${rateCell}
             <td>${h.perYear}</td>
             <td style="font-size:.75rem${h.topType === 'N/A' ? ';color:#94a3b8' : ''}" ${h.topType === 'N/A' ? 'title="Top collision-type rollup pending (mv_hotspots backend extension)"' : ''}>${h.topType === 'N/A' ? '—' : esc(h.topType.substring(0,20))}</td>
             <td><button class="btn-details" onclick="showLocationDetail('${esc(h.loc)}', 'hotspot')">📍 Details</button> <button class="btn-map" onclick="zoomToLocation('${esc(h.loc)}', '${locationType}')">🗺️ Map</button> <button class="btn-mutcd" onclick="askMUTCDForHotspot('${esc(h.loc)}')" title="Get MUTCD guidance">📖 MUTCD</button> <button style="background:#0ea5e9;color:white;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:.7rem" onclick="openHotspotStreetView('${esc(h.loc)}', '${locationType}')" title="View most severe crash location">🛣️</button></td>
@@ -62190,38 +62527,44 @@ function switchAnalysisSubtab(subtab) {
                     () => dc.getAnalysisBreakdown(tr.tier, tr.value));
                 if (!data) return;
                 if (typeof createChart !== 'function') return;
+                // Round 15 §12.6 — wrap each chart in paintWhenVisible so a 0×0
+                // canvas (sub-tab not yet expanded) doesn't produce a permanently
+                // blank Chart.js canvas.
+                const _paint = (typeof paintWhenVisible === 'function')
+                    ? paintWhenVisible
+                    : (id, fn) => fn();
                 // byYear → line
                 const years = Object.entries(data.byYear || {}).sort((a, b) => Number(a[0]) - Number(b[0]));
-                createChart('anaChartYear', 'line', {
+                _paint('anaChartYear', () => createChart('anaChartYear', 'line', {
                     labels: years.map(y => y[0]),
                     datasets: [{ label: 'Crashes', data: years.map(y => y[1].total || 0),
                                  borderColor: '#1e40af', backgroundColor: 'rgba(30,64,175,0.1)',
                                  fill: true, tension: 0.2 }]
-                });
+                }));
                 // byMonth → bar
                 const monthNames = ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                 const months = Object.entries(data.byMonth || {}).sort((a, b) => Number(a[0]) - Number(b[0]));
-                createChart('anaChartMonth', 'bar', {
+                _paint('anaChartMonth', () => createChart('anaChartMonth', 'bar', {
                     labels: months.map(m => monthNames[Number(m[0])] || m[0]),
                     datasets: [{ label: 'Crashes', data: months.map(m => m[1].total || 0),
                                  backgroundColor: '#1e40af' }]
-                });
+                }));
                 // bySeverity → doughnut (data-client returns flat counts: {K, A, B, C, O})
                 const sev = data.bySeverity || {};
-                createChart('anaChartSeverity', 'doughnut', {
+                _paint('anaChartSeverity', () => createChart('anaChartSeverity', 'doughnut', {
                     labels: ['K','A','B','C','O'],
                     datasets: [{ data: ['K','A','B','C','O'].map(k => Number(sev[k]) || 0),
                                  backgroundColor: ['#dc2626','#f59e0b','#fde047','#3b82f6','#94a3b8'] }]
-                });
+                }));
                 // byCollision (top 8) → horizontal bar (data-client returns flat counts)
                 const collisions = Object.entries(data.byCollision || {})
                     .sort((a, b) => Number(b[1]) - Number(a[1]))
                     .slice(0, 8);
-                createChart('anaChartCollision', 'bar', {
+                _paint('anaChartCollision', () => createChart('anaChartCollision', 'bar', {
                     labels: collisions.map(c => String(c[0]).substring(0, 24)),
                     datasets: [{ label: 'Crashes', data: collisions.map(c => Number(c[1]) || 0),
                                  backgroundColor: '#7c3aed' }]
-                }, { indexAxis: 'y' });
+                }, { indexAxis: 'y' }));
                 console.log('[Analysis] Crash analysis charts rendered from mv_analysis_summary');
             } catch (e) {
                 console.warn('[Analysis] Crash analysis render failed:', e && e.message);
@@ -70488,6 +70831,30 @@ function generateReport() {
     let type = document.getElementById('reportType').value;
     // Backward compatibility: map systemwide to dashboard
     if (type === 'systemwide') type = 'dashboard';
+
+    // Round 15 §12.9 — validate location before kicking off generation.
+    // Corridor / intersection report types require a route or node — without
+    // one the generators silently produce an empty PDF. Surface a clear toast
+    // and focus the input instead of failing silently. countermeasures and
+    // beforeafter are still validated downstream against their own state.
+    if (type === 'corridor' || type === 'intersection') {
+        const routeEl = document.getElementById('reportRoute');
+        const nodeEl  = document.getElementById('reportNode');
+        const hasRoute = routeEl && String(routeEl.value || '').trim();
+        const hasNode  = (type === 'intersection') ? (nodeEl && String(nodeEl.value || '').trim()) : true;
+        if (!hasRoute || (type === 'intersection' && !hasNode)) {
+            const fld = (!hasRoute) ? 'Route' : 'Node';
+            const target = (!hasRoute) ? routeEl : nodeEl;
+            if (typeof showToast === 'function') {
+                showToast('This report type requires a ' + fld + '. Please select one before generating.', 'warning', 5000);
+            } else {
+                alert('This report type requires a ' + fld + '. Please select one before generating.');
+            }
+            if (target && typeof target.focus === 'function') target.focus();
+            return;
+        }
+    }
+
     showLoading('Generating report...');
 
     // Round 14 §0.3 — kick off the per-type Supabase pre-fetch in parallel
@@ -86396,6 +86763,57 @@ function buildDKContext(question) {
     return context;
 }
 
+// Round 15 §5 — pgvector helpers for the knowledge_corpus RAG path.
+// State-agnostic — knowledge_corpus.state column scopes the search to the
+// active jurisdiction; null state matches federal-scope documents.
+async function _dkOpenAIEmbed(text) {
+    // text-embedding-3-small produces 1536-dim vectors which matches the
+    // knowledge_corpus.embedding column. Returns null if the user has no
+    // OpenAI key configured.
+    try {
+        const apiKey = (typeof getStoredOpenAIKey === 'function')
+            ? getStoredOpenAIKey()
+            : (localStorage.getItem('openaiApiKey') || null);
+        if (!apiKey) return null;
+        const resp = await fetch('https://api.openai.com/v1/embeddings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+            body: JSON.stringify({ model: 'text-embedding-3-small', input: text })
+        });
+        if (!resp.ok) return null;
+        const j = await resp.json();
+        return (j && j.data && j.data[0] && j.data[0].embedding) || null;
+    } catch (e) { return null; }
+}
+
+async function _dkPgvectorSearch(question, enabledSources, topK) {
+    if (!window.crashLensClient || typeof window.crashLensClient.searchKnowledgeCorpus !== 'function') {
+        return [];
+    }
+    const embedding = await _dkOpenAIEmbed(question);
+    if (!embedding) return [];
+    const stateKey = (window.crashLensClient.state || '').toLowerCase();
+    const hits = await window.crashLensClient.searchKnowledgeCorpus({
+        embedding,
+        state: stateKey,
+        sources: (enabledSources && enabledSources.length) ? enabledSources : null,
+        topK: topK || 8,
+        minSimilarity: 0.5
+    });
+    if (!Array.isArray(hits)) return [];
+    return hits.map(h => ({
+        score:    h.similarity,
+        source:   h.source,
+        section:  h.section || '',
+        title:    h.document_title || '',
+        content:  h.chunk_text || '',
+        chapter:  '',
+        page:     h.page || null,
+        metadata: h.metadata || {},
+        _via:     'pgvector'
+    }));
+}
+
 // Query knowledge sources (placeholder - will integrate with RAG)
 async function queryDKSources(question, context) {
     const sourceNames = context.sourceNames.join(', ');
@@ -86412,7 +86830,36 @@ async function queryDKSources(question, context) {
         let ragResults = [];
         if (qdrantSources.length > 0) {
             console.log('[DK] Searching Qdrant for sources:', qdrantSources);
-            ragResults = await ragSearch(question, qdrantSources, 10);
+            try {
+                ragResults = await ragSearch(question, qdrantSources, 10);
+            } catch (qdrantErr) {
+                console.warn('[DK] Qdrant search failed (non-fatal):', qdrantErr && qdrantErr.message);
+                ragResults = [];
+            }
+        }
+        // Round 15 §5 — pgvector knowledge_corpus search (parallel / fallback).
+        // Augments Qdrant results when both are configured; sole source when
+        // Qdrant is unavailable. Graceful no-op when corpus is empty (the
+        // table currently ships with 0 rows; Round 16 ingest populates it).
+        if (typeof _dkPgvectorSearch === 'function') {
+            try {
+                const pgHits = await _dkPgvectorSearch(question, context.enabledSources, 8);
+                if (pgHits && pgHits.length) {
+                    console.log('[DK] pgvector knowledge_corpus returned', pgHits.length, 'hits');
+                    // Dedupe-merge by (source, section): keep the higher-scored entry
+                    const _key = (r) => (r.source || '') + '|' + (r.section || '') + '|' + (r.title || '').slice(0, 30);
+                    const merged = new Map();
+                    [...ragResults, ...pgHits].forEach(r => {
+                        const k = _key(r);
+                        if (!merged.has(k) || (merged.get(k).score || 0) < (r.score || 0)) {
+                            merged.set(k, r);
+                        }
+                    });
+                    ragResults = [...merged.values()].sort((a, b) => (b.score || 0) - (a.score || 0));
+                }
+            } catch (pgErr) {
+                console.warn('[DK] pgvector search failed (non-fatal):', pgErr && pgErr.message);
+            }
         }
 
         // 3. Also query Pinecone for VA MUTCD if selected (using existing function)
@@ -103779,14 +104226,21 @@ async function initCrashTreeFromMatview(tier) {
             }
         }
 
-        const buildNode = (id, name, stats, children) => ({
-            id, name,
-            total: stats.total, K: stats.K, A: stats.A, B: stats.B, C: stats.C, O: stats.O,
-            pct: rootStats.total > 0 ? (stats.total / rootStats.total * 100) : 0,
-            unfilteredTotal: stats.total,
-            unfilteredKA: (stats.K || 0) + (stats.A || 0),
-            children: children || []
-        });
+        const buildNode = (id, name, stats, children) => {
+            const k = stats.K || 0, a = stats.A || 0;
+            const ka = k + a;
+            return {
+                id, name,
+                total: stats.total, K: stats.K, A: stats.A, B: stats.B, C: stats.C, O: stats.O,
+                k: k, a: a, b: stats.B || 0, c: stats.C || 0, o: stats.O || 0,
+                ka: ka,
+                kaPct: stats.total > 0 ? (ka / stats.total * 100).toFixed(1) + '%' : '0.0%',
+                pct: rootStats.total > 0 ? (stats.total / rootStats.total * 100) : 0,
+                unfilteredTotal: stats.total,
+                unfilteredKA: ka,
+                children: children || []
+            };
+        };
 
         const l1Children = [];
         for (const [l1Name, l1Entry] of l1Map.entries()) {
@@ -107397,15 +107851,46 @@ async function initFatalSpeedingFromMatview(tier) {
             ? CL.data.cachedMatview('mv_speed_summary', tierResolved.tier, tierResolved.value,
                 () => dc.getSpeedSummary(tierResolved.tier, tierResolved.value))
             : Promise.resolve(null);
+        // Round 15 §12.4 — pull mv_speed_severity_matrix in parallel for the
+        // F&S Speed-Related sub-tab Year × Severity matrix. State-agnostic;
+        // filtered by jurisdiction_county at county tier.
+        const _fsFetchSpeedSevMatrix = (typeof dc.getSpeedSeverityMatrix === 'function')
+            ? CL.data.cachedMatview('mv_speed_severity_matrix', tierResolved.tier, tierResolved.value,
+                () => dc.getSpeedSeverityMatrix({
+                    county: tierResolved.tier === 'county' ? tierResolved.value : undefined
+                }))
+            : Promise.resolve(null);
 
-        const [categories, analysis, fatalFactors, speedSummary] = await Promise.all([
+        const [categories, analysis, fatalFactors, speedSummary, speedSevMatrix] = await Promise.all([
             CL.data.cachedMatview('mv_safety_categories', tierResolved.tier, tierResolved.value,
                 () => dc.getSafetyCategories(tierResolved.tier, tierResolved.value)),
             CL.data.cachedMatview('mv_analysis_summary', tierResolved.tier, tierResolved.value,
                 () => dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value)),
             _fsFetchFatalFactors,
             _fsFetchSpeedSummary,
+            _fsFetchSpeedSevMatrix,
         ]);
+        // Round 15 §12.4 — Aggregate the matrix into byYearSeverity. Rows are
+        // (state, jurisdiction_county, physical_juris_name, crash_year, k, a, b, c, o, total_speed)
+        // — collapse across physical_juris_name within each year. Stashed here
+        // and re-attached after the speedData reset below.
+        let _speedSevByYearFromMv = null;
+        if (Array.isArray(speedSevMatrix) && speedSevMatrix.length) {
+            _speedSevByYearFromMv = {};
+            speedSevMatrix.forEach(r => {
+                const y = r.crash_year || r.year;
+                if (!y) return;
+                if (!_speedSevByYearFromMv[y]) _speedSevByYearFromMv[y] = { K: 0, A: 0, B: 0, C: 0, O: 0, total: 0 };
+                _speedSevByYearFromMv[y].K     += Number(r.k) || 0;
+                _speedSevByYearFromMv[y].A     += Number(r.a) || 0;
+                _speedSevByYearFromMv[y].B     += Number(r.b) || 0;
+                _speedSevByYearFromMv[y].C     += Number(r.c) || 0;
+                _speedSevByYearFromMv[y].O     += Number(r.o) || 0;
+                _speedSevByYearFromMv[y].total += Number(r.total_speed != null
+                    ? r.total_speed
+                    : (Number(r.k)+Number(r.a)+Number(r.b)+Number(r.c)+Number(r.o))) || 0;
+            });
+        }
 
         if (!categories && !analysis) {
             console.warn('[FS] No matview data available for', tierResolved.tier, tierResolved.value);
@@ -107425,6 +107910,11 @@ async function initFatalSpeedingFromMatview(tier) {
             byFactor: {}, byRoute: {}, byYear: {}, byYearFactor: {}, byYearSeverity: {},
             byHour: {}, severity: { K: 0, A: 0, B: 0, C: 0, O: 0 }
         };
+        // Round 15 §12.4 — re-attach the matview-built Year × Severity matrix
+        // after the reset so renderFSSpeedSeverityMatrix can read it.
+        if (_speedSevByYearFromMv) {
+            fatalSpeedingState.speedData._byYearSeverityFromMatview = _speedSevByYearFromMv;
+        }
         fatalSpeedingState.combinedData = { fatalOnly: 0, speedOnly: 0, both: 0 };
 
         // Initialize all factors (matches processFSData() initialization)
@@ -108996,7 +109486,14 @@ function renderFSSpeedSeverityMatrix() {
     const bodyEl = document.getElementById('fsSpeedSeverityBody');
     if (!headEl || !bodyEl) return;
 
-    const byYearSev = fatalSpeedingState.speedData.byYearSeverity || {};
+    // Round 15 §12.4 — prefer mv_speed_severity_matrix data when present
+    // (Supabase-only mode where sampleRows isn't available to populate the
+    // legacy byYearSeverity).
+    let byYearSev = fatalSpeedingState.speedData.byYearSeverity || {};
+    if (Object.keys(byYearSev).length === 0
+        && fatalSpeedingState.speedData._byYearSeverityFromMatview) {
+        byYearSev = fatalSpeedingState.speedData._byYearSeverityFromMatview;
+    }
     const years = Object.keys(byYearSev).sort();
 
     if (years.length === 0) {
@@ -143891,7 +144388,10 @@ function renderDistrictMatrixCharts() {
 
     // ---- Chart 1: Total Crashes by District (Horizontal Bar) ----
     const totalData = districts.map(d => d.total);
-    createChart('chartDistrictTotal', 'bar', {
+    // Round 15 §12.5 — wrap with paintWhenVisible. The District section is
+    // hidden until expanded; instantiating a Chart against a 0×0 canvas
+    // produced the four blank canvases reported by the QA sweep.
+    paintWhenVisible('chartDistrictTotal', () => createChart('chartDistrictTotal', 'bar', {
         labels: labels,
         datasets: [{
             label: 'Total Crashes',
@@ -143914,7 +144414,7 @@ function renderDistrictMatrixCharts() {
             x: { beginAtZero: true, ticks: { font: { size: 9 } } },
             y: { ticks: { font: { size: 9 } } }
         }
-    });
+    }));
 
     // ---- Chart 2: Severity Breakdown by District (Stacked Horizontal Bar) ----
     const severityColors = {
@@ -143924,7 +144424,7 @@ function renderDistrictMatrixCharts() {
         O: '#94a3b8'   // PDO - gray
     };
 
-    createChart('chartDistrictSeverity', 'bar', {
+    paintWhenVisible('chartDistrictSeverity', () => createChart('chartDistrictSeverity', 'bar', {
         labels: labels,
         datasets: [
             {
@@ -143978,10 +144478,10 @@ function renderDistrictMatrixCharts() {
                 ticks: { font: { size: 9 } }
             }
         }
-    });
+    }));
 
     // ---- Chart 3: Crash Distribution (Doughnut) ----
-    createChart('chartDistrictDoughnut', 'doughnut', {
+    paintWhenVisible('chartDistrictDoughnut', () => createChart('chartDistrictDoughnut', 'doughnut', {
         labels: labels,
         datasets: [{
             data: totalData,
@@ -144003,7 +144503,7 @@ function renderDistrictMatrixCharts() {
                 }
             }
         }
-    });
+    }));
 
     // Build custom legend for doughnut
     const legendEl = document.getElementById('legendDistrictDoughnut');
@@ -144025,7 +144525,7 @@ function renderDistrictMatrixCharts() {
 
     // ---- Chart 4: EPDO by District (Vertical Bar) ----
     const epdoData = districts.map(d => d.epdo);
-    createChart('chartDistrictEPDO', 'bar', {
+    paintWhenVisible('chartDistrictEPDO', () => createChart('chartDistrictEPDO', 'bar', {
         labels: labels,
         datasets: [{
             label: 'EPDO Score',
@@ -144056,7 +144556,7 @@ function renderDistrictMatrixCharts() {
                 ticks: { font: { size: 9 } }
             }
         }
-    });
+    }));
 }
 
 /**
@@ -145464,6 +145964,24 @@ function toggleDistrictStatsExpanded() {
 function initDistrictStatisticsOnGrantsTab() {
     const container = document.getElementById('districtStatisticsContainer');
     if (!container) return;
+
+    // Round 15 §12.7 — in Supabase-only mode (no sampleRows) the legacy
+    // districtState path never runs, so renderDistrictStatistics was never
+    // called and the container kept showing the 7 hardcoded zero-cards.
+    // Try the Supabase-backed renderer first; it owns the container when it
+    // succeeds, returns false (and we fall through to the legacy paths) if
+    // Supabase isn't available or the active tier isn't county.
+    if (typeof renderMagisterialDistricts === 'function'
+        && window.crashLensClient
+        && window.CL && CL.data && CL.data.supabaseBridge) {
+        Promise.resolve(renderMagisterialDistricts())
+            .then(ok => { /* ok=true means container is owned; otherwise legacy below ran */ })
+            .catch(e => console.warn('[Grants] renderMagisterialDistricts failed (non-fatal):', e && e.message));
+        // Don't return early — let the legacy districtState branch also run as a
+        // backup if it has data; renderMagisterialDistricts replaces the
+        // container's innerHTML when it succeeds, so the visible state is the
+        // Supabase render.
+    }
 
     // Check if districts are loaded
     if (districtState.loaded && Object.keys(districtState.statistics.byDistrict).length > 0) {
@@ -153805,12 +154323,102 @@ async function initPredictionTab() {
         updatePredictionHeader();
     } catch(e) {
         console.warn('[Prediction] Could not load forecast:', e.message);
-        // Bug fix (round 3, 2026-05-08): the predDataStatus badge stayed
-        // "Loading forecast data…" forever on 404. Update it to a clear
-        // not-available state so users don't think the page is hung.
+        // Round 15 §4 — try the mv_forecasts matview as a fallback. The
+        // backend ships least-squares linear forecasts per (state, jurisdiction,
+        // metric) for total/fatal/serious/pedestrian. This unblocks the tab
+        // when the R2 model file isn't yet built for the active scope.
+        const lit = await tryMatviewForecastsFallback({
+            jurisdictionName, stateName, stateKey, currentJurisdiction, tier
+        });
+        if (lit) return;   // matview path rendered something — done.
         const statusEl = document.getElementById('predDataStatus');
         if (statusEl) statusEl.textContent = `Forecasts not available · ${jurisdictionName}, ${stateName}`;
         showPredictionNoData(jurisdictionName, stateName, stateKey, currentJurisdiction);
+    }
+}
+
+/**
+ * Round 15 §4 — mv_forecasts fallback. Fetches the linear-trend forecast for
+ * the active jurisdiction (or state-tier when no jurisdiction is set) and
+ * paints a compact card view into the predNoDashboard slot. Returns true
+ * if at least one forecast row was rendered, false otherwise.
+ */
+async function tryMatviewForecastsFallback(ctx) {
+    try {
+        if (!window.crashLensClient || typeof window.crashLensClient.getForecasts !== 'function') {
+            return false;
+        }
+        const opts = {};
+        // mv_forecasts.jurisdiction is the human-readable name (e.g. 'Kent',
+        // 'Sussex', 'Wilmington'). State/federal tiers query without a
+        // jurisdiction filter and pick the state-aggregate row when present.
+        if (ctx.tier !== 'state' && ctx.tier !== 'federal' && ctx.jurisdictionName
+            && ctx.jurisdictionName !== 'Unknown') {
+            opts.jurisdiction = ctx.jurisdictionName;
+        }
+        const rows = await window.crashLensClient.getForecasts(opts);
+        if (!rows || rows.length === 0) return false;
+        const byMetric = Object.fromEntries(rows.map(r => [r.metric, r]));
+        const order = ['total_crashes', 'fatal', 'serious', 'pedestrian'];
+        const labels = {
+            total_crashes: 'Total Crashes',
+            fatal:         'Fatalities',
+            serious:       'Serious Injuries',
+            pedestrian:    'Pedestrian Crashes'
+        };
+        const cards = order.map(metric => {
+            const r = byMetric[metric];
+            if (!r) return '';
+            const fc = r.forecast_next_3yr || {};
+            const years = Object.keys(fc).sort();
+            const slope = Number(r.trend_slope || 0);
+            const trendLabel = slope < 0
+                ? `<span style="color:#16a34a">↓ ${Math.abs(slope).toFixed(1)}/yr (improving)</span>`
+                : `<span style="color:#dc2626">↑ ${slope.toFixed(1)}/yr (worsening)</span>`;
+            const histAvg = r.historical_avg != null ? Number(r.historical_avg).toLocaleString() : '—';
+            const yearsHtml = years.map(y => {
+                const v = Number(fc[y]);
+                return `<div style="text-align:center"><div style="font-size:.7rem;color:var(--gray)">${y}</div><div style="font-size:1.05rem;font-weight:700">${isFinite(v) ? Math.round(v).toLocaleString() : '—'}</div></div>`;
+            }).join('');
+            return `
+                <div class="card" style="padding:1rem;border:1px solid #e2e8f0;border-radius:8px">
+                    <h4 style="margin:0 0 .35rem;font-size:.95rem">${labels[metric] || metric}</h4>
+                    <div style="font-size:.75rem;margin-bottom:.5rem">${trendLabel}</div>
+                    <div style="font-size:.75rem;color:var(--gray);margin-bottom:.5rem">
+                        Historical avg ${r.first_year}–${r.last_year}: <strong>${histAvg}</strong>/yr
+                    </div>
+                    <div style="display:flex;gap:.75rem;justify-content:space-around;padding-top:.5rem;border-top:1px solid #f1f5f9">
+                        ${yearsHtml}
+                    </div>
+                </div>`;
+        }).filter(Boolean).join('');
+        if (!cards) return false;
+        const noDataEl = document.getElementById('predNoDashboard');
+        if (noDataEl) {
+            noDataEl.innerHTML = `
+                <div style="margin-bottom:1rem">
+                    <div style="font-size:1rem;font-weight:600">${ctx.jurisdictionName || ctx.stateName} 3-Year Linear Trend Forecast</div>
+                    <div style="font-size:.8rem;color:var(--gray);margin-top:.25rem">
+                        Computed from <code>mv_forecasts</code> (least-squares linear regression on ${(rows[0] && rows[0].n_years) || '—'} years of history). Independent of the AI model used in the main forecast cards above — shown here as a fallback while the per-jurisdiction trained model is unavailable.
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.75rem">
+                    ${cards}
+                </div>`;
+            noDataEl.style.display = '';
+        }
+        const statusEl = document.getElementById('predDataStatus');
+        if (statusEl) {
+            statusEl.textContent = `${ctx.jurisdictionName || ctx.stateName} · linear-trend fallback (mv_forecasts)`;
+        }
+        // Hide the "no data" placeholders for the OTHER sub-tabs since we have data.
+        try { document.getElementById('predNoCorridors').style.display = ''; } catch (e) { /* no-op */ }
+        try { document.getElementById('predNoTrends').style.display = ''; } catch (e) { /* no-op */ }
+        console.log('[Prediction] mv_forecasts fallback rendered', rows.length, 'metrics');
+        return true;
+    } catch (e) {
+        console.warn('[Prediction] mv_forecasts fallback failed:', e && e.message);
+        return false;
     }
 }
 

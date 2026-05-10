@@ -113,6 +113,20 @@
         }
         return global.crashLensClient.getLocationPicker(params).then(function (rows) {
             rows = rows || [];
+            // Round 15 §12.13 — filter the matview's catch-all bucket rows
+            // (location_name='Unknown' / '0' / empty) which represent crashes
+            // that lack a specific node OR route. They show as "Unknown
+            // (37,226 crashes)" at the top of the dropdown otherwise. Opt-in
+            // via opts.includeUnknown for advanced users.
+            if (!opts.includeUnknown) {
+                rows = rows.filter(function (r) {
+                    var ln = String(r && r.location_name != null ? r.location_name : '').trim();
+                    if (!ln) return false;
+                    if (ln === '0' || ln === '0.0') return false;
+                    if (ln.toLowerCase() === 'unknown') return false;
+                    return true;
+                });
+            }
             CACHE.set(key, { rows: rows, t: now });
             return rows;
         }).catch(function (e) {
