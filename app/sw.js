@@ -26,6 +26,7 @@ const STATIC_PRECACHE = [
     '/Federal/app/modules/ui/skeletons.js',
     '/Federal/app/modules/data/road-type-mapping.js',
     '/Federal/app/modules/data/matview-cache.js',
+    '/Federal/app/modules/data/prewarm.js',
     '/Federal/app/modules/data/supabase-bridge.js',
     '/Federal/app/modules/data/lazy-loader.js',
     '/Federal/app/modules/data/tab-loaders.js',

@@ -800,6 +800,19 @@ CL.data.supabaseBridge = (function () {
 
             var t = resolveTier();
             var spec = roadTypeSpec();
+
+            // Round-11 — pre-warm every other tab's matview in parallel so that
+            // once the user navigates off Upload tab, every tab is an instant
+            // cache hit. Fire-and-forget; don't await (we want the dashboard
+            // fetch to proceed in the same tick).
+            try {
+                if (CL.data && CL.data.prewarm && typeof CL.data.prewarm.schedule === 'function') {
+                    CL.data.prewarm.schedule(t.tier, t.value);
+                }
+            } catch (e) {
+                console.warn('[Prewarm] schedule failed (non-fatal):', e && e.message);
+            }
+
             console.log('[Phase2] Fetching summary from Supabase...', { tier: t.tier, value: t.value, spec: spec });
             try {
                 if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {

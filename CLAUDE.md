@@ -488,6 +488,22 @@ The data schema was originally built for Virginia (VDOT) but is now **state-agno
 
 ---
 
+## Performance: matview pre-warming
+
+When a user picks a state + jurisdiction on the Upload tab, `CL.data.prewarm`
+fires every tab's matview RPC in parallel (debounced 800 ms) so subsequent tab
+clicks hit `CL.data.cachedMatview` instantly. To add a new matview-backed tab:
+
+1. Implement the matview lookup in `app/modules/data/<tab>.js` using
+   `CL.data.cachedMatview('<mvName>', tier, value, fetcher)`.
+2. Add the same `(mvName, fetcher)` pair to `_buildBatch()` in
+   `app/modules/data/prewarm.js`.
+3. The pre-warm picks it up automatically on the next state change.
+
+Diagnose with `CL.data.prewarm.stats()` and `CL.data.matviewCacheStats()`.
+
+---
+
 ## Multi-State Data Onboarding
 
 ### State Onboarding Documentation (MANDATORY)
