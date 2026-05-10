@@ -1444,6 +1444,177 @@ class CrashLensDataClient {
   }
 
   // ─────────────────────────────────────────────────────────
+  //  ROUND 13 — Universal LocationPicker accessors
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * State-agnostic location picker — drives every "Or Select Location"
+   * dropdown across the app. Keys on (state, jurisdiction kind/value,
+   * road_type, location_type) — no jurisdiction literals anywhere.
+   *
+   * road_type contract:
+   *   'all_no_interstate' → translated server-side to is_interstate=false
+   *   'all' / null         → no road_type filter
+   *   anything else        → exact match against road_type column
+   *
+   * county input may include the trailing ' County' suffix; the RPC strips it.
+   *
+   * @param {object} opts {state, jurisdictionKind, jurisdictionValue,
+   *                       roadType, locationType, minCrashes, limit}
+   * @returns {Promise<Array>} rows sorted by total_crashes desc
+   */
+  async getLocationPicker(opts) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    opts = opts || {};
+    const body = {
+      p_state:               (opts.state || this.state || '').toLowerCase(),
+      p_jurisdiction_kind:   opts.jurisdictionKind || null,
+      p_jurisdiction_value:  opts.jurisdictionValue || null,
+      p_road_type:           opts.roadType || 'all_no_interstate',
+      p_location_type:       opts.locationType || null,
+      p_min_crashes:         opts.minCrashes || 1,
+      p_limit:               opts.limit || 500,
+    };
+    const url = `${this.supabaseUrl}/rpc/get_location_picker`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[DataClient] getLocationPicker failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Grant-Ready Locations table source. Same shape as getLocationPicker but
+   * adds vru_count, score_balanced, confidence_high. State-agnostic.
+   *
+   * @param {object} opts {state, county, mpo, pd, roadType, locationType,
+   *                       minCrashes, limit}
+   */
+  async getGrantReadyLocations(opts) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    opts = opts || {};
+    const stateKey = (opts.state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      state: 'eq.' + stateKey,
+      select: '*',
+      order: 'score_balanced.desc',
+      limit: String(opts.limit || 50),
+    });
+    const rt = opts.roadType || 'all_no_interstate';
+    if (rt === 'all_no_interstate') {
+      params.set('is_interstate', 'eq.false');
+    } else if (rt && rt !== 'all') {
+      params.set('road_type', 'eq.' + rt);
+    }
+    if (opts.locationType) params.set('location_type', 'eq.' + opts.locationType);
+    if (opts.minCrashes) params.set('total_crashes', 'gte.' + opts.minCrashes);
+    if (opts.county) {
+      params.set('jurisdiction_county', 'eq.' + String(opts.county).replace(/ County$/, ''));
+    }
+    if (opts.mpo) params.set('jurisdiction_mpo', 'eq.' + opts.mpo);
+    if (opts.pd)  params.set('jurisdiction_pd',  'eq.' + opts.pd);
+
+    const url = `${this.supabaseUrl}/mv_grant_ready_locations?${params.toString()}`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const resp = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(timer);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[DataClient] getGrantReadyLocations failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Magisterial District / CCD breakdown — guarded.
+   *
+   * Returns:
+   *   - Array of CCD rows when mv_grants_ccd exists for this jurisdiction
+   *   - null when the matview is missing (BLOCKED-UPSTREAM sentinel — frontend
+   *     shows a "TIGERweb spatial join pending" banner instead of zeros)
+   *   - [] when the matview exists but no rows match the filter
+   *
+   * @param {object} opts {state, county, roadType}
+   */
+  async getMagisterialDistricts(opts) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    opts = opts || {};
+    const stateKey = (opts.state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      state: 'eq.' + stateKey,
+      select: '*',
+    });
+    if (opts.county) {
+      params.set('county', 'eq.' + String(opts.county).replace(/ County$/, ''));
+    }
+    if (opts.roadType && opts.roadType !== 'all' && opts.roadType !== 'all_no_interstate') {
+      params.set('road_type', 'eq.' + opts.roadType);
+    }
+    const url = `${this.supabaseUrl}/mv_grants_ccd?${params.toString()}`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const resp = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(timer);
+      if (!resp.ok) {
+        // PostgREST returns 404 with a relation-missing message in the body
+        const text = await resp.text().catch(() => '');
+        if (resp.status === 404 || /relation .* does not exist/i.test(text)) {
+          return null;   // sentinel for BLOCKED-UPSTREAM
+        }
+        throw new Error(text || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      clearTimeout(timer);
+      if (/relation .* does not exist/i.test(String(e.message))) return null;
+      console.warn('[DataClient] getMagisterialDistricts failed:', e.message);
+      return null;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
   //  SUPABASE INTERNALS
   // ─────────────────────────────────────────────────────────
 
