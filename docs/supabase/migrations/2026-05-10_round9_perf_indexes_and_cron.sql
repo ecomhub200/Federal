@@ -1,3 +1,10 @@
+-- HOW TO APPLY (Murad only — CC cannot reach this Supabase):
+--   1. Open Supabase Studio for srv1503081.hstgr.cloud → SQL Editor
+--   2. Paste this entire file
+--   3. Click Run. The DO blocks are idempotent and safe to re-run.
+--   4. After completion, run the VERIFICATION queries at the bottom.
+--   5. Report timings back so we can confirm the target was hit.
+
 -- =============================================================================
 -- Round 9 backend perf — covering indexes + REFRESH CONCURRENTLY + pg_cron
 -- =============================================================================
@@ -293,45 +300,63 @@ END $$;
 -- SECTION 4 — One-shot warm refresh (run once after applying)
 -- =============================================================================
 -- Don't wait for 04:00 — refresh everything once now so the first post-deploy
--- user request hits a warm cache. Comment out or skip if your instance is
--- under live load and you'd rather wait for the scheduled window.
---
--- Run these one at a time and monitor — they can take minutes on full-state
--- datasets.
+-- user request hits a warm cache. These are uncommented intentionally so the
+-- whole file runs end-to-end on a single paste. If the instance is under
+-- live load and you'd rather wait for the scheduled window, delete or
+-- re-comment this section before running.
 
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.dashboard_summary;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_analysis_summary;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_safety_categories;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_pedbike_breakdowns;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_intersection_summary;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_factor_year;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_hotspots;
--- REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_grants_baseline;
+-- WARNING: can take minutes on full-state datasets — monitor pg_stat_activity.
+REFRESH MATERIALIZED VIEW CONCURRENTLY public.dashboard_summary;
+-- WARNING: can take minutes on full-state datasets — monitor pg_stat_activity.
+REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_analysis_summary;
+-- WARNING: can take minutes on full-state datasets — monitor pg_stat_activity.
+REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_safety_categories;
+-- WARNING: can take minutes on full-state datasets — monitor pg_stat_activity.
+REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_pedbike_breakdowns;
+-- WARNING: can take minutes on full-state datasets — monitor pg_stat_activity.
+REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_intersection_summary;
+-- WARNING: can take minutes on full-state datasets — monitor pg_stat_activity.
+REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_factor_year;
+-- WARNING: can take minutes on full-state datasets — monitor pg_stat_activity.
+REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_hotspots;
+-- WARNING: can take minutes on full-state datasets — monitor pg_stat_activity.
+REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_grants_baseline;
 
 -- =============================================================================
--- VERIFICATION
+-- VERIFICATION (uncomment and run after applying)
 -- =============================================================================
+-- These statements are read-only and safe to execute as part of the same
+-- paste. Capture the timings and report them back.
 
 -- 1. Confirm all the new indexes exist:
--- SELECT schemaname, indexname, indexdef
---   FROM pg_indexes
---  WHERE schemaname = 'public'
---    AND indexname LIKE 'idx_dashboard_summary_tier_%' OR indexname LIKE '%_uniq'
---  ORDER BY indexname;
+SELECT schemaname, indexname, indexdef
+  FROM pg_indexes
+ WHERE schemaname = 'public'
+   AND (indexname LIKE 'idx_dashboard_summary_tier_%' OR indexname LIKE '%_uniq')
+ ORDER BY indexname;
 
 -- 2. Confirm cron jobs are scheduled:
--- SELECT jobname, schedule, command FROM cron.job ORDER BY jobname;
+SELECT jobname, schedule, command FROM cron.job ORDER BY jobname;
 
 -- 3. Time the previously-slow query — should now be <500 ms with the new
 --    covering indexes:
--- EXPLAIN (ANALYZE, BUFFERS)
--- SELECT crash_year, crash_severity, road_type, is_interstate, crash_count
---   FROM dashboard_summary
---  WHERE state = 'delaware'
---    AND physical_juris_name = 'Sussex County'
---    AND road_type = 'all_roads';
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT crash_year, crash_severity, road_type, is_interstate, crash_count
+  FROM dashboard_summary
+ WHERE state = 'delaware'
+   AND physical_juris_name = 'Sussex County'
+   AND road_type = 'all_roads';
 
 -- 4. After cron has run at least once, check job status:
--- SELECT jobname, status, return_message, start_time, end_time
---   FROM cron.job_run_details
---   ORDER BY start_time DESC LIMIT 16;
+SELECT jobname, status, return_message, start_time, end_time
+  FROM cron.job_run_details
+  ORDER BY start_time DESC LIMIT 16;
+
+-- =============================================================================
+-- POST-APPLY EXTERNAL SMOKE TEST (run from Murad's shell, not in Studio)
+-- =============================================================================
+--
+-- curl -w "\n%{time_total}s\n" -H "apikey: $ANON_KEY" \
+--   "https://srv1503081.hstgr.cloud/rest/v1/dashboard_summary?select=crash_year,crash_severity,road_type,is_interstate,crash_count&state=eq.delaware&physical_juris_name=eq.Sussex%20County"
+--
+-- Expected: response time < 500 ms (was 11-22 s before this migration).

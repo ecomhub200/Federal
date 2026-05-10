@@ -13,13 +13,14 @@
  * Bump CACHE_NAME on every release so old caches get evicted on activate.
  */
 
-const CACHE_NAME = 'crashlens-v20260510-r9';
+const CACHE_NAME = 'crashlens-v20260511-r10';
 
 // Pre-cache the critical app shell. Other modules will be lazy-cached on
 // first fetch via the stale-while-revalidate handler below — listing every
 // file here is unnecessary and brittle. These are the bytes the very first
 // paint depends on.
 const STATIC_PRECACHE = [
+    '/Federal/app/',                  // directory URL — most users land here
     '/Federal/app/index.html',
     '/Federal/app/modules/loader.js',
     '/Federal/app/modules/ui/skeletons.js',
@@ -87,6 +88,23 @@ self.addEventListener('fetch', (event) => {
 
     // Skip Supabase / Postgres / R2 / Mapbox path patterns regardless of host.
     if (/\/rest\/v1\//.test(url.pathname) || /\.parquet(?:\?|$)/i.test(url.pathname)) {
+        return;
+    }
+
+    // Round-10 — alias the directory URL to index.html so warm reloads of
+    // /Federal/app/ hit the precached shell instead of a 12 MB network fetch.
+    if (url.pathname === '/Federal/app/' || url.pathname === '/Federal/app/index.html') {
+        event.respondWith(
+            caches.open(CACHE_NAME).then((cache) =>
+                cache.match('/Federal/app/index.html').then((cached) => {
+                    const fresh = fetch(req).then((res) => {
+                        if (res && res.ok) cache.put('/Federal/app/index.html', res.clone()).catch(() => {});
+                        return res;
+                    }).catch(() => cached);
+                    return cached || fresh;
+                })
+            )
+        );
         return;
     }
 
