@@ -136,6 +136,26 @@ CL.data = CL.data || {};
                 return client.getPedBikeBreakdowns(tier, value);
             });
         }
+        // Round 12 — mv_pedbike_locations: top ped/bike crash locations per
+        // mode. Mirrors the cachedMatview key shape used by the tab loader
+        // (see updatePeopleFromMatview → renderPedBikeLocationsFromMatview).
+        if (typeof client.getPedBikeLocations === 'function') {
+            push('mv_pedbike_locations:pedestrian', function () {
+                return client.getPedBikeLocations(tier, value, 'pedestrian', { limit: 50 });
+            }, { mode: 'pedestrian' });
+            push('mv_pedbike_locations:bicycle', function () {
+                return client.getPedBikeLocations(tier, value, 'bicycle', { limit: 50 });
+            }, { mode: 'bicycle' });
+        }
+        // Round 12 — mv_analysis_extra is unioned by getAnalysisBreakdown's
+        // existing fetch, so no extra prewarm entry is required (the SWR
+        // cache key is shared). We DO want the standalone accessor warmed
+        // for callers that fetch only the extra dimensions explicitly.
+        if (typeof client.getAnalysisExtra === 'function') {
+            push('mv_analysis_extra', function () {
+                return client.getAnalysisExtra(tier, value);
+            });
+        }
 
         return batch;
     }

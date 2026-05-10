@@ -50251,9 +50251,9 @@ async function paintDashboardChartsFromMatview() {
         });
     }
 
-    // chartDOW — placeholder until backend adds 'dow' dimension to mv_analysis_summary.
-    // When backend B1 lands, getAnalysisBreakdown will surface byDow and this
-    // block can be replaced with a real bar chart.
+    // chartDOW — Round 12: getAnalysisBreakdown now unions mv_analysis_extra
+    // (dow / roadsurface / trafficcontrol / firstevent dimensions) into the
+    // same envelope, so D.byDow is populated automatically.
     if (D.byDow && Object.keys(D.byDow).length > 0) {
         paintWhenVisible('chartDOW', () => {
             const dowLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -50267,7 +50267,7 @@ async function paintDashboardChartsFromMatview() {
             });
         });
     } else if (typeof showChartPlaceholder === 'function') {
-        showChartPlaceholder('chartDOW', 'Day-of-week breakdown pending mv_analysis_summary "dow" dimension');
+        showChartPlaceholder('chartDOW', 'No day-of-week data available for this jurisdiction.');
     }
 }
 
@@ -59551,10 +59551,162 @@ function updateHotspotDetailPanel(skipScroll = false) {
     calculateCountyBenchmarks();
     renderHotspotDetailContent();
 
+    // Round 12: when running matview-only (sampleRows empty), the synchronous
+    // aggregator above only seeded totals/severity/EPDO. Fetch the per-location
+    // JSONB breakdowns from mv_hotspots_detail and merge in dimensions
+    // (byYear, byMonth, byDOW, byHour, byCollision, byWeather, byLight,
+    // bySurface, byTrafficControl, factors, vru, demographics, specialZones)
+    // — then re-render so the panel charts populate end-to-end.
+    const _sampleRowsEmpty = !crashState.sampleRows || crashState.sampleRows.length === 0;
+    if (_sampleRowsEmpty) {
+        _hydrateHotspotDetailFromMatview('hotspot').then(merged => {
+            if (merged) renderHotspotDetailContent();
+        }).catch(e => console.warn('[Hotspot Detail] mv_hotspots_detail hydrate failed:', e && e.message));
+    }
+
     // Scroll panel into view (skip on initial auto-select)
     if (!skipScroll) {
         setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     }
+}
+
+/**
+ * Round 12 — Hydrate detail panel `aggregatedData` with per-location JSONB
+ * breakdowns from mv_hotspots_detail. Used by both the Hot Spots and the
+ * Intersections detail panels (the same structure works for both — they
+ * key off route name vs node id).
+ *
+ * @param {'hotspot'|'intersection'} which - which panel state to merge into
+ * @returns {Promise<boolean>} true when at least one location was hydrated
+ */
+async function _hydrateHotspotDetailFromMatview(which) {
+    const dc = (window.CL && CL.data) ? CL.data.client : null;
+    if (!dc || typeof dc.getHotspotDetail !== 'function') return false;
+
+    const stateState = (which === 'intersection')
+        ? (typeof intDetailState !== 'undefined' ? intDetailState : null)
+        : hotspotDetailState;
+    if (!stateState) return false;
+    const aggData = stateState.aggregatedData;
+    if (!aggData) return false;
+
+    // Selected locations: hotspot panel uses string names, intersection panel
+    // uses {node, routes} objects — normalize to a flat list of names.
+    const rawLocations = stateState.selectedLocations || [];
+    const locations = rawLocations.map(loc => {
+        if (typeof loc === 'string') return loc;
+        if (loc && typeof loc === 'object') return loc.node || loc.location || '';
+        return '';
+    }).filter(Boolean);
+    if (locations.length === 0) return false;
+
+    // Determine matview location_type. For the Hot Spots panel, the row
+    // grouping is route-or-node; default to 'segment' (any non-intersection)
+    // and fall back to 'intersection' on miss. The Intersection panel always
+    // uses 'intersection'.
+    const stateKey = (dc.state || (typeof window.crashLensClient !== 'undefined' && window.crashLensClient.state) || '').toLowerCase();
+    const tryTypes = (which === 'intersection')
+        ? ['intersection']
+        : ['segment', 'intersection'];
+
+    let merged = false;
+    for (const loc of locations) {
+        let detail = null;
+        for (const lt of tryTypes) {
+            try {
+                detail = await dc.getHotspotDetail(stateKey, lt, loc);
+                if (detail) break;
+            } catch (_) { /* try next location_type */ }
+        }
+        if (!detail) continue;
+        merged = true;
+
+        // Round 12: when aggregator produced zeros (no sampleRows), seed
+        // totals/severity/EPDO from the matview detail row so the panel KPI
+        // tiles also show real numbers.
+        if ((aggData.total || 0) === 0) {
+            const detailTotal = detail.total || 0;
+            const detailK = detail.k || 0;
+            const detailA = detail.a || 0;
+            aggData.total += detailTotal;
+            aggData.severity.K += detailK;
+            aggData.severity.A += detailA;
+            const remainder = Math.max(0, detailTotal - detailK - detailA);
+            aggData.severity.B += remainder;   // best-effort fill (per-severity B/C/O not in matview)
+            aggData.epdo = (typeof calcEPDO === 'function')
+                ? calcEPDO(aggData.severity)
+                : aggData.epdo;
+            // Per-location seed too (compare mode reads from byLocation).
+            if (aggData.byLocation && aggData.byLocation[loc]) {
+                const blEntry = aggData.byLocation[loc];
+                blEntry.total = (blEntry.total || 0) + detailTotal;
+                blEntry.severity = blEntry.severity || { K: 0, A: 0, B: 0, C: 0, O: 0 };
+                blEntry.severity.K += detailK;
+                blEntry.severity.A += detailA;
+                blEntry.severity.B += remainder;
+            }
+        }
+
+        // Merge JSONB dim buckets into aggData. Each by_X is { dim_value: count }.
+        const _mergeCount = (target, src) => {
+            if (!src) return;
+            for (const [k, v] of Object.entries(src)) {
+                target[k] = (target[k] || 0) + (Number(v) || 0);
+            }
+        };
+        const _mergeYear = (target, src) => {
+            if (!src) return;
+            for (const [yr, v] of Object.entries(src)) {
+                if (!target[yr]) target[yr] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+                target[yr].total += (Number(v) || 0);
+            }
+        };
+        _mergeYear(aggData.byYear, detail.by_year);
+        _mergeCount(aggData.byMonth, detail.by_month);
+        _mergeCount(aggData.byHour, detail.by_hour);
+        _mergeCount(aggData.byCollision, detail.by_collision);
+        _mergeCount(aggData.byWeather, detail.by_weather);
+        _mergeCount(aggData.byLight, detail.by_light);
+        _mergeCount(aggData.bySurface, detail.by_roadsurface);
+        _mergeCount(aggData.byTrafficControl, detail.by_trafficctrl);
+
+        // by_dow → byDOW (numeric 0-6 keys)
+        if (detail.by_dow) {
+            for (const [d, v] of Object.entries(detail.by_dow)) {
+                const key = parseInt(d, 10);
+                if (!Number.isNaN(key)) aggData.byDOW[key] = (aggData.byDOW[key] || 0) + (Number(v) || 0);
+            }
+        }
+
+        // Factor counts
+        aggData.factors.alcohol += (detail.alcohol_count || 0);
+        aggData.factors.speed += (detail.speed_count || 0);
+        aggData.factors.distracted += (detail.distracted_count || 0);
+        aggData.factors.drowsy += (detail.drowsy_count || 0);
+        aggData.factors.drug += (detail.drug_count || 0);
+        aggData.factors.hitrun += (detail.hitrun_count || 0);
+
+        // VRU: matview gives crash counts only (not separate K/A); we surface
+        // the totals so the count tiles render. K/A breakdowns require row
+        // data and stay at 0 in matview-only mode.
+        aggData.vru.pedestrian.total += (detail.ped_count || 0);
+        aggData.vru.bicycle.total += (detail.bike_count || 0);
+        aggData.vru.motorcycle.total += (detail.moto_count || 0);
+
+        // Demographics
+        aggData.demographics.senior += (detail.senior_count || 0);
+        aggData.demographics.young += (detail.young_count || 0);
+        aggData.demographics.unrestrained += (detail.unrestrained_count || 0);
+
+        // Special zones
+        aggData.specialZones.workZone += (detail.workzone_count || 0);
+        aggData.specialZones.schoolZone += (detail.school_count || 0);
+        // Round 12: surface adverse-weather / nighttime counts on the same
+        // specialZones bucket so the existing chart can pick them up.
+        aggData.specialZones.darkUnlit = (aggData.specialZones.darkUnlit || 0) + (detail.night_count || 0);
+        aggData.specialZones.adverseWeather = (aggData.specialZones.adverseWeather || 0) + (detail.adverse_weather_count || 0);
+    }
+    return merged;
 }
 
 // Aggregate crash data for selected locations
@@ -64283,6 +64435,17 @@ function updateIntDetailPanel(skipScroll = false) {
     aggregateIntDetailData();
     calculateIntCountyBenchmarks();
     renderIntDetailContent();
+
+    // Round 12: matview-only mode — hydrate the JSONB breakdowns from
+    // mv_hotspots_detail so the Yearly/Monthly/DOW/Hour/Collision/Weather/
+    // Light/Surface/TrafficCtrl/Factors charts populate. Re-renders on success.
+    const _sampleRowsEmpty = !crashState.sampleRows || crashState.sampleRows.length === 0;
+    if (_sampleRowsEmpty) {
+        _hydrateHotspotDetailFromMatview('intersection').then(merged => {
+            if (merged) renderIntDetailContent();
+        }).catch(e => console.warn('[Int Detail] mv_hotspots_detail hydrate failed:', e && e.message));
+    }
+
     // Scroll panel into view (skip on initial auto-select)
     if (!skipScroll) {
         setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
@@ -68710,6 +68873,26 @@ async function updatePeopleFromMatview(tier) {
                 console.warn('[PedBike] Per-mode chart paint failed:', perModeErr && perModeErr.message);
             }
         }
+
+        // Round 12: populate the Pedestrian/Bicycle High-Crash Locations
+        // tables and rebuild the Location Type pies from mv_pedbike_locations.
+        // At aggregate tiers (state/region/MPO/PD) the legacy applyPedFilters /
+        // applyBikeFilters path operates on sampleRows which are usually
+        // empty, leaving the tables blank. The matview gives us per-location
+        // K/A/total/at_intersection/night_count direct.
+        try {
+            await renderPedBikeLocationsFromMatview(dc, tierResolved);
+        } catch (locErr) {
+            console.warn('[PedBike] Locations matview paint failed:', locErr && locErr.message);
+        }
+
+        // Round 12: paint the Pedestrian vs Bicycle Comparison table from
+        // the safety_categories already fetched above.
+        try {
+            renderPedBikeComparisonTableFromCats(categories);
+        } catch (cmpErr) {
+            console.warn('[PedBike] Comparison table paint failed:', cmpErr && cmpErr.message);
+        }
     } catch (e) {
         console.warn('[PedBike] Matview load failed:', e.message, '— attempting sampleRows fallback');
         if (crashState.loaded && crashState.sampleRows && crashState.sampleRows.length > 0) {
@@ -68724,6 +68907,190 @@ async function updatePeopleFromMatview(tier) {
             } catch (fallbackErr) { /* non-fatal */ }
         }
     }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Round 12 — Ped/Bike High-Crash Locations from mv_pedbike_locations.
+// At aggregate tiers the legacy applyPedFilters / applyBikeFilters path
+// operates on sampleRows which are usually empty, leaving the tables
+// blank. The matview supplies per-location K/A/total/at_intersection/
+// night_count direct, so we hydrate the tables and pies from it.
+// ────────────────────────────────────────────────────────────────────────
+async function renderPedBikeLocationsFromMatview(dc, tierResolved) {
+    if (!dc || typeof dc.getPedBikeLocations !== 'function') return;
+    if (!tierResolved || !tierResolved.tier) return;
+
+    const _calcEpdo = (sev) => (typeof calcEPDO === 'function')
+        ? calcEPDO(sev)
+        : ((sev?.K || 0) * 883 + (sev?.A || 0) * 94 + (sev?.B || 0) * 21 + (sev?.C || 0) * 11 + (sev?.O || 0));
+
+    const _hydrate = (rows) => {
+        // mv_pedbike_locations columns: location_type, location_name, total,
+        // k, a, at_intersection, night_count, first_year, last_year.
+        // Map to the same shape pedAnalysisState.allLocations expects.
+        return (rows || []).map(r => {
+            const sev = { K: r.k || 0, A: r.a || 0, B: 0, C: 0, O: 0 };
+            const total = r.total || 0;
+            const intCount = r.at_intersection || (r.location_type === 'intersection' ? total : 0);
+            const nightCount = r.night_count || 0;
+            return {
+                location: r.location_name || 'Unknown',
+                total: total,
+                K: r.k || 0,
+                A: r.a || 0,
+                B: 0, C: 0, O: 0,
+                epdo: _calcEpdo(sev),
+                crashes: [],   // matview path has no row-level access
+                intPct: total > 0 ? Math.round(intCount / total * 100) : 0,
+                nightPct: total > 0 ? Math.round(nightCount / total * 100) : 0,
+                isNode: r.location_type === 'intersection',
+                _location_type: r.location_type
+            };
+        });
+    };
+
+    const _paintLocTypePie = (rows, mode) => {
+        if (typeof createChart !== 'function') return;
+        let intCount = 0, segCount = 0;
+        (rows || []).forEach(r => {
+            const t = r.total || 0;
+            if (r.location_type === 'intersection') intCount += t;
+            else segCount += t;
+        });
+        const canvasId = mode === 'pedestrian' ? 'chartPedLocationType' : 'chartBikeLocationType';
+        const legendId = mode === 'pedestrian' ? 'pedLocationTypeLegend' : 'bikeLocationTypeLegend';
+        const accentColor = mode === 'pedestrian' ? '#0891b2' : '#059669';
+        if (intCount + segCount === 0) {
+            if (typeof showChartPlaceholder === 'function') {
+                showChartPlaceholder(canvasId, 'No location-type data for this scope');
+            }
+            return;
+        }
+        if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder(canvasId);
+        createChart(canvasId, 'doughnut', {
+            labels: ['At Intersection', 'Non-Intersection'],
+            datasets: [{
+                data: [intCount, segCount],
+                backgroundColor: [accentColor, '#94a3b8'],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        }, { cutout: '50%', plugins: { legend: { display: false } } });
+        const total = (intCount + segCount) || 1;
+        const legendEl = document.getElementById(legendId);
+        if (legendEl) {
+            legendEl.innerHTML =
+                '<div style="display:flex;align-items:center;gap:.5rem">'
+              +   '<span style="width:12px;height:12px;background:' + accentColor + ';border-radius:2px"></span>'
+              +   '<span style="flex:1">Intersection</span>'
+              +   '<span style="font-weight:600">' + intCount + '</span>'
+              +   '<span style="color:#64748b">(' + (intCount / total * 100).toFixed(1) + '%)</span>'
+              + '</div>'
+              + '<div style="display:flex;align-items:center;gap:.5rem">'
+              +   '<span style="width:12px;height:12px;background:#94a3b8;border-radius:2px"></span>'
+              +   '<span style="flex:1">Non-Intersection</span>'
+              +   '<span style="font-weight:600">' + segCount + '</span>'
+              +   '<span style="color:#64748b">(' + (segCount / total * 100).toFixed(1) + '%)</span>'
+              + '</div>';
+        }
+    };
+
+    // Fire the two fetches in parallel.
+    const [pedRows, bikeRows] = await Promise.all([
+        CL.data.cachedMatview('mv_pedbike_locations:pedestrian', tierResolved.tier, tierResolved.value,
+            () => dc.getPedBikeLocations(tierResolved.tier, tierResolved.value, 'pedestrian', { limit: 50 }),
+            { mode: 'pedestrian' }),
+        CL.data.cachedMatview('mv_pedbike_locations:bicycle', tierResolved.tier, tierResolved.value,
+            () => dc.getPedBikeLocations(tierResolved.tier, tierResolved.value, 'bicycle', { limit: 50 }),
+            { mode: 'bicycle' })
+    ]);
+
+    // Pedestrian locations + pie
+    if (Array.isArray(pedRows)) {
+        const pedLocations = _hydrate(pedRows);
+        if (pedLocations.length > 0) {
+            pedAnalysisState.allLocations = pedLocations;
+            renderPedLocationTable(pedLocations, 'route');
+            // Auto-select first row if nothing chosen yet.
+            if (pedAnalysisState.selectedLocations.length === 0) {
+                pedAnalysisState.selectedLocations = [pedLocations[0]];
+                if (typeof updatePedSelectionUI === 'function') updatePedSelectionUI();
+                if (typeof updatePedDetailPanel === 'function') updatePedDetailPanel();
+            }
+        }
+        _paintLocTypePie(pedRows, 'pedestrian');
+    }
+
+    // Bicycle locations + pie
+    if (Array.isArray(bikeRows)) {
+        const bikeLocations = _hydrate(bikeRows);
+        if (bikeLocations.length > 0) {
+            bikeAnalysisState.allLocations = bikeLocations;
+            renderBikeLocationTable(bikeLocations, 'route');
+            if (bikeAnalysisState.selectedLocations.length === 0) {
+                bikeAnalysisState.selectedLocations = [bikeLocations[0]];
+                if (typeof updateBikeSelectionUI === 'function') updateBikeSelectionUI();
+                if (typeof updateBikeDetailPanel === 'function') updateBikeDetailPanel();
+            }
+        }
+        _paintLocTypePie(bikeRows, 'bicycle');
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Round 12 — Pedestrian vs Bicycle Comparison table from matview categories.
+// The legacy path computes byYear from sampleRows; at aggregate tiers we
+// only have category-level totals, so render the metric rows that don't
+// need year breakdowns.
+// ────────────────────────────────────────────────────────────────────────
+function renderPedBikeComparisonTableFromCats(categories) {
+    const tbody = document.getElementById('pedBikeCompareBody');
+    if (!tbody) return;
+    const empty = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+    const ped = (categories && categories.pedestrian) || empty;
+    const bike = (categories && categories.bicycle) || empty;
+    const _calcEpdo = (sev) => (typeof calcEPDO === 'function')
+        ? calcEPDO(sev)
+        : ((sev?.K || 0) * 883 + (sev?.A || 0) * 94 + (sev?.B || 0) * 21 + (sev?.C || 0) * 11 + (sev?.O || 0));
+    const pedEPDO = _calcEpdo(ped);
+    const bikeEPDO = _calcEpdo(bike);
+    const totalVRU = (ped.total || 0) + (bike.total || 0);
+    const totalVRUK = (ped.K || 0) + (bike.K || 0);
+    const totalVRUKA = ((ped.K || 0) + (ped.A || 0)) + ((bike.K || 0) + (bike.A || 0));
+    const totalVRUEPDO = pedEPDO + bikeEPDO;
+    const pedKARate = ped.total ? (((ped.K + ped.A) / ped.total) * 100).toFixed(1) : '0.0';
+    const bikeKARate = bike.total ? (((bike.K + bike.A) / bike.total) * 100).toFixed(1) : '0.0';
+    const allTotal = (typeof crashState !== 'undefined' && crashState && crashState.totalRows) || 0;
+    const pedPct = allTotal > 0 ? (ped.total / allTotal * 100).toFixed(2) : '—';
+    const bikePct = allTotal > 0 ? (bike.total / allTotal * 100).toFixed(2) : '—';
+    const totalPct = allTotal > 0 ? (totalVRU / allTotal * 100).toFixed(2) : '—';
+
+    tbody.innerHTML = `
+        <tr><td><strong>Total Crashes</strong></td>
+            <td style="text-align:center;font-size:1.1rem;font-weight:600;color:#0891b2">${(ped.total || 0).toLocaleString()}</td>
+            <td style="text-align:center;font-size:1.1rem;font-weight:600;color:#059669">${(bike.total || 0).toLocaleString()}</td>
+            <td style="text-align:center;font-size:1.1rem;font-weight:700">${totalVRU.toLocaleString()}</td></tr>
+        <tr><td><strong>Fatal (K)</strong></td>
+            <td style="text-align:center"><span class="severity-badge severity-K">${ped.K || 0}</span></td>
+            <td style="text-align:center"><span class="severity-badge severity-K">${bike.K || 0}</span></td>
+            <td style="text-align:center"><span class="severity-badge severity-K">${totalVRUK}</span></td></tr>
+        <tr><td><strong>Serious Injury (K+A)</strong></td>
+            <td style="text-align:center"><span class="severity-badge severity-A">${(ped.K || 0) + (ped.A || 0)}</span></td>
+            <td style="text-align:center"><span class="severity-badge severity-A">${(bike.K || 0) + (bike.A || 0)}</span></td>
+            <td style="text-align:center"><span class="severity-badge severity-A">${totalVRUKA}</span></td></tr>
+        <tr><td><strong>EPDO Score</strong></td>
+            <td style="text-align:center;font-weight:600">${pedEPDO.toLocaleString()}</td>
+            <td style="text-align:center;font-weight:600">${bikeEPDO.toLocaleString()}</td>
+            <td style="text-align:center;font-weight:700">${totalVRUEPDO.toLocaleString()}</td></tr>
+        <tr><td><strong>K+A Rate</strong></td>
+            <td style="text-align:center;color:${parseFloat(pedKARate) > 25 ? '#dc2626' : '#059669'}">${pedKARate}%</td>
+            <td style="text-align:center;color:${parseFloat(bikeKARate) > 25 ? '#dc2626' : '#059669'}">${bikeKARate}%</td>
+            <td style="text-align:center">${totalVRU > 0 ? (totalVRUKA / totalVRU * 100).toFixed(1) : 0}%</td></tr>
+        <tr><td><strong>% of All Crashes</strong></td>
+            <td style="text-align:center">${pedPct}%</td>
+            <td style="text-align:center">${bikePct}%</td>
+            <td style="text-align:center">${totalPct}%</td></tr>
+    `;
 }
 
 function updatePeopleAnalysis() {
@@ -97575,9 +97942,12 @@ function extractSeverity(row) {
 }
 
 // Round 5 Fix 1 — categories the UI shows that mv_safety_categories does NOT
-// yet expose. Cards render 0 + "(matview pending)" badge instead of "0%".
+// yet expose. Round 12: alcoholonly is now sourced from mv_safety_categories
+// category='alcohol' (verified DE: alcohol=4,058). The remaining 5 are flagged
+// "No data for this state" rather than "(matview pending)" — per Murad's
+// 2026-05-10 verification, those columns are NULL in the Delaware source CSV.
 const SAFETY_MATVIEW_PENDING = new Set([
-    'workzone', 'senior', 'young', 'lgtruck', 'hitrun', 'drowsy', 'alcoholonly'
+    'workzone', 'senior', 'young', 'lgtruck', 'hitrun', 'drowsy'
 ]);
 
 function updateSafetyCards() {
@@ -97601,8 +97971,8 @@ function updateSafetyCards() {
         if (countEl) countEl.textContent = count.toLocaleString();
         if (pctEl) {
             if (_matviewMode && SAFETY_MATVIEW_PENDING.has(catKey)) {
-                pctEl.textContent = '(matview pending)';
-                pctEl.title = 'This category is not yet exposed by mv_safety_categories — backend ticket pending.';
+                pctEl.textContent = 'No data for this state';
+                pctEl.title = 'Source CSV does not flag this factor in this state — count cannot be derived.';
             } else {
                 pctEl.textContent = pct + '%';
                 pctEl.title = '';
@@ -97648,6 +98018,11 @@ async function _loadSafetyFromMatview() {
         'bicycle':        'bicycle',
         'speed':          'speed',
         'impaired':       'impaired',
+        // Round 12: mv_safety_categories now exposes a standalone 'alcohol'
+        // category (alcohol-only, distinct from the impaired union). Map it
+        // to the alcoholonly UI card so the tile lights up with real data.
+        'alcohol':        'alcoholonly',
+        'drug':           'drug',
         'intersection':   'intersection',
         'nighttime':      'nighttime',
         'distracted':     'distracted',
@@ -97673,6 +98048,68 @@ async function _loadSafetyFromMatview() {
     safetyState.filteredTotal = (typeof crashState !== 'undefined' && crashState.totalRows) || 0;
     console.log('[Safety Focus] Loaded ' + mapped + ' categories from mv_safety_categories');
     return true;
+}
+
+/**
+ * Round 12 — Hydrate the per-category Top Locations table from
+ * mv_safety_focus_locations. Returns a `byRoute`-shaped object so the
+ * existing updateSafetyLocationTable() can paint the rows unchanged.
+ *
+ * UI categories ↔ matview categories: most map 1:1, except `alcoholonly`
+ * maps to the matview's `alcohol`. Categories with no source-data flagging
+ * (workzone/senior/young/lgtruck/hitrun/drowsy) are skipped — the table
+ * will render the "No data for selected filters" empty state.
+ */
+async function _hydrateSafetyLocationsFromMatview(uiCategory) {
+    if (!window.crashLensClient || !CL.data || !CL.data.supabaseBridge) return {};
+    if (typeof window.crashLensClient.getSafetyFocusLocations !== 'function') return {};
+
+    const UI_TO_MATVIEW = {
+        'alcoholonly': 'alcohol',
+        // every other UI key matches the matview key directly
+    };
+    const matviewCat = UI_TO_MATVIEW[uiCategory] || uiCategory;
+
+    // Skip categories the matview doesn't expose at all.
+    if (SAFETY_MATVIEW_PENDING.has(uiCategory)) return {};
+
+    const t = CL.data.supabaseBridge.resolveTier();
+    const rows = await CL.data.cachedMatview(
+        'mv_safety_focus_locations:' + matviewCat,
+        t.tier, t.value,
+        () => window.crashLensClient.getSafetyFocusLocations(t.tier, t.value, matviewCat, { limit: 50 }),
+        { category: matviewCat }
+    );
+    if (!Array.isArray(rows) || rows.length === 0) return {};
+
+    // Convert mv_safety_focus_locations rows to the byRoute shape that
+    // updateSafetyLocationTable() expects:
+    //   { [routeName]: { crashes: [...], severity: {K,A,B,C,O} } }
+    const byRoute = {};
+    rows.forEach(r => {
+        const route = r.location_name || 'Unknown';
+        if (!byRoute[route]) {
+            byRoute[route] = {
+                crashes: [],
+                severity: { K: 0, A: 0, B: 0, C: 0, O: 0 }
+            };
+        }
+        const ent = byRoute[route];
+        const total = r.total || 0;
+        // Synthesize one stub crash per total so the existing
+        // `data.crashes.length` count works. Only count is used downstream;
+        // the rich row-level fields (collision/weather/light) are not
+        // available at aggregate tier and the table doesn't display them.
+        for (let i = 0; i < total; i++) ent.crashes.push({});
+        ent.severity.K += r.k || 0;
+        ent.severity.A += r.a || 0;
+        // mv_safety_focus_locations rolls B+C+O into total without per-
+        // severity fields, so park the remainder in B as a best-effort
+        // fill so EPDO is non-zero.
+        const remainder = Math.max(0, total - (r.k || 0) - (r.a || 0));
+        ent.severity.B += remainder;
+    });
+    return byRoute;
 }
 
 function selectSafetyCategory(category) {
@@ -97758,8 +98195,28 @@ function selectSafetyCategory(category) {
     updateSafetyYearChart(catData.crashes);
     updateSafetyFactorBadges(catData.crashes);
 
-    // Update location table
-    updateSafetyLocationTable(catData.byRoute, category);
+    // Update location table.
+    // Round 12: when running in matview mode (no sampleRows), hydrate the
+    // table from mv_safety_focus_locations so the "Top Locations" table
+    // is no longer empty at aggregate tiers.
+    if (safetyState.matviewMode && (!catData.byRoute || Object.keys(catData.byRoute).length === 0)) {
+        _hydrateSafetyLocationsFromMatview(category).then((byRoute) => {
+            if (byRoute && Object.keys(byRoute).length > 0) {
+                catData.byRoute = byRoute;
+                updateSafetyLocationTable(byRoute, category);
+                // Re-render the Locations stat so the panel KPI matches.
+                const locEl = document.getElementById('safetyStatLocations');
+                if (locEl) locEl.textContent = Object.keys(byRoute).length.toLocaleString();
+            } else {
+                updateSafetyLocationTable({}, category);
+            }
+        }).catch((e) => {
+            console.warn('[Safety Focus] mv_safety_focus_locations hydrate failed:', e && e.message);
+            updateSafetyLocationTable(catData.byRoute || {}, category);
+        });
+    } else {
+        updateSafetyLocationTable(catData.byRoute, category);
+    }
 
     // Render typical countermeasures for this category
     renderSafetyCountermeasures(category);
@@ -106454,6 +106911,17 @@ async function initFatalSpeedingFromMatview(tier) {
             fatalSpeedingState.combinedData.speedOnly = (speedCat.total || 0) - (speedCat.K || 0);
         }
 
+        // Round 12: hydrate fatal/speed hotspot tables from
+        // mv_safety_focus_locations. Populates fatalData.byRoute and
+        // speedData.byRoute so the existing updateFS*Hotspots() functions
+        // can paint unchanged.
+        try {
+            const speedKAll = (categories && categories['speed'] && categories['speed'].K) || 0;
+            await _hydrateFSHotspotsFromMatview(dc, tierResolved, speedKAll);
+        } catch (locErr) {
+            console.warn('[FS] mv_safety_focus_locations hydrate failed:', locErr && locErr.message);
+        }
+
         fatalSpeedingState.loaded = true;
         fatalSpeedingState.source = 'supabase';
 
@@ -106470,6 +106938,96 @@ async function initFatalSpeedingFromMatview(tier) {
             }
         }
     }
+}
+
+/**
+ * Round 12 — Hydrate the F&S Fatal / Speed / Combined hotspot tables from
+ * mv_safety_focus_locations. Pulls the top fatal locations across every
+ * category (fatal-flagged), the top speed locations from category=speed,
+ * and merges into fatalSpeedingState.{fatalData,speedData}.byRoute so the
+ * existing updateFSFatalHotspots / updateFSSpeedHotspots /
+ * updateFSCombinedHotspots functions paint without modification.
+ */
+async function _hydrateFSHotspotsFromMatview(dc, tierResolved, speedKAll) {
+    if (!dc || typeof dc.getSafetyFocusLocations !== 'function') return;
+    if (!tierResolved || !tierResolved.tier) return;
+
+    const _calcEpdo = (sev) => (typeof calcEPDO === 'function')
+        ? calcEPDO(sev)
+        : ((sev?.K || 0) * 883 + (sev?.A || 0) * 94 + (sev?.B || 0) * 21 + (sev?.C || 0) * 11 + (sev?.O || 0));
+
+    const _stubCrashes = (rec) => {
+        // Synthesize one stub crash per row.total so the hotspot tables'
+        // year/topFactor logic doesn't divide by zero. The matview exposes
+        // first_year / last_year — span the years across the stubs so the
+        // "Years Active" column is non-empty.
+        const stubs = [];
+        const total = rec.total || 0;
+        const fy = parseInt(rec.first_year, 10);
+        const ly = parseInt(rec.last_year, 10);
+        for (let i = 0; i < total; i++) {
+            const yr = (Number.isFinite(fy) && Number.isFinite(ly) && ly >= fy)
+                ? (fy + (i % (ly - fy + 1)))
+                : '';
+            const stub = [];
+            stub[COL.YEAR] = yr;
+            stub[COL.SEVERITY] = (i < (rec.k || 0)) ? 'K' : ((i < ((rec.k || 0) + (rec.a || 0))) ? 'A' : 'B');
+            stubs.push(stub);
+        }
+        return stubs;
+    };
+
+    // Fetch top speed locations and top fatal locations (any category K>0).
+    const [speedRows, fatalRowsByCategory] = await Promise.all([
+        CL.data.cachedMatview('mv_safety_focus_locations:speed', tierResolved.tier, tierResolved.value,
+            () => dc.getSafetyFocusLocations(tierResolved.tier, tierResolved.value, 'speed', { limit: 100 }),
+            { category: 'speed' }),
+        // Pull top fatal locations across the categories most likely to have
+        // K>0 entries. Each call is small and the matview cache de-dupes
+        // repeat fetches across tabs.
+        Promise.all(['speed','alcohol','impaired','intersection','curves','roaddeparture','pedestrian','bicycle','motorcycle','distracted','nighttime']
+            .map(cat => CL.data.cachedMatview('mv_safety_focus_locations:' + cat, tierResolved.tier, tierResolved.value,
+                () => dc.getSafetyFocusLocations(tierResolved.tier, tierResolved.value, cat, { limit: 50 }),
+                { category: cat }
+            ))
+        )
+    ]);
+
+    // ---- Fatal byRoute: dedupe by location_name across all categories,
+    //                    keep the entry with highest k.
+    const fatalByRoute = {};
+    (fatalRowsByCategory || []).flat().filter(r => r && (r.k || 0) > 0).forEach(r => {
+        const route = r.location_name || 'Unknown';
+        const sev = { K: r.k || 0, A: r.a || 0, B: 0, C: 0, O: 0 };
+        const epdo = _calcEpdo(sev);
+        if (!fatalByRoute[route] || (fatalByRoute[route].k < sev.K)) {
+            fatalByRoute[route] = {
+                route,
+                k: sev.K,
+                fatalities: sev.K,    // approximate: 1 fatality per K crash
+                total: r.total || 0,
+                epdo,
+                crashes: _stubCrashes(r)
+            };
+        }
+    });
+
+    // ---- Speed byRoute: from category=speed rows.
+    const speedByRoute = {};
+    (speedRows || []).forEach(r => {
+        const route = r.location_name || 'Unknown';
+        const sev = { K: r.k || 0, A: r.a || 0, B: 0, C: 0, O: 0 };
+        speedByRoute[route] = {
+            route,
+            k: sev.K,
+            total: r.total || 0,
+            epdo: _calcEpdo(sev),
+            crashes: _stubCrashes(r)
+        };
+    });
+
+    fatalSpeedingState.fatalData.byRoute = fatalByRoute;
+    fatalSpeedingState.speedData.byRoute = speedByRoute;
 }
 
 function applyFSFilters() {
@@ -137655,6 +138213,17 @@ async function assetRunAnalysis() {
     }
 
     if (!crashState.mapPoints || crashState.mapPoints.length === 0) {
+        // Round 12: when sampleRows are unavailable (aggregate tier — state/
+        // region/MPO/PD), fall back to the find_crashes_near_assets RPC so
+        // the Prioritized Infrastructure table populates server-side. This
+        // is the path Murad's PDF tested with 464 transit stops loaded but
+        // empty crash data.
+        const dc = (window.CL && CL.data) ? CL.data.client : null;
+        if (dc && typeof dc.findCrashesNearAssets === 'function') {
+            console.log('[Asset] No sampleRows — using find_crashes_near_assets RPC');
+            await assetRunAnalysisViaRpc(activeAssets);
+            return;
+        }
         assetShowNotification('No crash data loaded. Please load crash data first.', 'warning');
         return;
     }
@@ -137770,6 +138339,110 @@ async function assetRunAnalysis() {
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
     console.log(`[Asset] Association complete: ${totalLocations} locations in ${elapsed}s` +
         (outOfScopeCount > 0 ? ` (${outOfScopeCount} outside crash data scope)` : ''));
+
+    assetShowLoading(false);
+    assetRenderResults();
+}
+
+/**
+ * Round 12 — Asset Deficiency spatial join via Supabase RPC.
+ * Used when local sampleRows aren't available (aggregate-tier sessions).
+ * Calls find_crashes_near_assets({state, assets[], radius_ft, ped_bike_only})
+ * and reshapes the response into the same assetState.associations shape that
+ * assetRenderResults() consumes.
+ */
+async function assetRunAnalysisViaRpc(activeAssets) {
+    const dc = (window.CL && CL.data) ? CL.data.client : null;
+    if (!dc || typeof dc.findCrashesNearAssets !== 'function') return;
+
+    const stateKey = (dc.state || (typeof window.crashLensClient !== 'undefined' && window.crashLensClient.state) || 'delaware').toLowerCase();
+    const radiusFt = assetState.radiusFeet || 300;
+
+    // Flatten asset locations into the {id, type, lat, lng} payload the RPC
+    // expects. Keep a parallel lookup so we can stitch results back to their
+    // owning asset/location object after the round-trip.
+    const payload = [];
+    const lookup = new Map();   // assetIdLocId → {asset, location}
+    activeAssets.forEach(asset => {
+        (asset.locations || []).forEach(loc => {
+            const lat = Number(loc.lat ?? loc.latitude);
+            const lng = Number(loc.lng ?? loc.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+            const key = `${asset.id}_${loc.id}`;
+            payload.push({
+                id: key,
+                type: asset.type || 'asset',
+                lat: lat,
+                lng: lng,
+            });
+            lookup.set(key, { asset, location: loc });
+        });
+    });
+
+    if (payload.length === 0) {
+        assetShowNotification('No assets with valid coordinates to analyze.', 'warning');
+        return;
+    }
+
+    // Determine ped/bike-only from the asset's crashFilter (Transit Safety
+    // assets default to ped_bike). When mixed, fall back to all crashes.
+    const allPedBike = activeAssets.every(a => a.crashFilter === 'ped_bike');
+
+    assetShowLoading(true, `Joining ${payload.length} assets with crash data…`);
+    const startTime = performance.now();
+
+    let rows = null;
+    try {
+        rows = await dc.findCrashesNearAssets(stateKey, payload, {
+            radius_ft: radiusFt,
+            ped_bike_only: allPedBike,
+        });
+    } catch (e) {
+        console.warn('[Asset] RPC failed:', e && e.message);
+    }
+
+    assetState.associations.clear();
+
+    // Index RPC results by asset_id so we can hydrate even assets that
+    // returned zero crashes (RPC omits empty rows).
+    const resultsByKey = new Map();
+    (rows || []).forEach(r => { resultsByKey.set(String(r.asset_id), r); });
+
+    lookup.forEach(({ asset, location }, key) => {
+        const r = resultsByKey.get(key);
+        const total = r ? Number(r.crash_count || 0) : 0;
+        const K = r ? Number(r.k_count || 0) : 0;
+        const A = r ? Number(r.a_count || 0) : 0;
+        const bcCount = r ? Number(r.bc_count || 0) : 0;
+        const O = r ? Number(r.o_count || 0) : 0;
+        const epdo = r ? Number(r.epdo || 0) : 0;
+        // RPC returns combined B+C; split is unavailable. Park the combined
+        // value in B and leave C at 0 so existing UI math (B+C) still holds.
+        const assocData = {
+            asset,
+            location,
+            crashes: [],            // RPC mode has no row-level access
+            total,
+            epdo,
+            K, A,
+            B: bcCount, C: 0, O,
+            ped: 0, bike: 0,
+            outOfCrashScope: false,
+        };
+        if (asset.type === 'school' && location.metadata) {
+            const enrollment = location.metadata.enrollment || 0;
+            const vulnFactor = location.metadata.vulnerability_factor || 1.0;
+            assocData.enrollment = enrollment;
+            assocData.level = location.metadata.level || 'Unknown';
+            assocData.crashRate = enrollment > 0 ? ((total / enrollment) * 1000).toFixed(2) : '0.00';
+            assocData.vulnFactor = vulnFactor;
+            assocData.vulnEpdo = Math.round(epdo * vulnFactor);
+        }
+        assetState.associations.set(key, assocData);
+    });
+
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+    console.log(`[Asset] RPC association complete: ${payload.length} assets, ${rows ? rows.length : 0} matched, ${elapsed}s`);
 
     assetShowLoading(false);
     assetRenderResults();

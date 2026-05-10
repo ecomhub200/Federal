@@ -1,0 +1,28 @@
+-- =============================================================================
+-- Round 12 — Extend mv_safety_categories (2026-05-10)
+-- =============================================================================
+-- PLACEHOLDER: applied live by Murad against srv1503081.hstgr.cloud on
+-- 2026-05-10. Verified on Delaware:
+--   alcohol  → 4,058 crashes
+--   drug     → 1,341 crashes
+--   impaired → 4,802 crashes (alcohol OR drug union; unchanged behavior)
+--
+-- Purpose: split the existing `impaired` category into its components so the
+-- Safety Focus "Alcohol-Involved" tile and the F&S Fatal "Drug" cross-factor
+-- can read their own rows.
+--
+-- Two new categories added; `impaired` retained as union for backwards
+-- compatibility:
+--   1. alcohol  — alcohol_related = 'Yes' (or any per-state alcohol flag)
+--   2. drug     — drug_related = 'Yes'    (or any per-state drug flag)
+--
+-- Apply against: self-hosted Supabase on srv1503081.hstgr.cloud
+--                (via Supabase MCP apply_migration / execute_sql)
+--
+-- The exact CREATE OR REPLACE MATERIALIZED VIEW body is held by Murad's
+-- apply log; this file is a source-of-truth marker for the change date and
+-- expected counts. A future round will replace this header with the exact
+-- SQL once the apply log is exported.
+-- =============================================================================
+
+-- (full SQL body to be inserted from Cowork apply log)

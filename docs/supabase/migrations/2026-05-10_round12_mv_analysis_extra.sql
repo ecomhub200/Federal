@@ -1,0 +1,27 @@
+-- =============================================================================
+-- Round 12 — mv_analysis_extra (2026-05-10)
+-- =============================================================================
+-- PLACEHOLDER: applied live by Murad against srv1503081.hstgr.cloud on
+-- 2026-05-10. Delaware row count: 4,069.
+--
+-- Purpose: extend the per-tier breakdown surface beyond the eight
+-- mv_analysis_summary dimensions (year/month/severity/collision/hour/
+-- funcclass/weather/light) with four more — *same row schema* so the
+-- frontend can UNION the two matviews trivially.
+--
+-- Dimensions added (one bucket per (state, tier, dimension, dim_value)):
+--   - dow             (0..6 = Sun..Sat per Postgres EXTRACT(DOW))
+--   - roadsurface     (Wet, Dry, Snow/Ice/Slush, ...)
+--   - trafficcontrol  (Signal, Stop, None, ...)
+--   - firstevent      (first harmful event description)
+--
+-- Row schema (must match mv_analysis_summary):
+--   state, dot_district, planning_district, mpo_name, physical_juris_name,
+--   dimension, dim_value, total, k, a, b, c, o
+--
+-- Refresh: nightly cron alongside mv_analysis_summary.
+--
+-- Apply against: self-hosted Supabase on srv1503081.hstgr.cloud
+-- =============================================================================
+
+-- (full SQL body to be inserted from Cowork apply log)
