@@ -36748,7 +36748,8 @@ async function _loadGrantsFromMatview() {
         window.crashLensClient.state = stateKey;
 
         showGrantRankingProgress(true, 'Querying mv_grants_baseline…', 0);
-        const rows = await window.crashLensClient.getGrantsBaseline(t.tier, t.value, {});
+        const rows = await CL.data.cachedMatview('mv_grants_baseline', t.tier, t.value,
+            () => window.crashLensClient.getGrantsBaseline(t.tier, t.value, {}));
         if (!rows || !rows.length) {
             grantState.allRankedLocations = [];
             applyLocationLimit();
@@ -60952,12 +60953,16 @@ async function _loadHotspotsFromMatview() {
         // each hotspot row carries impaired/speed/distracted/etc. counts. PDF
         // exports read these without a second roundtrip.
         const [data, topCollMap, factorsMap] = await Promise.all([
-            window.crashLensClient.getHotspots(t.tier, t.value, { limit: topN }),
+            CL.data.cachedMatview('mv_hotspots', t.tier, t.value,
+                () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: topN }),
+                { limit: topN }),
             (typeof window.crashLensClient.getHotspotsTopCollision === 'function'
-                ? window.crashLensClient.getHotspotsTopCollision(stateKey)
+                ? CL.data.cachedMatview('mv_hotspots_topcoll', 'state', stateKey,
+                    () => window.crashLensClient.getHotspotsTopCollision(stateKey))
                 : Promise.resolve(null)),
             (typeof window.crashLensClient.getHotspotsFactors === 'function'
-                ? window.crashLensClient.getHotspotsFactors(stateKey)
+                ? CL.data.cachedMatview('mv_hotspots_factors', 'state', stateKey,
+                    () => window.crashLensClient.getHotspotsFactors(stateKey))
                 : Promise.resolve(null))
         ]);
         if (!data || (!data.intersections.length && !data.segments.length)) {
@@ -63136,7 +63141,9 @@ async function _loadIntersectionsFromHotspots() {
         const t = CL.data.supabaseBridge.resolveTier();
         window.crashLensClient.state = stateKey;
 
-        const data = await window.crashLensClient.getHotspots(t.tier, t.value, { limit: 1000 });
+        const data = await CL.data.cachedMatview('mv_hotspots', t.tier, t.value,
+            () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: 1000 }),
+            { limit: 1000 });
         if (!data || !data.intersections || !data.intersections.length) {
             const container = document.getElementById('tab-intersection');
             if (container) {
@@ -63165,10 +63172,8 @@ async function _loadIntersectionsFromHotspots() {
         let _kpiAgg = null;
         try {
             if (window.crashLensClient && typeof window.crashLensClient.getIntersectionSummary === 'function') {
-                const _summary = (CL.data && CL.data.cachedMatview)
-                    ? await CL.data.cachedMatview('mv_intersection_summary', t.tier, t.value,
-                        () => window.crashLensClient.getIntersectionSummary(t.tier, t.value, {}))
-                    : await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+                const _summary = await CL.data.cachedMatview('mv_intersection_summary', t.tier, t.value,
+                    () => window.crashLensClient.getIntersectionSummary(t.tier, t.value, {}));
                 if (Array.isArray(_summary) && _summary.length > 0) {
                     _kpiAgg = _summary.reduce((s, r) => {
                         if (/not at intersection/i.test(r.intersection_type || '')) return s;
@@ -63204,10 +63209,8 @@ async function _loadIntersectionsFromHotspots() {
         const staleBanner = tabEl && tabEl.querySelector('.int-matview-banner');
         if (staleBanner) staleBanner.remove();
         try {
-            const summary = (CL.data && CL.data.cachedMatview)
-                ? await CL.data.cachedMatview('mv_intersection_summary', t.tier, t.value,
-                    () => window.crashLensClient.getIntersectionSummary(t.tier, t.value, {}))
-                : await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+            const summary = await CL.data.cachedMatview('mv_intersection_summary', t.tier, t.value,
+                () => window.crashLensClient.getIntersectionSummary(t.tier, t.value, {}));
             if (Array.isArray(summary) && summary.length > 0) {
                 // Pivot 1 — intersection_type → total (exclude "Not at Intersection")
                 const byType = new Map();
@@ -63735,10 +63738,8 @@ async function exportIntersectionPDF() {
     if ((int.total === 0) && window.crashLensClient && window.CL?.data?.supabaseBridge?.resolveTier) {
         try {
             const t = window.CL.data.supabaseBridge.resolveTier();
-            const summary = (CL.data && CL.data.cachedMatview)
-                ? await CL.data.cachedMatview('mv_intersection_summary', t.tier, t.value,
-                    () => window.crashLensClient.getIntersectionSummary(t.tier, t.value, {}))
-                : await window.crashLensClient.getIntersectionSummary(t.tier, t.value, {});
+            const summary = await CL.data.cachedMatview('mv_intersection_summary', t.tier, t.value,
+                () => window.crashLensClient.getIntersectionSummary(t.tier, t.value, {}));
             if (Array.isArray(summary) && summary.length > 0) {
                 const kpi = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
                 summary.forEach(r => {
@@ -63759,7 +63760,9 @@ async function exportIntersectionPDF() {
             // mv_hotspots intersections — the same source the on-screen
             // intersection table uses — so the PDF's Top Locations matches.
             if (!data.byNode || Object.keys(data.byNode).length === 0) {
-                const hot = await window.crashLensClient.getHotspots(t.tier, t.value, { limit: 200 });
+                const hot = await CL.data.cachedMatview('mv_hotspots', t.tier, t.value,
+                    () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: 200 }),
+                    { limit: 200 });
                 if (hot && Array.isArray(hot.intersections) && hot.intersections.length) {
                     const byNode = {};
                     hot.intersections.forEach(r => {
@@ -68303,21 +68306,14 @@ async function updatePeopleFromMatview(tier) {
         // Round 3 follow-up (2026-05-09): also fetch mv_pedbike_breakdowns so
         // we can paint chartPedYear/chartPedLight/chartPedLocationType +
         // bike equivalents + chartPedBikeCompare without sampleRows.
-        const _cm = (CL.data && CL.data.cachedMatview) ? CL.data.cachedMatview : null;
         const [categories, analysis, pedbike] = await Promise.all([
-            _cm
-                ? _cm('mv_safety_categories', tierResolved.tier, tierResolved.value,
-                    () => dc.getSafetyCategories(tierResolved.tier, tierResolved.value))
-                : dc.getSafetyCategories(tierResolved.tier, tierResolved.value),
-            _cm
-                ? _cm('mv_analysis_summary', tierResolved.tier, tierResolved.value,
-                    () => dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value))
-                : dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value),
+            CL.data.cachedMatview('mv_safety_categories', tierResolved.tier, tierResolved.value,
+                () => dc.getSafetyCategories(tierResolved.tier, tierResolved.value)),
+            CL.data.cachedMatview('mv_analysis_summary', tierResolved.tier, tierResolved.value,
+                () => dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value)),
             (typeof dc.getPedBikeBreakdowns === 'function'
-                ? (_cm
-                    ? _cm('mv_pedbike_breakdowns', tierResolved.tier, tierResolved.value,
-                        () => dc.getPedBikeBreakdowns(tierResolved.tier, tierResolved.value))
-                    : dc.getPedBikeBreakdowns(tierResolved.tier, tierResolved.value))
+                ? CL.data.cachedMatview('mv_pedbike_breakdowns', tierResolved.tier, tierResolved.value,
+                    () => dc.getPedBikeBreakdowns(tierResolved.tier, tierResolved.value))
                 : Promise.resolve(null))
         ]);
 
@@ -73034,8 +73030,10 @@ async function generateInfographic(allCrashes, title, agency, department, startD
             if (yearTo)   sumOpts.yearTo   = yearTo;
             [_supaSummary, _supaAnalysis, _supaCats] = await Promise.all([
                 window.crashLensClient.getSummary(t.tier, t.value, sumOpts),
-                window.crashLensClient.getAnalysisBreakdown(t.tier, t.value, {}),
-                window.crashLensClient.getSafetyCategories(t.tier, t.value, {}),
+                CL.data.cachedMatview('mv_analysis_summary', t.tier, t.value,
+                    () => window.crashLensClient.getAnalysisBreakdown(t.tier, t.value, {})),
+                CL.data.cachedMatview('mv_safety_categories', t.tier, t.value,
+                    () => window.crashLensClient.getSafetyCategories(t.tier, t.value, {})),
             ]);
             console.log('[Infographic] matview hydration: summary=' +
                 (Array.isArray(_supaSummary) ? _supaSummary.length : 0) + ' rows.');
@@ -73172,7 +73170,9 @@ async function generateInfographic(allCrashes, title, agency, department, startD
         // topLocations: top-5 hotspots from mv_hotspots, sorted by EPDO.
         try {
             const t = window.CL.data.supabaseBridge.resolveTier();
-            const hot = await window.crashLensClient.getHotspots(t.tier, t.value, { limit: 25 });
+            const hot = await CL.data.cachedMatview('mv_hotspots', t.tier, t.value,
+                () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: 25 }),
+                { limit: 25 });
             const merged = [...(hot?.intersections || []), ...(hot?.segments || [])];
             const top = merged
                 .map(r => {
@@ -76749,10 +76749,15 @@ async function generateFatalSpeedReport(crashes, title, author) {
             const t = window.CL.data.supabaseBridge.resolveTier();
             const [sumRows, cats, fatalHs, speedHs] = await Promise.all([
                 window.crashLensClient.getSummary(t.tier, t.value, {}),
-                window.crashLensClient.getSafetyCategories(t.tier, t.value, {}),
-                window.crashLensClient.getHotspots(t.tier, t.value, { limit: 100, sortBy: 'k' })
+                CL.data.cachedMatview('mv_safety_categories', t.tier, t.value,
+                    () => window.crashLensClient.getSafetyCategories(t.tier, t.value, {})),
+                CL.data.cachedMatview('mv_hotspots', t.tier, t.value,
+                    () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: 100, sortBy: 'k' }),
+                    { limit: 100, sortBy: 'k' })
                     .catch(() => null),
-                window.crashLensClient.getHotspots(t.tier, t.value, { limit: 100 })
+                CL.data.cachedMatview('mv_hotspots', t.tier, t.value,
+                    () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: 100 }),
+                    { limit: 100 })
                     .catch(() => null),
             ]);
             (sumRows || []).forEach(r => {
@@ -97616,7 +97621,8 @@ async function _loadSafetyFromMatview() {
     if (!stateKey) return false;
     const t = CL.data.supabaseBridge.resolveTier();
     window.crashLensClient.state = stateKey;
-    const cats = await window.crashLensClient.getSafetyCategories(t.tier, t.value, {});
+    const cats = await CL.data.cachedMatview('mv_safety_categories', t.tier, t.value,
+        () => window.crashLensClient.getSafetyCategories(t.tier, t.value, {}));
     if (!cats || Object.keys(cats).length === 0) return false;
 
     // Reset all UI categories to zero with matview marker.
@@ -104861,7 +104867,8 @@ async function generateCrashTreeReport() {
             const t = window.CL.data.supabaseBridge.resolveTier();
             const [_sumRows, _cats] = await Promise.all([
                 window.crashLensClient.getSummary(t.tier, t.value, {}),
-                window.crashLensClient.getSafetyCategories(t.tier, t.value, {}),
+                CL.data.cachedMatview('mv_safety_categories', t.tier, t.value,
+                    () => window.crashLensClient.getSafetyCategories(t.tier, t.value, {})),
             ]);
             let _scopeTotal = 0, _scopeKA = 0;
             (_sumRows || []).forEach(r => {

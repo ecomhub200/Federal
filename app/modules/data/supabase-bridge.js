@@ -45,8 +45,26 @@ CL.data.supabaseBridge = (function () {
     var SUMMARY_TTL_MS = 60000;
     var SUMMARY_CACHE_MAX = 50;
 
+    // Round 10 — normalize the cache key so callers passing equivalent specs
+    // with different key order or empty-array placeholders share a single
+    // cache slot. Without this, auto-load + injectFastDashboard + retry path
+    // each produce slightly different JSON → 3 fresh dashboard_summary calls
+    // per state change.
     function _summaryCacheKey(tier, value, filters) {
-        return tier + ':' + value + ':' + JSON.stringify(filters || {});
+        var norm = {};
+        var keys = Object.keys(filters || {}).sort();
+        for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            var v = filters[k];
+            if (v === null || v === undefined || v === '') continue;
+            if (Array.isArray(v) && v.length === 0) continue;
+            if (Array.isArray(v)) {
+                norm[k] = v.slice().sort();
+            } else {
+                norm[k] = v;
+            }
+        }
+        return (tier || '') + ':' + (value || '') + ':' + JSON.stringify(norm);
     }
 
     function _summaryCachePut(key, rows) {

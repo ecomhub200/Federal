@@ -147,6 +147,7 @@ CL.data.mapBridge = (function () {
         opts.signal = _abortController.signal;
 
         try {
+            // no-cache: live (per-viewport, bounds/zoom keyed)
             var rows = await window.crashLensClient.getViewportCrashes(bounds, zoom, opts);
             if (!Array.isArray(rows)) return;
 
