@@ -502,6 +502,17 @@ clicks hit `CL.data.cachedMatview` instantly. To add a new matview-backed tab:
 
 Diagnose with `CL.data.prewarm.stats()` and `CL.data.matviewCacheStats()`.
 
+### IMPORTANT: cache-key alignment
+
+When adding a new matview fetcher to both a tab loader AND `prewarm.js`,
+make sure the `cachedMatview(mvName, tier, value, fetcher, keyExtra)` 5th
+argument matches between the two call sites. Mismatched keys produce
+silent cache misses — the prewarm fetches the data, but the tab loader
+re-fetches it because the cache slot doesn't match.
+
+The Round 11.1 fix added this discipline for `mv_hotspots` (which uses
+`{ limit: topN }` as keyExtra). Watch for this when adding more matviews.
+
 ---
 
 ## Multi-State Data Onboarding

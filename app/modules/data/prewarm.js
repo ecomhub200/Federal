@@ -9,9 +9,11 @@
  *   - Each fetch goes through CL.data.cachedMatview, so when the user later
  *     clicks a tab, the matview lookup is an instant cache hit instead of
  *     a fresh 1-2 s RPC.
- *   - All fetches fire in parallel via Promise.allSettled — failures don't
- *     block other fetches, and we don't crash the app if one matview is
- *     missing on this state's instance.
+ *   - Fetches fire in 3-at-a-time waves (Promise.allSettled per wave) so the
+ *     self-hosted Supabase connection pool doesn't get saturated and starve
+ *     the user-visible dashboard_summary fetch. Failures don't block other
+ *     fetches, and we don't crash the app if one matview is missing on this
+ *     state's instance.
  *   - Debounced 800 ms after the last jurisdictionChanged event so rapid
  *     dropdown navigation (state → county → road type) only fires one batch.
  *   - Skipped if the user is already on a non-upload tab (they're driving,
@@ -62,8 +64,14 @@ CL.data = CL.data || {};
      */
     function _buildBatch(client, tier, value) {
         var batch = [];
-        var push = function (mvName, fetcher) {
-            batch.push({ mvName: mvName, fetcher: fetcher });
+        var push = function (mvName, fetcher, keyExtra, tierOverride, valueOverride) {
+            batch.push({
+                mvName: mvName,
+                fetcher: fetcher,
+                keyExtra: keyExtra,                  // optional — passed as cachedMatview's 5th arg
+                tier: tierOverride || tier,          // optional override (state-scoped fetchers)
+                value: valueOverride || value
+            });
         };
 
         // Dashboard / cross-tab
@@ -90,17 +98,31 @@ CL.data = CL.data || {};
                 return client.getAnalysisBreakdown(tier, value);
             });
         }
-        // Hot Spots
+        // Hot Spots — main matview (per tier/value, with topN keyExtra to match tab loader)
         if (typeof client.getHotspots === 'function') {
+            var topNEl = document.getElementById('hsTopN');
+            var topN = parseInt(topNEl && topNEl.value, 10) || 25;
             push('mv_hotspots', function () {
-                return client.getHotspots(tier, value, { limit: 1000 });
-            });
+                return client.getHotspots(tier, value, { limit: topN });
+            }, { limit: topN });   // keyExtra — must match the tab loader's cachedMatview call
         }
-        // Hot Spots — per-location factors (Round 7)
-        if (typeof client.getHotspotFactors === 'function') {
-            push('mv_hotspots_factors', function () {
-                return client.getHotspotFactors(tier, value);
-            });
+        // Hot Spots — top collision per location (STATE-SCOPED, not tier/value)
+        if (typeof client.getHotspotsTopCollision === 'function') {
+            var stateKey = (client.state || (typeof window.crashLensClient !== 'undefined' && window.crashLensClient.state) || '').toLowerCase();
+            if (stateKey) {
+                push('mv_hotspots_topcoll', function () {
+                    return client.getHotspotsTopCollision(stateKey);
+                }, undefined, /* tierOverride */ 'state', /* valueOverride */ stateKey);
+            }
+        }
+        // Hot Spots — per-location factor counts (STATE-SCOPED)
+        if (typeof client.getHotspotsFactors === 'function') {
+            var stateKey2 = (client.state || (typeof window.crashLensClient !== 'undefined' && window.crashLensClient.state) || '').toLowerCase();
+            if (stateKey2) {
+                push('mv_hotspots_factors', function () {
+                    return client.getHotspotsFactors(stateKey2);
+                }, undefined, /* tierOverride */ 'state', /* valueOverride */ stateKey2);
+            }
         }
         // Intersections
         if (typeof client.getIntersectionSummary === 'function') {
@@ -112,12 +134,6 @@ CL.data = CL.data || {};
         if (typeof client.getPedBikeBreakdowns === 'function') {
             push('mv_pedbike_breakdowns', function () {
                 return client.getPedBikeBreakdowns(tier, value);
-            });
-        }
-        // Fatal/Speed factor cross-tab (Round 7)
-        if (typeof client.getFactorYear === 'function') {
-            push('mv_factor_year', function () {
-                return client.getFactorYear(tier, value);
             });
         }
 
@@ -146,26 +162,37 @@ CL.data = CL.data || {};
         }
 
         var t0 = Date.now();
-        console.log('[Prewarm] kicking off ' + batch.length + ' parallel matview fetches for tier=' + tier + ' value=' + value);
+        console.log('[Prewarm] kicking off ' + batch.length + ' matview fetches in waves for tier=' + tier + ' value=' + value);
 
-        var promises = batch.map(function (item) {
-            return CL.data.cachedMatview(item.mvName, tier, value, item.fetcher)
-                .then(function () { _stats.hits++; return { mv: item.mvName, ok: true }; })
-                .catch(function (err) {
-                    _stats.misses++;
-                    console.warn('[Prewarm] ' + item.mvName + ' failed (non-fatal):', err && err.message);
-                    return { mv: item.mvName, ok: false, error: err && err.message };
+        // ROUND-11.1 — fire in 3-at-a-time waves instead of all-at-once. This
+        // avoids saturating the self-hosted Supabase connection pool, which
+        // throttled the concurrent dashboard_summary fetch to 14.5s in live
+        // testing. WAVE_SIZE leaves spare connections for the foreground summary.
+        var WAVE_SIZE = 3;
+        var results = [];
+        (async function () {
+            for (var i = 0; i < batch.length; i += WAVE_SIZE) {
+                var wave = batch.slice(i, i + WAVE_SIZE);
+                var wavePromises = wave.map(function (item) {
+                    return CL.data.cachedMatview(item.mvName, item.tier, item.value, item.fetcher, item.keyExtra)
+                        .then(function () { _stats.hits++; return { mv: item.mvName, ok: true }; })
+                        .catch(function (err) {
+                            _stats.misses++;
+                            console.warn('[Prewarm] ' + item.mvName + ' failed (non-fatal):', err && err.message);
+                            return { mv: item.mvName, ok: false, error: err && err.message };
+                        });
                 });
-        });
-
-        return Promise.allSettled(promises).then(function (results) {
+                var waveResults = await Promise.allSettled(wavePromises);
+                results = results.concat(waveResults);
+            }
             var elapsed = Date.now() - t0;
             _stats.lastRunMs = elapsed;
             _stats.lastBatchSize = batch.length;
             _stats.lastTier = tier + ':' + value;
             var ok = results.filter(function (r) { return r.value && r.value.ok; }).length;
-            console.log('[Prewarm] complete: ' + ok + '/' + batch.length + ' matviews warm in ' + elapsed + 'ms');
-        });
+            console.log('[Prewarm] complete: ' + ok + '/' + batch.length + ' matviews warm in ' + elapsed + 'ms (waves of ' + WAVE_SIZE + ')');
+        })();
+        return Promise.resolve();   // outer schedule() doesn't await; fire-and-forget
     }
 
     function schedule(tier, value) {
