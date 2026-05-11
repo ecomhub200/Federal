@@ -2873,6 +2873,157 @@ class CrashLensDataClient {
     return rows;
   }
 
+  // ─────────────────────────────────────────────────────────
+  //  ROUND 16 — Map metrics, state capabilities, AADT bulk-import,
+  //              scheduled-email transport helper.
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * mv_map_metrics — 18 per-factor crash counts (fatal, serious, ka_combined,
+   * pedestrian, bicycle, intersection, alcohol, speed, distracted,
+   * unrestrained, nighttime, motorcycle, animal, workzone, school_zone,
+   * guardrail, curves, weather) keyed on physical_juris_name / mpo_name /
+   * planning_district / dot_district. Drives the Map factor-chip parity rail.
+   *
+   * @param {object} opts { state, juris, mpo, pd, factor }
+   * @returns {Promise<Array|null>} matview rows
+   */
+  async getMapMetrics(opts) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    opts = opts || {};
+    const stateKey = (opts.state || this.state || '').toLowerCase();
+    const params = new URLSearchParams({ select: '*' });
+    if (stateKey) params.set('state', `eq.${stateKey}`);
+    if (opts.juris)  params.set('physical_juris_name', `eq.${opts.juris}`);
+    if (opts.mpo)    params.set('mpo_name', `eq.${opts.mpo}`);
+    if (opts.pd)     params.set('planning_district', `eq.${opts.pd}`);
+    if (opts.factor) params.set('factor', `eq.${opts.factor}`);
+    const url = `${this.supabaseUrl}/mv_map_metrics?${params.toString()}`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const resp = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(timer);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[DataClient] getMapMetrics failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * states.capabilities jsonb — drives the BLOCKED-UPSTREAM honest banners
+   * (Safety Focus cards, B/C severity cells, Magisterial District panels).
+   * Returns the raw capabilities object or null.
+   *
+   * @param {string} [state]
+   * @returns {Promise<object|null>}
+   */
+  async getStateCapabilities(state) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const stateKey = (state || this.state || '').toLowerCase();
+    if (!stateKey) return null;
+    const params = new URLSearchParams({
+      select: 'abbr,name,fips,capabilities',
+      or: `(abbr.ilike.${stateKey},name.ilike.${stateKey})`,
+    });
+    const url = `${this.supabaseUrl}/states?${params.toString()}`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+    };
+    try {
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) return null;
+      const rows = await resp.json();
+      return (rows && rows[0]) ? rows[0].capabilities : null;
+    } catch (e) {
+      console.warn('[DataClient] getStateCapabilities failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * aadt_bulk_import RPC — accepts a JSON array of AADT rows and bulk-inserts
+   * into aadt_lookup (idempotent via ON CONFLICT). Used by the paste-CSV
+   * import UI to bring AADT coverage from 10.8% → 80%+.
+   *
+   * @param {Array<object>} rows
+   * @returns {Promise<{submitted:number, inserted_or_updated:number, rejected:number}|null>}
+   */
+  async aadtBulkImport(rows) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { submitted: 0, inserted_or_updated: 0, rejected: 0 };
+    }
+    const url = `${this.supabaseUrl}/rpc/aadt_bulk_import`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ p_rows: rows }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      return await resp.json();
+    } catch (e) {
+      console.warn('[DataClient] aadtBulkImport failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * format_scheduled_report_email RPC — invoked from the Deno Edge Function
+   * to render a ready-to-send email payload (subject, body_html, body_text,
+   * to) from a queued row.
+   *
+   * @param {number|string} queueId
+   * @returns {Promise<object|null>}
+   */
+  async formatScheduledReportEmail(queueId) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    if (queueId == null) return null;
+    const url = `${this.supabaseUrl}/rpc/format_scheduled_report_email`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ p_queue_id: queueId }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      return await resp.json();
+    } catch (e) {
+      console.warn('[DataClient] formatScheduledReportEmail failed:', e.message);
+      return null;
+    }
+  }
+
   /** Health check — test Supabase connectivity */
   async healthCheck() {
     try {

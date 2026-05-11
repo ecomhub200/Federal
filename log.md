@@ -153,3 +153,16 @@ Cold-start TTI target: 12 s → 1.5 s. Warm reload target: 5.2 s → 1 s. Matche
 - Deferred to Round 13: Dashboard Census Subdivisions (CCD) table —
   needs TIGER subdivision boundary ingestion + spatial join. Crash Tree
   K/A in deep nodes — frontend tree-walker bug, requires investigation.
+
+## 2026-05-11 Round 16 — Map factor-chip parity + state capabilities + AADT bulk-import + Email Edge Function + Crash Tree §0
+- §0 Crash Tree severity walker (Round 15 carry-over): added a post-order recursive aggregator in `initCrashTreeFromMatview` (`app/index.html`) that propagates `k/a/b/c/o/K/A/B/C/O/ka/kaPct/unfilteredKA` up from children to every non-leaf node. Defensive against missing per-row severity columns in `mv_crash_tree`. KA values on D…FOCUS / facility-class children now reflect real counts instead of 0.
+- §2 data-client: 4 new methods on `CrashLensDataClient` (`assets/js/data-client.js`).
+  - `getMapMetrics({state,juris,mpo,pd,factor})` — REST GET `/mv_map_metrics`.
+  - `getStateCapabilities(state)` — REST GET `/states` with `or=(abbr.ilike,name.ilike)`.
+  - `aadtBulkImport(rows)` — RPC POST `/rpc/aadt_bulk_import`.
+  - `formatScheduledReportEmail(queueId)` — RPC POST `/rpc/format_scheduled_report_email`.
+- §3 Map factor-chip parity: `app/index.html` now renders a 13-chip rail (18 factors minus 5 hidden by DE capabilities) in `#mapFactorChips`, populated by `renderMapFactorChips()` and re-rendered on every Map-tab show and on `CL:tierChanged`. Each chip shows `total` + a fatal sub-count when k>0.
+- §4 BLOCKED-UPSTREAM honest banner: capability cache + `getActiveStateCapabilities()`, `applySafetyFocusCapabilityGates()` (drowsy/hitrun/lgtruck/young/senior → "—" + ⓘ tooltip badge), `applyInjuryBCCapabilityGate()` (kpiInjuryBC → "—" when both `has_severity_b` and `has_severity_c` are false). Hooks fire from `showTab('safety')` and after the Dashboard KPI strip render.
+- §5 AADT bulk-import UI: "📥 Import AADT" button next to "📈 ADT Data" on Hot Spots opens a modal with a paste-CSV textarea. `submitAadtImport()` parses, normalizes types, POSTs via `aadtBulkImport`, then re-renders hotspot rates.
+- §6 Email Edge Function: `supabase/functions/send_scheduled_emails/index.ts` — pulls due `email_send_queue` rows, calls `format_scheduled_report_email`, sends via SendGrid, then patches `sent_at` on success or increments `attempts` + records `error` on failure. Deploy with `supabase functions deploy send_scheduled_emails`.
+- Verification (manual): `crashLensClient.getMapMetrics()` returns rows; chip count ≥ 13 for DE; `getStateCapabilities()` reports `has_drowsy_flag=false`; Crash Tree D-node KA > 0.
