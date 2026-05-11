@@ -48513,6 +48513,135 @@ async function updateDashboardFromMatview(spec) {
 }
 window.updateDashboardFromMatview = updateDashboardFromMatview;
 
+// Round 21.1 §2 — F&S matview re-fetch with date filter applied. Hits
+// mv_fatal_factors + mv_speed_summary with crash_year=gte/lte, rebuilds
+// fatalSpeedingState.fatalFactorsRollup + speedSummaryRollup from the narrowed
+// rows, and re-paints. Mirrors §5.2 (Dashboard) and §5.4 (Intersections).
+// State-agnostic — keys on resolveTier() + crashLensClient.state.
+async function _refetchFSMatviewsWithDate(spec) {
+    if (!window.crashLensClient || !window.CL || !CL.data || !CL.data.supabaseBridge) return;
+    const dc = window.crashLensClient;
+    if (typeof CL.data.supabaseBridge.resolveTier !== 'function') return;
+    const t = CL.data.supabaseBridge.resolveTier();
+    if (!t || !t.tier) return;
+    const tierColMap = {
+        federal: null, state: null, region: 'dot_district', mpo: 'mpo_name',
+        planning_district: 'planning_district', county: 'planning_district',
+        city: 'physical_juris_name', city_town: 'physical_juris_name'
+    };
+    const tierCol = tierColMap[t.tier];
+    const buildParams = () => {
+        const p = new URLSearchParams({
+            state: 'eq.' + String(dc.state || '').toLowerCase(),
+            select: '*'
+        });
+        if (tierCol && t.value) p.set(tierCol, 'eq.' + t.value);
+        if (spec && spec.yearStart != null) p.append('crash_year', 'gte.' + spec.yearStart);
+        if (spec && spec.yearEnd   != null) p.append('crash_year', 'lte.' + spec.yearEnd);
+        return p.toString();
+    };
+    const headers = { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey };
+    let fatalFactors = [], speedSummary = [];
+    try {
+        const [fr, sr] = await Promise.all([
+            fetch(`${dc.supabaseUrl}/mv_fatal_factors?${buildParams()}`, { headers }),
+            fetch(`${dc.supabaseUrl}/mv_speed_summary?${buildParams()}`, { headers })
+        ]);
+        if (fr.ok) fatalFactors = await fr.json();
+        if (sr.ok) speedSummary = await sr.json();
+    } catch (e) {
+        console.warn('[FS] matview re-fetch failed:', e && e.message);
+        return;
+    }
+
+    // Rebuild fatalFactorsRollup from the narrowed rows. Mirrors the existing
+    // rebuild inside initFatalSpeedingFromMatview() so the cross-tab co-factor
+    // panels and the per-juris top factor map stay accurate.
+    if (Array.isArray(fatalFactors) && fatalFactors.length > 0) {
+        const rollup = {};
+        const NUMERIC_KEYS = [
+            'fatal_total', 'fatal_impaired', 'fatal_speed', 'fatal_distracted',
+            'fatal_unrestrained', 'fatal_nighttime', 'fatal_intersection',
+            'fatal_weather', 'fatal_animal',
+            'fatal_speed_impaired', 'fatal_night_speed', 'fatal_night_impaired',
+            'fatal_speed_unrestrained', 'fatal_speed_distracted',
+            'fatal_impaired_distracted',
+        ];
+        for (const r of fatalFactors) {
+            for (const k of NUMERIC_KEYS) {
+                rollup[k] = (rollup[k] || 0) + (Number(r[k]) || 0);
+            }
+        }
+        fatalSpeedingState.fatalFactorsRollup = rollup;
+        const SINGLE_FACTOR_COLS = {
+            fatal_impaired:     'impaired',
+            fatal_speed:        'speed',
+            fatal_distracted:   'distracted',
+            fatal_unrestrained: 'unrestrained',
+            fatal_nighttime:    'nighttime',
+            fatal_intersection: 'intersection',
+            fatal_weather:      'weather',
+            fatal_animal:       'animal',
+        };
+        let _topKey = null, _topVal = 0;
+        for (const [col, key] of Object.entries(SINGLE_FACTOR_COLS)) {
+            const v = Number(rollup[col] || 0);
+            if (v > _topVal) { _topVal = v; _topKey = key; }
+        }
+        if (fatalSpeedingState.fatalData) {
+            fatalSpeedingState.fatalData.jurisdictionTopFactor = _topKey;
+        }
+        const _byJurisFactors = {};
+        for (const r of fatalFactors) {
+            const j = String((r.physical_juris_name || '')).trim();
+            if (!j) continue;
+            if (!_byJurisFactors[j]) _byJurisFactors[j] = {};
+            for (const col of Object.keys(SINGLE_FACTOR_COLS)) {
+                _byJurisFactors[j][col] = (_byJurisFactors[j][col] || 0) + (Number(r[col]) || 0);
+            }
+        }
+        const _topByJuris = {};
+        for (const j of Object.keys(_byJurisFactors)) {
+            const cols = _byJurisFactors[j];
+            let tKey = null, tVal = 0;
+            for (const [col, key] of Object.entries(SINGLE_FACTOR_COLS)) {
+                const v = Number(cols[col] || 0);
+                if (v > tVal) { tVal = v; tKey = key; }
+            }
+            if (tKey) _topByJuris[j] = tKey;
+        }
+        if (fatalSpeedingState.fatalData) {
+            fatalSpeedingState.fatalData.topFactorByJuris = _topByJuris;
+        }
+    } else {
+        fatalSpeedingState.fatalFactorsRollup = null;
+        if (fatalSpeedingState.fatalData) {
+            fatalSpeedingState.fatalData.jurisdictionTopFactor = null;
+            fatalSpeedingState.fatalData.topFactorByJuris = null;
+        }
+    }
+
+    // Rebuild speedSummaryRollup from the narrowed rows.
+    if (Array.isArray(speedSummary) && speedSummary.length > 0) {
+        const sRoll = {};
+        for (const r of speedSummary) {
+            for (const k of Object.keys(r)) {
+                if (typeof r[k] === 'number') {
+                    sRoll[k] = (sRoll[k] || 0) + Number(r[k]);
+                }
+            }
+        }
+        fatalSpeedingState.speedSummaryRollup = sRoll;
+    } else {
+        fatalSpeedingState.speedSummaryRollup = null;
+    }
+
+    if (typeof updateFSDisplay === 'function') updateFSDisplay();
+    console.log('[FS] matview re-paint with spec:', spec,
+        '→ fatal:', fatalFactors.length, 'speed:', speedSummary.length);
+}
+window._refetchFSMatviewsWithDate = _refetchFSMatviewsWithDate;
+
 function applyFilters() {
     currentFilters.startDate = document.getElementById('filterStartDate').value || null;
     currentFilters.endDate = document.getElementById('filterEndDate').value || null;
@@ -51727,6 +51856,43 @@ async function _renderStateCoverageBanner() {
 }
 document.addEventListener('jurisdictionChanged', _renderStateCoverageBanner);
 window.addEventListener('crashtab:dashboard:shown', _renderStateCoverageBanner);
+
+// Round 20 §X8 (restored in 21.1 §3) — Dashboard CCD widget hide for states
+// that don't have CCD assignment ingested. Without this the widget renders
+// 7 zero rows + a NaN%-pie when the state-capability flag
+// has_ccd_assignment === false. Verified live: get_jurisdiction_breakdown
+// (p_state='delaware', p_tier='county', p_value='Kent County') returns
+// out_is_blocked_upstream:true; the caps row reports has_ccd_assignment:false.
+// State-agnostic — keys on the capability flag, not on any state literal.
+async function _hideDistrictWidgetIfUnsupported() {
+    try {
+        const dc = window.crashLensClient;
+        if (!dc || typeof dc.getStateCapabilities !== 'function') return false;
+        const caps = await dc.getStateCapabilities(String(dc.state || '').toLowerCase());
+        if (caps && caps.has_ccd_assignment === false) {
+            const widget = document.getElementById('districtMatrixWidget');
+            if (widget) {
+                widget.innerHTML = `
+                    <div class="card-title">🗺️ Crashes by Census Subdivisions</div>
+                    <div style="padding:.75rem .9rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--radius);color:#9a3412;font-size:.85rem">
+                        ⓘ Census-Subdivision (CCD) assignment is not yet ingested for this state.
+                        The breakdown will populate automatically once the TIGERweb spatial join is added to
+                        the ingest pipeline (<code>crashes.ccd_name</code>).
+                    </div>`;
+                widget.style.display = 'block';
+            }
+            ['chartDistrictTotal', 'chartDistrictSeverity', 'chartDistrictDoughnut', 'chartDistrictEPDO']
+                .forEach(id => { const c = document.getElementById(id); if (c) c.style.display = 'none'; });
+            const chartsEl = document.getElementById('districtMatrixCharts');
+            if (chartsEl) chartsEl.style.display = 'none';
+            return true;
+        }
+    } catch (_) { /* fall through */ }
+    return false;
+}
+window._hideDistrictWidgetIfUnsupported = _hideDistrictWidgetIfUnsupported;
+document.addEventListener('jurisdictionChanged', () => { _hideDistrictWidgetIfUnsupported(); });
+window.addEventListener('crashtab:dashboard:shown', () => { _hideDistrictWidgetIfUnsupported(); });
 
 // Factor-chip parity. Renders 18 factor chips minus those hidden by capabilities.
 const _MAP_FACTOR_DISPLAY = [
@@ -99807,7 +99973,7 @@ function setSfViewMode(mode) {
 }
 
 // Main orchestrator for the detail panel
-function updateSfDetailPanel(skipScroll) {
+async function updateSfDetailPanel(skipScroll) {
     if (sfDetailState.selectedLocations.length === 0) {
         const panel = document.getElementById('sfDetailPanel');
         if (panel) panel.classList.remove('visible');
@@ -99833,8 +99999,10 @@ function updateSfDetailPanel(skipScroll) {
     const titleEl = document.getElementById('sfDetailTitle');
     if (titleEl) titleEl.textContent = `Detailed Analysis: ${sfDetailState.selectedLocations.length} Location(s) - ${catConfig?.name || category}`;
 
-    // Aggregate and render
-    aggregateSfDetailData();
+    // Round 21.1 §4 — aggregateSfDetailData() is now async (matview fallback
+    // fires when sampleRows is empty). Await it so renderSfDetailContent()
+    // sees the hydrated state.
+    await aggregateSfDetailData();
     calculateSfCategoryBenchmarks();
     renderSfDetailContent();
 
@@ -99844,7 +100012,7 @@ function updateSfDetailPanel(skipScroll) {
 }
 
 // Aggregate crash data from selected locations within the active category
-function aggregateSfDetailData() {
+async function aggregateSfDetailData() {
     const category = safetyState.activeCategory;
     const catData = safetyState.data[category];
     if (!catData) return;
@@ -99885,6 +100053,84 @@ function aggregateSfDetailData() {
             vru: { pedestrian: 0, bicycle: 0 }
         };
     });
+
+    // Round 21.1 §4 — when per-row crashes are unavailable (matview-only
+    // aggregate tier with empty sampleRows), hydrate severity / EPDO / byYear
+    // totals from mv_safety_focus_locations so the detail panel doesn't
+    // render KA Rate=0 / EPDO=Total / sub-charts blank. State-agnostic —
+    // keys on the resolved tier + crashLensClient.state.
+    const _hasPerRow = sfDetailState.selectedLocations.some(route => {
+        const rd = catData.byRoute && catData.byRoute[route];
+        return rd && Array.isArray(rd.crashes) && rd.crashes.length > 0;
+    });
+    if (!_hasPerRow && window.crashLensClient && window.CL && CL.data
+        && CL.data.supabaseBridge
+        && typeof CL.data.supabaseBridge.resolveTier === 'function') {
+        const dc = window.crashLensClient;
+        const t = CL.data.supabaseBridge.resolveTier();
+        if (t && t.tier && t.value) {
+            const tierColMap = {
+                federal: null, state: null, region: 'dot_district', mpo: 'mpo_name',
+                planning_district: 'planning_district', county: 'planning_district',
+                city: 'physical_juris_name', city_town: 'physical_juris_name'
+            };
+            const tierCol = tierColMap[t.tier];
+            const params = new URLSearchParams({
+                state: 'eq.' + String(dc.state || '').toLowerCase(),
+                category: 'eq.' + category,
+                select: 'location_name,physical_juris_name,total,k,a,b,c,o,first_year,last_year'
+            });
+            if (tierCol && t.value) params.set(tierCol, 'eq.' + t.value);
+            try {
+                const resp = await fetch(`${dc.supabaseUrl}/mv_safety_focus_locations?${params.toString()}`, {
+                    headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
+                });
+                if (resp.ok) {
+                    const rows = await resp.json();
+                    const selected = new Set(sfDetailState.selectedLocations.map(r => String(r).trim()));
+                    rows.forEach(r => {
+                        const name = String(r.location_name || '').trim();
+                        if (!selected.has(name)) return;
+                        const rowTotal = Number(r.total) || 0;
+                        data.total += rowTotal;
+                        ['k','a','b','c','o'].forEach(s => {
+                            const v = Number(r[s]) || 0;
+                            data.severity[s.toUpperCase()] += v;
+                        });
+                        if (data.byLocation[name]) {
+                            data.byLocation[name].total += rowTotal;
+                            ['k','a','b','c','o'].forEach(s => {
+                                data.byLocation[name].severity[s.toUpperCase()] += Number(r[s]) || 0;
+                            });
+                        }
+                        // Synthesize byYear from first_year..last_year (distributes evenly).
+                        // This is a rough approximation — mv_safety_focus_locations doesn't
+                        // carry per-year breakdowns — but it lets the Yearly Trend chart
+                        // render rather than showing "No data available".
+                        if (r.first_year && r.last_year) {
+                            const span = Math.max(1, r.last_year - r.first_year + 1);
+                            const perYear = Math.round(rowTotal / span);
+                            for (let y = r.first_year; y <= r.last_year; y++) {
+                                data.byYear[y] = data.byYear[y] || { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+                                data.byYear[y].total += perYear;
+                            }
+                        }
+                    });
+                    data.epdo = (typeof calcEPDO === 'function')
+                        ? calcEPDO(data.severity)
+                        : (data.severity.K * 462 + data.severity.A * 62
+                            + data.severity.B * 12 + data.severity.C * 5 + data.severity.O);
+                    console.log('[SafetyDetail] matview fallback hydrated', rows.length,
+                        'rows for', category, '→ total:', data.total,
+                        'K:', data.severity.K, 'A:', data.severity.A, 'EPDO:', data.epdo);
+                    sfDetailState.aggregatedData = data;
+                    return;   // skip the per-row loop below
+                }
+            } catch (e) {
+                console.warn('[SafetyDetail] matview fallback failed:', e && e.message);
+            }
+        }
+    }
 
     // Iterate selected locations from the category's byRoute data
     sfDetailState.selectedLocations.forEach(route => {
@@ -108177,6 +108423,32 @@ function processFSData() {
         fatalSpeedingState.source === 'supabase' ||
         !(crashState.sampleRows && crashState.sampleRows.length > 0);
     if (_fsSupabaseMode) {
+        // Round 21.1 §2 — replace the legacy "filter unavailable" toast with a
+        // real matview re-fetch so the F&S date inputs actually narrow the
+        // data at aggregate tiers. mv_fatal_factors + mv_speed_summary both
+        // accept crash_year=gte/lte. State-agnostic; keys on the resolved tier.
+        if (typeof _refetchFSMatviewsWithDate === 'function') {
+            const spec = (typeof window._readGlobalFilterSpec === 'function')
+                ? window._readGlobalFilterSpec()
+                : { yearStart: null, yearEnd: null, severities: null };
+            // Override with F&S-tab-local date inputs if set — these are the
+            // primary inputs the user interacts with on this tab.
+            try {
+                const sd = document.getElementById('fsStartDate')?.value;
+                const ed = document.getElementById('fsEndDate')?.value;
+                if (sd) {
+                    const sy = new Date(sd).getFullYear();
+                    if (Number.isFinite(sy)) spec.yearStart = sy;
+                }
+                if (ed) {
+                    const ey = new Date(ed).getFullYear();
+                    if (Number.isFinite(ey)) spec.yearEnd = ey;
+                }
+            } catch (e) { /* non-fatal */ }
+            _refetchFSMatviewsWithDate(spec);
+            return;
+        }
+        // Legacy fallback only when the helper hasn't loaded yet.
         if (typeof showFSFilterUnavailableToast === 'function') {
             showFSFilterUnavailableToast();
         }
@@ -123379,7 +123651,11 @@ function signal_autoPopulateWarrant7() {
             const tierCol = tierColMap[t.tier];
             const params = new URLSearchParams({
                 state: 'eq.' + String(dc.state || '').toLowerCase(),
-                select: 'intersection_name,total,k,a,collision_type,crash_year',
+                // Round 21.1 §1 — column list aligned with mv_intersection_summary
+                // shape (intersection_name lives on mv_hotspots, NOT this view).
+                // Verified live: state, planning_district, intersection_type,
+                // traffic_control_type, collision_type, crash_year, total, k, a, b, c, o, ka, epdo.
+                select: 'intersection_type,traffic_control_type,collision_type,total,k,a,b,c,o,crash_year',
                 limit: '20000'
             });
             if (tierCol && t.value) params.set(tierCol, 'eq.' + t.value);
@@ -143455,7 +143731,14 @@ function pointInFeature(lng, lat, feature) {
  * Compute district-level crash statistics
  * Assigns each crash to a district using point-in-polygon
  */
-function computeDistrictCrashStatistics(geojson, jurisdictionId) {
+async function computeDistrictCrashStatistics(geojson, jurisdictionId) {
+    // Round 20 §X8 (restored in 21.1 §3) — short-circuit when capability flag
+    // forbids CCD assignment. The widget is repainted as a BLOCKED-UPSTREAM
+    // banner; skip the entire point-in-polygon pass on hidden data.
+    if (typeof _hideDistrictWidgetIfUnsupported === 'function'
+        && await _hideDistrictWidgetIfUnsupported()) {
+        return;
+    }
     // Round 21 §11.6 — short-circuit when the widget is hidden by the tier
     // gate. The matrix is only shown for county/city tiers; at higher tiers
     // it's display:none, so the point-in-polygon pass would burn CPU on data
@@ -144301,6 +144584,13 @@ async function refreshMagisterialDistrictCache() {
  * Pure render function - does NOT trigger any data loading
  */
 async function renderDistrictMatrixWidget() {
+    // Round 20 §X8 (restored in 21.1 §3) — short-circuit when the state's
+    // capability flag forbids CCD assignment. The helper paints a
+    // BLOCKED-UPSTREAM banner inline; nothing else should run on this widget.
+    if (typeof _hideDistrictWidgetIfUnsupported === 'function'
+        && await _hideDistrictWidgetIfUnsupported()) {
+        return;
+    }
     const widget = document.getElementById('districtMatrixWidget');
     const loadingEl = document.getElementById('districtMatrixLoading');
     const errorEl = document.getElementById('districtMatrixError');
