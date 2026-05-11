@@ -98,4 +98,39 @@
         // should already be present, but fall back to DOMContentLoaded.
         document.addEventListener('DOMContentLoaded', _installChartGuard);
     }
+
+    // ---------------------------------------------------------------
+    // Round 19 §7 — opt-in development-mode tracker for residual
+    // `new Chart(ctx, ...)` callsites that bypass ChartRegistry.create().
+    // Enable with `window.__DEV_TRACK_DIRECT_CHARTS = true; location.reload();`
+    // to surface direct callsites in DevTools (with a stack trace) so they
+    // can be refactored to ChartRegistry over time. No-op by default.
+    // ---------------------------------------------------------------
+    function _installDevTracker() {
+        if (!global.__DEV_TRACK_DIRECT_CHARTS) return;
+        if (typeof global.Chart === 'undefined') return;
+        if (global.Chart.__round19DevTracked) return;
+        const _Inner = global.Chart;
+        function TrackedChart(ctxOrCanvas, config) {
+            try {
+                console.warn('[ChartRegistry] DIRECT new Chart() — should use ChartRegistry.create()');
+                console.trace();
+            } catch (e) { /* never block */ }
+            return new _Inner(ctxOrCanvas, config);
+        }
+        TrackedChart.prototype = _Inner.prototype;
+        Object.setPrototypeOf(TrackedChart, _Inner);
+        for (const k of Object.keys(_Inner)) {
+            try { TrackedChart[k] = _Inner[k]; } catch (e) { /* ignore */ }
+        }
+        TrackedChart.__round19DevTracked = true;
+        TrackedChart.__round18Wrapped = true;
+        global.Chart = TrackedChart;
+        console.log('[ChartRegistry] DEV tracker on — direct new Chart() calls will warn + trace.');
+    }
+    if (typeof Chart !== 'undefined') {
+        _installDevTracker();
+    } else {
+        document.addEventListener('DOMContentLoaded', _installDevTracker);
+    }
 })(window);

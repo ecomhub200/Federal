@@ -24,6 +24,40 @@
     const _subscribers = new Map();   // key: tabName → callback(spec, changedKeys)
     const _previousSpec = { ...FILTER_SPEC };
 
+    // Round 19 §4 — persist filter spec to localStorage so a page reload keeps
+    // the user's date range / road type / severity selection. State-agnostic:
+    // storage key has no jurisdiction literals; severity Set is serialized to
+    // an array for JSON safety.
+    const STORAGE_KEY = 'crashlens_filter_spec_v1';
+
+    (function _loadFromStorage() {
+        try {
+            const raw = (typeof localStorage !== 'undefined') ? localStorage.getItem(STORAGE_KEY) : null;
+            if (!raw) return;
+            const saved = JSON.parse(raw);
+            for (const k of Object.keys(saved)) {
+                if (!(k in FILTER_SPEC)) continue;
+                if (k === 'severity' && Array.isArray(saved[k])) {
+                    FILTER_SPEC[k] = new Set(saved[k]);
+                } else {
+                    FILTER_SPEC[k] = saved[k];
+                }
+            }
+            console.log('[FilterEngine] restored from storage');
+        } catch (e) { /* ignore corrupted state */ }
+    })();
+
+    function _persist() {
+        try {
+            if (typeof localStorage === 'undefined') return;
+            const serializable = {
+                ...FILTER_SPEC,
+                severity: [...FILTER_SPEC.severity]
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+        } catch (e) { /* ignore quota errors */ }
+    }
+
     /** Update one or more fields, fire all subscribers with the changed keys. */
     function setFilter(updates) {
         const changedKeys = [];
@@ -43,6 +77,7 @@
             catch (e) { console.warn('[FilterEngine] subscriber "' + tab + '" failed:', e && e.message); }
         });
         Object.assign(_previousSpec, FILTER_SPEC);
+        _persist();
     }
 
     /** Read the current spec (shallow copy of all values). */
@@ -76,6 +111,11 @@
             location_type: null, min_crashes: null,
             group_by: 'route', traffic_control: null, people_injury_type: null
         });
+        // Round 19 §4 — also wipe persisted storage so the next page load
+        // genuinely starts fresh (not just the in-memory spec).
+        try {
+            if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY);
+        } catch (e) { /* ignore */ }
     }
 
     /** Helper: filter a row array by the active spec, client-side. */
