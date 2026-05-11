@@ -108970,7 +108970,6 @@ async function _fsShouldHideBC() {
     return _fsHideBCCache;
 }
 window.addEventListener('jurisdictionChanged', () => { _fsHideBCCache = null; });
-document.addEventListener('jurisdictionChanged', () => { _hideDistrictWidgetIfUnsupported(); });
 
 function _fsRenderBCBanner(beforeEl) {
     if (!beforeEl) return;
@@ -143339,7 +143338,7 @@ function updateDistrictStatisticsUI() {
  *   federal / state / region → "Crashes by County"
  *   mpo                      → "Crashes by County within <MPO>"
  *   planning_district        → "Crashes by County within <PD>"
- *   county                   → "Crashes by Magisterial District" (CCD or BLOCKED-UPSTREAM banner)
+ *   county                   → "Crashes by Magisterial District" (client-side TIGER fallback when CCD is unwired)
  *   city / town              → "Host Jurisdiction" (single host-county card)
  *
  * Backed by the get_jurisdiction_breakdown RPC. State-agnostic.
@@ -143382,13 +143381,10 @@ async function renderMagisterialDistricts() {
         return true;
     }
 
-    // BLOCKED-UPSTREAM sentinel row at county tier when CCD ingest hasn't landed.
+    // Drop BLOCKED-UPSTREAM sentinel rows so the client-side TIGER fallback can
+    // populate the magisterial-district matrix instead of showing a blocker.
     if (Array.isArray(rows) && rows.length === 1 && rows[0].is_blocked_upstream) {
-        container.innerHTML = '<div style="padding:.75rem;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--radius);font-size:.85rem">'
-            + '⚠️ Magisterial-district (CCD) breakdown is not yet wired for this jurisdiction. '
-            + 'It requires a TIGERweb spatial join during data ingest. Once <code>crashes.ccd_name</code> '
-            + 'is populated, the cards will appear automatically.</div>';
-        return true;
+        rows = [];
     }
 
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -143850,47 +143846,10 @@ async function refreshMagisterialDistrictCache() {
 }
 
 /**
- * Round 20 §X8 — when the active state's source data hasn't been spatial-joined
- * to Census County Subdivisions (CCDs / magisterial districts), the
- * client-side TIGER-polygon join yields all-zero rows + NaN% pies. Replace the
- * widget with a single BLOCKED-UPSTREAM banner so the dashboard doesn't expose
- * an empty surface.
- */
-async function _hideDistrictWidgetIfUnsupported() {
-    try {
-        const dc = window.crashLensClient;
-        if (!dc || typeof dc.getStateCapabilities !== 'function') return false;
-        const caps = await dc.getStateCapabilities((dc.state || 'delaware').toLowerCase());
-        if (caps && caps.has_ccd_assignment === false) {
-            const widget = document.getElementById('districtMatrixWidget');
-            if (widget) {
-                widget.innerHTML = `
-                    <div class="card-title">🗺️ Crashes by Census Subdivisions</div>
-                    <div style="padding:.75rem .9rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--radius);color:#9a3412;font-size:.85rem">
-                        ⓘ Census-Subdivision (CCD) assignment is not yet ingested for this state.
-                        The breakdown will populate automatically once the TIGERweb spatial join is added to
-                        the ingest pipeline (<code>crashes.ccd_name</code>).
-                    </div>`;
-                widget.style.display = 'block';
-            }
-            ['chartDistrictTotal', 'chartDistrictSeverity', 'chartDistrictDoughnut', 'chartDistrictEPDO']
-                .forEach(id => { const c = document.getElementById(id); if (c) c.style.display = 'none'; });
-            const chartsEl = document.getElementById('districtMatrixCharts');
-            if (chartsEl) chartsEl.style.display = 'none';
-            return true;
-        }
-    } catch (_) { /* fall through */ }
-    return false;
-}
-
-/**
  * Render the district matrix widget with current data
  * Pure render function - does NOT trigger any data loading
  */
 async function renderDistrictMatrixWidget() {
-    // Round 20 §X8 — short-circuit when the state lacks CCD assignment.
-    if (await _hideDistrictWidgetIfUnsupported()) return;
-
     const widget = document.getElementById('districtMatrixWidget');
     const loadingEl = document.getElementById('districtMatrixLoading');
     const errorEl = document.getElementById('districtMatrixError');
