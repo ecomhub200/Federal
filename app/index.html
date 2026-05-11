@@ -13154,6 +13154,26 @@ Search across traffic safety standards with AI-powered retrieval. Select a locat
 </p>
 </div>
 
+<!-- Round 19 §6 — Knowledge corpus embedding workflow. Pending chunks live
+     in knowledge_corpus_pending; they need 1536-dim embeddings before
+     pgvector RAG can find them. Client-side OpenAI call → embed_pending_chunks RPC. -->
+<details class="card" style="margin-bottom:1rem;padding:.75rem 1rem;background:#fefce8;border:1px solid #facc15" id="dkCorpusEmbedPanel">
+  <summary style="font-weight:600;color:#854d0e;cursor:pointer">⚙️ Knowledge Corpus Embedding (Admin)</summary>
+  <div style="margin-top:.6rem;font-size:.85rem;color:#475569">
+    <p style="margin:.25rem 0">
+      <span id="corpusPendingCount" style="font-weight:600;color:#854d0e">…</span> chunks pending. Embed them so Domain Knowledge RAG can return relevant standards content.
+    </p>
+    <p style="margin:.25rem 0;font-size:.75rem;color:#64748b">
+      Uses your stored OpenAI API key (header) with <code>text-embedding-3-small</code> (1536 dims). Cost ≈ $0.00001/12 chunks.
+    </p>
+    <div style="display:flex;gap:.5rem;align-items:center;margin-top:.5rem">
+      <button onclick="embedPendingCorpus()" id="embedCorpusBtn" class="btn btn-primary btn-sm">📚 Embed pending chunks</button>
+      <button onclick="loadCorpusCounts()" class="btn btn-secondary btn-sm">🔄 Refresh count</button>
+    </div>
+    <div id="corpusEmbedResult" style="margin-top:.6rem;font-size:.85rem"></div>
+  </div>
+</details>
+
 <!-- Location Selection Bar (Improved - Similar to CMF Tab) -->
 <div class="card" style="margin-bottom:1rem;padding:1rem;background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);border:2px solid #22c55e">
 
@@ -20784,33 +20804,59 @@ function safeFlyToBounds(map, bounds, options) {
     }
 }
 
-// Hard-fallback state-center lookup table. Keeping it data-keyed (state slug)
-// rather than per-state branches so onboarding a new state is an INSERT, not
-// a code edit. A future round can move this into Supabase states.config_json.
-const _STATE_CENTROID_FALLBACK = {
-    'delaware':  [39.0, -75.5],
-    'virginia':  [37.5, -78.7],
-    'colorado':  [39.0, -105.5],
-    'maryland':  [39.0, -76.7],
-    'new_jersey':[40.2, -74.7],
-    'pennsylvania':[40.9, -77.8]
-};
+// Round 19 §3 — state centroid loader reads from states.capabilities.center
+// in Supabase. Adding a new state is an INSERT, no JS edit required.
+// The Round 18 JS-constant fallback is retired except for the legacy
+// statesConfig path (kept for offline / pre-init callsites).
+const _stateCenterCache = new Map();   // norm-slug → [lat,lon] | null
 
-function getStateCenter(stateKey) {
+async function getStateCenter(stateKey) {
     if (!stateKey) return null;
     const norm = String(stateKey).toLowerCase().replace(/\s+/g, '_');
+    if (_stateCenterCache.has(norm)) return _stateCenterCache.get(norm);
+    // Try legacy in-memory statesConfig first (sync, no network)
     try {
         const sc = window.crashLensClient && window.crashLensClient.statesConfig;
-        if (sc && sc[norm] && Array.isArray(sc[norm].center)) return sc[norm].center;
+        if (sc && sc[norm] && Array.isArray(sc[norm].center) && sc[norm].center.length === 2) {
+            _stateCenterCache.set(norm, sc[norm].center);
+            return sc[norm].center;
+        }
     } catch (e) { /* ignore */ }
-    return _STATE_CENTROID_FALLBACK[norm] || null;
+    // Then DB → states.capabilities.center
+    try {
+        if (window.crashLensClient && typeof window.crashLensClient.getStateCapabilities === 'function') {
+            const caps = await window.crashLensClient.getStateCapabilities(norm);
+            const center = (caps && Array.isArray(caps.center) && caps.center.length === 2) ? caps.center : null;
+            _stateCenterCache.set(norm, center);
+            return center;
+        }
+    } catch (e) { /* ignore */ }
+    _stateCenterCache.set(norm, null);
+    return null;
 }
+
+// Sync helper for callsites that can't await (initial map paint). Returns
+// the cached value if getStateCenter() has already resolved, else null.
+function getStateCenterSync(stateKey) {
+    if (!stateKey) return null;
+    const norm = String(stateKey).toLowerCase().replace(/\s+/g, '_');
+    return _stateCenterCache.has(norm) ? _stateCenterCache.get(norm) : null;
+}
+
+// Prime the cache at boot for the active state so sync callsites work.
+(async function _primeStateCenter() {
+    try {
+        const stateKey = (window.crashLensClient && window.crashLensClient.state) || 'delaware';
+        await getStateCenter(stateKey);
+    } catch (e) { /* ignore */ }
+})();
 
 // Expose as globals (used by FilterEngine subscribers + tier handlers)
 window.safeFlyTo = safeFlyTo;
 window.safeFitBounds = safeFitBounds;
 window.safeFlyToBounds = safeFlyToBounds;
 window.getStateCenter = getStateCenter;
+window.getStateCenterSync = getStateCenterSync;
 
 // STATE_EPDO_WEIGHTS now defined in modules/core/constants.js
 const STATE_EPDO_WEIGHTS = CL.core.constants.STATE_EPDO_WEIGHTS;
@@ -21358,16 +21404,20 @@ async function handleTierChange(tier) {
                     }
                     if (!flown && typeof getStateCenter === 'function') {
                         const stateKey = (window.crashLensClient && window.crashLensClient.state) || '';
-                        const center = getStateCenter(stateKey);
+                        // Round 19 §3 — getStateCenter is now async (DB-driven via
+                        // states.capabilities.center). Try sync cache first, then await.
+                        let center = (typeof getStateCenterSync === 'function') ? getStateCenterSync(stateKey) : null;
+                        if (!center) center = await getStateCenter(stateKey);
                         if (center) safeFlyTo(crashMap, center, 7, { duration: 1.2 });
                     }
                 }
             } else if (crashMap && typeof getStateCenter === 'function') {
                 // Round 18 §3 — no BoundaryService available; still need to leave
                 // the previous tier's centroid (could be a city NaN), so fall
-                // back to the state centroid table.
+                // back to the state centroid (Round 19 §3 — DB-driven).
                 const stateKey = (window.crashLensClient && window.crashLensClient.state) || '';
-                const center = getStateCenter(stateKey);
+                let center = (typeof getStateCenterSync === 'function') ? getStateCenterSync(stateKey) : null;
+                if (!center) center = await getStateCenter(stateKey);
                 if (center) safeFlyTo(crashMap, center, 7, { duration: 1.2 });
             }
         } else if (tier === 'county') {
@@ -49189,6 +49239,13 @@ function resetFilters() {
     currentFilters.intersection = null;
     currentFilters.district = null;
     currentFilters.severity = ['K','A','B','C','O'];
+    // Round 19 §4 — also clear FilterEngine spec + persisted storage so a
+    // reload genuinely starts fresh and the global subscribers see defaults.
+    try {
+        if (window.FilterEngine && typeof window.FilterEngine.reset === 'function') {
+            window.FilterEngine.reset();
+        }
+    } catch (e) { /* ignore */ }
     updateDashboard();
     if (crashMap) updateMapDisplay();
 }
@@ -86155,6 +86212,9 @@ function initDomainKnowledge() {
 
     if (dkState.initialized) return;
 
+    // Round 19 §6 — refresh the corpus-pending counter once the tab loads.
+    try { if (typeof loadCorpusCounts === 'function') loadCorpusCounts(); } catch (e) { /* non-fatal */ }
+
     // Initialize Location Type Selector (if not already created)
     const typeSelector = document.getElementById('dkLocationTypeSelector');
     if (typeSelector && !typeSelector.hasChildNodes()) {
@@ -87319,6 +87379,106 @@ function buildDKContext(question) {
     };
 
     return context;
+}
+
+// ─────────────────────────────────────────────────────────
+// Round 19 §6 — Knowledge corpus embedding workflow.
+// Reads pending chunks → batched OpenAI embeddings → embed_pending_chunks RPC.
+// State-agnostic: the RPC keys on the row's existing state column. After this
+// runs once, the 12 starter chunks (MUTCD Warrants, AASHTO SSD, HSM EB/CMF,
+// DelDOT edge-lines / speed studies) become searchable via pgvector.
+// ─────────────────────────────────────────────────────────
+function _dkResolveOpenAIKey() {
+    try {
+        if (typeof getStoredOpenAIKey === 'function') {
+            const k = getStoredOpenAIKey();
+            if (k) return k;
+        }
+    } catch (e) { /* ignore */ }
+    return (typeof localStorage !== 'undefined' ? localStorage.getItem('openaiApiKey') : null)
+        || (typeof localStorage !== 'undefined' ? localStorage.getItem('ad_openai_key') : null)
+        || null;
+}
+
+async function loadCorpusCounts() {
+    const el = document.getElementById('corpusPendingCount');
+    if (!el) return;
+    el.textContent = '…';
+    try {
+        const dc = window.crashLensClient;
+        if (!dc || typeof dc.listPendingCorpusChunks !== 'function') {
+            el.textContent = 'unavailable';
+            return;
+        }
+        const rows = await dc.listPendingCorpusChunks({ limit: 1000 });
+        el.textContent = (rows && rows.length != null) ? rows.length.toLocaleString() : '?';
+    } catch (e) {
+        el.textContent = '?';
+    }
+}
+
+async function embedPendingCorpus() {
+    const btn = document.getElementById('embedCorpusBtn');
+    const resultEl = document.getElementById('corpusEmbedResult');
+    if (!resultEl) return;
+    const apiKey = _dkResolveOpenAIKey();
+    if (!apiKey) {
+        resultEl.innerHTML = '<span style="color:#dc2626">⚠️ Configure an OpenAI API key in the header first (used for embeddings).</span>';
+        return;
+    }
+    const dc = window.crashLensClient;
+    if (!dc || typeof dc.listPendingCorpusChunks !== 'function' || typeof dc.embedPendingChunks !== 'function') {
+        resultEl.innerHTML = '<span style="color:#dc2626">⚠️ Data client missing embed RPCs — refresh and retry.</span>';
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Embedding…'; }
+    resultEl.innerHTML = '<span style="color:#0369a1">Fetching pending chunks…</span>';
+    try {
+        const pending = await dc.listPendingCorpusChunks({ limit: 500 });
+        if (!Array.isArray(pending) || pending.length === 0) {
+            resultEl.innerHTML = '<span style="color:#475569">ℹ️ No pending chunks.</span>';
+            return;
+        }
+        const BATCH = 100;
+        const embeddings = [];
+        for (let i = 0; i < pending.length; i += BATCH) {
+            const batch = pending.slice(i, i + BATCH);
+            resultEl.innerHTML = `<span style="color:#0369a1">Embedding ${i + 1}–${Math.min(i + BATCH, pending.length)} of ${pending.length}…</span>`;
+            const resp = await fetch('https://api.openai.com/v1/embeddings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+                body: JSON.stringify({
+                    model: 'text-embedding-3-small',
+                    input: batch.map(c => c.chunk_text || '')
+                })
+            });
+            if (!resp.ok) {
+                const errText = await resp.text().catch(() => '');
+                throw new Error('OpenAI embeddings failed: HTTP ' + resp.status + ' ' + errText.slice(0, 200));
+            }
+            const data = await resp.json();
+            (data.data || []).forEach((d, j) => {
+                if (Array.isArray(d.embedding) && batch[j]) {
+                    embeddings.push({ id: batch[j].id, embedding: d.embedding });
+                }
+            });
+        }
+        if (embeddings.length === 0) {
+            resultEl.innerHTML = '<span style="color:#dc2626">⚠️ No embeddings generated.</span>';
+            return;
+        }
+        resultEl.innerHTML = `<span style="color:#0369a1">Submitting ${embeddings.length} embeddings to Supabase…</span>`;
+        const submit = await dc.embedPendingChunks(embeddings);
+        if (!submit) throw new Error('embed_pending_chunks returned null');
+        resultEl.innerHTML = `<span style="color:#065f46;font-weight:600">✅ Submitted ${submit.submitted ?? embeddings.length} • Inserted into corpus: ${submit.inserted ?? '?'}</span>`;
+        await loadCorpusCounts();
+    } catch (e) {
+        const safeMsg = String(e && e.message || e).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+        resultEl.innerHTML = `<span style="color:#dc2626">❌ Failed: ${safeMsg}</span>`;
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📚 Embed pending chunks'; }
+    }
 }
 
 // Round 15 §5 — pgvector helpers for the knowledge_corpus RAG path.
@@ -160816,6 +160976,134 @@ function signDef_exportPDF() {
         }
     });
 
+    // §2.6 Round 19 §8 — Safety Focus subscriber. mv_safety_categories ignores
+    // the date filter; the new per-year companion mv_safety_categories_yearly
+    // lets us narrow on a year window. State-agnostic: tier+state come from
+    // the supabaseBridge / FilterEngine, never a state literal.
+    async function _r19LoadSafetyCategoriesWithFilter(spec) {
+        const client = window.crashLensClient;
+        if (!client || !client.supabaseUrl || !client.supabaseKey) return null;
+        const stateKey = (typeof _activeStateKey === 'function')
+            ? _activeStateKey()
+            : (client.state || '').toLowerCase();
+        if (!stateKey) return null;
+        const t = (CL && CL.data && CL.data.supabaseBridge && typeof CL.data.supabaseBridge.resolveTier === 'function')
+            ? CL.data.supabaseBridge.resolveTier()
+            : { tier: 'state', value: null };
+        const yearActive = (spec.year_start != null || spec.year_end != null);
+        if (!yearActive) {
+            // No date filter — use the original RPC path (which is cached).
+            try {
+                if (typeof client.getSafetyCategories === 'function') {
+                    return await client.getSafetyCategories(t.tier, t.value, {});
+                }
+            } catch (e) { /* fall through */ }
+            return null;
+        }
+        // Date filter active — query the yearly companion directly.
+        const params = new URLSearchParams({
+            state: 'eq.' + stateKey,
+            select: '*',
+            limit: '5000'
+        });
+        if (spec.year_start != null) params.append('crash_year', 'gte.' + spec.year_start);
+        if (spec.year_end   != null) params.append('crash_year', 'lte.' + spec.year_end);
+        if (t.tier === 'county' && t.value) {
+            const canonical = String(t.value).endsWith(' County') ? t.value : t.value + ' County';
+            params.set('jurisdiction_county', 'eq.' + canonical);
+        } else if (t.tier === 'mpo' && t.value) {
+            params.set('jurisdiction_mpo', 'eq.' + t.value);
+        } else if (t.tier === 'planning_district' && t.value) {
+            params.set('jurisdiction_pd', 'eq.' + t.value);
+        } else if (t.tier === 'region' && t.value) {
+            params.set('dot_district', 'eq.' + t.value);
+        }
+        const url = client.supabaseUrl + '/mv_safety_categories_yearly?' + params.toString();
+        try {
+            const resp = await fetch(url, {
+                headers: { 'apikey': client.supabaseKey, 'Authorization': 'Bearer ' + client.supabaseKey }
+            });
+            if (!resp.ok) {
+                console.warn('[Round 19 §8] mv_safety_categories_yearly HTTP ' + resp.status);
+                return null;
+            }
+            const rows = await resp.json();
+            if (!Array.isArray(rows)) return null;
+            // Fold (category × all_years_in_window) → per-category aggregate
+            // shape that matches getSafetyCategories return value.
+            const byCategory = {};
+            for (const r of rows) {
+                const c = r.category;
+                if (!c) continue;
+                if (!byCategory[c]) {
+                    byCategory[c] = { category: c, total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, crash_count: 0, k: 0, a: 0, b: 0, c: 0, o: 0, epdo: 0 };
+                }
+                const acc = byCategory[c];
+                const total = Number(r.total ?? r.crash_count ?? 0);
+                acc.total += total;
+                acc.crash_count += total;
+                acc.K += Number(r.K ?? r.k ?? 0);
+                acc.A += Number(r.A ?? r.a ?? 0);
+                acc.B += Number(r.B ?? r.b ?? 0);
+                acc.C += Number(r.C ?? r.c ?? 0);
+                acc.O += Number(r.O ?? r.o ?? 0);
+                acc.k += Number(r.k ?? r.K ?? 0);
+                acc.a += Number(r.a ?? r.A ?? 0);
+                acc.b += Number(r.b ?? r.B ?? 0);
+                acc.c += Number(r.c ?? r.C ?? 0);
+                acc.o += Number(r.o ?? r.O ?? 0);
+                acc.epdo += Number(r.epdo ?? 0);
+            }
+            return byCategory;
+        } catch (e) {
+            console.warn('[Round 19 §8] mv_safety_categories_yearly failed:', e && e.message);
+            return null;
+        }
+    }
+
+    FilterEngine.subscribe('safety-focus', async (spec, changedKeys) => {
+        if (!changedKeys.some(k => ['year_start','year_end','date_start','date_end'].includes(k))) return;
+        try {
+            const cats = await _r19LoadSafetyCategoriesWithFilter(spec);
+            if (!cats) return;
+            // Re-paint Safety Focus cards using the existing renderer.
+            // Map matview shape → safetyState.data shape, mirroring
+            // _loadSafetyFromMatview() in app/index.html.
+            if (typeof safetyState === 'undefined' || !safetyState || !safetyState.data) return;
+            Object.keys(safetyState.data).forEach(cat => {
+                safetyState.data[cat] = {
+                    crashes: [], byRoute: {},
+                    severity: { K: 0, A: 0, B: 0, C: 0, O: 0 },
+                    bySubcategory: {},
+                    total: 0
+                };
+            });
+            const SAFETY_CARD_MAP = {
+                'curves':'curves','school':'school','guardrail':'guardrail',
+                'roaddeparture':'roaddeparture','pedestrian':'pedestrian','bicycle':'bicycle',
+                'speed':'speed','impaired':'impaired','alcohol':'alcoholonly','drug':'drug',
+                'intersection':'intersection','nighttime':'nighttime','distracted':'distracted',
+                'motorcycle':'motorcycle','weather':'weather','animal':'animal','unrestrained':'unrestrained'
+            };
+            Object.keys(cats).forEach(matviewCat => {
+                const uiKey = SAFETY_CARD_MAP[matviewCat] || matviewCat;
+                if (safetyState.data[uiKey]) {
+                    const m = cats[matviewCat] || {};
+                    safetyState.data[uiKey].total = m.total || m.crash_count || 0;
+                    safetyState.data[uiKey].severity = {
+                        K: m.K || m.k || 0, A: m.A || m.a || 0,
+                        B: m.B || m.b || 0, C: m.C || m.c || 0, O: m.O || m.o || 0
+                    };
+                }
+            });
+            if (typeof updateSafetyCards === 'function') updateSafetyCards();
+            else if (typeof showTab === 'function') showTab('safety');
+            console.log('[Round 19 §8] Safety Focus re-rendered for', spec.year_start, '→', spec.year_end);
+        } catch (e) {
+            console.warn('[Round 19 §8] safety-focus subscriber failed:', e && e.message);
+        }
+    });
+
     // ---------------------------------------------------------------
     // §2 — Filter input event handlers (push DOM changes → FilterEngine)
     // Idempotent: each input is bound at most once via dataset flag.
@@ -160894,14 +161182,42 @@ function signDef_exportPDF() {
         });
     }
 
+    // Round 19 §4 — replay the persisted FilterEngine spec onto the DOM
+    // inputs so a reload visually matches what's still in effect. Runs
+    // after _bindFilterInputs so the change handlers don't fire and
+    // re-write a fresh spec back over the restored one.
+    function _restoreFilterInputs() {
+        try {
+            if (!window.FilterEngine) return;
+            const spec = window.FilterEngine.getSpec();
+            const startEl = document.getElementById('filterStartDate');
+            const endEl = document.getElementById('filterEndDate');
+            if (startEl && spec.date_start) startEl.value = spec.date_start;
+            if (endEl && spec.date_end) endEl.value = spec.date_end;
+            if (spec.severity instanceof Set) {
+                ['K','A','B','C','O'].forEach(s => {
+                    const el = document.getElementById('sev' + s);
+                    if (el) el.checked = spec.severity.has(s);
+                });
+            }
+            const hsStart = document.getElementById('hsStartDate');
+            const hsEnd = document.getElementById('hsEndDate');
+            if (hsStart && spec.date_start) hsStart.value = spec.date_start;
+            if (hsEnd && spec.date_end) hsEnd.value = spec.date_end;
+            const tcEl = document.getElementById('intFilterTrafficCtrl');
+            if (tcEl && spec.traffic_control) tcEl.value = spec.traffic_control;
+        } catch (e) { /* ignore */ }
+    }
+
     // Bind on DOMContentLoaded + re-bind on tab change (new inputs may
     // appear after lazy module loads).
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', _bindFilterInputs);
+        document.addEventListener('DOMContentLoaded', () => { _bindFilterInputs(); _restoreFilterInputs(); });
     } else {
         _bindFilterInputs();
+        _restoreFilterInputs();
     }
-    document.addEventListener('crashDataLoaded', _bindFilterInputs);
+    document.addEventListener('crashDataLoaded', () => { _bindFilterInputs(); _restoreFilterInputs(); });
 
     // First-run housekeeping: apply state-aware defaults once the client
     // is ready (covers the boot path where state is set by URL/localStorage).

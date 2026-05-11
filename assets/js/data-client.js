@@ -2015,6 +2015,75 @@ class CrashLensDataClient {
     }
   }
 
+  /**
+   * Round 19 §6 — list pending knowledge_corpus_pending chunks awaiting
+   * embedding. Returns the rows with chunk_text so the caller can embed
+   * client-side via OpenAI and submit back via embedPendingChunks().
+   *
+   * @param {object} [opts] { limit?: number, state?: string }
+   * @returns {Promise<Array<{id, chunk_text}>|null>}
+   */
+  async listPendingCorpusChunks(opts) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    opts = opts || {};
+    const params = new URLSearchParams({
+      embedded_at: 'is.null',
+      select: 'id,chunk_text',
+      limit: String(opts.limit || 500),
+    });
+    if (opts.state) params.set('state', 'eq.' + String(opts.state).toLowerCase());
+    const url = `${this.supabaseUrl}/knowledge_corpus_pending?${params.toString()}`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+    };
+    try {
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) return null;
+      const rows = await resp.json();
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      console.warn('[DataClient] listPendingCorpusChunks failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Round 19 §6 — embed_pending_chunks(p_embeddings jsonb) RPC. Submits a
+   * batch of {id, embedding} pairs from knowledge_corpus_pending so the
+   * server moves them into knowledge_corpus with embeddings attached.
+   * Idempotent — sets embedded_at on the source row so re-runs are safe.
+   *
+   * @param {Array<{id, embedding:number[1536]}>} embeddings
+   * @returns {Promise<{submitted:number, inserted:number}|null>}
+   */
+  async embedPendingChunks(embeddings) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    if (!Array.isArray(embeddings) || embeddings.length === 0) return null;
+    const url = `${this.supabaseUrl}/rpc/embed_pending_chunks`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ p_embeddings: embeddings })
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(text || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      return data || null;
+    } catch (e) {
+      console.warn('[DataClient] embedPendingChunks failed:', e.message);
+      return null;
+    }
+  }
+
   /** Manually trigger the scheduled-email fan-out (admin / debug). */
   async enqueueDueScheduledReports() {
     if (!this.preferSupabase || !this.supabaseKey) return null;
@@ -3208,7 +3277,12 @@ class CrashLensDataClient {
     if (opts.yearStart != null) params.append('crash_year', 'gte.' + opts.yearStart);
     if (opts.yearEnd   != null) params.append('crash_year', 'lte.' + opts.yearEnd);
     if (opts.locationType)      params.set('location_type', 'eq.' + opts.locationType);
-    if (opts.county)            params.set('jurisdiction_county', 'eq.' + String(opts.county).replace(/ County$/, ''));
+    if (opts.county) {
+      // Round 19 §2 — mv_hotspots_yearly stores canonical "Kent County" (Round 14
+      // pollution-fix pattern). Earlier code stripped the suffix → 0-row matches.
+      const canonical = String(opts.county).endsWith(' County') ? opts.county : opts.county + ' County';
+      params.set('jurisdiction_county', 'eq.' + canonical);
+    }
     if (opts.mpo)               params.set('jurisdiction_mpo', 'eq.' + opts.mpo);
     if (opts.region)            params.set('dot_district', 'eq.' + opts.region);
 
