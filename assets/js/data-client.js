@@ -729,6 +729,7 @@ class CrashLensDataClient {
           filters: allFilters,
           order: 'epdo.desc',
           limit: fetchLimit,
+          signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
         });
         this._source = 'supabase';
         this._warnIfZeroRows('mv_hotspots', data, tier, value, opts);
@@ -818,6 +819,7 @@ class CrashLensDataClient {
         const data = await this._supabaseQuery('mv_crash_tree', {
           filters: allFilters,
           limit: 50000,
+          signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
         });
         this._source = 'supabase';
         return (data || []).map(r => {
@@ -924,6 +926,7 @@ class CrashLensDataClient {
         const data = await this._supabaseQuery('mv_safety_categories', {
           filters: allFilters,
           limit: 2000,
+          signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
         });
         this._source = 'supabase';
         // Rows are grouped by (state, county, district, mpo, planning_district,
@@ -980,6 +983,7 @@ class CrashLensDataClient {
         const data = await this._supabaseQuery('mv_analysis_summary', {
           filters: allFilters,
           limit: 10000,
+          signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
         });
         this._source = 'supabase';
         // Rows are grouped by (state, county, district, mpo, planning_district,
@@ -996,6 +1000,7 @@ class CrashLensDataClient {
           extraData = await this._supabaseQuery('mv_analysis_extra', {
             filters: allFilters,
             limit: 10000,
+            signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
           });
         } catch (extraErr) {
           // mv_analysis_extra may not exist on every state's instance.
@@ -1103,6 +1108,7 @@ class CrashLensDataClient {
           select: 'intersection_type,traffic_control_type,collision_type,crash_year,total,k,a,b,c,o,ka,epdo',
           filters: allFilters,
           limit: 50000,
+          signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
         });
         this._source = 'supabase';
         this._warnIfZeroRows('mv_intersection_summary', data, tier, value, opts);
@@ -1125,7 +1131,7 @@ class CrashLensDataClient {
    * @param {string} stateKey - state slug (e.g. 'delaware')
    * @returns {Promise<Map<string,string>|null>}
    */
-  async getHotspotsTopCollision(stateKey) {
+  async getHotspotsTopCollision(stateKey, opts = {}) {
     if (!this.preferSupabase || !this.supabaseKey) return null;
     const swrKey = CrashLensDataClient._swrKey({
       op: 'getHotspotsTopCollision', state: stateKey || this.state
@@ -1139,6 +1145,7 @@ class CrashLensDataClient {
           select: 'location_type,location_name,top_collision_type',
           filters: filters,
           limit: 50000,
+          signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
         });
         this._source = 'supabase';
         const map = new Map();
@@ -1166,7 +1173,7 @@ class CrashLensDataClient {
    * @param {string} stateKey
    * @returns {Promise<Map<string,object>|null>}
    */
-  async getHotspotsFactors(stateKey) {
+  async getHotspotsFactors(stateKey, opts = {}) {
     if (!this.preferSupabase || !this.supabaseKey) return null;
     const swrKey = CrashLensDataClient._swrKey({
       op: 'getHotspotsFactors', state: stateKey || this.state
@@ -1180,6 +1187,7 @@ class CrashLensDataClient {
           select: 'location_type,location_name,impaired_count,speed_count,distracted_count,unrestrained_count,motorcycle_count,night_count',
           filters: filters,
           limit: 50000,
+          signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
         });
         this._source = 'supabase';
         const map = new Map();
@@ -1233,6 +1241,7 @@ class CrashLensDataClient {
         const data = await this._supabaseQuery('mv_pedbike_breakdowns', {
           filters: allFilters,
           limit: 50000,
+          signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
         });
         this._source = 'supabase';
         const out = {
@@ -1287,6 +1296,7 @@ class CrashLensDataClient {
         const data = await this._supabaseQuery('mv_analysis_extra', {
           filters: allFilters,
           limit: 10000,
+          signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
         });
         this._source = 'supabase';
         const out = { byDow: {}, byRoadSurface: {}, byTrafficControl: {}, byFirstEvent: {} };
@@ -1362,6 +1372,7 @@ class CrashLensDataClient {
           filters: allFilters,
           order: 'total.desc',
           limit: opts.limit || 50,
+          signal: opts && opts.signal,   // Round 21 §1.2 — prewarm cancel
         });
         this._source = 'supabase';
         return data || [];
@@ -1938,7 +1949,9 @@ class CrashLensDataClient {
     const url = `${this.supabaseUrl}/mv_hotspots_with_rates?${params.toString()}`;
     const headers = { 'apikey': this.supabaseKey, 'Authorization': `Bearer ${this.supabaseKey}` };
     try {
-      const resp = await fetch(url, { headers });
+      // Round 21 §1.2 — accept an optional prewarm signal so we don't keep
+      // a CO request running after the user switched to DE.
+      const resp = await fetch(url, { headers, signal: opts && opts.signal });
       if (!resp.ok) {
         const text = await resp.text().catch(() => '');
         if (resp.status === 404 || /relation .* does not exist/i.test(text)) return null;
@@ -1948,6 +1961,7 @@ class CrashLensDataClient {
       this._source = 'supabase';
       return Array.isArray(data) ? data : [];
     } catch (e) {
+      if (e && e.name === 'AbortError') return null;
       console.warn('[DataClient] getHotspotsWithRates failed:', e.message);
       return null;
     }
@@ -2300,6 +2314,7 @@ class CrashLensDataClient {
       filters: allFilters,
       order: 'crash_year.asc',
       limit: 100000,
+      signal: filters && filters.signal,   // Round 21 §1.2 — prewarm cancel
     });
     this._warnIfZeroRows('dashboard_summary', data, tier, value, filters);
     return data;
@@ -2632,12 +2647,27 @@ class CrashLensDataClient {
     // network errors with exponential backoff before surfacing.
     const ATTEMPTS = 3;
     let lastError = null;
+    // Round 21 §1.2 — accept an optional external AbortSignal (from prewarm's
+    // cancellation token). If the caller aborts before/while we're fetching,
+    // surface an AbortError so the prewarm batch can short-circuit cleanly.
+    const externalSignal = opts.signal || null;
+    if (externalSignal && externalSignal.aborted) {
+      const e = new Error('Aborted by external signal');
+      e.name = 'AbortError';
+      throw e;
+    }
     for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), this.timeout);
+      let onExternalAbort = null;
+      if (externalSignal) {
+        onExternalAbort = () => controller.abort();
+        externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+      }
       try {
         const resp = await fetch(url.toString(), { headers, signal: controller.signal });
         clearTimeout(timer);
+        if (onExternalAbort) externalSignal.removeEventListener('abort', onExternalAbort);
 
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
@@ -2655,7 +2685,14 @@ class CrashLensDataClient {
         return data;
       } catch (e) {
         clearTimeout(timer);
+        if (onExternalAbort) externalSignal.removeEventListener('abort', onExternalAbort);
         lastError = e;
+        // If the caller-supplied signal aborted, propagate AbortError without retry.
+        if (externalSignal && externalSignal.aborted) {
+          const ae = new Error('Aborted by external signal');
+          ae.name = 'AbortError';
+          throw ae;
+        }
         const msg = String(e && e.message || '');
         const isTransient = /ERR_CONNECTION_CLOSED|Failed to fetch|NetworkError|aborted/i.test(msg);
         if (!isTransient || attempt === ATTEMPTS - 1) throw e;
