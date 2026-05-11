@@ -44,6 +44,12 @@
 <script src="../states/fips_database.js"></script>
 <script src="../states/state_adapter.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- Round 18 — ChartRegistry must load right after Chart.js so every new Chart
+     callsite below can funnel through it (prevents "Canvas is already in use"). -->
+<script src="../assets/js/chart-registry.js?v=r18"></script>
+<!-- Round 18 — FilterEngine: global filter-state pub/sub shared across tabs.
+     Loaded before any tab subscriber attaches. -->
+<script src="../assets/js/filter-engine.js?v=r18"></script>
 <!-- Round-9 Fix 6 — defer-load PDF / DOCX / markdown libraries. None of these
      are referenced at module-load time (every call site is inside a button
      handler or async function), so deferring them unblocks HTML parsing
@@ -20711,6 +20717,101 @@ let EPDO_WEIGHTS = CL.core.constants.EPDO_WEIGHTS_DEFAULT;
 let EPDO_ACTIVE_PRESET = 'hsm2010';
 const EPDO_PRESETS = CL.core.constants.EPDO_PRESETS;
 
+// ============================================================
+// ROUND 18 §3 — Safe map navigation helpers
+// Leaflet flyTo(NaN,NaN) / fitBounds(invalid) silently throw and leave
+// the loading spinner stuck (audit F002 + F005). Centralize the guard
+// here so every callsite gets the same treatment.
+// ============================================================
+function safeFlyTo(map, center, zoom, options) {
+    if (!map || typeof map.flyTo !== 'function') return false;
+    if (!Array.isArray(center) || center.length < 2) {
+        console.warn('[Map] safeFlyTo guarded non-array center; aborting');
+        return false;
+    }
+    const lat = Number(center[0]);
+    const lng = Number(center[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        console.warn('[Map] safeFlyTo guarded NaN coords; aborting');
+        return false;
+    }
+    try {
+        map.flyTo([lat, lng], zoom, options);
+        return true;
+    } catch (e) {
+        console.warn('[Map] safeFlyTo threw:', e && e.message);
+        return false;
+    }
+}
+
+function safeFitBounds(map, bounds, options) {
+    if (!map || typeof map.fitBounds !== 'function') return false;
+    if (!bounds) {
+        console.warn('[Map] safeFitBounds guarded null bounds; aborting');
+        return false;
+    }
+    try {
+        if (typeof bounds.isValid === 'function' && !bounds.isValid()) {
+            console.warn('[Map] safeFitBounds guarded invalid bounds; aborting');
+            return false;
+        }
+        map.fitBounds(bounds, options);
+        return true;
+    } catch (e) {
+        console.warn('[Map] safeFitBounds threw:', e && e.message);
+        return false;
+    }
+}
+
+function safeFlyToBounds(map, bounds, options) {
+    if (!map || typeof map.flyToBounds !== 'function') {
+        return safeFitBounds(map, bounds, options);
+    }
+    if (!bounds) {
+        console.warn('[Map] safeFlyToBounds guarded null bounds; aborting');
+        return false;
+    }
+    try {
+        if (typeof bounds.isValid === 'function' && !bounds.isValid()) {
+            console.warn('[Map] safeFlyToBounds guarded invalid bounds; aborting');
+            return false;
+        }
+        map.flyToBounds(bounds, options);
+        return true;
+    } catch (e) {
+        console.warn('[Map] safeFlyToBounds threw:', e && e.message);
+        return false;
+    }
+}
+
+// Hard-fallback state-center lookup table. Keeping it data-keyed (state slug)
+// rather than per-state branches so onboarding a new state is an INSERT, not
+// a code edit. A future round can move this into Supabase states.config_json.
+const _STATE_CENTROID_FALLBACK = {
+    'delaware':  [39.0, -75.5],
+    'virginia':  [37.5, -78.7],
+    'colorado':  [39.0, -105.5],
+    'maryland':  [39.0, -76.7],
+    'new_jersey':[40.2, -74.7],
+    'pennsylvania':[40.9, -77.8]
+};
+
+function getStateCenter(stateKey) {
+    if (!stateKey) return null;
+    const norm = String(stateKey).toLowerCase().replace(/\s+/g, '_');
+    try {
+        const sc = window.crashLensClient && window.crashLensClient.statesConfig;
+        if (sc && sc[norm] && Array.isArray(sc[norm].center)) return sc[norm].center;
+    } catch (e) { /* ignore */ }
+    return _STATE_CENTROID_FALLBACK[norm] || null;
+}
+
+// Expose as globals (used by FilterEngine subscribers + tier handlers)
+window.safeFlyTo = safeFlyTo;
+window.safeFitBounds = safeFitBounds;
+window.safeFlyToBounds = safeFlyToBounds;
+window.getStateCenter = getStateCenter;
+
 // STATE_EPDO_WEIGHTS now defined in modules/core/constants.js
 const STATE_EPDO_WEIGHTS = CL.core.constants.STATE_EPDO_WEIGHTS;
 
@@ -20873,9 +20974,16 @@ function toggleEPDOSection() {
     const toggle = document.getElementById('epdoSectionToggle');
     if (!content) return;
     const isExpanded = content.style.display !== 'none';
-    content.style.display = isExpanded ? 'none' : 'flex';
-    if (chevron) chevron.style.transform = isExpanded ? 'rotate(-90deg)' : 'rotate(0deg)';
-    if (toggle) toggle.setAttribute('aria-expanded', String(!isExpanded));
+    const willOpen = !isExpanded;
+    content.style.display = willOpen ? 'flex' : 'none';
+    if (chevron) {
+        // Round 18 §11 — keep CSS rotation for transition-smoothness, but
+        // also swap the textContent so screen readers + the audit-runner
+        // see the right character even if transform rendering is suppressed.
+        chevron.style.transform = willOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
+        chevron.textContent = willOpen ? '▼' : '▶';
+    }
+    if (toggle) toggle.setAttribute('aria-expanded', String(willOpen));
 }
 
 function updateEPDOPresetUI() {
@@ -21198,14 +21306,14 @@ async function handleTierChange(tier) {
                 if (typeof FederalBoundaries !== 'undefined') {
                     FederalBoundaries.render().then(layer => {
                         if (!layer) {
-                            crashMap.flyTo([39.5, -98.35], 4, { duration: 1.2 });
+                            safeFlyTo(crashMap, [39.5, -98.35], 4, { duration: 1.2 });
                         }
                     }).catch(e => {
                         console.warn('[Tier] Federal boundaries render failed:', e.message);
-                        crashMap.flyTo([39.5, -98.35], 4, { duration: 1.2 });
+                        safeFlyTo(crashMap, [39.5, -98.35], 4, { duration: 1.2 });
                     });
                 } else {
-                    crashMap.flyTo([39.5, -98.35], 4, { duration: 1.2 });
+                    safeFlyTo(crashMap, [39.5, -98.35], 4, { duration: 1.2 });
                 }
             }
         } else if (tier === 'state') {
@@ -21236,16 +21344,31 @@ async function handleTierChange(tier) {
                         });
                         stateLayer.addTo(crashMap);
                         builtInLayersState._stateOutlineLayer = stateLayer;
-                        crashMap.flyToBounds(stateLayer.getBounds(), { padding: [30, 30], duration: 1.2, maxZoom: stateInfo?.zoom || 7 });
+                        safeFlyToBounds(crashMap, stateLayer.getBounds(), { padding: [30, 30], duration: 1.2, maxZoom: stateInfo?.zoom || 7 });
                         console.log('[Tier] State outline boundary loaded for FIPS', stateFips);
                     }
                 } catch (e) {
                     console.warn('[Tier] Failed to load state outline:', e.message);
-                    // Fallback: fly to state center
+                    // Fallback: fly to state center (stateInfo first, then
+                    // Round 18 §3 getStateCenter() fallback table so City→State
+                    // never lands in a NaN flyTo, F005).
+                    let flown = false;
                     if (stateInfo) {
-                        crashMap.flyTo(stateInfo.center, stateInfo.zoom || 7, { duration: 1.2 });
+                        flown = safeFlyTo(crashMap, stateInfo.center, stateInfo.zoom || 7, { duration: 1.2 });
+                    }
+                    if (!flown && typeof getStateCenter === 'function') {
+                        const stateKey = (window.crashLensClient && window.crashLensClient.state) || '';
+                        const center = getStateCenter(stateKey);
+                        if (center) safeFlyTo(crashMap, center, 7, { duration: 1.2 });
                     }
                 }
+            } else if (crashMap && typeof getStateCenter === 'function') {
+                // Round 18 §3 — no BoundaryService available; still need to leave
+                // the previous tier's centroid (could be a city NaN), so fall
+                // back to the state centroid table.
+                const stateKey = (window.crashLensClient && window.crashLensClient.state) || '';
+                const center = getStateCenter(stateKey);
+                if (center) safeFlyTo(crashMap, center, 7, { duration: 1.2 });
             }
         } else if (tier === 'county') {
             // Restore county-level jurisdiction boundary
@@ -22160,7 +22283,7 @@ async function handleRegionSelection() {
             if (typeof displayRegionBoundary === 'function') {
                 displayRegionBoundary(region, regionId);
             } else if (region.center && crashMap && typeof crashMap.flyTo === 'function') {
-                crashMap.flyTo([region.center[1], region.center[0]], region.zoom || 8, { duration: 1.2 });
+                safeFlyTo(crashMap, [region.center[1], region.center[0]], region.zoom || 8, { duration: 1.2 });
             }
         } catch (boundaryErr) {
             console.warn('[Tier] displayRegionBoundary failed (non-fatal, continuing to data fetch):', boundaryErr && boundaryErr.message);
@@ -22329,7 +22452,7 @@ async function handleMPOSelection() {
                 // Fallback: fly to MPO center from hierarchy data
                 if (typeof removeMPOBoundaryLayer === 'function') removeMPOBoundaryLayer();
                 if (crashMap && typeof crashMap.flyTo === 'function') {
-                    crashMap.flyTo([mpo.center[1], mpo.center[0]], mpo.zoom || 10, { duration: 1.2 });
+                    safeFlyTo(crashMap, [mpo.center[1], mpo.center[0]], mpo.zoom || 10, { duration: 1.2 });
                 }
                 console.log(`[Tier] No BTS boundary polygon found for ${mpo.shortName}, using hierarchy center`);
             } else if (mpo.mapBounds) {
@@ -22340,7 +22463,7 @@ async function handleMPOSelection() {
                         L.latLng(mpo.mapBounds.sw[0], mpo.mapBounds.sw[1]),
                         L.latLng(mpo.mapBounds.ne[0], mpo.mapBounds.ne[1])
                     );
-                    crashMap.flyToBounds(bounds, { padding: [50, 50], duration: 1.2 });
+                    safeFlyToBounds(crashMap, bounds, { padding: [50, 50], duration: 1.2 });
                 }
             }
         } catch (boundaryErr) {
@@ -23419,9 +23542,9 @@ const FederalBoundaries = (() => {
         }
 
         try {
-            crashMap.flyToBounds(layer.getBounds(), { padding: [40, 40], duration: 1.2, maxZoom: 5 });
+            safeFlyToBounds(crashMap, layer.getBounds(), { padding: [40, 40], duration: 1.2, maxZoom: 5 });
         } catch (e) {
-            crashMap.flyTo([39.5, -98.35], 4, { duration: 1.2 });
+            safeFlyTo(crashMap, [39.5, -98.35], 4, { duration: 1.2 });
         }
         console.log(`[FederalBoundaries] Rendered ${geojson.features.length} state outlines (${activeFipsSet.size} active, ${geojson.features.length - activeFipsSet.size} context)`);
         return layer;
@@ -25691,7 +25814,7 @@ function applyDynamicStateConfig(geoConfig) {
     const mapInstance = (typeof crashMap !== 'undefined' && crashMap) ? crashMap : null;
     if (mapInstance && mapInstance.flyTo) {
         try {
-            mapInstance.flyTo(geoConfig.defaultMapCenter, geoConfig.defaultMapZoom, { duration: 1.5 });
+            safeFlyTo(mapInstance, geoConfig.defaultMapCenter, geoConfig.defaultMapZoom, { duration: 1.5 });
             // After fly animation completes, refresh crash markers with new state bounds
             setTimeout(() => {
                 if (typeof updateMapDisplay === 'function') updateMapDisplay();
@@ -26304,7 +26427,7 @@ function applyJurisdictionSelection(jurisdictionId) {
     if (mapRef) {
         try {
             // Use flyTo for smooth animated transition when switching jurisdictions
-            mapRef.flyTo(MAP_CENTER, MAP_ZOOM, { duration: 1.2 });
+            safeFlyTo(mapRef, MAP_CENTER, MAP_ZOOM, { duration: 1.2 });
             // Refresh crash markers and verify boundary after transition completes
             setTimeout(() => {
                 if (typeof updateMapDisplay === 'function' && crashState.mapPoints && crashState.mapPoints.length > 0) {
@@ -32308,7 +32431,7 @@ function showTab(tabId) {
                         }
                         // Final fallback: fly to center
                         if (mpo.center && crashMap) {
-                            crashMap.flyTo([mpo.center[1], mpo.center[0]], mpo.zoom || 10, { duration: 1.2 });
+                            safeFlyTo(crashMap, [mpo.center[1], mpo.center[0]], mpo.zoom || 10, { duration: 1.2 });
                         }
                     };
                     tryRestore().catch(e => console.warn('[Boundary] MPO boundary restore failed:', e.message));
@@ -51686,7 +51809,7 @@ function fitMapToData() {
     if (jurisdiction?.bbox && Array.isArray(jurisdiction.bbox) && jurisdiction.bbox.length === 4) {
         const [minLng, minLat, maxLng, maxLat] = jurisdiction.bbox;
         const bounds = L.latLngBounds([[minLat, minLng], [maxLat, maxLng]]);
-        crashMap.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 });
+        safeFitBounds(crashMap, bounds, { padding: [20, 20], maxZoom: 14 });
         console.log(`[Map] Fit to ${jurisdiction.name || jurisdictionId} jurisdiction bbox`);
         return;
     }
@@ -51695,7 +51818,7 @@ function fitMapToData() {
     const validPts = crashState.mapPoints.filter(isValidMapPoint);
     if (validPts.length > 0) {
         const bounds = L.latLngBounds(validPts.slice(0, 5000).map(p => [p.lat, p.lng]));
-        crashMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+        safeFitBounds(crashMap, bounds, { padding: [30, 30], maxZoom: 15 });
         console.log(`[Map] Fit to ${validPts.length} crash points`);
     } else if (MAP_CENTER) {
         // No data points but we have a jurisdiction center - show that
@@ -52955,7 +53078,7 @@ function highlightMultipleLocationsOnMap() {
     // Fit bounds to all selected points
     if (allPoints.length > 0) {
         const bounds = L.latLngBounds(allPoints.map(p => [p.lat, p.lng]));
-        crashMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        safeFitBounds(crashMap, bounds, { padding: [50, 50], maxZoom: 16 });
     }
 
     // Draw road-snapped polylines for routes (one per selected route with different colors)
@@ -54057,7 +54180,7 @@ function zoomToSearchedLocation(name, type) {
             crashMap.setView([avgLat, avgLng], 18);
         } else {
             const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
-            crashMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+            safeFitBounds(crashMap, bounds, { padding: [50, 50], maxZoom: 16 });
         }
     }
 }
@@ -54186,7 +54309,7 @@ function highlightLocationOnMap(name) {
         } else {
             // For routes, use fitBounds to show the full extent
             const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
-            crashMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+            safeFitBounds(crashMap, bounds, { padding: [50, 50], maxZoom: 16 });
         }
     }
 
@@ -62657,7 +62780,7 @@ function filterMapForLocation(crashes, locationName, locationType) {
             crashMap.setView([avgLat, avgLng], 17);
         } else {
             // For routes, fit to bounds
-            crashMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+            safeFitBounds(crashMap, bounds, { padding: [50, 50], maxZoom: 16 });
         }
     }
     
@@ -69296,7 +69419,7 @@ function filterMapForPedBike(crashes, label, type) {
     
     // Fit map to bounds
     if (bounds.length > 0) {
-        crashMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        safeFitBounds(crashMap, bounds, { padding: [50, 50], maxZoom: 16 });
     }
     
     // Show filter badge
@@ -104493,7 +104616,7 @@ function filterMapForSafety(crashes, label) {
     
     // Fit map to bounds
     if (bounds.length > 0) {
-        crashMap.fitBounds(bounds, { padding: [50, 50] });
+        safeFitBounds(crashMap, bounds, { padding: [50, 50] });
     }
     
     // Show filter badge
@@ -141037,7 +141160,7 @@ function assetFitMapToAssets() {
 
     if (allPoints.length > 0 && crashMap) {
         const bounds = L.latLngBounds(allPoints);
-        crashMap.fitBounds(bounds, { padding: [50, 50] });
+        safeFitBounds(crashMap, bounds, { padding: [50, 50] });
     }
 }
 
@@ -141070,7 +141193,7 @@ function assetShowOnMap(assetId) {
     if (asset.locations?.length > 0 && crashMap) {
         const points = asset.locations.map(loc => [loc.lat, loc.lng]);
         const bounds = L.latLngBounds(points);
-        crashMap.fitBounds(bounds, { padding: [50, 50] });
+        safeFitBounds(crashMap, bounds, { padding: [50, 50] });
     }
 }
 
@@ -142127,7 +142250,7 @@ function displayMPOBoundary(geojson, mpoId, mpoName) {
     try {
         const bounds = boundaryLayer.getBounds();
         if (bounds.isValid()) {
-            crashMap.flyToBounds(bounds, { padding: [50, 50], duration: 1.2, maxZoom: 13 });
+            safeFlyToBounds(crashMap, bounds, { padding: [50, 50], duration: 1.2, maxZoom: 13 });
         }
     } catch (e) {
         console.warn('[MPOBoundary] Could not fit to bounds:', e.message);
@@ -142182,7 +142305,7 @@ function displayRegionBoundary(region, regionId) {
         // and aborts the calling tier handler before it reaches the
         // Supabase bridge fetch.
         if (region?.center && crashMap && typeof crashMap.flyTo === 'function') {
-            crashMap.flyTo([region.center[1], region.center[0]], region.zoom || 8, { duration: 1.2 });
+            safeFlyTo(crashMap, [region.center[1], region.center[0]], region.zoom || 8, { duration: 1.2 });
         }
         return;
     }
@@ -142212,7 +142335,7 @@ function displayRegionBoundary(region, regionId) {
     `);
     boundaryLayer.addTo(crashMap);
 
-    crashMap.flyToBounds(bounds, { padding: [50, 50], duration: 1.2, maxZoom: region.zoom || 10 });
+    safeFlyToBounds(crashMap, bounds, { padding: [50, 50], duration: 1.2, maxZoom: region.zoom || 10 });
 
     builtInLayersState.regionBoundary.layer = boundaryLayer;
     builtInLayersState.regionBoundary.currentRegionId = regionId;
@@ -142258,7 +142381,7 @@ function displayPlanningDistrictBoundary(pd, pdId) {
 
     if (!pd?.mapBounds) {
         if (pd?.center) {
-            crashMap.flyTo([pd.center[1], pd.center[0]], pd.zoom || 9, { duration: 1.2 });
+            safeFlyTo(crashMap, [pd.center[1], pd.center[0]], pd.zoom || 9, { duration: 1.2 });
         }
         return;
     }
@@ -142287,7 +142410,7 @@ function displayPlanningDistrictBoundary(pd, pdId) {
     `);
     boundaryLayer.addTo(crashMap);
 
-    crashMap.flyToBounds(bounds, { padding: [40, 40], duration: 1.2, maxZoom: pd.zoom || 10 });
+    safeFlyToBounds(crashMap, bounds, { padding: [40, 40], duration: 1.2, maxZoom: pd.zoom || 10 });
 
     builtInLayersState.planningDistrictBoundary.layer = boundaryLayer;
     builtInLayersState.planningDistrictBoundary.currentPdId = pdId;
@@ -142395,7 +142518,7 @@ async function displayCityBoundary(citySlug, displayName, placeType) {
     try {
         const bounds = boundaryLayer.getBounds();
         if (bounds.isValid()) {
-            crashMap.flyToBounds(bounds, { padding: [40, 40], duration: 1.2, maxZoom: 14 });
+            safeFlyToBounds(crashMap, bounds, { padding: [40, 40], duration: 1.2, maxZoom: 14 });
         }
     } catch (e) {
         console.warn('[CityBoundary] Could not fit to bounds:', e.message);
@@ -143164,7 +143287,7 @@ function loadPendingDistrictsOnMapReady() {
             }
             // Final fallback: zoom to center
             if (mpo.center && crashMap) {
-                crashMap.flyTo([mpo.center[1], mpo.center[0]], mpo.zoom || 10, { duration: 1.2 });
+                safeFlyTo(crashMap, [mpo.center[1], mpo.center[0]], mpo.zoom || 10, { duration: 1.2 });
             }
         })().catch(e => console.warn('[Boundary] Pending MPO boundary load failed:', e.message));
     }
@@ -160254,6 +160377,542 @@ function signDef_exportPDF() {
 
 // end Sign Deficiency Tab
 // ============================================================
+
+
+// ============================================================
+// ROUND 18 — Filter-audit wiring (§2, §4, §5, §7, §8, §9, §10)
+// Hooks the FilterEngine subscribers, populates Supabase-backed
+// filter dropdowns, and ties the audit-found UX gaps together.
+// All event handlers are idempotent — safe to re-run on tab change.
+// State-agnostic: keys on FilterEngine spec + crashLensClient.state,
+// never on hard-coded jurisdiction names.
+// ============================================================
+(function () {
+    'use strict';
+
+    function _activeStateKey() {
+        try {
+            return ((window.crashLensClient && window.crashLensClient.state) || '').toLowerCase();
+        } catch (e) { return ''; }
+    }
+    function _yearFromIsoDate(iso) {
+        if (!iso) return null;
+        const m = String(iso).match(/^(\d{4})/);
+        return m ? parseInt(m[1], 10) : null;
+    }
+
+    // ---------------------------------------------------------------
+    // §4 — Traffic Control dropdown populator
+    // Populates the Intersections tab Traffic Control filter from
+    // get_traffic_control_types RPC. Runs the first time the user
+    // opens the Intersections tab, then caches per-state.
+    // ---------------------------------------------------------------
+    const _trafficCtrlCache = new Map();
+    async function populateTrafficControlDropdown() {
+        const sel = document.getElementById('intFilterTrafficCtrl');
+        if (!sel) return;
+        const stateKey = _activeStateKey();
+        if (!stateKey) return;
+        if (_trafficCtrlCache.has(stateKey)) {
+            _applyTrafficCtrlOptions(sel, _trafficCtrlCache.get(stateKey));
+            return;
+        }
+        try {
+            const client = window.crashLensClient;
+            if (!client || typeof client.getTrafficControlTypes !== 'function') return;
+            const rows = await client.getTrafficControlTypes(stateKey);
+            if (!Array.isArray(rows) || rows.length === 0) return;
+            _trafficCtrlCache.set(stateKey, rows);
+            _applyTrafficCtrlOptions(sel, rows);
+            console.log('[Round 18 §4] Traffic Control dropdown populated:', rows.length, 'types');
+        } catch (e) {
+            console.warn('[Round 18 §4] Traffic Control populate failed:', e && e.message);
+        }
+    }
+    function _applyTrafficCtrlOptions(sel, rows) {
+        // Preserve any existing selection if it's still valid
+        const prev = sel.value;
+        const opts = ['<option value="">All Traffic Controls</option>'];
+        for (const r of rows) {
+            const v = String(r.raw_value || '').replace(/"/g, '&quot;');
+            const lbl = String(r.label || r.raw_value || '');
+            const cnt = (typeof r.crash_count === 'number') ? r.crash_count.toLocaleString() : '';
+            opts.push('<option value="' + v + '">' + lbl + (cnt ? ' (' + cnt + ')' : '') + '</option>');
+        }
+        sel.innerHTML = opts.join('');
+        if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+    }
+    window.populateTrafficControlDropdown = populateTrafficControlDropdown;
+
+    // Re-populate when the user enters the Intersections tab or switches state.
+    document.addEventListener('crashDataLoaded', () => { populateTrafficControlDropdown(); });
+    // Also hook into showTab — wrap once
+    if (typeof showTab === 'function' && !showTab.__round18Wrapped) {
+        const _origShowTab = showTab;
+        const _wrapped = function (tabId) {
+            const r = _origShowTab.apply(this, arguments);
+            try {
+                if (tabId === 'intersection') populateTrafficControlDropdown();
+                if (tabId === 'dashboard') applyStateAwareCheckboxDefaults();
+            } catch (e) { /* non-fatal */ }
+            return r;
+        };
+        _wrapped.__round18Wrapped = true;
+        window.showTab = _wrapped;
+    }
+
+    // ---------------------------------------------------------------
+    // §8 — State-aware checkbox defaults
+    // ---------------------------------------------------------------
+    function applyStateAwareCheckboxDefaults() {
+        const stateKey = _activeStateKey();
+        if (!stateKey) return;
+        const vfirst = document.getElementById('cmfVirginiaFirst');
+        if (vfirst && !vfirst.dataset.userTouched) {
+            vfirst.checked = (stateKey === 'virginia');
+        }
+        const proven = document.getElementById('cmfProvenOnly');
+        if (proven && !proven.dataset.userTouched) {
+            // Default FHWA Proven Only when the state is NOT Virginia
+            proven.checked = (stateKey !== 'virginia');
+        }
+    }
+    // Mark inputs as user-touched once the user interacts, so we don't
+    // overwrite their choice on subsequent state changes.
+    document.addEventListener('change', (e) => {
+        if (!e.target) return;
+        if (e.target.id === 'cmfVirginiaFirst' || e.target.id === 'cmfProvenOnly') {
+            e.target.dataset.userTouched = '1';
+        }
+    });
+    window.applyStateAwareCheckboxDefaults = applyStateAwareCheckboxDefaults;
+
+    // ---------------------------------------------------------------
+    // §9 — Find Countermeasures validation
+    // Wrap setCMFMode + findCountermeasures so the "algo" toggle no
+    // longer silently fails when no location is selected.
+    // ---------------------------------------------------------------
+    function _hasCMFLocationSelected() {
+        try {
+            if (typeof cmfState !== 'undefined' && cmfState && cmfState.selectedLocation) return true;
+        } catch (e) { /* ignore */ }
+        const sel = document.getElementById('cmfLocationSelect');
+        if (sel && sel.value && sel.value !== '') return true;
+        const search = document.getElementById('cmfRoadSearch');
+        if (search && search.value && String(search.value).trim().length > 0) return true;
+        return false;
+    }
+    if (typeof setCMFMode === 'function' && !setCMFMode.__round18Wrapped) {
+        const _origSetCMFMode = setCMFMode;
+        const _wrappedSet = function (mode, forceRefresh) {
+            if (mode === 'algo' && !_hasCMFLocationSelected()) {
+                if (typeof showToast === 'function') {
+                    showToast('Please select a road name or location to find countermeasures.', 'warning');
+                }
+                const search = document.getElementById('cmfRoadSearch');
+                if (search) try { search.focus(); } catch (e) { /* ignore */ }
+                return;
+            }
+            return _origSetCMFMode.apply(this, arguments);
+        };
+        _wrappedSet.__round18Wrapped = true;
+        window.setCMFMode = _wrappedSet;
+    }
+
+    // ---------------------------------------------------------------
+    // §7 — Active Scope label sync
+    // Re-render the upload-tab tier scope card whenever the user
+    // changes the MPO / Region / Planning District select, so the
+    // label updates immediately (audit F003).
+    // ---------------------------------------------------------------
+    function _refreshActiveScopeCard() {
+        try {
+            const tier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+            if (CL && CL.upload && CL.upload.tierUI && typeof CL.upload.tierUI.applyUploadTierUI === 'function') {
+                CL.upload.tierUI.applyUploadTierUI(tier);
+            }
+        } catch (e) { /* non-fatal */ }
+    }
+    ['tierMPOSelect','tierRegionSelect','tierPlanningDistrictSelect','jurisdictionSelect','tierCountySelect','stateSelect']
+        .forEach(id => {
+            const el = document.getElementById(id);
+            if (el && !el.dataset.r18ScopeBound) {
+                el.addEventListener('change', _refreshActiveScopeCard);
+                el.dataset.r18ScopeBound = '1';
+            }
+        });
+
+    // ---------------------------------------------------------------
+    // §10 — Loading spinner sync
+    // Update the loading text BEFORE any async fetch so the user sees
+    // an accurate label during tier switches (audit F004, L001).
+    // ---------------------------------------------------------------
+    if (typeof handleTierChange === 'function' && !handleTierChange.__round18Wrapped) {
+        const _origHandleTierChange = handleTierChange;
+        const TIER_LOAD_LABELS = {
+            state: 'Statewide', region: 'Regional', mpo: 'MPO',
+            planning_district: 'Planning District', county: 'County',
+            city: 'City / Town', federal: 'Federal'
+        };
+        const _wrappedTier = async function (tier) {
+            try {
+                if (typeof showLoading === 'function') {
+                    const label = TIER_LOAD_LABELS[tier] || tier;
+                    showLoading('Switching to ' + label + ' view…');
+                }
+            } catch (e) { /* non-fatal */ }
+            try {
+                return await _origHandleTierChange.apply(this, arguments);
+            } finally {
+                try { if (typeof hideLoading === 'function') hideLoading(); } catch (e) { /* ignore */ }
+            }
+        };
+        _wrappedTier.__round18Wrapped = true;
+        window.handleTierChange = _wrappedTier;
+    }
+
+    // ---------------------------------------------------------------
+    // §5 — EPDO preset recompute cascade
+    // The existing recalculateAllEPDO() runs updateDashboard / hotspots
+    // / grants / cmf / safety. At aggregate tiers (where crashState
+    // has no sampleRows), updateDashboard early-returns and the KPI
+    // card never refreshes. Patch the cascade so it also re-fires
+    // the Supabase dashboard injection.
+    // ---------------------------------------------------------------
+    if (typeof recalculateAllEPDO === 'function' && !recalculateAllEPDO.__round18Wrapped) {
+        const _origRecalc = recalculateAllEPDO;
+        const _wrappedRecalc = function () {
+            const r = _origRecalc.apply(this, arguments);
+            try {
+                if (CL && CL.data && CL.data.supabaseBridge &&
+                    typeof CL.data.supabaseBridge.injectFastDashboard === 'function') {
+                    CL.data.supabaseBridge.injectFastDashboard({ force: true });
+                }
+            } catch (e) { /* non-fatal */ }
+            return r;
+        };
+        _wrappedRecalc.__round18Wrapped = true;
+        window.recalculateAllEPDO = _wrappedRecalc;
+    }
+
+    // ---------------------------------------------------------------
+    // §2 — Global FilterEngine subscribers
+    // ---------------------------------------------------------------
+    if (!window.FilterEngine) {
+        console.warn('[Round 18 §2] FilterEngine not loaded; subscribers skipped.');
+        return;
+    }
+
+    // §2.1 Dashboard subscriber
+    FilterEngine.subscribe('dashboard', async (spec, changedKeys) => {
+        if (!changedKeys.some(k => ['year_start','year_end','severity','road_type','date_start','date_end'].includes(k))) return;
+        try {
+            // Mirror to legacy currentFilters so getFilteredStats() path stays
+            // consistent for the R2-loaded case.
+            if (typeof currentFilters !== 'undefined') {
+                currentFilters.startDate = spec.date_start;
+                currentFilters.endDate = spec.date_end;
+                currentFilters.severity = Array.from(spec.severity || []);
+            }
+            // R2-loaded path: re-render the dashboard locally.
+            if (typeof crashState !== 'undefined' && crashState && crashState.sampleRows && crashState.sampleRows.length > 0 &&
+                typeof updateDashboard === 'function') {
+                updateDashboard();
+                if (typeof updateMapDisplay === 'function' && typeof crashMap !== 'undefined' && crashMap) updateMapDisplay();
+                return;
+            }
+            // Supabase-only path: do a direct dashboard_summary fetch with
+            // year filter and paint the year-range KPI subtext + total. Heavy
+            // chart repainting still flows through paintDashboardChartsFromMatview.
+            await _r18ApplyDashboardYearFilter(spec);
+        } catch (e) {
+            console.warn('[Round 18 §2.1] dashboard subscriber failed:', e && e.message);
+        }
+    });
+
+    async function _r18ApplyDashboardYearFilter(spec) {
+        const client = window.crashLensClient;
+        if (!client || !client.supabaseUrl || !client.supabaseKey) return;
+        const stateKey = _activeStateKey();
+        if (!stateKey) return;
+        const params = new URLSearchParams({
+            state: 'eq.' + stateKey,
+            select: 'crash_year,crash_count,fatals,serious_injuries,ped_crashes,bike_crashes,speed_crashes,night_crashes',
+            limit: '2000'
+        });
+        if (spec.year_start != null) params.append('crash_year', 'gte.' + spec.year_start);
+        if (spec.year_end   != null) params.append('crash_year', 'lte.' + spec.year_end);
+        if (spec.road_type === 'all_no_interstate') params.set('is_interstate', 'eq.false');
+        else if (spec.road_type && spec.road_type !== 'all') params.set('road_type', 'eq.' + spec.road_type);
+        const url = client.supabaseUrl + '/dashboard_summary?' + params.toString();
+        try {
+            const resp = await fetch(url, {
+                headers: { 'apikey': client.supabaseKey, 'Authorization': 'Bearer ' + client.supabaseKey }
+            });
+            if (!resp.ok) {
+                console.warn('[Round 18 §2.1] dashboard_summary fetch HTTP ' + resp.status);
+                return;
+            }
+            const rows = await resp.json();
+            if (!Array.isArray(rows)) return;
+            // Aggregate
+            let total = 0, K = 0, A = 0, ped = 0, bike = 0;
+            const yearsSeen = new Set();
+            for (const r of rows) {
+                const c = parseInt(r.crash_count, 10) || 0;
+                total += c;
+                K   += parseInt(r.fatals, 10) || 0;
+                A   += parseInt(r.serious_injuries, 10) || 0;
+                ped += parseInt(r.ped_crashes, 10) || 0;
+                bike+= parseInt(r.bike_crashes, 10) || 0;
+                if (r.crash_year) yearsSeen.add(parseInt(r.crash_year, 10));
+            }
+            const ys = [...yearsSeen].sort();
+            const yRange = ys.length ? (ys[0] + (ys.length > 1 ? ('–' + ys[ys.length - 1]) : '')) : '';
+            const _set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            _set('kpiTotal', total.toLocaleString());
+            _set('kpiYearRange', yRange);
+            _set('kpiFatal', K.toLocaleString());
+            _set('kpiPed', ped.toLocaleString());
+            _set('kpiBike', bike.toLocaleString());
+            console.log('[Round 18 §2.1] Dashboard refreshed with year filter:', spec.year_start, '–', spec.year_end, 'total=', total);
+        } catch (e) {
+            console.warn('[Round 18 §2.1] dashboard fetch failed:', e && e.message);
+        }
+    }
+
+    // §2.2 Hot Spots subscriber
+    FilterEngine.subscribe('hotspots', async (spec, changedKeys) => {
+        if (!changedKeys.some(k => ['year_start','year_end','min_crashes','group_by','location_type','road_type'].includes(k))) return;
+        try {
+            await _r18ReloadHotspots(spec);
+        } catch (e) {
+            console.warn('[Round 18 §2.2] hotspots subscriber failed:', e && e.message);
+        }
+    });
+
+    async function _r18ReloadHotspots(spec) {
+        const client = window.crashLensClient;
+        if (!client || typeof client.getHotspotsYearly !== 'function') {
+            // Fallback: just re-run the existing analyzer with whatever inputs
+            // it can read from the DOM. min_crashes/group_by are already wired
+            // through document.getElementById() in analyzeHotspots().
+            if (typeof analyzeHotspots === 'function') analyzeHotspots();
+            return;
+        }
+        const tier = (CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+            ? CL.data.supabaseBridge.resolveTier() : { tier: 'state', value: null };
+        const opts = {
+            yearStart: spec.year_start,
+            yearEnd:   spec.year_end,
+            locationType: spec.location_type || null,
+            limit: 500,
+        };
+        if (tier.tier === 'county') opts.county = tier.value;
+        if (tier.tier === 'mpo')    opts.mpo = tier.value;
+        if (tier.tier === 'region') opts.region = tier.value;
+        const raw = await client.getHotspotsYearly(opts);
+        if (!Array.isArray(raw)) {
+            if (typeof analyzeHotspots === 'function') analyzeHotspots();
+            return;
+        }
+        // Roll up (location_type, location_name) across the filtered year window
+        const agg = new Map();
+        for (const r of raw) {
+            const key = (r.location_type || '') + '|' + (r.location_name || '');
+            if (!agg.has(key)) {
+                agg.set(key, {
+                    location_type: r.location_type, location_name: r.location_name,
+                    total_crashes: 0, k: 0, a: 0, b: 0, c: 0, o: 0, epdo: 0,
+                    ped_count: 0, bike_count: 0,
+                    lat: r.lat, lon: r.lon
+                });
+            }
+            const acc = agg.get(key);
+            acc.total_crashes += parseInt(r.total_crashes, 10) || 0;
+            acc.k += parseInt(r.k, 10) || 0;
+            acc.a += parseInt(r.a, 10) || 0;
+            acc.b += parseInt(r.b, 10) || 0;
+            acc.c += parseInt(r.c, 10) || 0;
+            acc.o += parseInt(r.o, 10) || 0;
+            acc.epdo += parseFloat(r.epdo) || 0;
+            acc.ped_count += parseInt(r.ped_count, 10) || 0;
+            acc.bike_count += parseInt(r.bike_count, 10) || 0;
+        }
+        let rolled = [...agg.values()];
+        if (spec.min_crashes != null) rolled = rolled.filter(r => r.total_crashes >= spec.min_crashes);
+        rolled.sort((a, b) => b.epdo - a.epdo);
+        console.log('[Round 18 §2.2] hotspots rolled:', rolled.length, 'rows after year/min_crashes filter');
+
+        // Hand the data back to the existing renderer if a hook exists.
+        // The current renderer reads from crashState.hotspots, so write
+        // there in the renderHotspots shape (best-effort) and call it.
+        try {
+            if (typeof crashState !== 'undefined' && crashState) {
+                crashState.hotspots = rolled.map((r, idx) => ({
+                    rank: idx + 1,
+                    loc: r.location_name,
+                    type: r.location_type,
+                    total: r.total_crashes,
+                    K: r.k, A: r.a, B: r.b, C: r.c, O: r.o,
+                    epdo: r.epdo,
+                    perYear: 0,
+                    topType: 'N/A',
+                    pedCount: r.ped_count,
+                    bikeCount: r.bike_count,
+                    severity: { K: r.k, A: r.a, B: r.b, C: r.c, O: r.o }
+                }));
+                if (typeof setPaginationData === 'function') setPaginationData('hotspots', crashState.hotspots);
+                if (typeof renderHotspots === 'function') renderHotspots();
+            }
+        } catch (e) { console.warn('[Round 18 §2.2] hotspots render failed:', e && e.message); }
+    }
+
+    // §2.3 Intersections subscriber
+    FilterEngine.subscribe('intersections', (spec, changedKeys) => {
+        if (!changedKeys.some(k => ['year_start','year_end','traffic_control','road_type'].includes(k))) return;
+        try { _r18ReloadIntersections(spec); }
+        catch (e) { console.warn('[Round 18 §2.3] intersections subscriber failed:', e && e.message); }
+    });
+
+    async function _r18ReloadIntersections(spec) {
+        // Re-fire the existing tab-load pipeline. The mv_intersection_summary
+        // path used by tab-loaders honors crash_year predicates added as URL
+        // params via FilterEngine — but if not, we still want the visible UI
+        // to acknowledge the change.
+        if (typeof updateIntersectionTab === 'function') updateIntersectionTab();
+        // Also surface the active TC filter visibly so the user knows it took.
+        const sel = document.getElementById('intFilterTrafficCtrl');
+        if (sel) {
+            // FilterEngine traffic_control is the raw value; only set if it
+            // exists in the dropdown.
+            if (spec.traffic_control && [...sel.options].some(o => o.value === spec.traffic_control)) {
+                sel.value = spec.traffic_control;
+            }
+        }
+    }
+
+    // §2.4 Fatal & Speeding subscriber
+    FilterEngine.subscribe('fatalspeeding', (spec, changedKeys) => {
+        if (!changedKeys.some(k => ['year_start','year_end','severity'].includes(k))) return;
+        try {
+            if (typeof fatalSpeedingState !== 'undefined' && fatalSpeedingState) {
+                fatalSpeedingState.loaded = false;
+            }
+            if (typeof updateFatalSpeedingTab === 'function') updateFatalSpeedingTab();
+            else if (typeof showTab === 'function') showTab('fatalspeeding');
+        } catch (e) {
+            console.warn('[Round 18 §2.4] fatalspeeding subscriber failed:', e && e.message);
+        }
+    });
+
+    // §2.5 Ped/Bike subscriber
+    FilterEngine.subscribe('pedbike', (spec, changedKeys) => {
+        if (!changedKeys.some(k => ['people_injury_type','year_start','year_end'].includes(k))) return;
+        try {
+            if (typeof updatePedBikeTab === 'function') updatePedBikeTab();
+        } catch (e) {
+            console.warn('[Round 18 §2.5] pedbike subscriber failed:', e && e.message);
+        }
+    });
+
+    // ---------------------------------------------------------------
+    // §2 — Filter input event handlers (push DOM changes → FilterEngine)
+    // Idempotent: each input is bound at most once via dataset flag.
+    // ---------------------------------------------------------------
+    function _bindOnce(el, ev, handler) {
+        if (!el) return;
+        const key = 'r18Bound_' + ev;
+        if (el.dataset[key]) return;
+        el.addEventListener(ev, handler);
+        el.dataset[key] = '1';
+    }
+
+    function _bindFilterInputs() {
+        // Dashboard date inputs
+        _bindOnce(document.getElementById('filterStartDate'), 'change', (e) => {
+            const v = e.target.value || null;
+            FilterEngine.setFilter({ date_start: v, year_start: _yearFromIsoDate(v) });
+        });
+        _bindOnce(document.getElementById('filterEndDate'), 'change', (e) => {
+            const v = e.target.value || null;
+            FilterEngine.setFilter({ date_end: v, year_end: _yearFromIsoDate(v) });
+        });
+        // Severity checkboxes
+        ['K','A','B','C','O'].forEach(sev => {
+            _bindOnce(document.getElementById('sev' + sev), 'change', () => {
+                const active = new Set();
+                ['K','A','B','C','O'].forEach(s => {
+                    const cb = document.getElementById('sev' + s);
+                    if (cb && cb.checked) active.add(s);
+                });
+                FilterEngine.setFilter({ severity: active });
+            });
+        });
+
+        // Hot Spots — date + min crashes + group by, Apply button is the
+        // existing analyzeHotspots() — wrap it so it also pushes to engine.
+        _bindOnce(document.getElementById('hsStartDate'), 'change', (e) => {
+            FilterEngine.setFilter({ year_start: _yearFromIsoDate(e.target.value) });
+        });
+        _bindOnce(document.getElementById('hsEndDate'), 'change', (e) => {
+            FilterEngine.setFilter({ year_end: _yearFromIsoDate(e.target.value) });
+        });
+        _bindOnce(document.getElementById('hsMinCrashes'), 'change', (e) => {
+            const n = parseInt(e.target.value, 10);
+            FilterEngine.setFilter({ min_crashes: Number.isFinite(n) ? n : null });
+        });
+        _bindOnce(document.getElementById('hsGroupBy'), 'change', (e) => {
+            FilterEngine.setFilter({ group_by: e.target.value || 'route' });
+        });
+
+        // Intersections
+        _bindOnce(document.getElementById('intFilterStartDate'), 'change', (e) => {
+            FilterEngine.setFilter({ year_start: _yearFromIsoDate(e.target.value) });
+        });
+        _bindOnce(document.getElementById('intFilterEndDate'), 'change', (e) => {
+            FilterEngine.setFilter({ year_end: _yearFromIsoDate(e.target.value) });
+        });
+        _bindOnce(document.getElementById('intFilterTrafficCtrl'), 'change', (e) => {
+            FilterEngine.setFilter({ traffic_control: e.target.value || null });
+        });
+
+        // Fatal & Speeding 1Y/3Y/5Y quick buttons — match by data-fs-period
+        document.querySelectorAll('button[data-fs-period]').forEach(btn => {
+            _bindOnce(btn, 'click', () => {
+                const years = parseInt(btn.dataset.fsPeriod, 10);
+                if (!Number.isFinite(years)) return;
+                const endYear = new Date().getFullYear();
+                FilterEngine.setFilter({ year_start: endYear - years + 1, year_end: endYear });
+            });
+        });
+
+        // Ped/Bike injury-type dropdown
+        _bindOnce(document.getElementById('pedBikeInjuryType'), 'change', (e) => {
+            const v = e.target.value;
+            FilterEngine.setFilter({ people_injury_type: (!v || v === 'all') ? null : v });
+        });
+    }
+
+    // Bind on DOMContentLoaded + re-bind on tab change (new inputs may
+    // appear after lazy module loads).
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _bindFilterInputs);
+    } else {
+        _bindFilterInputs();
+    }
+    document.addEventListener('crashDataLoaded', _bindFilterInputs);
+
+    // First-run housekeeping: apply state-aware defaults once the client
+    // is ready (covers the boot path where state is set by URL/localStorage).
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyStateAwareCheckboxDefaults);
+    } else {
+        applyStateAwareCheckboxDefaults();
+    }
+
+    console.log('[Round 18] Filter-audit wiring loaded.');
+})();
 
 </script>
 
