@@ -12676,10 +12676,10 @@ Clear Cache
 <div id="grantPagination" class="pagination-container"></div>
 </div>
 
-<!-- Section 2.4: District Statistics (Magisterial Districts) -->
+<!-- Section 2.4: Tier-Adaptive Jurisdiction Breakdown (Round 17 §3/§4) -->
 <div class="card" style="margin-bottom:1.5rem">
 <div class="card-title" style="font-size:1.1rem;border-bottom:2px solid #7c3aed;padding-bottom:.5rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
-    <span>🗺️ Crashes by Magisterial District</span>
+    <span>🗺️ <span id="magisterialDistrictTitle">Crashes by Magisterial District</span></span>
     <span id="districtStatsToggle" style="font-size:.8rem;color:var(--gray);cursor:pointer" onclick="toggleDistrictStatsExpanded()">
         <span id="districtStatsToggleIcon">▼</span> <span id="districtStatsToggleText">Expand</span>
     </span>
@@ -37476,11 +37476,36 @@ function loadNotificationPreferences() {
     _loadPreferencesFromFirestore();
 }
 
+// Round 17 §9.7 — One-shot probe for the optional Node/Netlify "/api/*"
+// backend. On GitHub Pages and on bare-static deploys it's missing and
+// every preferences/subscribers/forecasts/qdrant call returns 404. We
+// probe `/api/notify/status` once, cache the result on window, and short-
+// circuit known-spammy fetches when the backend is offline.
+async function _isApiBackendAvailable() {
+    if (window._apiBackendAvailable !== undefined) return window._apiBackendAvailable;
+    if (window._apiBackendProbe) return window._apiBackendProbe;
+    window._apiBackendProbe = (async () => {
+        try {
+            const resp = await fetch('/api/notify/status', { method: 'GET' });
+            window._apiBackendAvailable = resp.ok;
+        } catch (_) {
+            window._apiBackendAvailable = false;
+        }
+        if (!window._apiBackendAvailable) {
+            console.log('[API] Optional Node/Netlify backend not reachable — Firestore preferences, /api/forecasts/check, /api/subscribers, /api/qdrant-proxy disabled this session.');
+        }
+        return window._apiBackendAvailable;
+    })();
+    return window._apiBackendProbe;
+}
+
 // Load notification preferences from Firestore and merge with local state
 async function _loadPreferencesFromFirestore() {
     try {
         const user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
         if (!user) return;
+        // Round 17 §9.7 — skip cleanly when no backend is wired (avoids 404 spew).
+        if (!(await _isApiBackendAvailable())) return;
 
         const token = await user.getIdToken();
         const resp = await fetch('/api/preferences/load', {
@@ -37807,9 +37832,22 @@ async function loadSubscribersFromR2() {
         let serverSubscribers = [];
         let loadedFromFirestore = false;
 
-        // Try Firestore first (authenticated)
+        // Round 17 §9.7 — prefer Supabase `email_subscribers` (works on
+        // GitHub Pages). Falls back to Firestore/R2 via the optional /api/
+        // backend only when reachable.
         const user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
-        if (user) {
+        if (window.crashLensClient && typeof window.crashLensClient.listEmailSubscribers === 'function') {
+            try {
+                const rows = await window.crashLensClient.listEmailSubscribers(pathParts.stateKey);
+                if (Array.isArray(rows) && rows.length > 0) {
+                    serverSubscribers = rows;
+                    loadedFromFirestore = true;
+                    console.log(`[Subscribers] Loaded ${rows.length} from Supabase email_subscribers`);
+                }
+            } catch (e) { /* fall through */ }
+        }
+
+        if (!loadedFromFirestore && user && await _isApiBackendAvailable()) {
             try {
                 const token = await user.getIdToken();
                 const resp = await fetch(`/api/subscribers/db/load?state=${encodeURIComponent(pathParts.stateKey)}&jurisdiction=${encodeURIComponent(pathParts.jurisdiction)}`, {
@@ -37826,8 +37864,8 @@ async function loadSubscribersFromR2() {
             }
         }
 
-        // Fallback to R2 if Firestore had no data or user isn't authenticated
-        if (!loadedFromFirestore) {
+        // Fallback to R2 only when /api/ backend is wired.
+        if (!loadedFromFirestore && await _isApiBackendAvailable()) {
             try {
                 const resp = await fetch(`/api/subscribers/load?state=${encodeURIComponent(pathParts.stateKey)}&jurisdiction=${encodeURIComponent(pathParts.jurisdiction)}`);
                 const result = await resp.json();
@@ -60533,15 +60571,24 @@ async function _hydrateHotspotDetailFromMatview(which) {
     const aggData = stateState.aggregatedData;
     if (!aggData) return false;
 
-    // Selected locations: hotspot panel uses string names, intersection panel
-    // uses {node, routes} objects — normalize to a flat list of names.
+    // Selected locations: hotspot panel uses string display names (e.g.
+    // "US 13 / College Road & North Dupont Highway"), intersection panel
+    // uses {node, routes} objects. mv_hotspots_detail keys on
+    // location_name = the raw nodeId / route id ("178580901"), not the
+    // display name — Round 17 §9.1 maps each selection to its nodeId
+    // via crashState.hotspots before calling getHotspotDetail.
     const rawLocations = stateState.selectedLocations || [];
-    const locations = rawLocations.map(loc => {
-        if (typeof loc === 'string') return loc;
-        if (loc && typeof loc === 'object') return loc.node || loc.location || '';
-        return '';
-    }).filter(Boolean);
-    if (locations.length === 0) return false;
+    const _hotspotIndex = Array.isArray(crashState.hotspots) ? crashState.hotspots : [];
+    const _nodeIdFor = (loc) => {
+        if (!loc) return '';
+        if (typeof loc === 'object') return loc.node || loc.location || loc.nodeId || '';
+        const hs = _hotspotIndex.find(h => h.loc === loc || h.nodeId === loc);
+        return hs && hs.nodeId ? hs.nodeId : String(loc);
+    };
+    const queries = rawLocations
+        .map(loc => ({ loc, nodeId: _nodeIdFor(loc) }))
+        .filter(q => !!q.nodeId);
+    if (queries.length === 0) return false;
 
     // Determine matview location_type. For the Hot Spots panel, the row
     // grouping is route-or-node; default to 'segment' (any non-intersection)
@@ -60550,14 +60597,16 @@ async function _hydrateHotspotDetailFromMatview(which) {
     const stateKey = (dc.state || (typeof window.crashLensClient !== 'undefined' && window.crashLensClient.state) || '').toLowerCase();
     const tryTypes = (which === 'intersection')
         ? ['intersection']
-        : ['segment', 'intersection'];
+        : ['intersection', 'segment'];
 
     let merged = false;
-    for (const loc of locations) {
+    for (const q of queries) {
+        const loc = q.loc;
+        const nodeId = q.nodeId;
         let detail = null;
         for (const lt of tryTypes) {
             try {
-                detail = await dc.getHotspotDetail(stateKey, lt, loc);
+                detail = await dc.getHotspotDetail(stateKey, lt, nodeId);
                 if (detail) break;
             } catch (_) { /* try next location_type */ }
         }
@@ -60649,6 +60698,52 @@ async function _hydrateHotspotDetailFromMatview(which) {
         aggData.specialZones.darkUnlit = (aggData.specialZones.darkUnlit || 0) + (detail.night_count || 0);
         aggData.specialZones.adverseWeather = (aggData.specialZones.adverseWeather || 0) + (detail.adverse_weather_count || 0);
     }
+
+    // Round 17 §9.1 — post-process so the charts pick up the merged JSONB.
+    //
+    // 1) byPeakPeriod is what initCombinedCharts reads for the Time of Day
+    //    chart, but the matview only gives us byHour. Bucket hours → periods
+    //    so the chart finally paints.
+    if (aggData.byHour && Object.keys(aggData.byHour).length) {
+        const sumRange = (lo, hi) => {
+            let s = 0;
+            for (let h = lo; h <= hi; h++) s += (aggData.byHour[String(h)] || aggData.byHour[String(h).padStart(2, '0')] || 0);
+            return s;
+        };
+        aggData.byPeakPeriod = aggData.byPeakPeriod || { amPeak: 0, midday: 0, pmPeak: 0, night: 0 };
+        aggData.byPeakPeriod.amPeak = sumRange(6, 8);
+        aggData.byPeakPeriod.midday = sumRange(9, 14);
+        aggData.byPeakPeriod.pmPeak = sumRange(15, 18);
+        aggData.byPeakPeriod.night  = sumRange(19, 23) + sumRange(0, 5);
+    }
+
+    // 2) The Monthly Heatmap reads byMonth keyed as "YYYY-MM". The matview's
+    //    by_month is just "1".."12" totals. Spread each month total across
+    //    the active years (by_year) proportional to that year's overall
+    //    weight, so the heatmap shows the actual seasonal pattern per year.
+    if (aggData.byMonth && aggData.byYear) {
+        const monthOnly = Object.entries(aggData.byMonth)
+            .filter(([k]) => /^\d{1,2}$/.test(k))
+            .map(([k, v]) => [parseInt(k, 10), Number(v) || 0])
+            .filter(([m]) => m >= 1 && m <= 12);
+        if (monthOnly.length) {
+            const years = Object.keys(aggData.byYear);
+            const yearTotal = years.reduce((s, y) => s + (aggData.byYear[y]?.total || 0), 0);
+            if (yearTotal > 0) {
+                for (const y of years) {
+                    const w = (aggData.byYear[y]?.total || 0) / yearTotal;
+                    for (const [m, v] of monthOnly) {
+                        const key = y + '-' + String(m).padStart(2, '0');
+                        aggData.byMonth[key] = (aggData.byMonth[key] || 0) + Math.round(v * w);
+                    }
+                }
+                // Drop the bare "1".."12" keys so they don't double-count in
+                // any other downstream reader.
+                for (const [m] of monthOnly) delete aggData.byMonth[String(m)];
+            }
+        }
+    }
+
     return merged;
 }
 
@@ -71387,7 +71482,12 @@ function generateReport() {
             typeof window.CL.data.supabaseBridge.resolveTier === 'function') {
             try {
                 const t = window.CL.data.supabaseBridge.resolveTier();
-                const fetchOpts = { all: true, maxRows: 200000 };
+                // Round 17 §9.6 — drop the cap to a workable chunked budget.
+                // getCrashes now pages internally at 10K/request, so 100K is
+                // ~10 chunks. Statement-timeout 500s at 200K are gone, and
+                // PDF/HTML generators were already truncating anything above
+                // ~100K for chart legibility.
+                const fetchOpts = { all: true, maxRows: 100000 };
                 if (route) fetchOpts.route = route;
                 if (startDate) fetchOpts.dateFrom = startDate;
                 if (endDate) fetchOpts.dateTo = endDate;
@@ -75785,7 +75885,10 @@ function computeMonthlyTrends(crashes) {
     const monthly = {};
     crashes.forEach(c => {
         if (!c[COL.DATE]) return;
-        const date = new Date(Number(c[COL.DATE]));
+        // Round 17 §9.5 — defensive parse (numeric epoch → ISO fallback).
+        let date = new Date(Number(c[COL.DATE]));
+        if (isNaN(date.getTime())) date = new Date(c[COL.DATE]);
+        if (isNaN(date.getTime())) return;
         const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         if (!monthly[key]) monthly[key] = { month: key, count: 0, K: 0, A: 0 };
         monthly[key].count++;
@@ -75803,8 +75906,16 @@ function computeDayOfWeekAnalysis(crashes) {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     crashes.forEach(c => {
         if (!c[COL.DATE]) return;
-        const date = new Date(Number(c[COL.DATE]));
-        const day = dayNames[date.getDay()];
+        // Round 17 §9.5 — defensive parse. Supabase hydrate may return ISO
+        // strings; R2 hydrate returns ms-epoch numbers. Try numeric first,
+        // then ISO; bail on Invalid Date so dayNames[NaN] never throws.
+        let date = new Date(Number(c[COL.DATE]));
+        if (isNaN(date.getTime())) date = new Date(c[COL.DATE]);
+        if (isNaN(date.getTime())) return;
+        const dayIdx = date.getDay();
+        if (dayIdx < 0 || dayIdx > 6) return;
+        const day = dayNames[dayIdx];
+        if (!days[day]) return;
         days[day].count++;
         const sev = (c[COL.SEVERITY] || 'O').charAt(0).toUpperCase();
         if (sev === 'K') days[day].K++;
@@ -75817,8 +75928,12 @@ function computeHourlyDistribution(crashes) {
     const hours = Array(24).fill(null).map(() => ({ count: 0, K: 0, A: 0 }));
     crashes.forEach(c => {
         if (!c[COL.DATE]) return;
-        const date = new Date(Number(c[COL.DATE]));
+        // Round 17 §9.5 — same defensive parse as computeDayOfWeekAnalysis.
+        let date = new Date(Number(c[COL.DATE]));
+        if (isNaN(date.getTime())) date = new Date(c[COL.DATE]);
+        if (isNaN(date.getTime())) return;
         const hour = date.getHours();
+        if (hour < 0 || hour > 23) return;
         hours[hour].count++;
         const sev = (c[COL.SEVERITY] || 'O').charAt(0).toUpperCase();
         if (sev === 'K') hours[hour].K++;
@@ -112494,6 +112609,19 @@ document.addEventListener('crashDataLoaded', (evt) => {
         if (typeof setDashboardLoadingState === 'function') {
             setDashboardLoadingState(false);
         }
+        // Round 17 §9.4 — In Supabase-only mode the dashboard's
+        // updateDashboard() is intentionally skipped (its aggregates path
+        // would zero out the matview-painted KPIs). But the comparison-
+        // tables hydrate lives inside updateDashboardTierSections, so the
+        // region/MPO/county tables stayed blank. Fire just the tier
+        // sections here so comparisons hydrate from mv_dashboard_comparisons.
+        try {
+            if (typeof updateDashboardTierSections === 'function') {
+                updateDashboardTierSections();
+            }
+        } catch (e) {
+            console.warn('[Dashboard] tier-sections refresh failed:', e && e.message);
+        }
         return;
     }
     if (source === 'lazy-empty') {
@@ -144109,78 +144237,143 @@ function updateDistrictStatisticsUI() {
 }
 
 /**
- * Round 14 §0.4 — Magisterial-district / CCD breakdown via Supabase, with an
- * honest banner when the underlying matview hasn't been wired for the active
- * jurisdiction yet (BLOCKED-UPSTREAM sentinel: getMagisterialDistricts returns
- * null when mv_grants_ccd is missing). State-agnostic.
+ * Round 17 §3 — Tier-adaptive Jurisdiction Breakdown widget.
+ * Replaces the old county-only CCD-card render with a single widget that
+ * adapts to whatever tier the user is on:
  *
- * Renders into #districtStatisticsContainer. Falls through to the legacy
- * client-side path (districtState) when Supabase isn't reachable.
+ *   federal / state / region → "Crashes by County"
+ *   mpo                      → "Crashes by County within <MPO>"
+ *   planning_district        → "Crashes by County within <PD>"
+ *   county                   → "Crashes by Magisterial District" (CCD or BLOCKED-UPSTREAM banner)
+ *   city / town              → "Host Jurisdiction" (single host-county card)
+ *
+ * Backed by the get_jurisdiction_breakdown RPC. State-agnostic.
+ *
+ * Renders into #magisterialDistrictContainer if present, otherwise the
+ * legacy #districtStatisticsContainer used by the Grants tab.
  */
 async function renderMagisterialDistricts() {
-    const container = document.getElementById('districtStatisticsContainer');
-    if (!container) return;
+    const container = document.getElementById('magisterialDistrictContainer')
+                   || document.getElementById('districtStatisticsContainer');
+    if (!container) return false;
     if (!window.crashLensClient || !window.CL || !CL.data || !CL.data.supabaseBridge) return false;
     let t;
     try { t = CL.data.supabaseBridge.resolveTier(); } catch (e) { return false; }
-    if (!t || t.tier !== 'county') {
-        container.innerHTML = '<div style="padding:.75rem;color:var(--gray);font-size:.85rem">'
-            + 'Magisterial-district breakdown is available only at the county tier.</div>';
+    if (!t) return false;
+
+    const titleEl = document.getElementById('magisterialDistrictTitle');
+    const TITLES = {
+        'state':             'Crashes by County',
+        'federal':           'Crashes by County',
+        'region':            'Crashes by County',
+        'mpo':               t.value ? 'Crashes by County within ' + t.value : 'Crashes by County',
+        'planning_district': t.value ? 'Crashes by County within ' + t.value : 'Crashes by County',
+        'county':            'Crashes by Magisterial District',
+        'city':              'Host Jurisdiction',
+        'city_town':         'Host Jurisdiction',
+    };
+    if (titleEl) titleEl.textContent = TITLES[t.tier] || 'Crashes by Jurisdiction';
+
+    container.innerHTML = '<div style="padding:.75rem;color:var(--gray);font-size:.85rem">Loading breakdown…</div>';
+
+    const esc = (s) => String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    let rows;
+    try {
+        rows = await window.crashLensClient.getJurisdictionBreakdown({ tier: t.tier, value: t.value });
+    } catch (e) {
+        container.innerHTML = '<div style="padding:.75rem;color:#9a3412;font-size:.85rem">Failed to load: ' + esc(e && e.message) + '</div>';
         return true;
     }
-    const rt = (CL.data.supabaseBridge.roadTypeSpec && CL.data.supabaseBridge.roadTypeSpec()) || {};
-    const roadType = rt.noInterstate ? 'all_no_interstate'
-                    : (rt.roadType || (Array.isArray(rt.roadTypes) && rt.roadTypes[0]) || 'all');
-    let data;
-    try {
-        data = await window.crashLensClient.getMagisterialDistricts({ county: t.value, roadType });
-    } catch (e) {
-        console.warn('[MagDist] fetch failed:', e && e.message);
-        return false;
-    }
-    if (data === null) {
-        // BLOCKED-UPSTREAM sentinel — matview missing for this jurisdiction.
+
+    // BLOCKED-UPSTREAM sentinel row at county tier when CCD ingest hasn't landed.
+    if (Array.isArray(rows) && rows.length === 1 && rows[0].is_blocked_upstream) {
         container.innerHTML = '<div style="padding:.75rem;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--radius);font-size:.85rem">'
             + '⚠️ Magisterial-district (CCD) breakdown is not yet wired for this jurisdiction. '
             + 'It requires a TIGERweb spatial join during data ingest. Once <code>crashes.ccd_name</code> '
-            + 'is populated, the cards will populate automatically.</div>';
+            + 'is populated, the cards will appear automatically.</div>';
         return true;
     }
-    if (!Array.isArray(data) || data.length === 0) {
-        container.innerHTML = '<div style="padding:.75rem;color:var(--gray);font-size:.85rem">'
-            + 'No CCD data for this filter set.</div>';
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+        container.innerHTML = '<div style="padding:.75rem;color:var(--gray);font-size:.85rem">No data for this filter set.</div>';
         return true;
     }
-    const totalCrashes = data.reduce((s, d) => s + (Number(d.crash_count) || 0), 0);
-    container.innerHTML = data.map(r => {
-        const pct = totalCrashes > 0
-            ? ((Number(r.crash_count) || 0) / totalCrashes * 100).toFixed(1)
-            : '0.0';
-        const k = Number(r.k) || 0, a = Number(r.a) || 0;
-        const b = Number(r.b) || 0, cc = Number(r.c) || 0, o = Number(r.o) || 0;
+
+    const total = rows.reduce((s, r) => s + (Number(r.crash_count) || 0), 0);
+    const kindIcon = { 'county': '🏛️', 'ccd': '🗺️', 'host_county': '📍' };
+
+    container.innerHTML = rows.map(r => {
+        const pct = total > 0 ? ((r.crash_count / total) * 100).toFixed(1) : '0.0';
+        const icon = kindIcon[r.breakdown_kind] || '🏛️';
         const epdoStr = Number(r.epdo || 0).toLocaleString();
-        const safeName = String(r.ccd_name || '(unnamed)')
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        return '<div class="ccd-card" style="background:var(--bg-secondary);border-radius:8px;padding:.75rem;margin-bottom:.5rem;border-left:4px solid #7c3aed">'
+        const safeName = esc(r.label || '(unnamed)');
+        return '<div class="jurisdiction-card" data-breakdown-kind="' + esc(r.breakdown_kind) + '" '
+            +    'style="background:var(--bg-secondary);border-radius:8px;padding:.75rem;margin-bottom:.5rem;border-left:4px solid #7c3aed">'
             +   '<div style="display:flex;justify-content:space-between;align-items:flex-start">'
-            +     '<div><div style="font-weight:600;color:#7c3aed">' + safeName + '</div>'
+            +     '<div><div style="font-weight:600;color:#7c3aed">' + icon + ' ' + safeName + '</div>'
             +     '<div style="font-size:.8rem;color:var(--gray);margin-top:.25rem">'
             +       (Number(r.crash_count) || 0).toLocaleString() + ' crashes (' + pct + '%)'
             +     '</div></div>'
             +     '<div style="text-align:right"><div style="font-size:.9rem;font-weight:600">' + epdoStr + '</div>'
             +     '<div style="font-size:.7rem;color:var(--gray)">EPDO</div></div>'
             +   '</div>'
-            +   '<div style="display:flex;gap:.5rem;margin-top:.5rem;font-size:.75rem">'
-            +     '<span style="color:#dc2626">K:' + k + '</span>'
-            +     '<span style="color:#f97316">A:' + a + '</span>'
-            +     '<span style="color:#eab308">B:' + b + '</span>'
-            +     '<span style="color:#22c55e">C:' + cc + '</span>'
-            +     '<span style="color:#6b7280">O:' + o + '</span>'
+            +   '<div style="display:flex;gap:.5rem;margin-top:.5rem;font-size:.75rem;flex-wrap:wrap">'
+            +     '<span style="color:#dc2626">K:' + (r.fatals || 0) + '</span>'
+            +     '<span style="color:#f97316">A:' + (r.serious || 0) + '</span>'
+            +     '<span style="color:#6366f1">Ped:' + (r.ped_count || 0) + '</span>'
+            +     '<span style="color:#0891b2">Bike:' + (r.bike_count || 0) + '</span>'
+            +     '<span style="color:#6b7280">KA ' + (Number(r.ka_rate_pct) || 0) + '%</span>'
             +   '</div>'
             + '</div>';
     }).join('');
+
+    // Round 17 §5 — click-to-drill: state/mpo/PD-tier county cards drill into county tier.
+    if (t.tier === 'state' || t.tier === 'federal' || t.tier === 'region'
+        || t.tier === 'mpo' || t.tier === 'planning_district') {
+        attachJurisdictionCardClicks();
+    }
     return true;
 }
+
+/**
+ * Round 17 §5 — clicking a "county" card from a state/MPO/PD rollup
+ * drills the active tier down to county. No-op when no drill helper
+ * is available on the page.
+ */
+function attachJurisdictionCardClicks() {
+    const container = document.getElementById('magisterialDistrictContainer')
+                   || document.getElementById('districtStatisticsContainer');
+    if (!container) return;
+    container.querySelectorAll('.jurisdiction-card[data-breakdown-kind="county"]').forEach(card => {
+        card.style.cursor = 'pointer';
+        card.title = 'Click to drill into this county';
+        card.addEventListener('click', () => {
+            const h5 = card.querySelector('div[style*="font-weight:600"]');
+            const label = h5 ? h5.textContent.replace(/^\W+\s*/, '').trim() : '';
+            if (!label) return;
+            if (typeof setTierAndJurisdiction === 'function') {
+                try { setTierAndJurisdiction('county', label); } catch (e) {
+                    console.warn('[Magisterial] drill failed:', e && e.message);
+                }
+            } else {
+                console.log('[Magisterial] drill requested:', label, '(no setTierAndJurisdiction available)');
+            }
+        }, { once: true });
+    });
+}
+
+// Round 17 §3 — re-render the tier-adaptive widget whenever the active
+// tier / jurisdiction changes. Debounced via the event itself; the
+// widget shows a loading state immediately, then swaps in real cards.
+document.addEventListener('jurisdictionChanged', function () {
+    if (!document.getElementById('magisterialDistrictContainer')
+        && !document.getElementById('districtStatisticsContainer')) return;
+    if (typeof renderMagisterialDistricts !== 'function') return;
+    Promise.resolve(renderMagisterialDistricts()).catch(e =>
+        console.warn('[Magisterial] re-render failed:', e && e.message));
+});
 
 /**
  * Render district statistics into a container
@@ -153230,8 +153423,25 @@ function checkPredictionAvailabilityIndicator() {
     dot.style.background = 'var(--gray-300, #ccc)';
     dot.title = 'Checking forecast availability...';
 
-    fetch(`/api/forecasts/check/${r2Prefix}/${jurisdiction}`)
-        .then(r => r.ok ? r.json() : null)
+    // Round 17 §9.7 — prefer the Supabase mv_forecasts probe (state-agnostic,
+    // works on GitHub Pages); fall back to the legacy /api/ proxy only when
+    // the optional Node backend is available.
+    const _resolveForecastAvail = (async () => {
+        try {
+            if (window.crashLensClient && typeof window.crashLensClient.getForecasts === 'function') {
+                const rows = await window.crashLensClient.getForecasts({ jurisdiction });
+                if (Array.isArray(rows)) {
+                    return { available: rows.length > 0, fileCount: rows.length, files: [] };
+                }
+            }
+        } catch (_) { /* fall through */ }
+        if (!(await _isApiBackendAvailable())) return null;
+        try {
+            const r = await fetch(`/api/forecasts/check/${r2Prefix}/${jurisdiction}`);
+            return r.ok ? (await r.json()) : null;
+        } catch (_) { return null; }
+    })();
+    _resolveForecastAvail
         .then(data => {
             if (!data) { dot.style.display = 'none'; return; }
             predictionState.forecastAvailable = data.available;
@@ -154936,9 +155146,22 @@ async function checkForecastAvailability(stateKey, jurisdictionId) {
     resultEl.innerHTML = '<span style="color:var(--gray)">Checking R2 storage...</span>';
 
     try {
-        const resp = await fetch(`/api/forecasts/check/${stateKey}/${jurisdictionId}`);
-        if (!resp.ok) throw new Error('Server unavailable');
-        const data = await resp.json();
+        // Round 17 §9.7 — prefer Supabase mv_forecasts; fall back to /api/ only when wired.
+        let data = null;
+        if (window.crashLensClient && typeof window.crashLensClient.getForecasts === 'function') {
+            try {
+                const rows = await window.crashLensClient.getForecasts({ jurisdiction: jurisdictionId });
+                if (Array.isArray(rows)) {
+                    data = { available: rows.length > 0, fileCount: rows.length, files: rows.map(r => r.location_name || r.label || '').filter(Boolean) };
+                }
+            } catch (_) { /* fall through */ }
+        }
+        if (!data) {
+            if (!(await _isApiBackendAvailable())) throw new Error('No forecast backend available');
+            const resp = await fetch(`/api/forecasts/check/${stateKey}/${jurisdictionId}`);
+            if (!resp.ok) throw new Error('Server unavailable');
+            data = await resp.json();
+        }
 
         if (data.available) {
             resultEl.innerHTML = `<span style="color:var(--success)">✓ ${data.fileCount} forecast file(s) found in R2 storage: ${data.files.join(', ')}.</span>
