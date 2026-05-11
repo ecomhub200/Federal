@@ -204,3 +204,23 @@ Cold-start TTI target: 12 s → 1.5 s. Warm reload target: 5.2 s → 1 s. Matche
 - Backend pre-applied by Cowork: `states.capabilities.center` for DE/VA/CO; `mv_safety_categories_yearly` matview; `embed_pending_chunks(p_embeddings jsonb)` RPC.
 - §5 AADT bulk-import UI already shipped Round 16 §5 — no changes needed.
 - Files touched: `assets/js/data-client.js`, `assets/js/filter-engine.js`, `assets/js/chart-registry.js`, `app/index.html`, `log.md`.
+
+## 2026-05-11 — Round 20 frontend merged (PDF-audit tab gaps + Prediction/DeepDive removal)
+- §2 mv_crash_tree contributingFactors→contributing translation (5-line fix in data-client.js getCrashTree), plus matview-only stats panel write-back so updateCrashTreeStats() renders K/A/Total from crashTreeState when sampleRows is empty.
+- §3 Hot Spots toolbar gains "📥 Import AADT" button + new aadtCoverageBanner that surfaces aadt_lookup row count and links to the import modal. Banner refreshes on jurisdictionChanged and after successful imports.
+- §4.1 mv_speed_severity_matrix renderer hides B/C columns and emits a one-line banner when state capabilities.has_severity_b===false && has_severity_c===false. Capability cache resets on jurisdictionChanged.
+- §4.2 mv_fatal_factors long-format support: fold rows into a jurisdiction-wide top-factor hint stored on fatalSpeedingState.fatalData.jurisdictionTopFactor; getTopFactor() falls back to it when per-row crashes are stubs, replacing the "-" placeholder.
+- §5 Safety Focus sub-KPI row replaced with a single inline note (id: safety-subkpi-unavailable) whenever mv_safety_co_factors returns 404. _safetyFocusHasCofactors() caches the probe result.
+- §6 People-Injured pie + legend drops the "Senior wearing seatbelt" slot when capabilities.has_senior_flag===false (both Supabase-only and legacy-row code paths).
+- §8 Dashboard loading banner auto-hides once the six tracked canvases paint (createChart instrumented via _markDashboardChartPainted); crashtab:dashboard:shown event resizes those canvases to fix the blank-canvas-while-hidden bug.
+- §9 Warrants location selection: when sampleRows aren't loaded but Supabase is configured, skip the polling loop entirely and let the existing Supabase path serve crashes (3s legacy poll timeout kept for the no-Supabase fallback).
+- §10 Grants: _renderGrantDeadline() returns the raw string for un-parseable deadlines ("Quarterly", "Rolling", "TBD"), and displayStateGrants no longer filters those rows out as isPast.
+- §11 Domain Knowledge corpus embedding banner (id: domainKnowledgeEmbedBanner) shows when knowledge_corpus_pending has rows; auto-refreshes on crashtab:knowledge:shown and crashtab:cmf:shown.
+- §X8 Dashboard District Matrix widget short-circuits to a BLOCKED-UPSTREAM banner when state capabilities.has_ccd_assignment===false; charts hidden; re-checked on jurisdictionChanged.
+- §X9 Crash Prediction tab removed: nav item, tab body, predictionState, initPredictionTab + 16 helper functions, predForecastDot, checkPredictionAvailabilityIndicator, generatePredictionForecastReport, How-To entry, reportType <option>, friendlyNames/pdfTitles/reportGenerators/pageCounts entries, getForecasts data-client method.
+- §X9 Deep Dive tab removed: nav item, tab body, deepDiveState, initDeepDiveTab + 12 helper functions, detectDeepDiveColumns hooks, generateDeepDiveAnalysisReport, How-To entry, reportType <option>, all map entries.
+- showTab dispatches new crashtab:{hotspots|dashboard|cmf|knowledge}:shown events for tab-aware banners.
+- State-agnostic checklist: §3 keys on aadt_lookup count + has_aadt_full_coverage; §4.1 keys on has_severity_b/c; §5 keys on existence of mv_safety_co_factors (404 today); §6 keys on has_senior_flag; §X8 keys on has_ccd_assignment; §X9 removes uniformly with no per-state bypass. No new SQL.
+- Verification: node -e new Function on app/index.html inline scripts (13 blocks, ~11MB) parses cleanly; data-client.js parses cleanly; grep -nE "predictionState|deepDiveState|tab-prediction|tab-deepdive|predForecastDot" returns 0 matches.
+- Files touched: `assets/js/data-client.js`, `app/index.html`, `log.md`.
+- Backend ask logged for future round: mv_safety_co_factors matview needed to re-enable Safety Focus sub-KPI breakdowns; schema sketched in §5 of Round 20 prompt.

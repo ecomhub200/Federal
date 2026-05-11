@@ -808,7 +808,13 @@ class CrashLensDataClient {
       try {
         const tierFilters = this._tierFilter(tier, value);
         const allFilters = { ...tierFilters };
-        if (opts.treeType) allFilters.tree_type = `eq.${opts.treeType}`;
+        if (opts.treeType) {
+          // mv_crash_tree stores 'contributing' (singular, no Factors suffix);
+          // frontend has historically passed 'contributingFactors'. Translate to
+          // keep all R2 / CSV / agg-worker code paths unchanged.
+          const matviewValue = opts.treeType === 'contributingFactors' ? 'contributing' : opts.treeType;
+          allFilters.tree_type = `eq.${matviewValue}`;
+        }
         const data = await this._supabaseQuery('mv_crash_tree', {
           filters: allFilters,
           limit: 50000,
@@ -1943,38 +1949,6 @@ class CrashLensDataClient {
       return Array.isArray(data) ? data : [];
     } catch (e) {
       console.warn('[DataClient] getHotspotsWithRates failed:', e.message);
-      return null;
-    }
-  }
-
-  /**
-   * mv_forecasts — least-squares linear-trend forecast per (state, jurisdiction, metric).
-   * Drives the Crash Prediction tab.
-   * @param {object} opts {state?, jurisdiction?, metric?}
-   */
-  async getForecasts(opts = {}) {
-    if (!this.preferSupabase || !this.supabaseKey) return null;
-    const stateKey = (opts.state || this.state || '').toLowerCase();
-    const params = new URLSearchParams({
-      state: 'eq.' + stateKey,
-      select: '*',
-    });
-    if (opts.jurisdiction) params.set('jurisdiction', 'eq.' + opts.jurisdiction);
-    if (opts.metric)       params.set('metric', 'eq.' + opts.metric);
-    const url = `${this.supabaseUrl}/mv_forecasts?${params.toString()}`;
-    const headers = { 'apikey': this.supabaseKey, 'Authorization': `Bearer ${this.supabaseKey}` };
-    try {
-      const resp = await fetch(url, { headers });
-      if (!resp.ok) {
-        const text = await resp.text().catch(() => '');
-        if (resp.status === 404 || /relation .* does not exist/i.test(text)) return null;
-        throw new Error(text || `HTTP ${resp.status}`);
-      }
-      const data = await resp.json();
-      this._source = 'supabase';
-      return Array.isArray(data) ? data : [];
-    } catch (e) {
-      console.warn('[DataClient] getForecasts failed:', e.message);
       return null;
     }
   }
