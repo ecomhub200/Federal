@@ -224,3 +224,26 @@ Cold-start TTI target: 12 s → 1.5 s. Warm reload target: 5.2 s → 1 s. Matche
 - Verification: node -e new Function on app/index.html inline scripts (13 blocks, ~11MB) parses cleanly; data-client.js parses cleanly; grep -nE "predictionState|deepDiveState|tab-prediction|tab-deepdive|predForecastDot" returns 0 matches.
 - Files touched: `assets/js/data-client.js`, `app/index.html`, `log.md`.
 - Backend ask logged for future round: mv_safety_co_factors matview needed to re-enable Safety Focus sub-KPI breakdowns; schema sketched in §5 of Round 20 prompt.
+
+## 2026-05-11 — Round 20.1 hotfix
+§B `loadAadtCoverageBanner` was querying `aadt_lookup?select=id` — column doesn't exist
+(matview's PK is composite `(state, rte_name, rte_segment_id, measurement_year)`).
+The 400 was swallowed by the catch; banner stayed at "checking…". Switched to `select=state`.
+
+§C `mv_fatal_factors` is wide-format (`fatal_total, fatal_impaired, fatal_speed, fatal_distracted,
+fatal_unrestrained, fatal_nighttime, fatal_intersection, fatal_weather, fatal_animal` plus 6
+composite co-factor columns). Round 20's `jurisdictionTopFactor` derivation expected a long-format
+`contributing_factor` column that doesn't exist — every county/PD-tier load returned `null` and the
+Top Factor column rendered '—' across the table. Replaced with a walker that reads the existing
+wide-format rollup (SINGLE_FACTOR_COLS map).
+
+§D Polish: removed dead `.pred-*` CSS (~120 lines) and orphan `.dd-panel-*` / `.dd-arrow` /
+`.dd-insight` / `.dd-no-data` selectors; trimmed `.pred-*` from the 768px media query (kept
+`.hotspot-*` + `.int-vru-grid`); refreshed a stale "15 report types" comment that listed prediction
+and deepdive.
+
+Verification: ✅ AADT banner renders "N AADT records loaded" instead of "checking…";
+✅ Fatal Crashes Top Factor renders icon+name at planning-district rollup;
+✅ All 13 inline scripts + data-client.js parse cleanly.
+
+Files touched: `app/index.html`, `log.md`.
