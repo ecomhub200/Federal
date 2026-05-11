@@ -5414,6 +5414,11 @@ Your data stays private. All processing happens in your browser.
 <!-- DASHBOARD TAB -->
 <div id="tab-dashboard" class="tab-content" role="tabpanel" aria-labelledby="tab-dashboard-btn">
 
+<!-- Round 21 §10 — State coverage banner. Shown when capabilities probe reports
+     total_crashes:0 (state is still pending in the data pipeline). State-agnostic
+     — keys on caps.crashes_total / caps.total_crashes. -->
+<div id="stateCoverageBanner" style="display:none;background:#fef3c7;border-left:3px solid #d97706;padding:.6rem .85rem;margin-bottom:.75rem;font-size:.9rem;border-radius:var(--radius);color:#92400e"></div>
+
 <!-- Severity Legend for Non-Experts -->
 <div class="severity-legend" role="region" aria-label="Crash severity codes explained">
 <strong style="margin-right:.5rem">Severity Codes:</strong>
@@ -6192,7 +6197,7 @@ All No Interstate
 </div>
 <div class="filter-group">
 <label for="hsGroupBy">Group By <span class="help-tooltip" data-tooltip="Route Name: Groups crashes by road. Intersection Node: Groups by specific intersections.">?</span></label>
-<select id="hsGroupBy">
+<select id="hsGroupBy" onchange="if(typeof analyzeHotspots==='function')analyzeHotspots()">
 <option value="route">Route Name</option>
 <option value="node">Intersection Node</option>
 </select>
@@ -10876,8 +10881,8 @@ Search by road name to find evidence-based safety solutions from the
 </div>
 <div class="filter-group">
 <label style="display:flex;align-items:center;gap:.5rem">
-<input type="checkbox" id="cmfVirginiaFirst" style="width:16px;height:16px" checked>
-<span>🗺️ Virginia First</span>
+<input type="checkbox" id="cmfVirginiaFirst" style="width:16px;height:16px">
+<span id="cmfVirginiaFirstLabel">🗺️ Virginia First</span>
 </label>
 </div>
 </div>
@@ -12316,6 +12321,8 @@ Search across traffic safety standards with AI-powered retrieval. Select a locat
 
 <!-- Round 20 §11 — Inline embed prompt. Visible when pending chunks > 0. -->
 <div id="domainKnowledgeEmbedBanner" style="display:none;background:#fef3c7;border-left:3px solid #d97706;padding:.5rem .75rem;margin:.5rem 0 1rem 0;font-size:.85rem;border-radius:var(--radius);color:#92400e"></div>
+<!-- Round 21 §4 — Qdrant unavailable banner (GH-Pages hosting). -->
+<div id="dkQdrantUnavailableBanner" style="display:none;background:#fef3c7;border-left:3px solid #d97706;padding:.5rem .75rem;margin:.5rem 0 1rem 0;font-size:.85rem;border-radius:var(--radius);color:#92400e"></div>
 <!-- Round 19 §6 — Knowledge corpus embedding workflow. Pending chunks live
      in knowledge_corpus_pending; they need 1536-dim embeddings before
      pgvector RAG can find them. Client-side OpenAI call → embed_pending_chunks RPC. -->
@@ -20022,6 +20029,16 @@ function getCurrentStateFips() {
             return appConfig.states[detected].fips;
         }
     }
+    // Round 21 §2 — Priority 3b: last-selected state from localStorage.
+    // Honors the user's prior selection across reloads so the app doesn't
+    // bounce back to the demo/default state every cold-load.
+    try {
+        const lastFips = localStorage.getItem('selectedStateFips');
+        if (lastFips && typeof appConfig !== 'undefined' && appConfig?.states) {
+            const known = Object.values(appConfig.states).some(s => s && s.fips === lastFips);
+            if (known) return lastFips;
+        }
+    } catch (e) { /* localStorage unavailable — fall through */ }
     // Priority 4: Default from config
     const defaultState = (typeof appConfig !== 'undefined' && appConfig?.defaultState) || null;
     if (defaultState && typeof appConfig !== 'undefined' && appConfig?.states?.[defaultState]?.fips) {
@@ -20093,6 +20110,25 @@ function loadEPDOPreset(presetKey) {
     updateEPDOPresetUI();
     updateEPDOWeightLabels();
     recalculateAllEPDO();
+    // Round 21 §6 — When sampleRows is empty (every aggregate tier), the
+    // in-memory recalculateAllEPDO() has nothing to walk and the EPDO tile
+    // doesn't refresh. Force a matview re-paint so the Dashboard reflects
+    // the new weights immediately. State-agnostic.
+    try {
+        const _hasRows = !!(typeof crashState !== 'undefined' && crashState && crashState.sampleRows && crashState.sampleRows.length > 0);
+        if (!_hasRows && typeof updateDashboardFromMatview === 'function') {
+            const spec = (typeof window._readGlobalFilterSpec === 'function')
+                ? window._readGlobalFilterSpec()
+                : { yearStart: null, yearEnd: null, severities: null };
+            updateDashboardFromMatview(spec);
+        }
+    } catch (e) { /* non-fatal */ }
+    // Broadcast so any other tab that caches EPDO-derived values can refresh.
+    try {
+        window.dispatchEvent(new CustomEvent('epdo:weights-changed', {
+            detail: { preset: presetKey, weights: Object.assign({}, EPDO_WEIGHTS) }
+        }));
+    } catch (e) { /* non-fatal */ }
     console.log('[EPDO] Preset changed to:', presetKey, EPDO_WEIGHTS);
 }
 
@@ -24813,11 +24849,23 @@ function populateStateDropdown() {
  * Triggers dynamic configuration: loads counties, updates map, changes jurisdictions.
  */
 async function handleStateSelection() {
+    // Round 21 §1.3 — cancel any in-flight prewarm batch before kicking off
+    // the new state's. Prevents the 60+s back-to-back prewarm stall observed
+    // on CO→DE switches.
+    try {
+        if (CL && CL.data && CL.data.prewarm && typeof CL.data.prewarm.cancel === 'function') {
+            CL.data.prewarm.cancel();
+        }
+    } catch (e) { /* non-fatal */ }
+
     const select = document.getElementById('stateSelect');
     if (!select) return;
 
     const stateFips = select.value;
     if (!stateFips) return;
+
+    // Round 21 §2 — persist last-selected state so reloads stay on this state.
+    try { localStorage.setItem('selectedStateFips', stateFips); } catch (e) { /* non-fatal */ }
 
     const statusText = document.getElementById('stateStatusText');
 
@@ -48361,6 +48409,110 @@ function clearDatePreset(startInputId, endInputId, callback) {
 // ============================================================
 // DASHBOARD FILTERING
 // ============================================================
+
+// Round 21 §5.1 — central spec read from the global-filter inputs. Returns
+// year ranges (matview rows carry crash_year, not full dates) and the
+// selected severity subset. `severities: null` means unfiltered.
+window._readGlobalFilterSpec = function _readGlobalFilterSpec() {
+    const startEl = document.getElementById('filterStartDate');
+    const endEl   = document.getElementById('filterEndDate');
+    const parseYear = el => {
+        if (!el || !el.value) return null;
+        const d = new Date(el.value);
+        const y = d.getFullYear();
+        return Number.isFinite(y) ? y : null;
+    };
+    const yearStart = parseYear(startEl);
+    const yearEnd   = parseYear(endEl);
+    const ALL_SEV = ['K','A','B','C','O'];
+    const sevList = ALL_SEV.filter(s => {
+        const el = document.getElementById('sev' + s);
+        return el && el.checked;
+    });
+    const severities = (sevList.length === ALL_SEV.length) ? null : sevList;
+    return { yearStart, yearEnd, severities };
+};
+
+// Round 21 §5.2 — when sampleRows is empty (every aggregate tier with
+// matview-paint), re-fetch dashboard_summary with the spec applied so the
+// KPI tiles narrow live. Aggregates into the same DOM IDs updateDashboard()
+// writes. State-agnostic — keys on resolveTier() + crashLensClient.state.
+async function updateDashboardFromMatview(spec) {
+    if (!window.crashLensClient || !window.CL || !CL.data || !CL.data.supabaseBridge) return;
+    const dc = window.crashLensClient;
+    if (typeof CL.data.supabaseBridge.resolveTier !== 'function') return;
+    const t = CL.data.supabaseBridge.resolveTier();
+    if (!t || !t.tier) return;
+    const tierColMap = {
+        federal: null, state: null, region: 'dot_district', mpo: 'mpo_name',
+        planning_district: 'planning_district', county: 'planning_district',
+        city: 'physical_juris_name', city_town: 'physical_juris_name'
+    };
+    const tierCol = tierColMap[t.tier];
+    const params = new URLSearchParams({
+        state: 'eq.' + String(dc.state || '').toLowerCase(),
+        select: 'crash_count,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,night_crashes,alcohol_crashes,animal_crashes,crash_severity'
+    });
+    if (tierCol && t.value) params.set(tierCol, 'eq.' + t.value);
+    if (spec && spec.yearStart != null) params.append('crash_year', 'gte.' + spec.yearStart);
+    if (spec && spec.yearEnd != null)   params.append('crash_year', 'lte.' + spec.yearEnd);
+    if (spec && Array.isArray(spec.severities) && spec.severities.length > 0) {
+        params.set('crash_severity', 'in.(' + spec.severities.join(',') + ')');
+    }
+    let rows = [];
+    try {
+        const resp = await fetch(`${dc.supabaseUrl}/dashboard_summary?${params.toString()}`, {
+            headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
+        });
+        if (!resp.ok) {
+            console.warn('[Dashboard] matview re-fetch failed:', resp.status);
+            return;
+        }
+        rows = await resp.json();
+    } catch (e) {
+        console.warn('[Dashboard] matview re-fetch threw:', e && e.message);
+        return;
+    }
+    const sev = { K:0, A:0, B:0, C:0, O:0 };
+    let total = 0, ped = 0, bike = 0, speed = 0, night = 0, alc = 0, animal = 0;
+    (rows || []).forEach(r => {
+        const n = Number(r.crash_count) || 0;
+        total += n;
+        const sevK = String(r.crash_severity || '').charAt(0).toUpperCase();
+        if (sevK in sev) sev[sevK] += n;
+        ped    += Number(r.ped_crashes)     || 0;
+        bike   += Number(r.bike_crashes)    || 0;
+        speed  += Number(r.speed_crashes)   || 0;
+        night  += Number(r.night_crashes)   || 0;
+        alc    += Number(r.alcohol_crashes) || 0;
+        animal += Number(r.animal_crashes)  || 0;
+    });
+    const W = EPDO_WEIGHTS || { K:462, A:62, B:12, C:5, O:1 };
+    const epdo = sev.K * (W.K || 0) + sev.A * (W.A || 0)
+               + sev.B * (W.B || 0) + sev.C * (W.C || 0)
+               + sev.O * (W.O || 0);
+    const setN = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = (Number(v) || 0).toLocaleString();
+    };
+    setN('kpiTotal',     total);
+    setN('kpiFatal',     sev.K);
+    setN('kpiInjuryA',   sev.A);
+    setN('kpiInjuryBC',  sev.B + sev.C);
+    setN('kpiPDO',       sev.O);
+    setN('kpiEPDO',      epdo);
+    setN('kpiKA',        sev.K + sev.A);
+    setN('kpiVRU',       ped + bike);
+    setN('kpiSpeed',     speed);
+    setN('kpiNighttime', night);
+    // Honor the Round 16 BLOCKED-UPSTREAM B/C gate — we just overwrote kpiInjuryBC.
+    if (typeof applyInjuryBCCapabilityGate === 'function') {
+        applyInjuryBCCapabilityGate().catch(() => {});
+    }
+    console.log('[Dashboard] matview re-paint with spec:', spec, '→ total:', total, 'K:', sev.K, 'A:', sev.A);
+}
+window.updateDashboardFromMatview = updateDashboardFromMatview;
+
 function applyFilters() {
     currentFilters.startDate = document.getElementById('filterStartDate').value || null;
     currentFilters.endDate = document.getElementById('filterEndDate').value || null;
@@ -48372,6 +48524,16 @@ function applyFilters() {
     ['K','A','B','C','O'].forEach(s => { if(document.getElementById('sev'+s).checked) currentFilters.severity.push(s); });
     updateDashboard();
     if (crashMap) updateMapDisplay();
+    // Round 21 §5.3 — when sampleRows is empty, re-fetch the matview with
+    // crash_year + crash_severity filters so the date/severity inputs
+    // actually narrow the KPI tiles instead of being a no-op.
+    try {
+        const _hasRows = !!(crashState && crashState.sampleRows && crashState.sampleRows.length > 0);
+        if (!_hasRows) {
+            const spec = window._readGlobalFilterSpec();
+            updateDashboardFromMatview(spec);
+        }
+    } catch (e) { /* non-fatal */ }
 }
 
 function resetFilters() {
@@ -48397,6 +48559,12 @@ function resetFilters() {
     } catch (e) { /* ignore */ }
     updateDashboard();
     if (crashMap) updateMapDisplay();
+    // Round 21 §5.3 — re-fire the matview re-paint with the reset spec so
+    // KPIs return to baseline when sampleRows is empty.
+    try {
+        const _hasRows = !!(crashState && crashState.sampleRows && crashState.sampleRows.length > 0);
+        if (!_hasRows) updateDashboardFromMatview(window._readGlobalFilterSpec());
+    } catch (e) { /* non-fatal */ }
 }
 
 // Reset filter UI elements without triggering dashboard update (used after data load)
@@ -51531,6 +51699,34 @@ async function applyInjuryBCCapabilityGate() {
         bcEl.title = "B and C injury severities are not available in this state's source data.";
     }
 }
+
+// Round 21 §10 — Dashboard state coverage banner. Surfaces a clear message
+// when the active state's capabilities row reports total_crashes:0
+// (pipeline pending / data not yet ingested). State-agnostic — keys on the
+// capability row, not on any state literal.
+async function _renderStateCoverageBanner() {
+    const banner = document.getElementById('stateCoverageBanner');
+    if (!banner) return;
+    const dc = window.crashLensClient;
+    if (!dc || typeof dc.getStateCapabilities !== 'function') {
+        banner.style.display = 'none';
+        return;
+    }
+    let caps = null;
+    try { caps = await getActiveStateCapabilities(); }
+    catch (e) { caps = null; }
+    const total = caps && (Number(caps.crashes_total) || Number(caps.total_crashes) || 0);
+    if (!caps || total > 0) {
+        banner.style.display = 'none';
+        return;
+    }
+    const stateKey = (dc.state || '').toLowerCase();
+    const stateDisplay = stateKey ? (stateKey.charAt(0).toUpperCase() + stateKey.slice(1)) : 'This state';
+    banner.style.display = 'block';
+    banner.innerHTML = 'ⓘ <strong>' + stateDisplay + '</strong> crash data is being prepared (<code>pipeline_status: pending</code>). Switch to another state from the State picker to explore the live tool, or check back later.';
+}
+document.addEventListener('jurisdictionChanged', _renderStateCoverageBanner);
+window.addEventListener('crashtab:dashboard:shown', _renderStateCoverageBanner);
 
 // Factor-chip parity. Renders 18 factor chips minus those hidden by capabilities.
 const _MAP_FACTOR_DISPLAY = [
@@ -59137,7 +59333,9 @@ function showSegmentOnMap(routeName) {
     // Fit map to segment bounds
     if (allPoints.length > 0) {
         const bounds = L.latLngBounds(allPoints);
-        map.fitBounds(bounds, { padding: [50, 50] });
+        // Round 21 §11.5 — wrap with safeFitBounds (Round 18 §3) so a NaN/empty
+        // bounds object doesn't blow up Leaflet's internal projection math.
+        safeFitBounds(map, bounds, { padding: [50, 50] });
     }
 
     // Create popup content
@@ -59510,7 +59708,8 @@ function showOverRepSegmentsOnMap() {
     // Fit map to all segments
     if (allPoints.length > 0) {
         const bounds = L.latLngBounds(allPoints);
-        map.fitBounds(bounds, { padding: [30, 30] });
+        // Round 21 §11.5 — wrap with safeFitBounds (Round 18 §3) for NaN guard.
+        safeFitBounds(map, bounds, { padding: [30, 30] });
     }
 
     // Show legend
@@ -63561,7 +63760,65 @@ function applyIntersectionFilters() {
     intFilters.trafficCtrl = document.getElementById('intFilterTrafficCtrl').value || null;
     updateIntersectionFilterStatus();
     updateIntersectionTab();
+    // Round 21 §5.4 — when sampleRows is empty, re-fetch mv_intersection_summary
+    // with the date + traffic-ctrl filters so the charts narrow live.
+    try {
+        const _hasRows = !!(crashState && crashState.sampleRows && crashState.sampleRows.length > 0);
+        if (!_hasRows && typeof updateIntersectionTabFromMatview === 'function') {
+            const baseSpec = (typeof window._readGlobalFilterSpec === 'function')
+                ? window._readGlobalFilterSpec()
+                : { yearStart: null, yearEnd: null, severities: null };
+            const yStart = intFilters.startDate ? new Date(intFilters.startDate).getFullYear() : baseSpec.yearStart;
+            const yEnd   = intFilters.endDate   ? new Date(intFilters.endDate).getFullYear()   : baseSpec.yearEnd;
+            updateIntersectionTabFromMatview({
+                yearStart: Number.isFinite(yStart) ? yStart : null,
+                yearEnd:   Number.isFinite(yEnd)   ? yEnd   : null,
+                trafficCtrl: intFilters.trafficCtrl || null
+            });
+        }
+    } catch (e) { /* non-fatal */ }
 }
+
+// Round 21 §5.4 — Supabase re-fetch of mv_intersection_summary with optional
+// crash_year + traffic_control_type filters. The renderer (if one exists in
+// this build) is invoked from the existing matview-paint path; if not yet
+// wired, this just primes the cache.
+async function updateIntersectionTabFromMatview(spec) {
+    if (!window.crashLensClient || !window.CL || !CL.data || !CL.data.supabaseBridge) return;
+    const dc = window.crashLensClient;
+    if (typeof CL.data.supabaseBridge.resolveTier !== 'function') return;
+    const t = CL.data.supabaseBridge.resolveTier();
+    if (!t || !t.tier) return;
+    const tierColMap = {
+        state: null, region: 'dot_district', mpo: 'mpo_name',
+        planning_district: 'planning_district', county: 'planning_district',
+        city: 'physical_juris_name', city_town: 'physical_juris_name'
+    };
+    const tierCol = tierColMap[t.tier];
+    const params = new URLSearchParams({
+        state: 'eq.' + String(dc.state || '').toLowerCase(),
+        select: 'intersection_type,traffic_control_type,collision_type,total,k,a,b,c,o,epdo,crash_year'
+    });
+    if (tierCol && t.value) params.set(tierCol, 'eq.' + t.value);
+    if (spec && spec.yearStart != null) params.append('crash_year', 'gte.' + spec.yearStart);
+    if (spec && spec.yearEnd != null)   params.append('crash_year', 'lte.' + spec.yearEnd);
+    if (spec && spec.trafficCtrl)       params.set('traffic_control_type', 'eq.' + spec.trafficCtrl);
+    try {
+        const resp = await fetch(`${dc.supabaseUrl}/mv_intersection_summary?${params.toString()}`, {
+            headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
+        });
+        if (!resp.ok) return;
+        const rows = await resp.json();
+        if (typeof renderIntersectionChartsFromMatviewRows === 'function') {
+            renderIntersectionChartsFromMatviewRows(rows);
+        } else {
+            console.log('[Intersections] re-fetched', (rows || []).length, 'rows for spec', spec, '— renderIntersectionChartsFromMatviewRows helper not present in this build');
+        }
+    } catch (e) {
+        console.warn('[Intersections] matview re-fetch failed:', e && e.message);
+    }
+}
+window.updateIntersectionTabFromMatview = updateIntersectionTabFromMatview;
 
 function resetIntersectionFilters() {
     document.getElementById('intFilterStartDate').value = '';
@@ -85081,6 +85338,27 @@ async function initQdrantConnection() {
     const useProxy = shouldUseQdrantProxy();
     console.log('[Qdrant] Initializing... Mode:', useProxy ? 'Proxy' : 'Direct');
 
+    // Round 21 §4 — On hosts without the Netlify/Coolify proxy (GitHub Pages),
+    // /api/qdrant-proxy returns a 404 GH-Pages HTML page that the Qdrant client
+    // then mis-parses as JSON. Skip the init when the backend isn't there and
+    // surface a clear inline banner instead. State-agnostic — keys on the
+    // existing _isApiBackendAvailable() probe (no host literal).
+    if (useProxy && typeof _isApiBackendAvailable === 'function') {
+        try {
+            const apiAvailable = await _isApiBackendAvailable();
+            if (!apiAvailable) {
+                const banner = document.getElementById('dkQdrantUnavailableBanner');
+                if (banner) {
+                    banner.style.display = 'block';
+                    banner.innerHTML = 'ⓘ Qdrant proxy is not deployed on this hosting (GitHub Pages). The Domain Knowledge RAG search relies on Qdrant; on this host the local <strong>Knowledge Corpus</strong> tab provides the same content via Supabase pgvector.';
+                }
+                console.log('[Qdrant] init skipped — Netlify/Coolify proxy unavailable on this host');
+                dkState.qdrant.initialized = true;   // mark so we don't retry per session
+                return;
+            }
+        } catch (e) { /* fall through to the normal init below */ }
+    }
+
     try {
         const collections = await qdrantGetCollections();
         console.log('[Qdrant] Connected. Collections:', collections);
@@ -86191,10 +86469,24 @@ async function loadCorpusCounts() {
         if (el) el.textContent = pendingCount.toLocaleString();
         if (banner) {
             if (pendingCount > 0) {
+                // Round 21 §16.7 — when there's nothing to embed against (no
+                // OpenAI key in the header), surface that pre-emptively
+                // instead of waiting for the user to click Embed and fail.
+                const key = (typeof _dkResolveOpenAIKey === 'function') ? _dkResolveOpenAIKey() : null;
                 banner.style.display = 'block';
-                banner.innerHTML = `<strong>${pendingCount.toLocaleString()} reference chunks are unembedded.</strong>
-                    RAG search will return nothing until you embed them.
-                    <button onclick="embedPendingCorpus()" class="btn btn-sm btn-primary" style="margin-left:.5rem">📚 Embed now</button>`;
+                if (!key) {
+                    banner.style.background = '#fef2f2';
+                    banner.style.borderLeftColor = '#dc2626';
+                    banner.style.color = '#991b1b';
+                    banner.innerHTML = `<strong>${pendingCount.toLocaleString()} reference chunks are unembedded</strong> — and no OpenAI API key is configured. Add a key in the header to enable embedding.`;
+                } else {
+                    banner.style.background = '#fef3c7';
+                    banner.style.borderLeftColor = '#d97706';
+                    banner.style.color = '#92400e';
+                    banner.innerHTML = `<strong>${pendingCount.toLocaleString()} reference chunks are unembedded.</strong>
+                        RAG search will return nothing until you embed them.
+                        <button onclick="embedPendingCorpus()" class="btn btn-sm btn-primary" style="margin-left:.5rem">📚 Embed now</button>`;
+                }
             } else {
                 banner.style.display = 'none';
             }
@@ -107661,9 +107953,37 @@ async function initFatalSpeedingFromMatview(tier) {
                 if (v > _topVal) { _topVal = v; _topKey = key; }
             }
             fatalSpeedingState.fatalData.jurisdictionTopFactor = _topKey;
+
+            // Round 21 §16.1 — also build a per-physical_juris_name top-factor
+            // map so each Fatal Locations row can show the city's top factor
+            // instead of falling through to the jurisdiction-wide hint (which
+            // produced the "every row says 🚦 Intersection" symptom on NCC).
+            // mv_fatal_factors lacks intersection-level keys, so per-juris is
+            // the most granular split we can build today.
+            const _byJurisFactors = {};
+            for (const r of fatalFactors) {
+                const j = String((r.physical_juris_name || '')).trim();
+                if (!j) continue;
+                if (!_byJurisFactors[j]) _byJurisFactors[j] = {};
+                for (const col of Object.keys(SINGLE_FACTOR_COLS)) {
+                    _byJurisFactors[j][col] = (_byJurisFactors[j][col] || 0) + (Number(r[col]) || 0);
+                }
+            }
+            const _topByJuris = {};
+            for (const j of Object.keys(_byJurisFactors)) {
+                const cols = _byJurisFactors[j];
+                let tKey = null, tVal = 0;
+                for (const [col, key] of Object.entries(SINGLE_FACTOR_COLS)) {
+                    const v = Number(cols[col] || 0);
+                    if (v > tVal) { tVal = v; tKey = key; }
+                }
+                if (tKey) _topByJuris[j] = tKey;
+            }
+            fatalSpeedingState.fatalData.topFactorByJuris = _topByJuris;
         } else {
             fatalSpeedingState.fatalFactorsRollup = null;
             fatalSpeedingState.fatalData.jurisdictionTopFactor = null;
+            fatalSpeedingState.fatalData.topFactorByJuris = null;
         }
 
         // Round 14 §4 — fold mv_speed_summary into state. Drives the Speed
@@ -108133,6 +108453,11 @@ function updateFSDisplay() {
     updateFSCombinedCrossAnalysis();
     renderFSSpeedComparison();
 
+    // Round 21 §7 — Young/Senior driver factor cards hidden when this state's
+    // source data lacks the age flags. Honors `has_young_flag` / `has_senior_flag`
+    // capability columns. State-agnostic.
+    try { _applyFSYoungSeniorGate(); } catch (e) { /* non-fatal */ }
+
     // Bug fix (round 3, 2026-05-08): paint the 8 F&S Chart.js canvases from
     // matview-aggregated state. Without these, all 8 canvases stay empty in
     // Supabase-only mode (sampleRows = []). Each helper guards against an
@@ -108150,6 +108475,52 @@ function updateFSDisplay() {
         try { paintFSCombinedYearChart(); }      catch(e){console.warn('[FS]', e.message);}
         try { paintFSCombinedHourChart(); }      catch(e){console.warn('[FS]', e.message);}
     }
+}
+
+// Round 21 §7 — F&S Young/Senior driver capability gate.
+// Hides .fs-factor-card.young / .fs-factor-card.senior when the active state's
+// capability flags are false. Inserts a single explanatory banner inside each
+// factor section that contains hidden cards. Idempotent — re-runs cheaply on
+// every updateFSDisplay() pass.
+async function _applyFSYoungSeniorGate() {
+    const dc = window.crashLensClient;
+    if (!dc || typeof dc.getStateCapabilities !== 'function') return;
+    let caps = null;
+    try { caps = await getActiveStateCapabilities(); } catch (e) { caps = null; }
+    if (!caps) return;
+    const hideYoung  = (caps.has_young_flag  === false);
+    const hideSenior = (caps.has_senior_flag === false);
+    if (!hideYoung && !hideSenior) return;
+    const youngCards  = Array.from(document.querySelectorAll('.fs-factor-card.young'));
+    const seniorCards = Array.from(document.querySelectorAll('.fs-factor-card.senior'));
+    const affectedSections = new Set();
+    if (hideYoung) {
+        youngCards.forEach(card => {
+            card.style.display = 'none';
+            const sec = card.parentElement;
+            if (sec) affectedSections.add(sec);
+        });
+    }
+    if (hideSenior) {
+        seniorCards.forEach(card => {
+            card.style.display = 'none';
+            const sec = card.parentElement;
+            if (sec) affectedSections.add(sec);
+        });
+    }
+    affectedSections.forEach(sec => {
+        if (sec.dataset.fsDemoBanner === '1') return;
+        const labels = [];
+        if (hideYoung)  labels.push('Young 16-24');
+        if (hideSenior) labels.push('Senior 65+');
+        const text = 'ⓘ Driver-age cards (' + labels.join(' / ') + ") hidden — this state's source data does not carry the age flags.";
+        const banner = document.createElement('div');
+        banner.className = 'fs-demo-banner';
+        banner.style.cssText = 'grid-column:1/-1;padding:.5rem .75rem;background:#fef3c7;border-left:3px solid #d97706;border-radius:var(--radius);font-size:.8rem;color:#92400e;margin:.5rem 0';
+        banner.textContent = text;
+        sec.appendChild(banner);
+        sec.dataset.fsDemoBanner = '1';
+    });
 }
 
 // ---- F&S chart paint helpers (round 3, 2026-05-08) ----
@@ -108499,7 +108870,8 @@ function updateFSFatalHotspots() {
     tbody.innerHTML = pageData.map((loc, pageIndex) => {
         const globalIndex = startIndex + pageIndex;
         const years = [...new Set(loc.crashes.map(r => r[COL.YEAR]))].sort().join(', ');
-        const topFactor = getTopFactor(loc.crashes);
+        // Round 21 §16.1 — pass `loc` so per-juris top-factor map can resolve.
+        const topFactor = getTopFactor(loc.crashes, loc);
         const fatalities = loc.fatalities || loc.k;
         const countyCell = showCounty ? `<td style="font-size:.75rem" class="tier-county-col">${esc(loc.county || '')}</td>` : '';
 
@@ -108533,7 +108905,8 @@ function goToFSFatalPage(tableKey, page) {
     tbody.innerHTML = pageData.map((loc, pageIndex) => {
         const globalIndex = startIndex + pageIndex;
         const years = [...new Set(loc.crashes.map(r => r[COL.YEAR]))].sort().join(', ');
-        const topFactor = getTopFactor(loc.crashes);
+        // Round 21 §16.1 — pass `loc` so per-juris top-factor map can resolve.
+        const topFactor = getTopFactor(loc.crashes, loc);
         const fatalities = loc.fatalities || loc.k;
         const countyCell = showCounty ? `<td style="font-size:.75rem" class="tier-county-col">${esc(loc.county || '')}</td>` : '';
 
@@ -109646,7 +110019,7 @@ function closeFSDetailPanel(section) {
     grid?.querySelectorAll('.fs-factor-card').forEach(card => card.classList.remove('active'));
 }
 
-function getTopFactor(crashes) {
+function getTopFactor(crashes, loc) {
     const counts = {};
     Object.keys(fsFactorConfig).forEach(factor => {
         counts[factor] = crashes.filter(row => fsFactorConfig[factor].check(row)).length;
@@ -109655,10 +110028,12 @@ function getTopFactor(crashes) {
     if (sorted[0] && sorted[0][1] > 0) {
         return fsFactorConfig[sorted[0][0]].icon + ' ' + fsFactorConfig[sorted[0][0]].name.split(' ')[0];
     }
-    // Fallback: when per-row crashes are stub data (county rollup, no
-    // sampleRows), use the jurisdiction-wide top factor from mv_fatal_factors.
-    const hint = fatalSpeedingState?.fatalData?.jurisdictionTopFactor;
-    if (hint) {
+    // Round 21 §16.1 — when per-row crashes are stubs (county rollup, no
+    // sampleRows), prefer the per-juris top factor from mv_fatal_factors so
+    // each row shows its city's dominant factor instead of every row falling
+    // through to the same jurisdiction-wide hint.
+    const _matchHint = (hint) => {
+        if (!hint) return null;
         const hintKey = String(hint).toLowerCase();
         const matched = Object.keys(fsFactorConfig).find(k =>
             k === hintKey || fsFactorConfig[k]?.name?.toLowerCase().startsWith(hintKey)
@@ -109667,7 +110042,20 @@ function getTopFactor(crashes) {
             return fsFactorConfig[matched].icon + ' ' + fsFactorConfig[matched].name.split(' ')[0];
         }
         return hint;
+    };
+    if (loc) {
+        const jurisCandidates = [
+            loc.city, loc.physical_juris_name, loc.county, loc.juris, loc.jurisdiction
+        ].filter(Boolean).map(s => String(s).trim());
+        const perJurisMap = fatalSpeedingState?.fatalData?.topFactorByJuris || null;
+        if (perJurisMap) {
+            for (const j of jurisCandidates) {
+                if (j && perJurisMap[j]) return _matchHint(perJurisMap[j]);
+            }
+        }
     }
+    const matchedHint = _matchHint(fatalSpeedingState?.fatalData?.jurisdictionTopFactor);
+    if (matchedHint) return matchedHint;
     return '—';
 }
 
@@ -122967,6 +123355,57 @@ function signal_evaluateWarrant7(hourlyAggregates) {
  * Per MUTCD 4C.08: Counts angle crashes and pedestrian crashes susceptible to correction by signal
  */
 function signal_autoPopulateWarrant7() {
+    // Round 21 §3 — Supabase fallback. On aggregate tiers where sampleRows is
+    // empty (county-rollup / planning_district / region / state), warrantsState
+    // has no filteredCrashes to analyze. Pull intersection-level rows directly
+    // from mv_intersection_summary so the warrant analysis isn't a no-op.
+    // Idempotent — does nothing on tiers where filteredCrashes is already
+    // populated. State-agnostic — keys on resolved tier + crashLensClient.state.
+    if ((!warrantsState.filteredCrashes || warrantsState.filteredCrashes.length === 0)
+        && (!warrantsState.locationCrashes || warrantsState.locationCrashes.length === 0)
+        && window.crashLensClient
+        && window.CL && CL.data && CL.data.supabaseBridge
+        && !warrantsState._w7SupabaseFallbackInFlight) {
+        const t = (typeof CL.data.supabaseBridge.resolveTier === 'function')
+            ? CL.data.supabaseBridge.resolveTier()
+            : null;
+        if (t && t.tier && t.value) {
+            const dc = window.crashLensClient;
+            const tierColMap = {
+                state: null, region: 'dot_district', mpo: 'mpo_name',
+                planning_district: 'planning_district', county: 'planning_district',
+                city: 'physical_juris_name', city_town: 'physical_juris_name'
+            };
+            const tierCol = tierColMap[t.tier];
+            const params = new URLSearchParams({
+                state: 'eq.' + String(dc.state || '').toLowerCase(),
+                select: 'intersection_name,total,k,a,collision_type,crash_year',
+                limit: '20000'
+            });
+            if (tierCol && t.value) params.set(tierCol, 'eq.' + t.value);
+            warrantsState._w7SupabaseFallbackInFlight = true;
+            fetch(`${dc.supabaseUrl}/mv_intersection_summary?${params}`, {
+                headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
+            })
+                .then(r => r.ok ? r.json() : [])
+                .then(rows => {
+                    warrantsState._w7SupabaseFallbackInFlight = false;
+                    if (Array.isArray(rows) && rows.length > 0) {
+                        warrantsState.filteredCrashes = rows;
+                        console.log('[Warrant 7] Supabase fallback hydrated', rows.length, 'rows');
+                        signal_autoPopulateWarrant7();   // re-enter with populated crashes
+                    } else {
+                        console.warn('[Warrant 7] Supabase fallback returned no rows for tier', t);
+                    }
+                })
+                .catch(err => {
+                    warrantsState._w7SupabaseFallbackInFlight = false;
+                    console.warn('[Warrant 7] Supabase fallback failed:', err && err.message);
+                });
+            return;
+        }
+    }
+
     // Ensure filtered crashes are synced from location crashes
     if (warrantsState.locationCrashes && warrantsState.locationCrashes.length > 0) {
         filterWarrantCrashesByDate();
@@ -143017,6 +143456,18 @@ function pointInFeature(lng, lat, feature) {
  * Assigns each crash to a district using point-in-polygon
  */
 function computeDistrictCrashStatistics(geojson, jurisdictionId) {
+    // Round 21 §11.6 — short-circuit when the widget is hidden by the tier
+    // gate. The matrix is only shown for county/city tiers; at higher tiers
+    // it's display:none, so the point-in-polygon pass would burn CPU on data
+    // that's never rendered. State-agnostic — keys on the widget's visibility.
+    try {
+        const widget = document.getElementById('districtMatrixWidget');
+        if (widget && widget.style.display === 'none') {
+            console.log('[Districts] widget hidden — skipping statistics computation');
+            return;
+        }
+    } catch (e) { /* non-fatal */ }
+
     if (districtState.isComputing) {
         console.log('[Districts] Statistics computation already in progress');
         // Show feedback to user that computation is ongoing
@@ -155287,6 +155738,13 @@ function signDef_exportPDF() {
         const vfirst = document.getElementById('cmfVirginiaFirst');
         if (vfirst && !vfirst.dataset.userTouched) {
             vfirst.checked = (stateKey === 'virginia');
+        }
+        // Round 21 §8 — label clarifies why the checkbox is off outside VA.
+        const vfirstLabel = document.getElementById('cmfVirginiaFirstLabel');
+        if (vfirstLabel) {
+            vfirstLabel.textContent = (stateKey === 'virginia')
+                ? '🗺️ Virginia First (matches your state)'
+                : `🗺️ Virginia First (off — your state is ${stateKey})`;
         }
         const proven = document.getElementById('cmfProvenOnly');
         if (proven && !proven.dataset.userTouched) {

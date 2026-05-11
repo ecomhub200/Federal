@@ -49,8 +49,12 @@ CL.data = CL.data || {};
         if (oldestKey) _cache.delete(oldestKey);
     }
 
-    CL.data.cachedMatview = function (mvName, tier, value, fetcher, keyExtra) {
+    CL.data.cachedMatview = function (mvName, tier, value, fetcher, keyExtra, opts) {
         var key = _key(mvName, tier, value, keyExtra);
+        // Round 21 §1.2 — accept an optional AbortSignal so callers (prewarm)
+        // can cancel in-flight fetches when superseded. The signal is passed
+        // into the fetcher; fetchers that accept it forward it to fetch().
+        var signal = (opts && opts.signal) ? opts.signal : null;
 
         var hit = _cache.get(key);
         if (hit && (Date.now() - hit.ts) < TTL_MS) {
@@ -63,8 +67,14 @@ CL.data = CL.data || {};
         }
 
         var promise = Promise.resolve()
-            .then(fetcher)
+            .then(function () { return fetcher(signal ? { signal: signal } : undefined); })
             .then(function (data) {
+                // Don't poison the cache with a null result returned by an
+                // AbortError-suppressed fetcher.
+                if (signal && signal.aborted) {
+                    _inflight.delete(key);
+                    return data;
+                }
                 _cache.set(key, { ts: Date.now(), data: data });
                 _evictOldest();
                 _inflight.delete(key);
