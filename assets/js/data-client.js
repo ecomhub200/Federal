@@ -2127,6 +2127,65 @@ class CrashLensDataClient {
     }
   }
 
+  /**
+   * Round 17 §2 — Tier-adaptive jurisdiction breakdown.
+   * Drives the Dashboard / Grants widget. RPC returns one row per
+   * county/CCD/host_county depending on the active tier.
+   *
+   * @param {object} opts {state?, tier, value?}
+   * @returns {Promise<Array>} normalized rows (out_ prefix stripped)
+   */
+  async getJurisdictionBreakdown(opts) {
+    if (!this.preferSupabase || !this.supabaseKey) return [];
+    opts = opts || {};
+    const body = {
+      p_state: (opts.state || this.state || '').toLowerCase(),
+      p_tier:  opts.tier  || 'state',
+      p_value: opts.value || null,
+    };
+    const url = `${this.supabaseUrl}/rpc/get_jurisdiction_breakdown`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!resp.ok) {
+        const err = await resp.text().catch(() => '');
+        throw new Error(err || `HTTP ${resp.status}`);
+      }
+      const rows = await resp.json();
+      this._source = 'supabase';
+      // Unwrap the "out_" prefix the RPC uses to avoid column-name
+      // ambiguity in PL/pgSQL.
+      return (rows || []).map(r => ({
+        breakdown_kind:      r.out_breakdown_kind,
+        label:               r.out_label,
+        crash_count:         Number(r.out_crash_count || 0),
+        fatals:              Number(r.out_fatals || 0),
+        serious:             Number(r.out_serious || 0),
+        epdo:                Number(r.out_epdo || 0),
+        ped_count:           Number(r.out_ped_count || 0),
+        bike_count:          Number(r.out_bike_count || 0),
+        ka_rate_pct:         Number(r.out_ka_rate_pct || 0),
+        is_blocked_upstream: !!r.out_is_blocked_upstream,
+      }));
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[DataClient] getJurisdictionBreakdown failed:', e.message);
+      return [];
+    }
+  }
+
   // ─────────────────────────────────────────────────────────
   //  SUPABASE INTERNALS
   // ─────────────────────────────────────────────────────────
@@ -2347,20 +2406,46 @@ class CrashLensDataClient {
       allFilters.and = `(${andParts.join(',')})`;
     }
 
-    // Bulk fetch mode (filters.all) — used by CMF/Warrants/CSV export
+    // Bulk fetch mode (filters.all) — used by CMF/Warrants/CSV export.
+    // Round 17 §9.6 — a single limit=200000 hits Supabase statement_timeout
+    // and returns 500. Chunk anything above 10K via PostgREST `Range:`
+    // header so each request stays well under the per-statement budget.
     if (filters.all) {
       const maxRows = filters.maxRows || 10000;
-      const data = await this._supabaseQuery('crashes', {
-        filters: allFilters,
-        order: 'crash_year.desc,objectid.asc',
-        limit: maxRows,
-      });
-      const rows = Array.isArray(data) ? data : (data.rows || []);
-      return {
-        rows: rows.map(r => this._pgToFrontend(r)),
-        total: rows.length,
-        page: 1,
-      };
+      const CHUNK = 10000;
+      if (maxRows <= CHUNK) {
+        const data = await this._supabaseQuery('crashes', {
+          filters: allFilters,
+          order: 'crash_year.desc,objectid.asc',
+          limit: maxRows,
+        });
+        const rows = Array.isArray(data) ? data : (data.rows || []);
+        return {
+          rows: rows.map(r => this._pgToFrontend(r)),
+          total: rows.length,
+          page: 1,
+        };
+      }
+      const out = [];
+      for (let start = 0; start < maxRows; start += CHUNK) {
+        const end = Math.min(start + CHUNK - 1, maxRows - 1);
+        let chunk;
+        try {
+          chunk = await this._supabaseQuery('crashes', {
+            filters: allFilters,
+            order: 'crash_year.desc,objectid.asc',
+            range: [start, end],
+          });
+        } catch (e) {
+          console.warn('[DataClient] bulk chunk ' + start + '-' + end + ' failed:', e && e.message);
+          break;
+        }
+        const rows = Array.isArray(chunk) ? chunk : (chunk.rows || []);
+        if (!rows.length) break;
+        for (let i = 0; i < rows.length; i++) out.push(this._pgToFrontend(rows[i]));
+        if (rows.length < CHUNK) break;
+      }
+      return { rows: out, total: out.length, page: 1 };
     }
 
     // Paginated mode (default)
@@ -2498,33 +2583,44 @@ class CrashLensDataClient {
       headers['Range'] = `${opts.range[0]}-${opts.range[1]}`;
     }
 
-    // Fetch with timeout
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeout);
+    // Fetch with timeout. Round 17 §9.8 — Hostinger's reverse proxy
+    // occasionally drops the TCP connection mid-request (manifests as
+    // `ERR_CONNECTION_CLOSED` / "Failed to fetch"). Retry transient
+    // network errors with exponential backoff before surfacing.
+    const ATTEMPTS = 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeout);
+      try {
+        const resp = await fetch(url.toString(), { headers, signal: controller.signal });
+        clearTimeout(timer);
 
-    try {
-      const resp = await fetch(url.toString(), { headers, signal: controller.signal });
-      clearTimeout(timer);
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.message || `HTTP ${resp.status}`);
+        }
 
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.message || `HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        if (opts.count) {
+          const contentRange = resp.headers.get('Content-Range');
+          const total = contentRange ? parseInt(contentRange.split('/')[1]) || 0 : data.length;
+          return { rows: data, count: total };
+        }
+
+        return data;
+      } catch (e) {
+        clearTimeout(timer);
+        lastError = e;
+        const msg = String(e && e.message || '');
+        const isTransient = /ERR_CONNECTION_CLOSED|Failed to fetch|NetworkError|aborted/i.test(msg);
+        if (!isTransient || attempt === ATTEMPTS - 1) throw e;
+        await new Promise(r => setTimeout(r, 200 * Math.pow(2, attempt)));   // 200ms, 400ms
+        console.log('[DataClient] retry ' + (attempt + 1) + '/' + (ATTEMPTS - 1) + ' for ' + table + ' (' + msg + ')');
       }
-
-      const data = await resp.json();
-
-      // Return with count if requested
-      if (opts.count) {
-        const contentRange = resp.headers.get('Content-Range');
-        const total = contentRange ? parseInt(contentRange.split('/')[1]) || 0 : data.length;
-        return { rows: data, count: total };
-      }
-
-      return data;
-    } catch (e) {
-      clearTimeout(timer);
-      throw e;
     }
+    throw lastError || new Error('Unknown fetch error');
   }
 
   // ─────────────────────────────────────────────────────────
