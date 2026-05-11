@@ -5974,6 +5974,8 @@ Your data stays private. All processing happens in your browser.
 <span class="filter-chip" data-filter="ped" onclick="toggleMapFilter(this)">🚶 Ped</span>
 <span class="filter-chip" data-filter="bike" onclick="toggleMapFilter(this)">🚴 Bike</span>
 <span class="filter-chip" data-filter="intersection" onclick="toggleMapFilter(this)">🚦 Intersection</span>
+<!-- Round 16 §3 — factor-chip parity (data-driven, populated by renderMapFactorChips) -->
+<span id="mapFactorChips" class="map-factor-chips" style="display:inline-flex;flex-wrap:wrap;gap:.25rem;margin-left:.5rem"></span>
 <select id="mapYearFilter" onchange="updateMapDisplay()" style="margin-left:auto;padding:.35rem;border-radius:var(--radius);border:1px solid var(--border);font-size:.8rem"><option value="">All Years</option></select>
 <!-- Date Range Filter -->
 <div class="date-filter-container">
@@ -12568,6 +12570,7 @@ Clear Cache
 </div>
 <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem">
 <button class="btn-soft btn-soft-primary btn-soft-sm" onclick="openADTInputModal()" title="Enter Average Daily Traffic for rate-based scoring">📈 ADT Data</button>
+<button class="btn-soft btn-soft-success btn-soft-sm" onclick="openAadtImportModal()" title="Bulk import AADT rows (paste TMPD CSV) — Round 16 §5">📥 Import AADT</button>
 <span id="adtDataStatus" style="font-size:.75rem;color:var(--gray)">No ADT</span>
 </div>
 </div>
@@ -32214,6 +32217,10 @@ function showTab(tabId) {
         }
         // Always update asset panel when switching to map (shows Mapillary even without user assets)
         setTimeout(updateMapAssetPanel, 150);
+        // Round 16 §3 — paint the factor-chip parity rail.
+        if (typeof renderMapFactorChips === 'function') {
+            renderMapFactorChips().catch(() => {});
+        }
         // Restore Mapillary layer if it was enabled but map wasn't ready during initial restore
         setTimeout(() => {
             if (builtInLayersState?.mapillary?.enabled && !builtInLayersState.mapillary.layer && crashMap) {
@@ -32425,6 +32432,11 @@ function showTab(tabId) {
                 if (safetyState.activeCategory && safetyState.activeCategory !== 'cross') {
                     setTimeout(() => selectSafetyCategory(safetyState.activeCategory), 100);
                 }
+            }
+            // Round 16 §4 — gate BLOCKED-UPSTREAM Safety Focus categories
+            // (drowsy/hitrun/lgtruck/young/senior on DE) with an honest "—".
+            if (typeof applySafetyFocusCapabilityGates === 'function') {
+                setTimeout(() => applySafetyFocusCapabilityGates().catch(() => {}), 150);
             }
         } else {
             // Show empty state when no data is loaded
@@ -37122,6 +37134,100 @@ function saveADTData() {
 
     document.getElementById('adtInputModal').remove();
     rankLocationsForGrants();
+}
+
+// =============================================================================
+// ROUND 16 §5 — AADT BULK IMPORT (paste TMPD CSV → aadt_lookup)
+// =============================================================================
+
+function openAadtImportModal() {
+    const existing = document.getElementById('aadtImportModal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'aadtImportModal';
+    modal.className = 'modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:1.5rem;';
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:var(--radius);padding:1.5rem;width:min(820px,100%);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(15,23,42,0.25);">
+            <h3 style="margin:0 0 .5rem;color:#065f46">📥 Bulk Import AADT</h3>
+            <p style="margin:0 0 .75rem;font-size:.85rem;color:#475569">
+                Paste a TMPD-style CSV. First row must be the header. Required columns:
+                <code>state, rte_name, measurement_year, aadt</code>.
+                Optional: <code>posted_speed_limit, functional_class, is_interstate, source</code>.
+                Rows already present (same state + rte_name + measurement_year) will be updated idempotently.
+            </p>
+            <textarea id="aadtCsv" rows="12" placeholder="state,rte_name,measurement_year,aadt,posted_speed_limit,source&#10;delaware,US-13,2025,32450,50,TMPD"
+                style="width:100%;font-family:monospace;font-size:.8rem;padding:.5rem;border:1px solid var(--border);border-radius:var(--radius);box-sizing:border-box"></textarea>
+            <div id="aadtImportResult" style="font-size:.85rem;margin-top:.5rem;color:#0f172a"></div>
+            <div style="display:flex;gap:.5rem;margin-top:.75rem;justify-content:flex-end">
+                <button onclick="document.getElementById('aadtImportModal').remove()" class="btn btn-secondary">Cancel</button>
+                <button onclick="submitAadtImport()" class="btn btn-primary">📥 Import</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function _parseAadtCsv(csv) {
+    const lines = csv.split(/\r?\n/).filter(l => l.trim() !== '');
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+        const cells = lines[i].split(',');
+        const obj = {};
+        headers.forEach((h, idx) => {
+            const raw = cells[idx] != null ? String(cells[idx]).trim() : '';
+            if (raw === '') { obj[h] = null; return; }
+            if (h === 'measurement_year' || h === 'aadt' || h === 'posted_speed_limit') {
+                const n = Number(raw);
+                obj[h] = Number.isFinite(n) ? n : null;
+            } else if (h === 'is_interstate') {
+                obj[h] = /^(t|true|1|y|yes)$/i.test(raw);
+            } else {
+                obj[h] = raw;
+            }
+        });
+        if (obj.state && obj.rte_name && obj.aadt != null) {
+            rows.push(obj);
+        }
+    }
+    return rows;
+}
+
+async function submitAadtImport() {
+    const csvEl = document.getElementById('aadtCsv');
+    const resultEl = document.getElementById('aadtImportResult');
+    if (!csvEl || !resultEl) return;
+    const csv = (csvEl.value || '').trim();
+    if (!csv) {
+        resultEl.innerHTML = '<span style="color:#dc2626">⚠️ Paste CSV content first.</span>';
+        return;
+    }
+    const rows = _parseAadtCsv(csv);
+    if (rows.length === 0) {
+        resultEl.innerHTML = '<span style="color:#dc2626">⚠️ Could not parse any valid rows. Check headers and required columns.</span>';
+        return;
+    }
+    resultEl.innerHTML = `<span style="color:#0369a1">Submitting ${rows.length.toLocaleString()} rows…</span>`;
+    try {
+        const dc = window.crashLensClient;
+        if (!dc || typeof dc.aadtBulkImport !== 'function') {
+            throw new Error('Data client unavailable');
+        }
+        const result = await dc.aadtBulkImport(rows);
+        if (!result) throw new Error('No response from server');
+        resultEl.innerHTML =
+            `<span style="color:#065f46;font-weight:600">✅ Submitted: ${(result.submitted ?? rows.length).toLocaleString()} • ` +
+            `Inserted/Updated: ${(result.inserted_or_updated ?? 0).toLocaleString()} • ` +
+            `Rejected: ${(result.rejected ?? 0).toLocaleString()}</span>`;
+        // Refresh hotspot crash-rate display if available.
+        if (typeof renderHotspotsTableWithRates === 'function') {
+            try { renderHotspotsTableWithRates(); } catch (e) { /* non-fatal */ }
+        }
+    } catch (e) {
+        resultEl.innerHTML = `<span style="color:#dc2626">❌ Import failed: ${e.message}</span>`;
+    }
 }
 
 // =============================================================================
@@ -49231,6 +49337,11 @@ function updateDashboard() {
     document.getElementById('kpiAPct').textContent = pct(sev.A, total) + '%';
     document.getElementById('kpiInjuryBC').textContent = (sev.B + sev.C).toLocaleString();
     document.getElementById('kpiPDO').textContent = sev.O.toLocaleString();
+    // Round 16 §4 — BLOCKED-UPSTREAM gate: states without B/C in source data
+    // (e.g. Delaware) show "—" instead of a misleading 0.
+    if (typeof applyInjuryBCCapabilityGate === 'function') {
+        applyInjuryBCCapabilityGate().catch(() => {});
+    }
 
     // EPDO with breakdown
     const epdo = calcEPDO(sev);
@@ -51946,6 +52057,215 @@ function clearQuickFilters() {
     const badge = document.querySelector('.safety-map-badge');
     if (badge) badge.classList.remove('visible');
 }
+
+// ============================================================
+// ROUND 16 §3 + §4 — Map factor-chip parity + capability gating
+// ============================================================
+
+// Cached capabilities for the active state. Reset on state change.
+let _stateCapabilities = null;
+let _stateCapabilitiesStateKey = null;
+
+async function getActiveStateCapabilities() {
+    const dc = window.crashLensClient;
+    const currentKey = (dc && dc.state) ? String(dc.state).toLowerCase() : '';
+    if (_stateCapabilities && _stateCapabilitiesStateKey === currentKey) {
+        return _stateCapabilities;
+    }
+    _stateCapabilities = null;
+    _stateCapabilitiesStateKey = currentKey;
+    if (!dc || typeof dc.getStateCapabilities !== 'function') return {};
+    try {
+        const caps = await dc.getStateCapabilities();
+        _stateCapabilities = caps || {};
+    } catch (e) {
+        console.warn('[Capabilities] fetch failed:', e.message);
+        _stateCapabilities = {};
+    }
+    return _stateCapabilities;
+}
+
+function _buildBlockedBadgeEl() {
+    const span = document.createElement('span');
+    span.className = 'badge blocked-upstream';
+    span.title = "This factor flag is not in this state's source data. Re-ingest required to populate.";
+    span.style.cssText = 'display:inline-block;padding:.1rem .35rem;font-size:.65rem;border-radius:9999px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;';
+    span.textContent = 'ⓘ Source-data gap';
+    return span;
+}
+
+// Map a Safety Focus card category (matches .safety-card.<cat>) → capability key.
+// Cards NOT in this map are always shown regardless of capabilities.
+const _SAFETY_CARD_CAPABILITY_MAP = {
+    lgtruck:  'has_lgtruck_flag',
+    young:    'has_young_flag',
+    senior:   'has_senior_flag',
+    drowsy:   'has_drowsy_flag',
+    hitrun:   'has_hitrun_flag',
+};
+
+// Gate Safety Focus cards: replace the count with "—" and add a tooltip badge
+// when the active state's capability for that flag is explicitly false.
+async function applySafetyFocusCapabilityGates() {
+    const caps = await getActiveStateCapabilities();
+    if (!caps) return;
+    for (const [category, capKey] of Object.entries(_SAFETY_CARD_CAPABILITY_MAP)) {
+        if (caps[capKey] !== false) continue;
+        const card = document.querySelector('.safety-card.' + category);
+        if (!card) continue;
+        const valueEl = card.querySelector('.safety-card-value');
+        const pctEl = card.querySelector('.safety-card-pct');
+        if (valueEl) valueEl.textContent = '—';
+        if (pctEl) pctEl.textContent = '';
+        if (!card.querySelector('.blocked-upstream')) {
+            const badge = _buildBlockedBadgeEl();
+            badge.style.marginTop = '.25rem';
+            card.appendChild(badge);
+        }
+        card.classList.add('safety-card-blocked');
+        card.style.opacity = '0.65';
+        card.style.cursor = 'not-allowed';
+    }
+}
+
+// Gate Dashboard Injury B/C KPI — show "—" when the state has neither B nor C.
+async function applyInjuryBCCapabilityGate() {
+    const caps = await getActiveStateCapabilities();
+    if (!caps) return;
+    const bcEl = document.getElementById('kpiInjuryBC');
+    if (!bcEl) return;
+    if (caps.has_severity_b === false && caps.has_severity_c === false) {
+        bcEl.textContent = '—';
+        bcEl.title = "B and C injury severities are not available in this state's source data.";
+    }
+}
+
+// Factor-chip parity. Renders 18 factor chips minus those hidden by capabilities.
+const _MAP_FACTOR_DISPLAY = [
+    ['fatal',          '💀 Fatal'],
+    ['serious',        '🩹 Serious (A)'],
+    ['ka_combined',    '⚠️ K+A'],
+    ['pedestrian',     '🚶 Pedestrian'],
+    ['bicycle',        '🚴 Bicycle'],
+    ['intersection',   '🚦 Intersection'],
+    ['alcohol',        '🍺 Impaired'],
+    ['speed',          '⚡ Speed'],
+    ['distracted',     '📱 Distracted'],
+    ['unrestrained',   '🪑 Unrestrained'],
+    ['nighttime',      '🌙 Nighttime'],
+    ['motorcycle',     '🏍️ Motorcycle'],
+    ['animal',         '🦌 Animal'],
+    ['workzone',       '🚧 Work Zone'],
+    ['school_zone',    '🎒 School Zone'],
+    ['guardrail',      '🛡️ Guardrail'],
+    ['curves',         '〰️ Curves'],
+    ['weather',        '🌧️ Weather'],
+];
+
+// Factor → capability key for honest hiding when the state lacks the flag.
+const _FACTOR_CAPABILITY_MAP = {
+    lgtruck:  'has_lgtruck_flag',
+    young:    'has_young_flag',
+    senior:   'has_senior_flag',
+    drowsy:   'has_drowsy_flag',
+    hitrun:   'has_hitrun_flag',
+};
+
+async function renderMapFactorChips() {
+    const container = document.getElementById('mapFactorChips');
+    if (!container) return;
+    const dc = window.crashLensClient;
+    if (!dc || typeof dc.getMapMetrics !== 'function') return;
+
+    // Resolve tier via supabase-bridge — matches the rest of the app.
+    let tier = { tier: 'state', value: null };
+    try {
+        if (window.CL && CL.data && CL.data.supabaseBridge &&
+            typeof CL.data.supabaseBridge.resolveTier === 'function') {
+            tier = CL.data.supabaseBridge.resolveTier() || tier;
+        }
+    } catch (e) { /* fall through */ }
+
+    const opts = {};
+    if (tier.tier === 'planning_district')          opts.pd = tier.value;
+    else if (tier.tier === 'mpo')                   opts.mpo = tier.value;
+    else if (tier.tier === 'county' || tier.tier === 'city') opts.juris = tier.value;
+    // 'state' tier → no filter; aggregate over jurisdictions below.
+
+    const [rows, caps] = await Promise.all([
+        dc.getMapMetrics(opts),
+        getActiveStateCapabilities(),
+    ]);
+    if (!rows) { container.innerHTML = ''; return; }
+
+    const byFactor = {};
+    rows.forEach(r => {
+        const f = r.factor;
+        if (!f) return;
+        if (!byFactor[f]) byFactor[f] = { total: 0, k: 0, a: 0, epdo: 0 };
+        byFactor[f].total += Number(r.total) || 0;
+        byFactor[f].k     += Number(r.k) || 0;
+        byFactor[f].a     += Number(r.a) || 0;
+        byFactor[f].epdo  += Number(r.epdo) || 0;
+    });
+
+    const hiddenByCaps = {};
+    Object.entries(_FACTOR_CAPABILITY_MAP).forEach(([factor, capKey]) => {
+        if (caps && caps[capKey] === false) hiddenByCaps[factor] = true;
+    });
+
+    container.innerHTML = _MAP_FACTOR_DISPLAY
+        .filter(([k]) => !hiddenByCaps[k])
+        .map(([k, label]) => {
+            const d = byFactor[k] || { total: 0, k: 0, a: 0 };
+            const fatalChip = d.k > 0
+                ? '<span class="chip-k" style="margin-left:.25rem;font-size:.65rem;color:#dc2626;font-weight:600;">' + d.k.toLocaleString() + ' fatal</span>'
+                : '';
+            return '<button class="map-chip filter-chip" data-factor="' + k + '" ' +
+                'onclick="toggleMapFactor(\'' + k + '\')" ' +
+                'style="display:inline-flex;align-items:center;gap:.25rem;padding:.25rem .5rem;border:1px solid var(--border);border-radius:9999px;background:#fff;cursor:pointer;font-size:.7rem">' +
+                '<span class="chip-label">' + label + '</span>' +
+                '<span class="chip-count" style="font-weight:600">' + d.total.toLocaleString() + '</span>' +
+                fatalChip +
+                '</button>';
+        }).join('');
+}
+
+// Map factor chip → existing toggleMapFilter equivalent. Factors that map to
+// an existing map filter route there; others are display-only counts.
+const _FACTOR_TO_LEGACY_FILTER = {
+    fatal:        'fatal',
+    serious:      'serious',
+    ka_combined:  'serious',
+    pedestrian:   'ped',
+    bicycle:      'bike',
+    intersection: 'intersection',
+};
+
+function toggleMapFactor(factor) {
+    const legacy = _FACTOR_TO_LEGACY_FILTER[factor];
+    if (legacy) {
+        const el = document.querySelector('.filter-chip[data-filter="' + legacy + '"]');
+        if (el && typeof toggleMapFilter === 'function') {
+            toggleMapFilter(el);
+            return;
+        }
+    }
+    // For factor chips without a row-level filter (e.g. animal, workzone)
+    // just toggle visual active state — the count is the value.
+    const chip = document.querySelector('.map-chip[data-factor="' + factor + '"]');
+    if (chip) chip.classList.toggle('active');
+}
+
+// Re-render chips whenever the tier resolves a new value. Supabase-bridge
+// fires this event after a successful tier switch (Round 13+ pattern).
+document.addEventListener('CL:tierChanged', () => {
+    _stateCapabilities = null;
+    _stateCapabilitiesStateKey = null;
+    renderMapFactorChips().catch(() => {});
+    applySafetyFocusCapabilityGates().catch(() => {});
+    applyInjuryBCCapabilityGate().catch(() => {});
+});
 
 // Switch between street and satellite base layers
 // ============================================================
@@ -104261,6 +104581,39 @@ async function initCrashTreeFromMatview(tier) {
         l1Children.sort((a, b) => b.total - a.total);
 
         const rootNode = buildNode('root', 'All Crashes', rootStats, l1Children);
+
+        // §0 (Round 16) — defensive post-order severity walker.
+        // Round 15 §0 specified this; the prior accumulator relied on every
+        // matview row carrying its own k/a, which is fragile. Walking the tree
+        // post-order and summing k/a from children guarantees every non-leaf
+        // node reflects real KA — even if the underlying matview ever emits
+        // rollup rows with NULL severities, or a future rename drops the
+        // per-row severity columns.
+        const propagateSeverity = (node) => {
+            if (!node) return;
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(propagateSeverity);
+                const ck = node.children.reduce((s, c) => s + (Number(c.k) || 0), 0);
+                const ca = node.children.reduce((s, c) => s + (Number(c.a) || 0), 0);
+                const cb = node.children.reduce((s, c) => s + (Number(c.b) || 0), 0);
+                const cc = node.children.reduce((s, c) => s + (Number(c.c) || 0), 0);
+                const co = node.children.reduce((s, c) => s + (Number(c.o) || 0), 0);
+                // Prefer child-derived values whenever they are non-zero; this
+                // makes the walker robust to leaf rows that lacked k/a.
+                if (ck + ca + cb + cc + co > 0 || !((node.k || 0) + (node.a || 0))) {
+                    node.k  = ck; node.a = ca;
+                    node.b  = cb; node.c = cc; node.o = co;
+                    node.K  = ck; node.A = ca;
+                    node.B  = cb; node.C = cc; node.O = co;
+                    node.ka = ck + ca;
+                    node.kaPct = node.total > 0
+                        ? (node.ka / node.total * 100).toFixed(1) + '%'
+                        : '0.0%';
+                    node.unfilteredKA = node.ka;
+                }
+            }
+        };
+        propagateSeverity(rootNode);
 
         crashTreeState.treeData = rootNode;
         crashTreeState.totalCrashes = rootStats.total;
