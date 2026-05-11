@@ -3024,6 +3024,117 @@ class CrashLensDataClient {
     }
   }
 
+  // ─────────────────────────────────────────────────────────
+  //  ROUND 18 §1 — Filter-population RPCs
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * Round 18 §1.1 — Populate Intersections Traffic Control dropdown.
+   * Returns [{raw_value, label, crash_count}].
+   */
+  async getTrafficControlTypes(stateKey) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const url = `${this.supabaseUrl}/rpc/get_traffic_control_types`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ p_state: (stateKey || this.state || '').toLowerCase() }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      const rows = await resp.json();
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      console.warn('[DataClient] getTrafficControlTypes failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Round 18 §1.3 — Year-availability for date-picker bounds.
+   * Returns [{crash_year, crash_count}].
+   */
+  async getYearFilterOptions(opts) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    opts = opts || {};
+    const body = {
+      p_state:              (opts.state || this.state || '').toLowerCase(),
+      p_jurisdiction_kind:  opts.jurisdictionKind || null,
+      p_jurisdiction_value: opts.jurisdictionValue || null,
+    };
+    const url = `${this.supabaseUrl}/rpc/get_year_filter_options`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Content-Type': 'application/json',
+    };
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      const rows = await resp.json();
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      console.warn('[DataClient] getYearFilterOptions failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Round 18 §1.2 — mv_hotspots_yearly per-year rollup for date-filtered
+   * hotspots / intersections / F&S queries. Pre-aggregated by Cowork.
+   *
+   * opts: { state, yearStart, yearEnd, locationType, limit }
+   */
+  async getHotspotsYearly(opts) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    opts = opts || {};
+    const params = new URLSearchParams({
+      state: 'eq.' + ((opts.state || this.state || '').toLowerCase()),
+      select: 'location_type,location_name,crash_year,total_crashes,k,a,b,c,o,epdo,ped_count,bike_count,lat,lon,jurisdiction_county,jurisdiction_mpo,dot_district',
+      order: 'total_crashes.desc',
+      limit: String(opts.limit || 5000),
+    });
+    if (opts.yearStart != null) params.append('crash_year', 'gte.' + opts.yearStart);
+    if (opts.yearEnd   != null) params.append('crash_year', 'lte.' + opts.yearEnd);
+    if (opts.locationType)      params.set('location_type', 'eq.' + opts.locationType);
+    if (opts.county)            params.set('jurisdiction_county', 'eq.' + String(opts.county).replace(/ County$/, ''));
+    if (opts.mpo)               params.set('jurisdiction_mpo', 'eq.' + opts.mpo);
+    if (opts.region)            params.set('dot_district', 'eq.' + opts.region);
+
+    const url = `${this.supabaseUrl}/mv_hotspots_yearly?${params.toString()}`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+    };
+    try {
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      const rows = await resp.json();
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      console.warn('[DataClient] getHotspotsYearly failed:', e.message);
+      return null;
+    }
+  }
+
   /** Health check — test Supabase connectivity */
   async healthCheck() {
     try {
