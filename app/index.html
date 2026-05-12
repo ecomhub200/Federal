@@ -4398,7 +4398,10 @@ textarea:focus-visible {
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<!-- Supabase JS SDK (Phase 1+2 — co-loaded with Firebase; activated by featureFlags.useSupabaseAuth) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="../assets/js/firebase-config.js?v=2"></script>
+<script src="../assets/js/supabase-auth.js?v=migration-phase1"></script>
 <script src="../assets/js/auth.js?v=2"></script>
 
 <!-- CrashLens Module System -->
@@ -25566,6 +25569,23 @@ function saveJurisdictionSelection() {
  * Consultants skip auto-selection so they see the default "All" view.
  */
 async function applyUserJurisdiction(userData) {
+    // Phase 2 — fall back to Supabase profile when Firebase userData is null.
+    // Lets Phase 3 cutover work without changing this function's caller.
+    if (!userData && typeof SupabaseAuth !== 'undefined' && typeof SupabaseAuth.getProfile === 'function') {
+        try {
+            const sbProfile = await SupabaseAuth.getProfile();
+            if (sbProfile) {
+                // Translate snake_case profile shape → Firestore-shape this function expects.
+                userData = {
+                    userState: sbProfile.home_state_fips,
+                    userStateName: sbProfile.home_state,
+                    userJurisdiction: sbProfile.home_jurisdiction_id,
+                    userJurisdictionName: sbProfile.home_jurisdiction_name,
+                    employeeType: sbProfile.employee_type
+                };
+            }
+        } catch (e) { /* non-fatal */ }
+    }
     if (!userData) return;
     if (!userData.userState) return;
     if (userData.employeeType === 'consultant') return;
