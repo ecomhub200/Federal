@@ -282,3 +282,38 @@ Backend ASKS (separate, for Cowork):
   - mv_safety_co_factors matview (still pending from Round 20 §5)
 
 Files touched: `app/index.html`, `log.md`.
+
+## 2026-05-12 — Round 23 frontend merged
+
+§1 Reports tab matview-aware regeneration — `hydrateReportFromMatviews()` pulls
+   dashboard_summary + mv_hotspots + mv_fatal_factors + mv_speed_summary +
+   mv_safety_categories + mv_intersection_summary + mv_analysis_summary in parallel
+   (~3s) instead of paginating 100K row-level crashes (~60-90s). Hooked into
+   `generateReport()` for the `dashboard`/`systemwide` types via `MATVIEW_REPORT_TYPES`
+   set (intentionally narrow — generators must be ported in §1.3 before adding more).
+   Kills the "infinite time" hang on the Dashboard report at every aggregate tier.
+   Other report types fall through to the legacy row pull (unchanged behavior) until
+   their generators are ported in subsequent rounds.
+
+§1.3 `computeStats()` ported to read `window._reportMatviewData` first — any future
+   generator port automatically gets correct totals/severity/ped/bike from matviews.
+   `generateDashboardReport` inline filters (nightCount, speedCount, intCount) and
+   Year-Over-Year iteration also ported. K/A breakdown per-year is left at 0 (not
+   surfaced by dashboard_summary at this rollup); the table still renders year +
+   total + EPDO.
+
+§2 Ped/Bike detail panels Supabase fallback — `updatePedDetailPanel` +
+   `updateBikeDetailPanel` made async; hydrate from `mv_safety_focus_locations`
+   (category=pedestrian/bicycle) + `mv_pedbike_breakdowns` (mode=ped/bike) when
+   per-row `selected.crashes` is empty. Mirrors Round 21.1 §4 Safety Focus pattern.
+   KPIs + sub-charts (Year/Collision/Light/Weather/Surface/TrafficControl) render
+   at planning_district rollup. Demographics/contributing-factor sections show 0 in
+   matview mode (alcohol/speed/distracted/etc. not surfaced by ped/bike matviews;
+   acceptable for headline panel).
+
+§3 qrcode.min.js CDN 404 fix — changed `/build/qrcode.min.js` → `/build/qrcode.js`
+   (the npm package only ships unminified). Removes one console error.
+
+Backend: zero new SQL. All matview shapes verified live via existing data-client.
+
+Files touched: `app/index.html`, `log.md`.
