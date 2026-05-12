@@ -138,8 +138,8 @@ if (typeof pmtiles === 'undefined') {
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <!-- PptxGenJS for PowerPoint generation -->
 <script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@3.12.0/dist/pptxgen.bundle.js"></script>
-<!-- QRCode.js for QR code generation -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.js"></script>
+<!-- QRCode.js removed: qrcode@1.5.3 ships no browser bundle (lib/browser.js
+     is bundler-only) and no callsite in this file uses the QRCode global. -->
 <style>
 /*
  * Copyright 2025 CRASH LENS
@@ -112734,25 +112734,30 @@ function generateSafetyCategoryReport() {
 // INITIALIZATION HOOK
 // ============================================================
 
-// Initialize safety module when data loads (auto-initialization)
-// Use a more robust approach with faster polling and event-based fallback
+// Initialize safety module when data loads (auto-initialization).
+// initSafetyFocus() handles both paths:
+//   • county/city tier  → uses crashState.sampleRows (legacy processSafetyData)
+//   • aggregate tiers   → hydrates from mv_safety_categories (no sampleRows)
+// So the gate is `crashState.loaded` (set by both R2 autoload and the supabase
+// bridge) — NOT `sampleRows.length > 0`, which is empty in matview-only mode.
 let safetyInitAttempts = 0;
 const safetyCheckInterval = setInterval(() => {
     safetyInitAttempts++;
-    if (crashState.loaded && crashState.sampleRows && crashState.sampleRows.length > 0) {
+    if (crashState.loaded) {
         clearInterval(safetyCheckInterval);
         console.log('[Safety Focus] Auto-initializing after', safetyInitAttempts, 'checks');
         setTimeout(initSafetyFocus, 300);
     } else if (safetyInitAttempts > 60) {
-        // Stop checking after 60 seconds
         clearInterval(safetyCheckInterval);
         console.log('[Safety Focus] Gave up auto-initialization, will init on tab open');
     }
-}, 500);  // Check every 500ms instead of 1000ms
+}, 500);
 
-// Also listen for custom data load event if available
+// Also listen for custom data load event. Matview-only loads (source=supabase)
+// set crashState.loaded=true with empty sampleRows — initSafetyFocus() takes
+// the matview branch in that case, so don't gate on sampleRows here.
 document.addEventListener('crashDataLoaded', () => {
-    if (!safetyState.loaded && crashState.loaded && crashState.sampleRows?.length > 0) {
+    if (!safetyState.loaded && crashState.loaded) {
         console.log('[Safety Focus] Initializing via crashDataLoaded event');
         initSafetyFocus();
     }
