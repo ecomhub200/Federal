@@ -340,7 +340,7 @@ const CrashLensAuth = {
       // Phase 2 — dual-write to Supabase profiles. Non-fatal if Supabase is down.
       try {
         if (typeof SupabaseAuth !== 'undefined' && typeof SupabaseAuth.upsertProfile === 'function') {
-          const profileRow = SupabaseAuth.mapFirestoreToProfile(user.uid, newUser);
+          const profileRow = await SupabaseAuth.mapFirestoreToProfile(user.uid, newUser);
           if (profileRow) await SupabaseAuth.upsertProfile(profileRow);
         }
       } catch (e) { console.warn('[Auth] Supabase dual-write (ensureUserDocument) failed:', e && e.message); }
@@ -351,7 +351,7 @@ const CrashLensAuth = {
     const existingDoc = doc.data();
     try {
       if (typeof SupabaseAuth !== 'undefined' && typeof SupabaseAuth.upsertProfile === 'function') {
-        const existingRow = SupabaseAuth.mapFirestoreToProfile(user.uid, existingDoc);
+        const existingRow = await SupabaseAuth.mapFirestoreToProfile(user.uid, existingDoc);
         if (existingRow) await SupabaseAuth.upsertProfile(existingRow);
       }
     } catch (e) { console.warn('[Auth] Supabase dual-write (existing doc) failed:', e && e.message); }
@@ -536,7 +536,7 @@ const CrashLensAuth = {
     try {
       if (typeof SupabaseAuth !== 'undefined' && typeof SupabaseAuth.upsertProfile === 'function') {
         const freshDoc = this.userData;         // re-read above to get merged shape
-        const row = SupabaseAuth.mapFirestoreToProfile(this.currentUser.uid, freshDoc);
+        const row = await SupabaseAuth.mapFirestoreToProfile(this.currentUser.uid, freshDoc);
         if (row) await SupabaseAuth.upsertProfile(row);
       }
     } catch (e) { console.warn('[Auth] Supabase dual-write (updateUserProfile) failed:', e && e.message); }
