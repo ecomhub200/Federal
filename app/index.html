@@ -66508,7 +66508,10 @@ async function _fetchPedBikeDetailAggregates(mode, selectedNames) {
     const tierCol = tierColMap[t.tier];
     const headers = { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey };
     const stateKey = String(dc.state || '').toLowerCase();
+    // mv_safety_focus_locations.category uses full words; mv_pedbike_breakdowns.mode also uses full words.
+    // The caller passes the short form ('ped' / 'bike') — translate both before querying.
     const category = mode === 'ped' ? 'pedestrian' : 'bicycle';
+    const mvMode   = mode === 'ped' ? 'pedestrian' : 'bicycle';
 
     const sflParams = new URLSearchParams({
         state: 'eq.' + stateKey,
@@ -66519,7 +66522,7 @@ async function _fetchPedBikeDetailAggregates(mode, selectedNames) {
 
     const pbbParams = new URLSearchParams({
         state: 'eq.' + stateKey,
-        mode: 'eq.' + mode,
+        mode: 'eq.' + mvMode,
         select: 'dimension,dim_value,total,k,a,o'
     });
     if (tierCol && t.value) pbbParams.set(tierCol, 'eq.' + t.value);
@@ -66556,16 +66559,43 @@ async function _fetchPedBikeDetailAggregates(mode, selectedNames) {
             }
         });
 
+        // mv_pedbike_breakdowns currently exposes 3 dimensions: 'light', 'location', 'year'.
+        // The 'collision' / 'weather' / 'roadsurface' / 'trafficcontrol' dims do NOT exist in
+        // the matview yet — see Cowork backend follow-up. Until they're added, those four
+        // breakdowns simply stay empty in matview-fallback mode (the per-row code path at
+        // tier=county/city still populates them from raw crashes, which is unaffected).
         const byCollision = {}, byLight = {}, byWeather = {}, bySurface = {}, byTrafficControl = {};
         const dimMap = {
-            collision: byCollision, light: byLight, weather: byWeather,
-            roadsurface: bySurface, trafficcontrol: byTrafficControl
+            light: byLight,
+            // collision/weather/roadsurface/trafficcontrol intentionally absent until matview extension
         };
+        // Light dim is the only breakdown the matview supports today; merge it in.
         pbbRows.forEach(r => {
             const target = dimMap[r.dimension];
             if (!target || !r.dim_value) return;
             target[r.dim_value] = (target[r.dim_value] || 0) + (Number(r.total) || 0);
         });
+        // The matview also has dimension='year' with dim_value=YYYY — feed byYear so the
+        // per-year trend chart renders accurately (replaces the SFL first/last span estimate).
+        const byYearFromPbb = {};
+        pbbRows.forEach(r => {
+            if (r.dimension !== 'year' || !r.dim_value) return;
+            const y = String(r.dim_value);
+            if (!byYearFromPbb[y]) byYearFromPbb[y] = { total: 0, K: 0, A: 0 };
+            byYearFromPbb[y].total += Number(r.total) || 0;
+            byYearFromPbb[y].K     += Number(r.k) || 0;
+            byYearFromPbb[y].A     += Number(r.a) || 0;
+        });
+        // Prefer pbb byYear when it has data; fall back to the SFL span estimate already in `byYear`.
+        if (Object.keys(byYearFromPbb).length > 0) {
+            for (const y of Object.keys(byYearFromPbb)) byYear[y] = byYearFromPbb[y];
+        }
+        if (window.console && console.debug) {
+            console.debug('[PedBikeDetail] matview agg:', {
+                mode: mvMode, total, sflRows: sflRows.length, pbbRows: pbbRows.length,
+                light_keys: Object.keys(byLight).length, year_keys: Object.keys(byYear).length
+            });
+        }
 
         return { total, severity, byYear, byCollision, byLight, byWeather, bySurface, byTrafficControl };
     } catch (e) {
