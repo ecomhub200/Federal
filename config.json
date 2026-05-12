@@ -2,6 +2,10 @@
   "appName": "CRASH LENS",
   "appSubtitle": "Crash Analysis Tool",
   "version": "2.0.0",
+  "featureFlags": {
+    "useSupabaseAuth": false,
+    "supabaseAuthDualWrite": true
+  },
   "apis": {
     "mapbox": {
       "accessToken": "pk.eyJ1IjoibXVyYWRhbHF1cmlzaGVlIiwiYSI6ImNtazA0cnoyaTcwN20zY3EybGVlNWlmMzcifQ.VaJ4IEUf2vmFM4EexagsMg",

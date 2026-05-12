@@ -282,3 +282,30 @@ Backend ASKS (separate, for Cowork):
   - mv_safety_co_factors matview (still pending from Round 20 §5)
 
 Files touched: `app/index.html`, `log.md`.
+
+## 2026-05-12 — Migration Phase 1+2 (frontend) merged
+
+§1 config.json gained featureFlags.{useSupabaseAuth:false, supabaseAuthDualWrite:true}.
+§2 Supabase JS SDK <script> tags added to login/index.html, app/index.html, pricing.html.
+   (index.html, contact.html, contact-sales.html do not load Firebase scripts; skipped.)
+§3 New file assets/js/supabase-auth.js (~280 lines) — wrapper exposing
+   SupabaseAuth.{init,getUser,getUserAsync,signInWithEmail,signUpWithEmail,
+   signInWithGoogle,signInWithMicrosoft,signOut,getProfile,upsertProfile,
+   mapFirestoreToProfile,debug}.
+§4 auth.js dual-write hooks at ensureUserDocument (new-doc + existing-doc paths),
+   updateUserProfile, signOut — Firestore writes now also fire
+   SupabaseAuth.upsertProfile().
+§5 applyUserJurisdiction (app/index.html:25568) gained Supabase getProfile()
+   fallback when Firebase userData is null. No-op when Firebase is the active
+   provider.
+
+Behavior: ZERO user-visible change. Firebase remains the auth provider. Supabase
+rows populate in real time alongside Firestore writes. Rollback = config.json
+flag flip.
+
+Backend asks logged separately (4 items in §10 of source prompt): SQL migration,
+Auth provider config, Firestore-export script, Stripe webhook live flag.
+
+Files touched: `config.json`, `assets/js/supabase-auth.js` (new),
+`assets/js/auth.js`, `login/index.html`, `app/index.html`, `pricing.html`,
+`log.md`.
