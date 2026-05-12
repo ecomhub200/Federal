@@ -247,3 +247,38 @@ Verification: ✅ AADT banner renders "N AADT records loaded" instead of "checki
 ✅ All 13 inline scripts + data-client.js parse cleanly.
 
 Files touched: `app/index.html`, `log.md`.
+
+## 2026-05-12 — Round 22 frontend merged
+
+§1 chartFuncClass / chartWeather / chartLight — drop paintWhenVisible wrap, paint immediately.
+   Resolves Chrome Claude matrix-audit finding (3 blank canvases at every tier — data is
+   already loaded into D.byFuncClass / byWeather / byLight by getAnalysisBreakdown but the
+   IntersectionObserver wrap never fired before screenshot / PDF capture).
+§2 updateTierScopeHeader gains planning_district branch. Resolves T2 (MPO label persisted
+   when switching MPO → Planning District). State-agnostic — keys on tier name + reads
+   jurisdictionContext.tierPlanningDistrict.{name,shortName}.
+§3a kpiPersonsInjured wired to dashboard_summary.total_injured (existing column, verified
+   live). Card is display:none until total_injured > 0.
+§3b kpiVehicleCountCard hidden via applyAvgVehiclesCapabilityGate (no vehicle column in
+   dashboard_summary today). State-agnostic — gate flips to caps-driven when backend adds
+   avg_vehicles_per_crash.
+§4 F&S loading skeleton — _showFSLoadingSkeleton fires on initFatalSpeedingTab() entry and
+   on the crashtab:fatalspeeding:shown event so users don't see all-zero KPIs for 4-5s on
+   first activation.
+§5a window._syncVirginiaFirstDefault alias for the Round 21 §8 audit health-check.
+§5b Work Zone safety card → ⓘ Source-data gap badge on crashtab:safety:shown when count=0
+   (DE has no has_workzone_flag capability today; card is outside _SAFETY_CARD_CAPABILITY_MAP).
+§5c Data Connection Status card writer (line 26586) shows tierCity.name at city tier
+   instead of parent county. Limited scope — getActiveJurisdictionId() left untouched
+   because 30+ callers expect parent county slugs for R2 paths / data lookups.
+§5d MPO header gains tooltip explaining boundary differences vs PD.
+§6 Crash Tree secondary analysis 5s timeout — deferred per ship-order §8.
+
+Backend: zero new SQL — every column verified live.
+
+Backend ASKS (separate, for Cowork):
+  - dashboard_summary.persons_injured + avg_vehicles_per_crash columns (to enable the
+    Vehicle Count tile and refine Persons Injured semantics)
+  - mv_safety_co_factors matview (still pending from Round 20 §5)
+
+Files touched: `app/index.html`, `log.md`.

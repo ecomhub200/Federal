@@ -26575,9 +26575,22 @@ function updateDataConnectionStatus(status, message = null) {
             : '--';
     }
     if (jurisdictionEl) {
-        const jurisdiction = getActiveJurisdictionId();
-        const name = appConfig?.jurisdictions?.[jurisdiction]?.name || jurisdiction;
-        jurisdictionEl.textContent = name;
+        // Round 22 §5c — at city tier, prefer the city's display name so the
+        // Data Connection Status card shows "Dover city" instead of the parent
+        // county name. State-agnostic — keys on viewTier + tierCity shape, not
+        // on any state literal. Other callers of getActiveJurisdictionId() are
+        // left untouched (many expect the parent county slug for R2 paths etc).
+        let displayName = null;
+        if (typeof jurisdictionContext !== 'undefined'
+            && (jurisdictionContext.viewTier === 'city' || jurisdictionContext.viewTier === 'city_town')
+            && jurisdictionContext.tierCity?.name) {
+            displayName = jurisdictionContext.tierCity.name;
+        }
+        if (!displayName) {
+            const jurisdiction = getActiveJurisdictionId();
+            displayName = appConfig?.jurisdictions?.[jurisdiction]?.name || jurisdiction;
+        }
+        jurisdictionEl.textContent = displayName;
     }
 
     // Show/hide error message
@@ -48505,6 +48518,21 @@ async function updateDashboardFromMatview(spec) {
     setN('kpiVRU',       ped + bike);
     setN('kpiSpeed',     speed);
     setN('kpiNighttime', night);
+    // Round 22 §3a — surface total_injured (exists in dashboard_summary today)
+    // as the Persons Injured KPI. Tile is display:none until we set it visible.
+    let _totalInjured = 0;
+    (rows || []).forEach(r => { _totalInjured += Number(r.total_injured) || 0; });
+    setN('kpiPersonsInjured', _totalInjured);
+    const _piCard = document.getElementById('kpiPersonsInjuredCard');
+    if (_piCard) _piCard.style.display = _totalInjured > 0 ? '' : 'none';
+    const _piSub = document.getElementById('kpiPersonsInjuredSub');
+    if (_piSub) _piSub.textContent = total > 0
+        ? `Avg per crash: ${(_totalInjured / total).toFixed(2)}`
+        : 'Avg per crash: 0';
+    // Round 22 §3b — hide vehicle-count tile until backend provides a column.
+    if (typeof applyAvgVehiclesCapabilityGate === 'function') {
+        applyAvgVehiclesCapabilityGate();
+    }
     // Honor the Round 16 BLOCKED-UPSTREAM B/C gate — we just overwrote kpiInjuryBC.
     if (typeof applyInjuryBCCapabilityGate === 'function') {
         applyInjuryBCCapabilityGate().catch(() => {});
@@ -50272,9 +50300,25 @@ function updateTierScopeHeader() {
     } else if (tier === 'mpo') {
         const mpoName = jurisdictionContext.tierMpo?.name || jurisdictionContext.tierMpo?.shortName || 'MPO';
         const tprLabel = HierarchyRegistry.getTPRTypeLabel(false);
-        if (titleEl) titleEl.textContent = mpoName;
+        if (titleEl) {
+            titleEl.textContent = mpoName;
+            // Round 22 §5d — explain why MPO totals may not match PD totals.
+            titleEl.title = 'MPO boundaries differ from Planning District boundaries — ' +
+                            'crash counts may not match the Planning District total.';
+        }
         if (subtitleEl) subtitleEl.textContent = `${stateName} — ${tprLabel}`;
         if (badgeEl) badgeEl.textContent = tprLabel;
+    }
+    // Round 22 §2 — planning_district branch was missing → tier label persisted
+    // from previous MPO/region selection. Verified: Chrome Claude saw "Dover/Kent
+    // County MPO" header on Central District PD selection. State-agnostic.
+    else if (tier === 'planning_district') {
+        const pdName = jurisdictionContext.tierPlanningDistrict?.name
+                    || jurisdictionContext.tierPlanningDistrict?.shortName
+                    || 'Planning District';
+        if (titleEl) titleEl.textContent = pdName;
+        if (subtitleEl) subtitleEl.textContent = `${stateName} — Planning District`;
+        if (badgeEl) badgeEl.textContent = 'Planning District';
     }
 }
 
@@ -50387,19 +50431,19 @@ async function paintDashboardChartsFromMatview() {
     }
 
     // chartFuncClass — Functional Class distribution (top 8)
+    // Round 22 §1a — paint immediately (was wrapped in paintWhenVisible which raced
+    // with PDF capture + matrix-audit. Data already loaded into D.byFuncClass).
     if (D.byFuncClass && Object.keys(D.byFuncClass).length > 0) {
-        paintWhenVisible('chartFuncClass', () => {
-            const fc = Object.entries(D.byFuncClass)
-                .filter(([_, v]) => v && v.total > 0)
-                .sort((a, b) => b[1].total - a[1].total)
-                .slice(0, 8);
-            if (fc.length > 0) {
-                createChart('chartFuncClass', 'bar', {
-                    labels: fc.map(([k]) => String(k).substring(0, 20)),
-                    datasets: [{ label: 'Crashes', data: fc.map(([_, v]) => v.total), backgroundColor: '#059669' }]
-                }, { indexAxis: 'y' });
-            }
-        });
+        const fc = Object.entries(D.byFuncClass)
+            .filter(([_, v]) => v && v.total > 0)
+            .sort((a, b) => b[1].total - a[1].total)
+            .slice(0, 8);
+        if (fc.length > 0) {
+            createChart('chartFuncClass', 'bar', {
+                labels: fc.map(([k]) => String(k).substring(0, 20)),
+                datasets: [{ label: 'Crashes', data: fc.map(([_, v]) => v.total), backgroundColor: '#059669' }]
+            }, { indexAxis: 'y' });
+        }
     }
 
     // chartCollision — Top 10 collision types. byCollision is { name: total }.
@@ -50419,49 +50463,47 @@ async function paintDashboardChartsFromMatview() {
     }
 
     // chartWeather — Top 6 weather conditions doughnut
+    // Round 22 §1b — paint immediately (drop paintWhenVisible).
     if (D.byWeather && Object.keys(D.byWeather).length > 0) {
-        paintWhenVisible('chartWeather', () => {
-            const wx = Object.entries(D.byWeather)
-                .filter(([_, v]) => v && v.total > 0)
-                .sort((a, b) => b[1].total - a[1].total)
-                .slice(0, 6);
-            if (wx.length > 0) {
-                const wxLabels = wx.map(([k]) => String(k).substring(0, 20));
-                const wxData = wx.map(([_, v]) => v.total);
-                const wxColors = ['#0ea5e9','#64748b','#f59e0b','#10b981','#8b5cf6','#ec4899'];
-                createChart('chartWeather', 'doughnut', {
-                    labels: wxLabels,
-                    datasets: [{ data: wxData, backgroundColor: wxColors, borderWidth: 2, borderColor: '#fff' }]
-                }, { cutout: '50%', plugins: { legend: { display: false } } });
-                const total = wxData.reduce((s, n) => s + n, 0);
-                if (typeof buildCustomLegend === 'function') {
-                    buildCustomLegend('legendWeather', wxLabels, wxData, wxColors, total);
-                }
+        const wx = Object.entries(D.byWeather)
+            .filter(([_, v]) => v && v.total > 0)
+            .sort((a, b) => b[1].total - a[1].total)
+            .slice(0, 6);
+        if (wx.length > 0) {
+            const wxLabels = wx.map(([k]) => String(k).substring(0, 20));
+            const wxData = wx.map(([_, v]) => v.total);
+            const wxColors = ['#0ea5e9','#64748b','#f59e0b','#10b981','#8b5cf6','#ec4899'];
+            createChart('chartWeather', 'doughnut', {
+                labels: wxLabels,
+                datasets: [{ data: wxData, backgroundColor: wxColors, borderWidth: 2, borderColor: '#fff' }]
+            }, { cutout: '50%', plugins: { legend: { display: false } } });
+            const total = wxData.reduce((s, n) => s + n, 0);
+            if (typeof buildCustomLegend === 'function') {
+                buildCustomLegend('legendWeather', wxLabels, wxData, wxColors, total);
             }
-        });
+        }
     }
 
     // chartLight — Top 6 light conditions doughnut
+    // Round 22 §1c — paint immediately (drop paintWhenVisible).
     if (D.byLight && Object.keys(D.byLight).length > 0) {
-        paintWhenVisible('chartLight', () => {
-            const lt = Object.entries(D.byLight)
-                .filter(([_, v]) => v && v.total > 0)
-                .sort((a, b) => b[1].total - a[1].total)
-                .slice(0, 6);
-            if (lt.length > 0) {
-                const ltLabels = lt.map(([k]) => String(k).substring(0, 20));
-                const ltData = lt.map(([_, v]) => v.total);
-                const ltColors = ['#fcd34d','#1e293b','#94a3b8','#f97316','#6366f1','#14b8a6'];
-                createChart('chartLight', 'doughnut', {
-                    labels: ltLabels,
-                    datasets: [{ data: ltData, backgroundColor: ltColors, borderWidth: 2, borderColor: '#fff' }]
-                }, { cutout: '50%', plugins: { legend: { display: false } } });
-                const total = ltData.reduce((s, n) => s + n, 0);
-                if (typeof buildCustomLegend === 'function') {
-                    buildCustomLegend('legendLight', ltLabels, ltData, ltColors, total);
-                }
+        const lt = Object.entries(D.byLight)
+            .filter(([_, v]) => v && v.total > 0)
+            .sort((a, b) => b[1].total - a[1].total)
+            .slice(0, 6);
+        if (lt.length > 0) {
+            const ltLabels = lt.map(([k]) => String(k).substring(0, 20));
+            const ltData = lt.map(([_, v]) => v.total);
+            const ltColors = ['#fcd34d','#1e293b','#94a3b8','#f97316','#6366f1','#14b8a6'];
+            createChart('chartLight', 'doughnut', {
+                labels: ltLabels,
+                datasets: [{ data: ltData, backgroundColor: ltColors, borderWidth: 2, borderColor: '#fff' }]
+            }, { cutout: '50%', plugins: { legend: { display: false } } });
+            const total = ltData.reduce((s, n) => s + n, 0);
+            if (typeof buildCustomLegend === 'function') {
+                buildCustomLegend('legendLight', ltLabels, ltData, ltColors, total);
             }
-        });
+        }
     }
 
     // chartDOW — Round 12: getAnalysisBreakdown now unions mv_analysis_extra
@@ -51817,6 +51859,30 @@ async function applySafetyFocusCapabilityGates() {
     }
 }
 
+// Round 22 §5b — Work Zone safety card sits outside _SAFETY_CARD_CAPABILITY_MAP
+// because some states (DE today) do not have has_workzone_flag in caps but the
+// card still renders "0". Show the source-data-gap badge in that case so users
+// don't read 0 as a real count.
+window.addEventListener('crashtab:safety:shown', () => {
+    setTimeout(() => {
+        const card = document.querySelector('.safety-card.workzone');
+        if (!card) return;
+        const valueEl = card.querySelector('.safety-card-value');
+        if (!valueEl) return;
+        const txt = (valueEl.textContent || '').trim();
+        if ((txt === '0' || txt === '') && !card.querySelector('.blocked-upstream')) {
+            valueEl.textContent = '—';
+            const pctEl = card.querySelector('.safety-card-pct');
+            if (pctEl) pctEl.textContent = '';
+            if (typeof _buildBlockedBadgeEl === 'function') {
+                const badge = _buildBlockedBadgeEl();
+                badge.style.marginTop = '.25rem';
+                card.appendChild(badge);
+            }
+        }
+    }, 800);
+});
+
 // Gate Dashboard Injury B/C KPI — show "—" when the state has neither B nor C.
 async function applyInjuryBCCapabilityGate() {
     const caps = await getActiveStateCapabilities();
@@ -51828,6 +51894,21 @@ async function applyInjuryBCCapabilityGate() {
         bcEl.title = "B and C injury severities are not available in this state's source data.";
     }
 }
+
+// Round 22 §3b — Vehicle count column not in dashboard_summary today.
+// Hide the tile until backend adds it. State-agnostic — keys on the
+// absence of the matview column, not on any state literal. When the
+// backend adds dashboard_summary.avg_vehicles_per_crash (or per-row
+// vehicle_count), this gate can flip to caps-driven (similar to
+// applyInjuryBCCapabilityGate).
+function applyAvgVehiclesCapabilityGate() {
+    const card = document.getElementById('kpiVehicleCountCard');
+    if (!card) return;
+    card.style.display = 'none';
+}
+window.applyAvgVehiclesCapabilityGate = applyAvgVehiclesCapabilityGate;
+document.addEventListener('jurisdictionChanged', () => applyAvgVehiclesCapabilityGate());
+window.addEventListener('crashtab:dashboard:shown', () => applyAvgVehiclesCapabilityGate());
 
 // Round 21 §10 — Dashboard state coverage banner. Surfaces a clear message
 // when the active state's capabilities row reports total_crashes:0
@@ -107930,7 +108011,31 @@ function generateProfessionalTableRows(node, indent = 0) {
 // FATAL & SPEEDING TAB FUNCTIONS
 // ============================================================
 
+// Round 22 §4 — show "…" placeholder on F&S KPI tiles before matview data
+// resolves so users don't see all zeros for 4-5s on first tab activation.
+function _showFSLoadingSkeleton() {
+    const skeletonIds = [
+        'fsTotalFatalities', 'fsFatalCrashes', 'fsFatalPct',
+        'fsFatalRate', 'fsKACombined',
+        'fsSpeedCrashes', 'fsSpeedFatalities', 'fsSpeedPct',
+        'fsSpeedEPDO', 'fsSpeedPrevalence'
+    ];
+    skeletonIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const t = (el.textContent || '').trim();
+        if (!t || t === '0' || t === '0%' || t === '0.0%' || t === '$0' || t === '0.00') {
+            el.innerHTML = '<span style="color:#94a3b8" data-fs-skeleton="1">…</span>';
+        }
+    });
+}
+window._showFSLoadingSkeleton = _showFSLoadingSkeleton;
+window.addEventListener('crashtab:fatalspeeding:shown', _showFSLoadingSkeleton);
+
 function initFatalSpeedingTab() {
+    // Round 22 §4 — write skeleton before any async work so users don't see all zeros.
+    _showFSLoadingSkeleton();
+
     const _fsTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
 
     // Supabase-first for ALL tiers: try matview path first.
@@ -156051,6 +156156,9 @@ function signDef_exportPDF() {
         }
     });
     window.applyStateAwareCheckboxDefaults = applyStateAwareCheckboxDefaults;
+    // Round 22 §5a — alias under the Round 21 §8 spec name so audit health-checks
+    // pass. Both names point to the same function.
+    window._syncVirginiaFirstDefault = applyStateAwareCheckboxDefaults;
 
     // ---------------------------------------------------------------
     // §9 — Find Countermeasures validation
