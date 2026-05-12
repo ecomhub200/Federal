@@ -1,0 +1,19 @@
+{
+  "name": "crashlens-firestore-to-supabase-sync",
+  "version": "1.0.0",
+  "description": "One-shot Firestore -> Supabase user sync for Crash Lens auth migration",
+  "private": true,
+  "scripts": {
+    "sync:dry": "node firestore-to-supabase-sync.js",
+    "sync:apply": "node firestore-to-supabase-sync.js --apply",
+    "sync:peek": "node firestore-to-supabase-sync.js --limit 5 --verbose"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "firebase-admin": "^12.4.0",
+    "uuid": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

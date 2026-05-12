@@ -1,0 +1,10 @@
+# NEVER commit these â€” Firebase admin grants full project access
+firebase-admin.json
+firebase-service-account.json
+*-service-account*.json
+
+# Node
+node_modules/
+# package-lock.json — committed for reproducibility
+.env
+.env.*
