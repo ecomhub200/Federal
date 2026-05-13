@@ -28235,15 +28235,79 @@ function restoreCrashStateFromCache(cached) {
 // for rollups). Instead, lazy-fetch per-marker rows from mv_map_points so
 // every per-row filter (Map / HotSpots / Intersections / PedBike / etc.)
 // has data to operate on. State-agnostic — keys on resolveTier()'s output.
+// Round 25 §6 — IndexedDB cache for matview-fetched mapPoints.
+// Keyed by (state, tier, value, day-bucket) so the cache invalidates
+// every 24h. Most users browse for <24h; matview data refreshes daily
+// per the backend pipeline.
+const _MAP_POINTS_CACHE_DB = 'crashlens-map-points-cache';
+const _MAP_POINTS_CACHE_STORE = 'points';
+
+function _openMapPointsCache() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(_MAP_POINTS_CACHE_DB, 1);
+        req.onupgradeneeded = e => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(_MAP_POINTS_CACHE_STORE)) {
+                db.createObjectStore(_MAP_POINTS_CACHE_STORE, { keyPath: 'cacheKey' });
+            }
+        };
+        req.onsuccess = e => resolve(e.target.result);
+        req.onerror = reject;
+    });
+}
+
+function _mapPointsDayBucket() {
+    return Math.floor(Date.now() / (24*60*60*1000));
+}
+
+function _mapPointsCacheKey(state, tier, value) {
+    return `${state}|${tier}|${value || ''}|${_mapPointsDayBucket()}`;
+}
+
+async function _readMapPointsCache(state, tier, value) {
+    try {
+        const db = await _openMapPointsCache();
+        const tx = db.transaction(_MAP_POINTS_CACHE_STORE, 'readonly');
+        const store = tx.objectStore(_MAP_POINTS_CACHE_STORE);
+        const cacheKey = _mapPointsCacheKey(state, tier, value);
+        return await new Promise((res, rej) => {
+            const req = store.get(cacheKey);
+            req.onsuccess = () => res(req.result?.points || null);
+            req.onerror = rej;
+        });
+    } catch (e) { return null; }
+}
+
+async function _writeMapPointsCache(state, tier, value, points) {
+    try {
+        const db = await _openMapPointsCache();
+        const tx = db.transaction(_MAP_POINTS_CACHE_STORE, 'readwrite');
+        const store = tx.objectStore(_MAP_POINTS_CACHE_STORE);
+        store.put({ cacheKey: _mapPointsCacheKey(state, tier, value), points: points, ts: Date.now() });
+        // Also evict stale entries (different day bucket) to bound IDB size.
+        const todaySuffix = '|' + _mapPointsDayBucket();
+        store.openCursor().onsuccess = e => {
+            const cursor = e.target.result;
+            if (!cursor) return;
+            if (!cursor.value.cacheKey.endsWith(todaySuffix)) {
+                cursor.delete();
+            }
+            cursor.continue();
+        };
+    } catch (e) { /* non-fatal */ }
+}
+
 async function _hydrateMapPointsFromMatview(reason) {
     const dc = window.crashLensClient;
     if (!dc || typeof dc.getMapPoints !== 'function') return;
     let opts = {};
+    let tier = 'state', value = '';
     try {
         const t = (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
             ? CL.data.supabaseBridge.resolveTier()
             : null;
         if (t && t.tier) {
+            tier = t.tier; value = t.value || '';
             if (t.tier === 'dot_district')      opts.dotDistrict      = t.value;
             if (t.tier === 'planning_district') opts.planningDistrict = t.value;
             if (t.tier === 'mpo')               opts.mpoName          = t.value;
@@ -28251,12 +28315,26 @@ async function _hydrateMapPointsFromMatview(reason) {
             // 'state' / 'federal' → no tier filter; the state= eq filter alone scopes it.
         }
     } catch (e) { /* fall through to state-only scope */ }
-    console.log('[mapPointsHydrate] fetching mv_map_points (' + reason + ')', opts);
+
+    // Round 25 §6 — try IndexedDB cache first
+    const stateKey = (dc.state || '').toLowerCase();
+    const cached = await _readMapPointsCache(stateKey, tier, value);
+    if (cached) {
+        crashState.mapPoints = cached;
+        console.log('[mapPointsHydrate] HIT cache (' + reason + ') ' + cached.length + ' points');
+        document.dispatchEvent(new CustomEvent('crashDataLoaded', { detail: { source: 'mv_map_points_cached' } }));
+        showBackgroundLoadingIndicator(false);
+        return;
+    }
+
+    console.log('[mapPointsHydrate] MISS cache (' + reason + '), fetching mv_map_points', opts);
     const t0 = Date.now();
     const rows = await dc.getMapPoints(opts);
     crashState.mapPoints = rows || [];
     console.log('[mapPointsHydrate] populated ' + crashState.mapPoints.length +
                 ' points in ' + (Date.now() - t0) + 'ms — filters now operational');
+    // Write to cache (best-effort)
+    _writeMapPointsCache(stateKey, tier, value, crashState.mapPoints);
     document.dispatchEvent(new CustomEvent('crashDataLoaded', { detail: { source: 'mv_map_points' } }));
     showBackgroundLoadingIndicator(false);
 }
@@ -51241,35 +51319,77 @@ async function dashExportSearchCSV() {
  * @returns {{latMin: number, latMax: number, lonMin: number, lonMax: number}}
  */
 function getMapCoordinateBounds() {
-    // Prefer jurisdiction-level bbox for tighter filtering (fixes out-of-boundary crashes)
-    const jurisdictionId = localStorage.getItem('selectedJurisdiction');
-    const jurisdiction = jurisdictionId && appConfig?.jurisdictions?.[jurisdictionId]
-        ? appConfig.jurisdictions[jurisdictionId]
-        : null;
+    // Round 25 §6 — at broader tiers (region/MPO/planning_district/state/federal),
+    // mv_map_points is rolled up across counties (e.g. planning_district =
+    // Central District includes points outside the user's "selected" county).
+    // The previous jurisdiction-level bbox clipped legitimate rolled-up points
+    // (dropped ~62K of 95K Central District points in Delaware). At non-county
+    // tiers, use state-level bounds instead so the filter doesn't drop them.
+    let activeTier = 'county';
+    try {
+        activeTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier)
+            ? jurisdictionContext.viewTier
+            : 'county';
+    } catch (e) { /* default to county */ }
+    const wideTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district', 'dot_district']);
+    const useJurisdictionBbox = !wideTiers.has(activeTier);
 
-    if (jurisdiction?.bbox && Array.isArray(jurisdiction.bbox) && jurisdiction.bbox.length === 4) {
-        const [minLng, minLat, maxLng, maxLat] = jurisdiction.bbox;
-        // Add ~5% buffer so crashes near the border aren't clipped (increased from 2% to recover edge-of-county crashes)
-        const latBuffer = (maxLat - minLat) * 0.05;
-        const lngBuffer = (maxLng - minLng) * 0.05;
-        return {
-            latMin: minLat - latBuffer,
-            latMax: maxLat + latBuffer,
-            lonMin: minLng - lngBuffer,
-            lonMax: maxLng + lngBuffer
-        };
+    if (useJurisdictionBbox) {
+        // County/city tier — prefer jurisdiction-level bbox for tighter filtering
+        const jurisdictionId = localStorage.getItem('selectedJurisdiction');
+        const jurisdiction = jurisdictionId && appConfig?.jurisdictions?.[jurisdictionId]
+            ? appConfig.jurisdictions[jurisdictionId]
+            : null;
+
+        if (jurisdiction?.bbox && Array.isArray(jurisdiction.bbox) && jurisdiction.bbox.length === 4) {
+            const [minLng, minLat, maxLng, maxLat] = jurisdiction.bbox;
+            // Add ~5% buffer so crashes near the border aren't clipped (increased from 2% to recover edge-of-county crashes)
+            const latBuffer = (maxLat - minLat) * 0.05;
+            const lngBuffer = (maxLng - minLng) * 0.05;
+            return {
+                latMin: minLat - latBuffer,
+                latMax: maxLat + latBuffer,
+                lonMin: minLng - lngBuffer,
+                lonMax: maxLng + lngBuffer
+            };
+        }
     }
 
-    // Fall back to state-level bounds
+    // Round 25 §6 — prefer config-driven state bbox if present in appConfig.states.
+    // Supports either array form [minLng, minLat, maxLng, maxLat] or
+    // object form { south, north, west, east } for forward-compat.
+    const dc = window.crashLensClient;
+    const stateKey = (dc?.state || '').toLowerCase();
+    const stateCfg = stateKey && window.appConfig?.states?.[stateKey];
+    if (stateCfg?.bbox) {
+        if (Array.isArray(stateCfg.bbox) && stateCfg.bbox.length === 4) {
+            const [minLng, minLat, maxLng, maxLat] = stateCfg.bbox;
+            return { latMin: minLat, latMax: maxLat, lonMin: minLng, lonMax: maxLng };
+        }
+        if (typeof stateCfg.bbox === 'object' &&
+            stateCfg.bbox.south != null && stateCfg.bbox.north != null &&
+            stateCfg.bbox.west  != null && stateCfg.bbox.east  != null) {
+            return {
+                latMin: stateCfg.bbox.south, latMax: stateCfg.bbox.north,
+                lonMin: stateCfg.bbox.west,  lonMax: stateCfg.bbox.east
+            };
+        }
+    }
+
+    // Fall back to StateAdapter-derived bounds (covers all states via FIPSDatabase).
     const geoBounds = (typeof StateAdapter !== 'undefined' && typeof StateAdapter.getGeoConfig === 'function' && StateAdapter.getGeoConfig())
         ? StateAdapter.getGeoConfig().coordinateBounds
         : null;
-    return {
-        latMin: geoBounds ? geoBounds.latMin : 24,
-        latMax: geoBounds ? geoBounds.latMax : 50,
-        lonMin: geoBounds ? geoBounds.lonMin : -125,
-        lonMax: geoBounds ? geoBounds.lonMax : -66
-    };
+    if (geoBounds) {
+        return {
+            latMin: geoBounds.latMin,
+            latMax: geoBounds.latMax,
+            lonMin: geoBounds.lonMin,
+            lonMax: geoBounds.lonMax
+        };
+    }
+    // Final fallback: continental US bounds (very loose).
+    return { latMin: 24.5, latMax: 49.5, lonMin: -125.0, lonMax: -66.5 };
 }
 
 /**
