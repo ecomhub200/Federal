@@ -663,6 +663,92 @@ class CrashLensDataClient {
   }
 
   /**
+   * mv federal_summary — per-state annual rollup.
+   * Aggregates across area_type / functional_class / ownership / severity to
+   * give one row per (state, year). Used by the federal-tier Safety Scorecard.
+   *
+   * Pulls 4 prior years too so the renderer can paint a 5-yr sparkline and
+   * compute YoY deltas without a second request.
+   *
+   * @param {number} yearStart - inclusive
+   * @param {number} yearEnd   - inclusive (set equal to yearStart for single year)
+   * @returns {Promise<Array>} one row per state with totals + yoy_total/yoy_fatal/spark_5yr
+   */
+  async getFederalSummary(yearStart, yearEnd) {
+    yearStart = parseInt(yearStart, 10);
+    yearEnd   = parseInt(yearEnd, 10);
+    if (!this.preferSupabase || !this.supabaseKey) return [];
+    const params = new URLSearchParams({
+      select: 'state,crash_year,total_crashes,total_k,total_a,total_b,total_c,total_killed,total_injured,ped_crashes,bike_crashes,alcohol_crashes,distracted_crashes,speed_crashes,wz_crashes',
+      crash_year: `gte.${yearStart - 4}`,  // pull 4 prior years for sparkline + YoY
+      order: 'state,crash_year'
+    });
+    const url = `${this.supabaseUrl}/federal_summary?${params}`;
+    try {
+      const resp = await fetch(url, { headers: { apikey: this.supabaseKey, Authorization: 'Bearer ' + this.supabaseKey } });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const raw = await resp.json();
+      // Roll up to one row per (state, year) — federal_summary is partitioned
+      // by area_type/functional_class/ownership/severity so a single state-year
+      // emits many rows.
+      const byState = {};
+      raw.forEach(r => {
+        const yr = Number(r.crash_year);
+        const s = r.state;
+        if (!byState[s]) byState[s] = { state:s, _byYear:{} };
+        if (!byState[s]._byYear[yr]) byState[s]._byYear[yr] = { total:0, k:0, a:0, b:0, c:0, ksi:0, epdo:0, killed:0, injured:0, ped:0, bike:0, alc:0, dist:0, spd:0, wz:0 };
+        const b = byState[s]._byYear[yr];
+        const k = Number(r.total_k||0), a = Number(r.total_a||0), bsev = Number(r.total_b||0), cs = Number(r.total_c||0);
+        const tot = Number(r.total_crashes||0);
+        b.total += tot;
+        b.k += k; b.a += a; b.b += bsev; b.c += cs;
+        b.ksi += k + a;
+        b.killed  += Number(r.total_killed||0);
+        b.injured += Number(r.total_injured||0);
+        b.ped     += Number(r.ped_crashes||0);
+        b.bike    += Number(r.bike_crashes||0);
+        b.alc     += Number(r.alcohol_crashes||0);
+        b.dist    += Number(r.distracted_crashes||0);
+        b.spd     += Number(r.speed_crashes||0);
+        b.wz      += Number(r.wz_crashes||0);
+        // EPDO using FHWA 2025 weights (federal default).
+        const oCount = Math.max(0, tot - k - a - bsev - cs);
+        b.epdo += k*883 + a*94 + bsev*21 + cs*11 + oCount;
+      });
+      const out = [];
+      Object.values(byState).forEach(s => {
+        const inRange = [];
+        for (let y = yearStart; y <= yearEnd; y++) if (s._byYear[y]) inRange.push(s._byYear[y]);
+        if (!inRange.length) return;
+        const sum = (k) => inRange.reduce((acc, x) => acc + (x[k] || 0), 0);
+        const total_crashes = sum('total'), fatal_crashes = sum('k'), ksi_crashes = sum('ksi');
+        const prevYr = s._byYear[yearStart - 1];
+        const yoyTotal = prevYr && prevYr.total ? ((total_crashes - prevYr.total) / Math.max(prevYr.total, 1) * 100) : null;
+        const yoyFatal = prevYr ? ((fatal_crashes - prevYr.k) / Math.max(prevYr.k, 1) * 100) : null;
+        const spark = [];
+        for (let y = yearStart - 4; y <= yearStart; y++) spark.push(s._byYear[y] ? s._byYear[y].total : 0);
+        out.push({
+          state: s.state,
+          total_crashes, fatal_crashes, ksi_crashes,
+          total_epdo: sum('epdo'),
+          total_killed: sum('killed'), total_injured: sum('injured'),
+          ped_crashes: sum('ped'), bike_crashes: sum('bike'),
+          impaired_crashes: sum('alc'), speed_crashes: sum('spd'),
+          distracted_crashes: sum('dist'), workzone_crashes: sum('wz'),
+          ksi_rate: 0,                         // renderer computes per-100K using state population
+          yoy_total: yoyTotal, yoy_fatal: yoyFatal,
+          spark_5yr: spark
+        });
+      });
+      this._source = 'supabase';
+      return out;
+    } catch (e) {
+      console.warn('[DataClient] getFederalSummary failed:', e.message);
+      return [];
+    }
+  }
+
+  /**
    * Get available states from states table.
    * @returns {Promise<Array>} [{abbr, name, display_name, total_crashes, ...}]
    */

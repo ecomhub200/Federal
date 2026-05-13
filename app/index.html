@@ -4393,6 +4393,28 @@ textarea:focus-visible {
 .api-fallback-chain .chain-step.skipped{background:#fee2e2;border-color:#fecaca;color:#dc2626;text-decoration:line-through;opacity:.6}
 .api-fallback-chain .chain-arrow{color:#cbd5e1}
 
+/* Safety Scorecard — tier-aware redesign */
+.sc-pill { padding:.35rem .7rem; border:1px solid #cbd5e1; background:#fff; color:#475569; border-radius:6px; font-size:.75rem; cursor:pointer; }
+.sc-pill.active { background:#1e293b; color:#fff; border-color:#1e293b; font-weight:600; }
+.sc-kpi { background:#f8fafc; border:1px solid var(--gray-light); border-radius:var(--radius); padding:.6rem .75rem; }
+.sc-kpi .kpi-label { font-size:.65rem; color:#64748b; margin:0 0 .15rem; text-transform:uppercase; letter-spacing:.04em; }
+.sc-kpi .kpi-val { font-size:1.1rem; font-weight:600; margin:0; line-height:1.2; }
+.sc-kpi .kpi-sub { font-size:.7rem; margin:.15rem 0 0; }
+.sc-kpi.up .kpi-sub { color:#dc2626; }
+.sc-kpi.down .kpi-sub { color:#059669; }
+#scorecardTable thead th { position:sticky; top:0; background:#fff; z-index:1; cursor:pointer; user-select:none; }
+#scorecardTable thead th .sort-arr { font-size:.65rem; opacity:.4; margin-left:.2rem; }
+#scorecardTable thead th.sorted .sort-arr { opacity:1; }
+#scorecardTable tbody tr.pinned { background:#dbeafe; }
+.pin-btn { background:none; border:none; padding:0; margin-right:.25rem; cursor:pointer; color:#94a3b8; font-size:.85rem; vertical-align:-1px; }
+.pin-btn.is-pinned { color:#1e40af; }
+.heat-cell { display:inline-block; padding:.15rem .45rem; border-radius:6px; font-size:.7rem; font-weight:600; }
+.spark-svg { width:60px; height:18px; }
+.delta-up { color:#dc2626; font-size:.65rem; margin-left:.2rem; }
+.delta-down { color:#059669; font-size:.65rem; margin-left:.2rem; }
+.delta-flat { color:#94a3b8; font-size:.65rem; margin-left:.2rem; }
+#scorecard-choropleth svg { display:block; max-width:100%; height:auto; }
+
 </style>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -19791,85 +19813,101 @@ Developed by CRASH LENS | <a href="mailto:support@aicreatesai.com" style="color:
 <!-- ═══════════════════════════════════════════════ -->
 <div id="tab-scorecard" class="tab-content" role="tabpanel" aria-labelledby="tab-scorecard-btn">
 <div class="card">
-<div class="card-title"><span aria-hidden="true">📋</span> Safety Scorecard — Jurisdiction Comparison</div>
-
-<!-- Filters Bar -->
-<div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end;margin-bottom:1rem;padding:.75rem 1rem;background:#f8fafc;border-radius:var(--radius);border:1px solid var(--gray-light)">
-
-<div style="display:flex;flex-direction:column;gap:.25rem">
-<label style="font-size:.75rem;font-weight:600;color:#475569">Year</label>
-<select id="scorecard-year" onchange="loadScorecardData()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem;min-width:80px">
-</select>
+<!-- Title row + summary badge -->
+<div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.75rem">
+  <div class="card-title" style="margin:0"><span aria-hidden="true">📋</span> Safety Scorecard</div>
+  <span id="scorecard-status" style="font-size:.75rem;color:#64748b;margin-left:auto"></span>
 </div>
 
-<div style="display:flex;flex-direction:column;gap:.25rem">
-<label style="font-size:.75rem;font-weight:600;color:#475569">Mode</label>
-<select id="scorecard-year-mode" onchange="onScorecardModeChange()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem">
-<option value="single">Single Year</option>
-<option value="compare">Compare</option>
-<option value="rolling">3-Year Rolling</option>
-</select>
+<!-- TOOLBAR -->
+<div class="sc-toolbar" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:flex-end;padding:.6rem .75rem;background:#f8fafc;border-radius:var(--radius);border:1px solid var(--gray-light);margin-bottom:.75rem">
+  <div style="display:flex;flex-direction:column;gap:.2rem">
+    <label style="font-size:.7rem;font-weight:600;color:#475569">Year</label>
+    <select id="scorecard-year" onchange="loadScorecardData()" style="padding:.35rem .55rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.8rem;min-width:75px"></select>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:.2rem">
+    <label style="font-size:.7rem;font-weight:600;color:#475569">Mode</label>
+    <select id="scorecard-year-mode" onchange="onScorecardModeChange()" style="padding:.35rem .55rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.8rem">
+      <option value="single">Single year</option>
+      <option value="compare">Compare YoY</option>
+      <option value="rolling">3-year rolling</option>
+    </select>
+  </div>
+  <div id="scorecard-compare-wrap" style="display:none;flex-direction:column;gap:.2rem">
+    <label style="font-size:.7rem;font-weight:600;color:#475569">Compare to</label>
+    <select id="scorecard-compare-year" onchange="loadScorecardData()" style="padding:.35rem .55rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.8rem;min-width:75px"></select>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:.2rem">
+    <label style="font-size:.7rem;font-weight:600;color:#475569">Scorecard</label>
+    <select id="scorecard-type" onchange="loadScorecardData()" style="padding:.35rem .55rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.8rem">
+      <option value="volume">Volume &amp; severity</option>
+      <option value="vulnerable">Vulnerable users</option>
+      <option value="factors">Contributing factors</option>
+      <option value="infrastructure">Infrastructure</option>
+    </select>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:.4rem">
+    <label style="display:inline-flex;align-items:center;gap:.3rem;font-size:.75rem;color:#475569;cursor:pointer">
+      <input type="checkbox" id="scorecard-normalize" onchange="renderScorecardTable(_scorecardData)"> Per 100K population
+    </label>
+  </div>
 </div>
 
-<div id="scorecard-compare-wrap" style="display:none;flex-direction:column;gap:.25rem">
-<label style="font-size:.75rem;font-weight:600;color:#475569">Compare To</label>
-<select id="scorecard-compare-year" onchange="loadScorecardData()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem;min-width:80px">
-</select>
+<!-- FEDERAL-ONLY KPI ROW (hidden for other tiers) -->
+<div id="scorecard-federal-kpis" style="display:none;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem;margin-bottom:.75rem"></div>
+
+<!-- FEDERAL-ONLY CHOROPLETH (hidden for other tiers) -->
+<div id="scorecard-choropleth-wrap" style="display:none;margin-bottom:.75rem;background:#fff;padding:.6rem;border:1px solid var(--gray-light);border-radius:var(--radius)">
+  <div style="display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:#475569;margin-bottom:.4rem">
+    <span><strong>US choropleth</strong> — fatal crashes per 100K population</span>
+    <span style="margin-left:auto;display:inline-flex;align-items:center;gap:.25rem;font-size:.65rem">
+      <span style="display:inline-block;width:14px;height:10px;background:#E6F1FB"></span>low
+      <span style="display:inline-block;width:14px;height:10px;background:#378ADD"></span>
+      <span style="display:inline-block;width:14px;height:10px;background:#0C447C"></span>high
+    </span>
+  </div>
+  <div id="scorecard-choropleth"></div>
 </div>
 
-<div style="display:flex;flex-direction:column;gap:.25rem">
-<label style="font-size:.75rem;font-weight:600;color:#475569">Scorecard</label>
-<select id="scorecard-type" onchange="loadScorecardData()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem">
-<option value="volume">Volume &amp; Severity</option>
-<option value="vulnerable">Vulnerable Users</option>
-<option value="factors">Contributing Factors</option>
-<option value="infrastructure">Infrastructure</option>
-</select>
+<!-- TIER-AWARE PEER PILLS -->
+<div id="scorecard-tier-tabs" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.6rem"></div>
+
+<!-- SEARCH + ACTIONS -->
+<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
+  <input type="search" id="scorecard-search" placeholder="Search jurisdiction…" oninput="renderScorecardTable(_scorecardData)" style="flex:1;min-width:160px;max-width:280px;font-size:.8rem;padding:.35rem .55rem;border:1px solid #cbd5e1;border-radius:6px">
+  <button class="btn-soft btn-soft-secondary btn-soft-sm" onclick="resetScorecardPins()" title="Clear all pinned rows">📌 Reset pins</button>
+  <button class="btn-soft btn-soft-success btn-soft-sm" onclick="exportScorecardCSV()" title="Download visible rows as CSV">⬇️ Export CSV</button>
 </div>
 
-<div style="margin-left:auto;font-size:.8rem;color:#64748b" id="scorecard-status"></div>
-</div>
-
-<!-- Tier filter strip — splits the leaderboard by jurisdiction tier (Fix 6) -->
-<div id="scorecard-tier-tabs" style="display:flex;gap:.5rem;margin-bottom:1rem">
-  <button class="scorecard-tier-btn active" data-tier="all" onclick="setScorecardTier('all')"
-    style="padding:.4rem .8rem;border:1px solid #cbd5e1;background:#1e293b;color:#fff;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">All</button>
-  <button class="scorecard-tier-btn" data-tier="county" onclick="setScorecardTier('county')"
-    style="padding:.4rem .8rem;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:6px;font-size:.8rem;cursor:pointer">Counties</button>
-  <button class="scorecard-tier-btn" data-tier="city" onclick="setScorecardTier('city')"
-    style="padding:.4rem .8rem;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:6px;font-size:.8rem;cursor:pointer">Cities &amp; Towns</button>
-</div>
-
-<!-- Scorecard Table -->
+<!-- SCORECARD TABLE -->
 <div style="max-height:520px;overflow-y:auto;border:1px solid var(--gray-light);border-radius:var(--radius)">
-<table class="data-table" id="scorecardTable">
-<thead id="scorecardHead"><tr><th>Loading...</th></tr></thead>
-<tbody id="scorecardBody"></tbody>
-</table>
+  <table class="data-table" id="scorecardTable">
+    <thead id="scorecardHead"><tr><th>Loading…</th></tr></thead>
+    <tbody id="scorecardBody"></tbody>
+  </table>
 </div>
 </div>
 
-<!-- Bar Chart Card -->
+<!-- BAR CHART CARD -->
 <div class="card" style="margin-top:1rem">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
-<div class="card-title" style="margin:0"><span aria-hidden="true">📊</span> Metric Comparison</div>
-<div style="display:flex;align-items:center;gap:.5rem">
-<label style="font-size:.75rem;font-weight:600;color:#475569">Metric</label>
-<select id="scorecard-chart-metric" onchange="updateScorecardChart()" style="padding:.4rem .6rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem">
-<option value="total_crashes">Total Crashes</option>
-<option value="fatal_crashes">Fatal Crashes</option>
-<option value="ksi_crashes">KSI (K+A)</option>
-<option value="total_epdo">EPDO Score</option>
-<option value="ped_crashes">Pedestrian</option>
-<option value="impaired_crashes">Impaired</option>
-<option value="speed_crashes">Speed</option>
-<option value="night_crashes">Night</option>
-</select>
-</div>
-</div>
-<div style="position:relative;height:400px">
-<canvas id="scorecardChart"></canvas>
-</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
+    <div class="card-title" style="margin:0"><span aria-hidden="true">📊</span> Metric comparison</div>
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <label style="font-size:.7rem;font-weight:600;color:#475569">Metric</label>
+      <select id="scorecard-chart-metric" onchange="updateScorecardChart()" style="padding:.35rem .55rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.8rem">
+        <option value="total_crashes">Total crashes</option>
+        <option value="fatal_crashes">Fatal crashes</option>
+        <option value="ksi_crashes">KSI (K+A)</option>
+        <option value="total_epdo">EPDO score</option>
+        <option value="ped_crashes">Pedestrian</option>
+        <option value="impaired_crashes">Impaired</option>
+        <option value="speed_crashes">Speed</option>
+        <option value="night_crashes">Night</option>
+        <option value="ksi_rate">KSI rate (per 100K)</option>
+      </select>
+    </div>
+  </div>
+  <div style="position:relative;height:340px"><canvas id="scorecardChart" role="img" aria-label="Bar chart of selected metric across visible scorecard rows">Bar chart of selected metric across visible scorecard rows.</canvas></div>
 </div>
 </div><!-- END tab-scorecard -->
 
@@ -157673,7 +157711,34 @@ let _scorecardData  = [];     // latest fetched rows
 let _scorecardSortCol  = 'rank_total_crashes';
 let _scorecardSortAsc  = true;
 let _scorecardInited   = false;
-let _scorecardTierFilter = 'all';   // 'county' | 'city' | 'all'
+let _scorecardTierFilter = 'all';   // 'county' | 'city' | 'all'  (legacy var, kept for backward compat)
+let _scorecardActiveTier = 'state'; // 'federal' | 'state' | 'dot_district' | 'mpo' | 'planning_district' | 'county' | 'city'
+
+// US Census 2023 vintage estimates — used for per-100K normalization toggle.
+// Keyed by lowercase state name (matches `state` column in scorecard_rankings + federal_summary).
+// Source: census.gov/data/tables/time-series/demo/popest/2020s-state-total.html
+const _STATE_POP_2023 = {
+  'alabama':5108468, 'alaska':733406, 'arizona':7431344, 'arkansas':3067732,
+  'california':38965193, 'colorado':5877610, 'connecticut':3617176,
+  'delaware':1031890, 'district of columbia':678972, 'florida':22610726,
+  'georgia':11029227, 'hawaii':1435138, 'idaho':1964726, 'illinois':12549689,
+  'indiana':6862199, 'iowa':3207004, 'kansas':2940546, 'kentucky':4526154,
+  'louisiana':4573749, 'maine':1395722, 'maryland':6180253,
+  'massachusetts':7001399, 'michigan':10037261, 'minnesota':5737915,
+  'mississippi':2939690, 'missouri':6196156, 'montana':1132812,
+  'nebraska':1978379, 'nevada':3194176, 'new hampshire':1402054,
+  'new jersey':9290841, 'new mexico':2114371, 'new york':19571216,
+  'north carolina':10835491, 'north dakota':783926, 'ohio':11785935,
+  'oklahoma':4053824, 'oregon':4233358, 'pennsylvania':12961683,
+  'rhode island':1095962, 'south carolina':5373555, 'south dakota':919318,
+  'tennessee':7126489, 'texas':30503301, 'utah':3417734, 'vermont':647464,
+  'virginia':8715698, 'washington':7812880, 'west virginia':1770071,
+  'wisconsin':5910955, 'wyoming':584057
+};
+function _statePopulation(stateName) {
+  return _STATE_POP_2023[String(stateName||'').toLowerCase()] || null;
+}
+function _titleCase(s) { return String(s||'').replace(/\b\w/g, c => c.toUpperCase()); }
 
 /**
  * Infer the tier of a scorecard row from the active state's hierarchy.json.
@@ -157700,16 +157765,44 @@ function _inferScorecardTier(row) {
   }
 }
 
+// Legacy entry point — delegated to the new pill renderer.
 function setScorecardTier(tier) {
   _scorecardTierFilter = tier;
-  document.querySelectorAll('.scorecard-tier-btn').forEach(btn => {
-    const active = btn.getAttribute('data-tier') === tier;
-    btn.style.background = active ? '#1e293b' : '#fff';
-    btn.style.color      = active ? '#fff'    : '#475569';
-    btn.style.fontWeight = active ? '600'     : '400';
-  });
+  _scorecardActivePill = tier;
+  _renderTierPills(_scorecardActiveTier);
   renderScorecardTable(_scorecardData);
   updateScorecardChart();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Tier-aware peer pills.  The set of pills depends on the active tier —
+// at federal we show regions, at county we show city/magisterial, etc.
+// ─────────────────────────────────────────────────────────────────────────
+const _SCORECARD_PEER_PILLS = {
+  federal:           [['all','All states'],['ne','Northeast'],['s','South'],['mw','Midwest'],['w','West']],
+  state:             [['all','All'],['county','Counties'],['city','Cities & towns']],
+  dot_district:      [['all','All in region'],['county','Counties'],['city','Cities & towns']],
+  mpo:               [['all','All in MPO'],['county','Counties'],['city','Cities & towns']],
+  planning_district: [['all','All in PD'],['county','Counties'],['city','Cities & towns']],
+  county:            [['all','All in county'],['city','Cities & towns'],['mag','Magisterial districts']],
+  city:              [['route','Top routes'],['intersection','Top intersections'],['corridor','Corridors']]
+};
+let _scorecardActivePill = 'all';
+function _renderTierPills(activeTier) {
+  const wrap = document.getElementById('scorecard-tier-tabs');
+  if (!wrap) return;
+  const pills = _SCORECARD_PEER_PILLS[activeTier] || _SCORECARD_PEER_PILLS.state;
+  if (!pills.some(p => p[0] === _scorecardActivePill)) _scorecardActivePill = pills[0][0];
+  wrap.innerHTML = pills.map(([k, lbl]) =>
+    `<button class="sc-pill ${k===_scorecardActivePill?'active':''}" data-pill="${k}">${lbl}</button>`
+  ).join('');
+  wrap.querySelectorAll('.sc-pill').forEach(b => b.addEventListener('click', () => {
+    _scorecardActivePill = b.dataset.pill;
+    _scorecardTierFilter = b.dataset.pill;
+    wrap.querySelectorAll('.sc-pill').forEach(x => x.classList.toggle('active', x === b));
+    renderScorecardTable(_scorecardData);
+    updateScorecardChart();
+  }));
 }
 
 // Auto-refresh on jurisdiction / state change. State-agnostic: works for
@@ -157793,6 +157886,70 @@ async function loadScorecardData() {
   const mode = modeSel ? modeSel.value : 'single';
   if (statusEl) statusEl.textContent = 'Loading…';
 
+  // Resolve tier first — federal tier has its own data source and doesn't need stateKey.
+  let activeTier = 'state';
+  let opts = {};
+  if (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier) {
+    const tier = CL.data.supabaseBridge.resolveTier();
+    if (tier && tier.tier) {
+      activeTier = tier.tier;
+      if (tier.tier === 'dot_district')      opts.dotDistrict      = tier.value;
+      if (tier.tier === 'planning_district') opts.planningDistrict = tier.value;
+      if (tier.tier === 'mpo')               opts.mpoName          = tier.value;
+      if (tier.tier === 'county' || tier.tier === 'city') opts.jurisdiction = tier.value;
+    }
+  }
+  _scorecardActiveTier = activeTier;
+
+  // ── Federal tier branch ──────────────────────────────────────────────
+  // Pulls per-state totals from federal_summary; doesn't need stateKey.
+  if (activeTier === 'federal') {
+    const client = window.crashLensClient;
+    if (!client || !client.getFederalSummary) {
+      if (statusEl) statusEl.textContent = 'Data client not available';
+      return;
+    }
+    try {
+      let data;
+      if (mode === 'rolling') {
+        data = await client.getFederalSummary(year - 2, year);
+      } else {
+        data = await client.getFederalSummary(year, year);
+      }
+      _scorecardData = data || [];
+      _renderFederalKpis(_scorecardData, year);
+      _renderChoropleth(_scorecardData);
+      const kpiEl = document.getElementById('scorecard-federal-kpis');
+      const choroEl = document.getElementById('scorecard-choropleth-wrap');
+      if (kpiEl) kpiEl.style.display = 'grid';
+      if (choroEl) choroEl.style.display = 'block';
+      _renderTierPills('federal');
+      if (mode === 'compare') {
+        const compareYear = parseInt(document.getElementById('scorecard-compare-year').value, 10);
+        const compareData = await client.getFederalSummary(compareYear, compareYear);
+        renderComparisonTable(_scorecardData, compareData || [], year, compareYear);
+      } else {
+        renderScorecardTable(_scorecardData);
+      }
+      updateScorecardChart();
+      const banner = (_scorecardData.length === 1 && _scorecardData[0].state === 'delaware')
+        ? ' (today: 1 of 51 states ingested — auto-grows as backend ingests more)'
+        : '';
+      if (statusEl) statusEl.textContent = `${_scorecardData.length} state${_scorecardData.length===1?'':'s'} · ${mode === 'rolling' ? (year-2)+'–'+year : year}${banner}`;
+    } catch (e) {
+      console.error('[Scorecard/federal] load failed:', e);
+      if (statusEl) statusEl.textContent = 'Federal load failed: ' + e.message;
+    }
+    return;
+  }
+
+  // ── Non-federal: hide federal-only widgets, render tier-aware pills, continue ──
+  const kpiEl = document.getElementById('scorecard-federal-kpis');
+  const choroEl = document.getElementById('scorecard-choropleth-wrap');
+  if (kpiEl) kpiEl.style.display = 'none';
+  if (choroEl) choroEl.style.display = 'none';
+  _renderTierPills(activeTier);
+
   // State-agnostic resolution. Use the same picker every other tab uses so
   // switching state in Upload Data automatically swaps scorecard partitions.
   const stateKey = (typeof _resolveActiveState === 'function')
@@ -157801,18 +157958,6 @@ async function loadScorecardData() {
   if (!stateKey) {
     if (statusEl) statusEl.textContent = 'No state selected — pick a state in Upload Data first.';
     return;
-  }
-
-  // Resolve tier context (state / county / city etc.)
-  let opts = {};
-  if (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier) {
-    const tier = CL.data.supabaseBridge.resolveTier();
-    if (tier && tier.tier && tier.tier !== 'state') {
-      if (tier.tier === 'dot_district')      opts.dotDistrict      = tier.value;
-      if (tier.tier === 'planning_district') opts.planningDistrict = tier.value;
-      if (tier.tier === 'mpo')               opts.mpoName          = tier.value;
-      if (tier.tier === 'county' || tier.tier === 'city') opts.jurisdiction = tier.value;
-    }
   }
 
   const client = window.crashLensClient;
@@ -157922,68 +158067,262 @@ function _rerank(rows, valKey, rankKey) {
 }
 
 /**
- * Render the main scorecard table (single year or rolling).
+ * Render the main scorecard table — sortable, search-filtered, peer-pill-filtered,
+ * with sparkline + KSI/100K heatmap + pin row + per-100K normalize toggle.
  */
+let _scorecardSortKey = 'total_crashes';
+let _scorecardSortDir = 'desc';
+const _scorecardPinned = new Set();
 function renderScorecardTable(data) {
-  const type = document.getElementById('scorecard-type').value;
-  const cfg  = SCORECARD_COLUMNS[type] || SCORECARD_COLUMNS.volume;
-  const thead = document.getElementById('scorecardHead');
-  const tbody = document.getElementById('scorecardBody');
-  if (!thead || !tbody) return;
+  const head = document.getElementById('scorecardHead');
+  const body = document.getElementById('scorecardBody');
+  if (!head || !body) return;
+  if (!data || !data.length) {
+    head.innerHTML = '<tr><th colspan="99" style="text-align:left;padding:1rem;color:#475569">No scorecard data available.</th></tr>';
+    body.innerHTML = '';
+    return;
+  }
 
-  // Tier filter (Fix 6) — narrow rows to the active sub-tab.
-  const _filtered = (_scorecardTierFilter === 'all')
-    ? data
-    : data.filter(r => _inferScorecardTier(r) === _scorecardTierFilter);
+  const isFederal = (_scorecardActiveTier === 'federal');
+  const normalize = document.getElementById('scorecard-normalize') && document.getElementById('scorecard-normalize').checked;
+  const search = (document.getElementById('scorecard-search') && document.getElementById('scorecard-search').value || '').trim().toLowerCase();
 
-  // Sort data
-  const sorted = _filtered.slice().sort((a, b) => {
-    let av = a[_scorecardSortCol], bv = b[_scorecardSortCol];
-    av = (av === null || av === undefined) ? Infinity : Number(av);
-    bv = (bv === null || bv === undefined) ? Infinity : Number(bv);
-    return _scorecardSortAsc ? av - bv : bv - av;
+  // Apply peer-pill filter (federal regions OR jurisdiction-type heuristic)
+  let rows = data.slice();
+  if (_scorecardActivePill && _scorecardActivePill !== 'all') {
+    rows = rows.filter(r => _matchesPeerPill(r, _scorecardActivePill, isFederal));
+  }
+  // Search filter
+  if (search) {
+    const nameKey = isFederal ? 'state' : 'jurisdiction';
+    rows = rows.filter(r => String(r[nameKey]||'').toLowerCase().includes(search));
+  }
+
+  // Compute per-100K rates per row (used for normalize toggle + heatmap).
+  // For federal tier we use 2023 state population; for state-tier rows we
+  // fall back to the precomputed ksi_rate column from scorecard_rankings.
+  rows.forEach(r => {
+    const pop = isFederal ? _statePopulation(r.state) : null;
+    r._ksiRate = pop ? (Number(r.ksi_crashes||0) / pop * 100000) : Number(r.ksi_rate || 0);
+    r._totalRate = pop ? (Number(r.total_crashes||0) / pop * 100000) : null;
   });
 
-  const maxRank = _filtered.length || 1;
+  // Sort (pinned rows always float to top)
+  const nameKey = isFederal ? 'state' : 'jurisdiction';
+  rows.sort((a, b) => {
+    const aPinned = _scorecardPinned.has(a[nameKey]);
+    const bPinned = _scorecardPinned.has(b[nameKey]);
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    const av = a[_scorecardSortKey], bv = b[_scorecardSortKey];
+    if (typeof av === 'string' && typeof bv === 'string') {
+      return _scorecardSortDir === 'desc' ? bv.localeCompare(av) : av.localeCompare(bv);
+    }
+    return _scorecardSortDir === 'desc' ? (Number(bv||0) - Number(av||0)) : (Number(av||0) - Number(bv||0));
+  });
 
   // Build header
-  let hdr = '<tr><th style="cursor:pointer;min-width:60px" onclick="scorecardSort(\'rank_total_crashes\')">#</th>';
-  hdr += '<th style="cursor:pointer;min-width:140px" onclick="scorecardSort(\'jurisdiction\')">Jurisdiction</th>';
-  cfg.cols.forEach(c => {
-    const arrow = _scorecardSortCol === c.key ? (_scorecardSortAsc ? ' ▲' : ' ▼') : '';
-    hdr += `<th style="cursor:pointer;text-align:right;min-width:80px" onclick="scorecardSort('${c.key}')">${c.label}${arrow}</th>`;
-  });
-  hdr += '</tr>';
-  thead.innerHTML = hdr;
+  const cols = [
+    { k:'__rank',        l:'#',           sortable:false, num:false },
+    { k: nameKey,        l: isFederal?'State':'Jurisdiction', sortable:true,  num:false },
+    { k:'total_crashes', l: normalize?'Total/100K':'Total',  sortable:true,  num:true  },
+    { k:'__spark',       l:'5-yr',        sortable:false, num:false },
+    { k:'fatal_crashes', l:'Fatal',       sortable:true,  num:true  },
+    { k:'ksi_crashes',   l: normalize?'KSI/100K':'KSI',     sortable:true,  num:true  },
+    { k:'total_epdo',    l:'EPDO',        sortable:true,  num:true  },
+    { k:'_ksiRate',      l:'KSI/100K',    sortable:true,  num:true  }
+  ];
+  head.innerHTML = '<tr>' + cols.map(c => {
+    const sorted = c.k === _scorecardSortKey;
+    const arr = sorted ? (_scorecardSortDir==='desc'?'▼':'▲') : '▼';
+    return `<th class="${c.num?'num':''} ${sorted?'sorted':''}" data-k="${c.k}" ${c.sortable?'role="button"':''} style="${c.num?'text-align:right;':''}padding:.5rem .55rem;font-size:.75rem;color:#475569;font-weight:500">${c.l}${c.sortable?` <span class="sort-arr">${arr}</span>`:''}</th>`;
+  }).join('') + '</tr>';
+  head.querySelectorAll('th[role="button"]').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.k;
+    if (_scorecardSortKey === k) _scorecardSortDir = _scorecardSortDir === 'desc' ? 'asc' : 'desc';
+    else { _scorecardSortKey = k; _scorecardSortDir = 'desc'; }
+    renderScorecardTable(data);
+  }));
 
-  // Build rows
-  let html = '';
-  sorted.forEach(r => {
-    const rank = Number(r.rank_total_crashes) || 999;
-    const rankColor = _rankColor(rank, maxRank);
-    html += `<tr style="cursor:pointer" onclick="scorecardDrillDown('${(r.jurisdiction||'').replace(/'/g,"\\'")}')">`;
-    html += `<td style="text-align:center"><span style="display:inline-block;width:28px;height:28px;line-height:28px;border-radius:50%;font-weight:700;font-size:.8rem;color:#fff;background:${rankColor}">${rank}</span></td>`;
-    const _inferredTier = _inferScorecardTier(r);
-    const _tierBadge = (_inferredTier && _inferredTier !== 'unknown')
-      ? ` <span style="font-size:.65rem;color:#64748b;font-weight:500;margin-left:.4rem;padding:.1rem .35rem;background:#f1f5f9;border-radius:3px">${_inferredTier}</span>`
-      : '';
-    html += `<td style="font-weight:600">${r.jurisdiction || '—'}${_tierBadge}</td>`;
-    cfg.cols.forEach(c => {
-      let val = r[c.key];
-      if (val === null || val === undefined) val = '—';
-      else if (c.pct) val = parseFloat(val).toFixed(1) + '%';
-      else val = Number(val).toLocaleString();
-      // Mini rank badge if column has a rank key
-      let badge = '';
-      if (c.rank && r[c.rank] !== undefined) {
-        const cr = Number(r[c.rank]);
-        badge = ` <span style="font-size:.65rem;color:${_rankColor(cr, maxRank)};font-weight:700">#${cr}</span>`;
-      }
-      html += `<td style="text-align:right">${val}${badge}</td>`;
-    });
-    html += '</tr>';
+  // Heatmap rank (1-based) for KSI rate column
+  const ksiSorted = rows.slice().sort((a,b) => Number(b._ksiRate||0) - Number(a._ksiRate||0));
+  const ksiRankByName = {};
+  ksiSorted.forEach((r, i) => { ksiRankByName[r[nameKey]] = i + 1; });
+
+  // Build body
+  body.innerHTML = rows.map((r, i) => {
+    const name = r[nameKey];
+    const isPinned = _scorecardPinned.has(name);
+    const dispTotal = normalize && r._totalRate != null
+      ? r._totalRate.toFixed(1)
+      : Number(r.total_crashes||0).toLocaleString();
+    const dispKsi = normalize ? Number(r._ksiRate||0).toFixed(1) : Number(r.ksi_crashes||0).toLocaleString();
+    const yoyRaw = (r.yoy_total != null ? Number(r.yoy_total) : (r.yoy_fatal != null ? Number(r.yoy_fatal) : 0));
+    const yoy = isFinite(yoyRaw) ? yoyRaw : 0;
+    const yoyArr = yoy > 0.5 ? `<span class="delta-up">▲ ${yoy.toFixed(1)}%</span>`
+                : yoy < -0.5 ? `<span class="delta-down">▼ ${Math.abs(yoy).toFixed(1)}%</span>`
+                : `<span class="delta-flat">▬ ${yoy.toFixed(1)}%</span>`;
+    const sparkVals = Array.isArray(r.spark_5yr) && r.spark_5yr.length
+      ? r.spark_5yr
+      : [r.total_crashes, r.total_crashes, r.total_crashes, r.total_crashes, r.total_crashes];
+    const sparkSvg = _spark(sparkVals);
+    const heatRank = ksiRankByName[name] || rows.length;
+    const heatBg = _heatColor(heatRank, rows.length || 1);
+    const heatFg = ((heatRank - 1) / Math.max(rows.length, 1)) < 0.4 ? '#fff' : '#412402';
+    const displayName = isFederal ? _titleCase(name) : (name || '—');
+    return `<tr class="${isPinned?'pinned':''}" data-name="${_escapeAttr(name)}">
+      <td class="rank" style="text-align:center;padding:.45rem;font-size:.7rem;font-weight:600;color:#64748b">${i + 1}</td>
+      <td style="padding:.45rem .55rem;font-size:.8rem"><button class="pin-btn ${isPinned?'is-pinned':''}" data-pin="${_escapeAttr(name)}" aria-label="Pin row">${isPinned?'📍':'📌'}</button>${displayName}</td>
+      <td class="num" style="text-align:right;padding:.45rem .55rem;font-size:.8rem;font-variant-numeric:tabular-nums">${dispTotal}${yoyArr}</td>
+      <td style="padding:.3rem .55rem;color:#64748b">${sparkSvg}</td>
+      <td class="num" style="text-align:right;padding:.45rem .55rem;font-size:.8rem;font-variant-numeric:tabular-nums">${Number(r.fatal_crashes||0).toLocaleString()}</td>
+      <td class="num" style="text-align:right;padding:.45rem .55rem;font-size:.8rem;font-variant-numeric:tabular-nums">${dispKsi}</td>
+      <td class="num" style="text-align:right;padding:.45rem .55rem;font-size:.8rem;font-variant-numeric:tabular-nums">${Number(r.total_epdo||0).toLocaleString()}</td>
+      <td class="num" style="text-align:right;padding:.45rem .55rem"><span class="heat-cell" style="background:${heatBg};color:${heatFg}">${Number(r._ksiRate||0).toFixed(1)}</span></td>
+    </tr>`;
+  }).join('');
+  body.querySelectorAll('.pin-btn').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const n = btn.dataset.pin;
+    if (_scorecardPinned.has(n)) _scorecardPinned.delete(n); else _scorecardPinned.add(n);
+    renderScorecardTable(data);
+  }));
+}
+
+// ── Peer-pill filter heuristic ──────────────────────────────────────────
+function _matchesPeerPill(row, pill, isFederal) {
+  if (isFederal) {
+    const NORTHEAST = ['connecticut','maine','massachusetts','new hampshire','rhode island','vermont','new jersey','new york','pennsylvania'];
+    const SOUTH = ['delaware','district of columbia','florida','georgia','maryland','north carolina','south carolina','virginia','west virginia','alabama','kentucky','mississippi','tennessee','arkansas','louisiana','oklahoma','texas'];
+    const MIDWEST = ['illinois','indiana','michigan','ohio','wisconsin','iowa','kansas','minnesota','missouri','nebraska','north dakota','south dakota'];
+    const WEST = ['arizona','colorado','idaho','montana','nevada','new mexico','utah','wyoming','alaska','california','hawaii','oregon','washington'];
+    const s = String(row.state||'').toLowerCase();
+    if (pill === 'ne') return NORTHEAST.includes(s);
+    if (pill === 's')  return SOUTH.includes(s);
+    if (pill === 'mw') return MIDWEST.includes(s);
+    if (pill === 'w')  return WEST.includes(s);
+    return true;
+  }
+  // Non-federal — use existing _inferScorecardTier heuristic ('county' / 'city').
+  const inferred = (typeof _inferScorecardTier === 'function') ? _inferScorecardTier(row) : 'unknown';
+  if (pill === 'county') return inferred === 'county';
+  if (pill === 'city')   return inferred === 'city';
+  if (pill === 'mag')    return row.jurisdiction_type === 'magisterial';
+  return true;
+}
+
+// ── Sparkline + heatmap helpers ─────────────────────────────────────────
+function _spark(values) {
+  if (!Array.isArray(values) || values.length < 2) return '';
+  const nums = values.map(v => Number(v||0));
+  const min = Math.min(...nums), max = Math.max(...nums);
+  const w = 60, h = 18, range = (max - min) || 1;
+  const pts = nums.map((v,i) => `${(i / (nums.length-1) * w).toFixed(1)},${(h - (v - min) / range * (h-2) - 1).toFixed(1)}`).join(' ');
+  return `<svg class="spark-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
+}
+const _SCORECARD_HEAT_RAMP = ['#EAF3DE','#C0DD97','#FAC775','#EF9F27','#E24B4A','#A32D2D'];
+function _heatColor(rank, total) {
+  if (total <= 0) return _SCORECARD_HEAT_RAMP[0];
+  const i = Math.min(_SCORECARD_HEAT_RAMP.length - 1, Math.floor((rank - 1) / total * _SCORECARD_HEAT_RAMP.length));
+  return _SCORECARD_HEAT_RAMP[i];
+}
+function _escapeAttr(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+
+// ── Action buttons (reset pins / CSV export) ───────────────────────────
+function resetScorecardPins() { _scorecardPinned.clear(); renderScorecardTable(_scorecardData); }
+function exportScorecardCSV() {
+  if (!_scorecardData || !_scorecardData.length) return;
+  const isFederal = (_scorecardActiveTier === 'federal');
+  const nameKey = isFederal ? 'state' : 'jurisdiction';
+  const cols = [nameKey, 'total_crashes', 'fatal_crashes', 'ksi_crashes', 'total_epdo', 'total_killed', 'total_injured', 'ksi_rate'];
+  const lines = [cols.join(',')];
+  _scorecardData.forEach(r => lines.push(cols.map(c => `"${String(r[c] == null ? '' : r[c]).replace(/"/g,'""')}"`).join(',')));
+  const blob = new Blob([lines.join('\n')], { type:'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const tag = isFederal ? 'federal' : (_scorecardData[0].state || 'data');
+  a.href = url; a.download = `scorecard_${tag}_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Federal-only KPI cards ─────────────────────────────────────────────
+function _renderFederalKpis(rows, year) {
+  const wrap = document.getElementById('scorecard-federal-kpis');
+  if (!wrap) return;
+  if (!rows || !rows.length) { wrap.innerHTML = ''; return; }
+  const withRate = rows.map(r => {
+    const pop = _statePopulation(r.state);
+    return Object.assign({}, r, { _ksiRate: pop ? (Number(r.ksi_crashes||0) / pop * 100000) : 0, _pop: pop });
   });
-  tbody.innerHTML = html || '<tr><td colspan="99" style="text-align:center;padding:2rem;color:#94a3b8">No data for this selection</td></tr>';
+  const worstByKsi = withRate.slice().sort((a,b) => b._ksiRate - a._ksiRate)[0];
+  const mostImproved = withRate.slice().sort((a,b) => (Number(a.yoy_fatal||0)) - (Number(b.yoy_fatal||0)))[0];
+  const natFatal = rows.reduce((s,r) => s + Number(r.fatal_crashes||0), 0);
+  const natKsi   = rows.reduce((s,r) => s + Number(r.ksi_crashes||0), 0);
+  const natPop   = rows.reduce((s,r) => s + (_statePopulation(r.state) || 0), 0);
+  const natKsiRate = natPop ? (natKsi / natPop * 100000).toFixed(1) : '—';
+  const cards = [
+    { cls:'up',   label:'Worst by KSI rate', val: _titleCase(worstByKsi.state),
+      sub: worstByKsi._ksiRate.toFixed(1) + ' / 100K' + (worstByKsi.yoy_fatal != null ? ' • ' + (worstByKsi.yoy_fatal>0?'+':'') + Number(worstByKsi.yoy_fatal).toFixed(1)+'% YoY' : '') },
+    { cls:'down', label:'Most improved YoY', val: _titleCase(mostImproved.state),
+      sub: mostImproved.yoy_fatal != null ? Number(mostImproved.yoy_fatal).toFixed(1) + '% fatal crashes' : '—' },
+    { cls:'',     label:'National fatal total', val: natFatal.toLocaleString(),
+      sub: year + ' — Crash Lens federal_summary' },
+    { cls:'',     label:'National KSI rate', val: natKsiRate + ' / 100K',
+      sub: 'SS4A target ≤ 50' }
+  ];
+  wrap.innerHTML = cards.map(c => `<div class="sc-kpi ${c.cls}">
+    <p class="kpi-label">${c.label}</p>
+    <p class="kpi-val">${c.val}</p>
+    <p class="kpi-sub">${c.sub}</p>
+  </div>`).join('');
+}
+
+// ── D3 choropleth (federal tier only) ───────────────────────────────────
+window._scorecardChoroplethLoaded = false;
+function _loadChoroplethDeps() {
+  if (window._scorecardChoroplethLoaded) return Promise.resolve();
+  const load = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+  return load('https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js')
+    .then(() => load('https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js'))
+    .then(() => { window._scorecardChoroplethLoaded = true; });
+}
+async function _renderChoropleth(rows) {
+  const wrap = document.getElementById('scorecard-choropleth');
+  if (!wrap || !rows || !rows.length) return;
+  wrap.innerHTML = '<div style="padding:1rem;color:#94a3b8;font-size:.8rem">Loading map…</div>';
+  try {
+    await _loadChoroplethDeps();
+    if (typeof d3 === 'undefined' || typeof topojson === 'undefined') return;
+    wrap.innerHTML = '';
+    const fatalRateByName = {};
+    rows.forEach(r => {
+      const pop = _statePopulation(r.state);
+      if (pop) fatalRateByName[_titleCase(r.state)] = Number(r.fatal_crashes||0) / pop * 100000;
+    });
+    const vals = Object.values(fatalRateByName);
+    const max = vals.length ? Math.max(...vals, 1) : 1;
+    const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const scheme = isDark ? d3.schemeBlues[5].slice().reverse() : d3.schemeBlues[5];
+    const color = d3.scaleQuantize([0, max], scheme);
+    const svg = d3.select(wrap).append('svg').attr('viewBox', '0 0 900 470').attr('width', '100%');
+    const path = d3.geoPath(d3.geoAlbersUsa().scale(1000).translate([450, 230]));
+    const us = await fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(r => r.json());
+    svg.selectAll('path')
+      .data(topojson.feature(us, us.objects.states).features)
+      .join('path')
+      .attr('d', path)
+      .attr('stroke', isDark ? 'rgba(255,255,255,.2)' : '#fff')
+      .attr('stroke-width', 0.5)
+      .attr('fill', d => fatalRateByName[d.properties.name] != null ? color(fatalRateByName[d.properties.name]) : '#eee')
+      .style('cursor','pointer')
+      .on('click', (_e, d) => {
+        if (typeof switchToState === 'function') switchToState(String(d.properties.name).toLowerCase());
+      })
+      .append('title').text(d => `${d.properties.name} — ${(fatalRateByName[d.properties.name]||0).toFixed(1)} fatal / 100K`);
+  } catch (e) {
+    wrap.innerHTML = '<div style="padding:1rem;color:#dc2626;font-size:.8rem">Choropleth failed to load: ' + e.message + '</div>';
+  }
 }
 
 /**
@@ -158137,68 +158476,67 @@ function scorecardDrillDown(jurisdiction) {
 
 /**
  * Update the horizontal bar chart with the selected metric.
+ * Works for both federal-tier rows (state column) and state-tier rows (jurisdiction column).
  */
 function updateScorecardChart() {
   const canvas = document.getElementById('scorecardChart');
   const metricSel = document.getElementById('scorecard-chart-metric');
   if (!canvas || !metricSel || !_scorecardData.length) return;
 
+  const isFederal = (_scorecardActiveTier === 'federal');
+  const nameKey = isFederal ? 'state' : 'jurisdiction';
   const metric = metricSel.value;
-  const metricLabel = metricSel.options[metricSel.selectedIndex]?.text || metric;
+  const metricLabel = (metricSel.options[metricSel.selectedIndex] && metricSel.options[metricSel.selectedIndex].text) || metric;
 
-  // Sort by metric descending, take top 20
-  const sorted = _scorecardData.slice()
-    .sort((a, b) => (Number(b[metric]) || 0) - (Number(a[metric]) || 0))
-    .slice(0, 20);
+  // ksi_rate may not be precomputed for federal rows — fall back to _ksiRate
+  // (set by renderScorecardTable) or compute on the fly.
+  const valueOf = (r) => {
+    if (metric === 'ksi_rate' && (r.ksi_rate == null || r.ksi_rate === 0)) {
+      const pop = _statePopulation(r.state);
+      if (pop) return Number(r.ksi_crashes||0) / pop * 100000;
+    }
+    return Number(r[metric]||0);
+  };
 
-  const labels = sorted.map(r => r.jurisdiction || '?');
-  const values = sorted.map(r => Number(r[metric]) || 0);
+  // Take top-12 by selected metric
+  const sorted = _scorecardData.slice().sort((a,b) => valueOf(b) - valueOf(a)).slice(0, 12);
+  const labels = sorted.map(r => isFederal ? _titleCase(r[nameKey]) : (r[nameKey] || '?'));
+  const vals   = sorted.map(valueOf);
+  // Rank-based color when rank_total_crashes is present (state-tier),
+  // otherwise blue default for federal-tier rows.
   const maxRank = _scorecardData.length;
   const colors = sorted.map(r => {
-    const rank = Number(r.rank_total_crashes) || maxRank;
-    return _rankColor(rank, maxRank);
+    const rank = Number(r.rank_total_crashes);
+    return rank ? _rankColor(rank, maxRank) : '#378ADD';
   });
 
   if (_scorecardChart) _scorecardChart.destroy();
-
   _scorecardChart = new Chart(canvas.getContext('2d'), {
     type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: metricLabel,
-        data: values,
-        backgroundColor: colors,
-        borderRadius: 4,
-        barThickness: 16,
-      }]
-    },
+    data: { labels, datasets: [{ label: metricLabel, data: vals, backgroundColor: colors, borderRadius: 4, barThickness: 16 }] },
     options: {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => `${metricLabel}: ${ctx.parsed.x.toLocaleString()}`
-          }
-        }
+        tooltip: { callbacks: { label: ctx => `${metricLabel}: ${ctx.parsed.x.toLocaleString()}` } }
       },
       scales: {
-        x: {
-          beginAtZero: true,
-          grid: { color: 'rgba(0,0,0,.06)' },
-          ticks: { callback: v => v.toLocaleString() }
-        },
-        y: {
-          grid: { display: false },
-          ticks: { font: { size: 11 } }
-        }
+        x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.06)' }, ticks: { callback: v => v.toLocaleString() } },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } }
       }
     }
   });
 }
+
+// Refresh scorecard when the active tier changes — federal⇄state⇄county etc.
+document.addEventListener('CL:tierChanged', () => {
+  const panel = document.getElementById('tab-scorecard');
+  if (panel && panel.classList.contains('active') && typeof loadScorecardData === 'function') {
+    loadScorecardData();
+  }
+});
 
 // ================================================================
 // END SAFETY SCORECARD MODULE
