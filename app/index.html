@@ -62260,12 +62260,120 @@ async function _loadHotspotsFromMatview() {
         try { initSignalWarrantChecker(); } catch (e) { /* non-fatal */ }
         hideLoading();
         console.log('[Hot Spots] Loaded ' + filtered.length + ' locations from mv_hotspots');
+
+        // CC Round 25 §1 — When mv_hotspots returns 0 rows at aggregate tier
+        // (PD/region/MPO/state), try the richer mv_hotspots_with_rates matview
+        // as a fallback. State-agnostic; keys on resolved tier columns.
+        if (filtered.length === 0) {
+            const _isAgg = t && ['planning_district','dot_district','region','mpo','state','federal'].includes(t.tier);
+            if (_isAgg) {
+                const rateRows = await _hotspots_fetchMatview();
+                if (Array.isArray(rateRows) && rateRows.length > 0) {
+                    _renderHotspotsTableFromMatview(rateRows);
+                    console.log('[Hot Spots] Fallback painted ' + rateRows.length + ' rows from mv_hotspots_with_rates');
+                }
+            }
+        }
         return true;
     } catch (e) {
         console.warn('[Hot Spots] Matview path failed:', e && e.message);
         hideLoading();
         return false;
     }
+}
+
+/**
+ * CC Round 25 §1 — direct fetch of mv_hotspots_with_rates with tier filters
+ * (planning_district / dot_district / mpo_name / physical_juris_name). Used
+ * as a fallback when mv_hotspots returns 0 rows at aggregate tiers. The
+ * matview ships state-agnostic columns; if a column is missing on the
+ * backend, PostgREST returns 400 and we silently degrade.
+ */
+async function _hotspots_fetchMatview() {
+    try {
+        const dc = window.crashLensClient;
+        if (!dc || !CL?.data?.supabaseBridge) return [];
+        const t = CL.data.supabaseBridge.resolveTier?.();
+        if (!t || !t.tier) return [];
+        const params = new URLSearchParams({
+            state: 'eq.' + String(dc.state || '').toLowerCase(),
+            select: '*',
+            order: 'total_epdo.desc.nullslast',
+            limit: '500'
+        });
+        if (t.tier === 'planning_district') params.set('planning_district', 'eq.' + t.value);
+        else if (t.tier === 'dot_district' || t.tier === 'region') params.set('dot_district', 'eq.' + t.value);
+        else if (t.tier === 'mpo')          params.set('mpo_name',     'eq.' + t.value);
+        else if (t.tier === 'county' || t.tier === 'city') params.set('physical_juris_name', 'eq.' + t.value);
+        const url = `${dc.supabaseUrl}/mv_hotspots_with_rates?${params.toString()}`;
+        const resp = await fetch(url, {
+            headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
+        });
+        if (!resp.ok) {
+            console.warn('[Hot Spots] mv_hotspots_with_rates fallback HTTP', resp.status);
+            return [];
+        }
+        const rows = await resp.json();
+        return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+        console.warn('[Hot Spots] _hotspots_fetchMatview failed:', e && e.message);
+        return [];
+    }
+}
+
+/**
+ * CC Round 25 §1 — paint mv_hotspots_with_rates rows into the existing
+ * Hot Spots table by mapping them to the crashState.hotspots[] shape that
+ * renderHotspots() expects. Preserves AADT + crash_rate_mvmt columns the
+ * standard table renderer already supports.
+ */
+function _renderHotspotsTableFromMatview(rows) {
+    const mapped = (rows || []).map(r => {
+        const total = Number(r.total_crashes) || 0;
+        const K = Number(r.k || r.fatal_crashes) || 0;
+        const A = Number(r.a || r.serious_injury_crashes) || 0;
+        const B = Number(r.b) || 0, C = Number(r.c) || 0, O = Number(r.o) || 0;
+        const epdo = Number(r.total_epdo || r.epdo) || 0;
+        const first = Number(r.first_year) || 0;
+        const last  = Number(r.last_year)  || 0;
+        const span  = Math.max(1, (last && first) ? (last - first + 1) : 1);
+        const rteName = String(r['RTE Name'] || r.rte_name || '').trim();
+        const intName = String(r['Intersection Name'] || r.intersection_name || '').trim();
+        const nodeId  = String(r.location_name || '').trim();
+        let locName;
+        if (r.location_type === 'intersection') {
+            locName = (rteName && intName) ? (rteName + ' / ' + intName) : (intName || rteName || nodeId);
+        } else {
+            locName = rteName || nodeId || intName;
+        }
+        if (!locName) locName = nodeId || '(unnamed)';
+        return {
+            loc: locName,
+            nodeId: nodeId,
+            total: total,
+            K: K, A: A, B: B, C: C, O: O,
+            epdo: epdo,
+            ka: K + A,
+            perYear: (total / span).toFixed(1),
+            topType: 'N/A',
+            route: rteName,
+            county: r.jurisdiction_county || r.physical_juris_name || r.county || '',
+            lat: r.lat_centroid,
+            lon: r.lon_centroid,
+            aadt:         (r.aadt != null) ? Number(r.aadt) : null,
+            aadtYear:     (r.aadt_year != null) ? r.aadt_year : null,
+            crashRateMvmt:(r.crash_rate_mvmt != null) ? Number(r.crash_rate_mvmt) : null,
+            epdoRateMvmt: (r.epdo_rate_mvmt != null) ? Number(r.epdo_rate_mvmt) : null,
+            impaired_count: 0, speed_count: 0, distracted_count: 0,
+            unrestrained_count: 0, motorcycle_count: 0, night_count: 0,
+            top_collision_type: 'N/A'
+        };
+    }).filter(h => h.loc && h.loc !== '(unnamed)')
+      .sort((a, b) => (b.epdo || 0) - (a.epdo || 0));
+    crashState.hotspots = mapped;
+    setPaginationData('hotspots', mapped);
+    renderHotspots();
+    try { initSignalWarrantChecker(); } catch (e) { /* non-fatal */ }
 }
 
 // Auto-select top ranked hotspot and show info banner
@@ -64396,6 +64504,21 @@ async function _loadIntersectionsFromHotspots() {
             () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: 1000 }),
             { limit: 1000 });
         if (!data || !data.intersections || !data.intersections.length) {
+            // CC Round 25 §2 — mv_hotspots returned no intersection rows. Try
+            // the dedicated mv_intersection_summary matview directly before
+            // showing the empty-state. This recovers the tab at aggregate
+            // tiers where mv_hotspots's intersection bucket is sparse.
+            const _isAgg = t && ['planning_district','dot_district','region','mpo','state','federal'].includes(t.tier);
+            if (_isAgg) {
+                const fallbackRows = await _intersections_fetchMatview();
+                if (Array.isArray(fallbackRows) && fallbackRows.length > 0) {
+                    const painted = _renderIntersectionKpisFromMatview(fallbackRows);
+                    if (painted) {
+                        console.log('[Intersections] Fallback painted KPIs from mv_intersection_summary (' + fallbackRows.length + ' rows)');
+                        return true;
+                    }
+                }
+            }
             const container = document.getElementById('tab-intersection');
             if (container) {
                 container.innerHTML = '<div style="padding:2rem;text-align:center;color:#475569">' +
@@ -64610,6 +64733,74 @@ async function _loadIntersectionsFromHotspots() {
         console.warn('[Intersections] Matview path failed:', e && e.message);
         return false;
     }
+}
+
+/**
+ * CC Round 25 §2 — direct fetch of mv_intersection_summary with tier filters
+ * (planning_district / dot_district / mpo_name / physical_juris_name). Used
+ * as a fallback to repaint Intersection KPIs + leaderboard when the
+ * mv_hotspots-derived intersection rows are empty at aggregate tier.
+ * State-agnostic.
+ */
+async function _intersections_fetchMatview() {
+    try {
+        const dc = window.crashLensClient;
+        if (!dc || !CL?.data?.supabaseBridge) return [];
+        const t = CL.data.supabaseBridge.resolveTier?.();
+        if (!t || !t.tier) return [];
+        const params = new URLSearchParams({
+            state: 'eq.' + String(dc.state || '').toLowerCase(),
+            select: '*',
+            limit: '50000'
+        });
+        if (t.tier === 'planning_district') params.set('planning_district', 'eq.' + t.value);
+        else if (t.tier === 'dot_district' || t.tier === 'region') params.set('dot_district', 'eq.' + t.value);
+        else if (t.tier === 'mpo')          params.set('mpo_name',     'eq.' + t.value);
+        else if (t.tier === 'county' || t.tier === 'city') params.set('physical_juris_name', 'eq.' + t.value);
+        const url = `${dc.supabaseUrl}/mv_intersection_summary?${params.toString()}`;
+        const resp = await fetch(url, {
+            headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
+        });
+        if (!resp.ok) {
+            console.warn('[Intersections] mv_intersection_summary fallback HTTP', resp.status);
+            return [];
+        }
+        const rows = await resp.json();
+        return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+        console.warn('[Intersections] _intersections_fetchMatview failed:', e && e.message);
+        return [];
+    }
+}
+
+/**
+ * CC Round 25 §2 — repaint Intersection-tab KPI cards from
+ * mv_intersection_summary rows (excludes "Not at Intersection" buckets).
+ * Used when the mv_hotspots-derived KPIs returned zero at aggregate tier.
+ */
+function _renderIntersectionKpisFromMatview(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return false;
+    const agg = rows.reduce((s, r) => {
+        if (/not at intersection/i.test(r.intersection_type || '')) return s;
+        return {
+            total: s.total + (Number(r.total) || 0),
+            K:     s.K     + (Number(r.k)     || 0),
+            A:     s.A     + (Number(r.a)     || 0)
+        };
+    }, { total: 0, K: 0, A: 0 });
+    if (agg.total === 0) return false;
+    const baseTotal = (typeof crashState !== 'undefined' && crashState.totalRows) || agg.total;
+    const elTotal   = document.getElementById('intTotal');
+    const elFatal   = document.getElementById('intFatal');
+    const elSerious = document.getElementById('intSerious');
+    const elPct     = document.getElementById('intPct');
+    if (elTotal)   elTotal.textContent   = agg.total.toLocaleString();
+    if (elFatal)   elFatal.textContent   = agg.K;
+    if (elSerious) elSerious.textContent = agg.A;
+    if (elPct)     elPct.textContent     = (typeof pct === 'function'
+        ? pct(agg.total, baseTotal)
+        : ((baseTotal > 0 ? (agg.total / baseTotal * 100) : 0).toFixed(1))) + '%';
+    return true;
 }
 
 function getFilteredIntersectionData() {
@@ -109013,6 +109204,24 @@ async function initFatalSpeedingFromMatview(tier) {
             console.warn('[FS] mv_safety_focus_locations hydrate failed:', locErr && locErr.message);
         }
 
+        // CC Round 25 §3 — if the data-client methods returned nothing for
+        // mv_fatal_factors / mv_speed_summary (e.g. the client lacks the
+        // helper on older builds), do a direct REST fetch against the same
+        // matviews so the speed/fatal totals get painted. State-agnostic;
+        // keys on resolved tier columns. Silently degrades on column or
+        // matview errors.
+        const _fsSpeedZero = !(fatalSpeedingState.speedData && fatalSpeedingState.speedData.totalCrashes > 0);
+        const _fsFactorsMissing = !(fatalSpeedingState.fatalFactorsRollup &&
+            Object.keys(fatalSpeedingState.fatalFactorsRollup).length > 0);
+        if (_fsSpeedZero || _fsFactorsMissing) {
+            try {
+                const _fb = await _fatalSpeeding_fetchMatviews();
+                _applyFatalSpeedingFallback(_fb);
+            } catch (fbErr) {
+                console.warn('[FS] fallback matview fetch failed:', fbErr && fbErr.message);
+            }
+        }
+
         fatalSpeedingState.loaded = true;
         fatalSpeedingState.source = 'supabase';
 
@@ -109028,6 +109237,133 @@ async function initFatalSpeedingFromMatview(tier) {
                 console.warn('[FS] sampleRows fallback also failed:', fallbackErr.message);
             }
         }
+    }
+}
+
+/**
+ * CC Round 25 §3 — direct fetch of mv_speed_summary, mv_speed_severity_matrix,
+ * and mv_fatal_factors in parallel with tier filters (planning_district /
+ * dot_district / mpo_name / physical_juris_name). Used as a fallback when
+ * the data-client helpers (getFatalFactors / getSpeedSummary /
+ * getSpeedSeverityMatrix) aren't present or returned empty results.
+ * State-agnostic; degrades silently on column / matview errors.
+ */
+async function _fatalSpeeding_fetchMatviews() {
+    const out = { speed: [], matrix: [], fatalFactors: [] };
+    try {
+        const dc = window.crashLensClient;
+        if (!dc || !CL?.data?.supabaseBridge) return out;
+        const t = CL.data.supabaseBridge.resolveTier?.();
+        if (!t || !t.tier) return out;
+        const headers = { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey };
+        const stateKey = String(dc.state || '').toLowerCase();
+        const applyTier = (p) => {
+            if (t.tier === 'planning_district')                      p.set('planning_district', 'eq.' + t.value);
+            else if (t.tier === 'dot_district' || t.tier === 'region') p.set('dot_district', 'eq.' + t.value);
+            else if (t.tier === 'mpo')                                 p.set('mpo_name', 'eq.' + t.value);
+            else if (t.tier === 'county' || t.tier === 'city')         p.set('physical_juris_name', 'eq.' + t.value);
+        };
+        const mk = () => { const p = new URLSearchParams({ state: 'eq.' + stateKey, select: '*' }); applyTier(p); return p; };
+        const fetchSafe = async (mv) => {
+            try {
+                const resp = await fetch(`${dc.supabaseUrl}/${mv}?${mk().toString()}`, { headers });
+                if (!resp.ok) {
+                    console.warn('[FS] fallback', mv, 'HTTP', resp.status);
+                    return [];
+                }
+                const j = await resp.json();
+                return Array.isArray(j) ? j : [];
+            } catch (e) {
+                console.warn('[FS] fallback', mv, 'fetch failed:', e && e.message);
+                return [];
+            }
+        };
+        const [speed, matrix, fatalFactors] = await Promise.all([
+            fetchSafe('mv_speed_summary'),
+            fetchSafe('mv_speed_severity_matrix'),
+            fetchSafe('mv_fatal_factors'),
+        ]);
+        return { speed, matrix, fatalFactors };
+    } catch (e) {
+        console.warn('[FS] _fatalSpeeding_fetchMatviews failed:', e && e.message);
+        return out;
+    }
+}
+
+/**
+ * CC Round 25 §3 — merge fallback matview rows into fatalSpeedingState.
+ * Only fills slots that the primary matview path left empty so we never
+ * overwrite richer data already loaded via the data-client helpers.
+ */
+function _applyFatalSpeedingFallback(fb) {
+    if (!fb || (typeof fb !== 'object')) return;
+    const speedRows  = Array.isArray(fb.speed)        ? fb.speed        : [];
+    const matrixRows = Array.isArray(fb.matrix)       ? fb.matrix       : [];
+    const factorRows = Array.isArray(fb.fatalFactors) ? fb.fatalFactors : [];
+
+    // mv_speed_summary → speedData totals (only when empty)
+    if (speedRows.length && !(fatalSpeedingState.speedData && fatalSpeedingState.speedData.totalCrashes > 0)) {
+        const sRoll = { totalCrashes: 0, fatalCount: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+        for (const r of speedRows) {
+            sRoll.totalCrashes += Number(r.total_speed_crashes || r.total) || 0;
+            sRoll.fatalCount   += Number(r.fatal_speed_crashes  || r.k_speed  || r.k) || 0;
+            sRoll.K            += Number(r.k_speed || r.k) || 0;
+            sRoll.A            += Number(r.a_speed || r.a) || 0;
+            sRoll.B            += Number(r.b_speed || r.b) || 0;
+            sRoll.C            += Number(r.c_speed || r.c) || 0;
+            sRoll.O            += Number(r.o_speed || r.o) || 0;
+        }
+        if (sRoll.totalCrashes > 0) {
+            fatalSpeedingState.speedData.totalCrashes = sRoll.totalCrashes;
+            fatalSpeedingState.speedData.fatalCount   = sRoll.fatalCount;
+            fatalSpeedingState.speedData.severity = {
+                K: sRoll.K, A: sRoll.A, B: sRoll.B, C: sRoll.C, O: sRoll.O
+            };
+            console.log('[FS] Fallback mv_speed_summary applied:', sRoll);
+        }
+    }
+
+    // mv_speed_severity_matrix → byYearSeverity (only when empty)
+    if (matrixRows.length && !fatalSpeedingState.speedData._byYearSeverityFromMatview) {
+        const byYr = {};
+        for (const r of matrixRows) {
+            const y = r.crash_year || r.year;
+            if (!y) continue;
+            if (!byYr[y]) byYr[y] = { K: 0, A: 0, B: 0, C: 0, O: 0, total: 0 };
+            byYr[y].K     += Number(r.k) || 0;
+            byYr[y].A     += Number(r.a) || 0;
+            byYr[y].B     += Number(r.b) || 0;
+            byYr[y].C     += Number(r.c) || 0;
+            byYr[y].O     += Number(r.o) || 0;
+            byYr[y].total += Number(r.total_speed != null
+                ? r.total_speed
+                : (Number(r.k)+Number(r.a)+Number(r.b)+Number(r.c)+Number(r.o))) || 0;
+        }
+        if (Object.keys(byYr).length > 0) {
+            fatalSpeedingState.speedData._byYearSeverityFromMatview = byYr;
+            console.log('[FS] Fallback mv_speed_severity_matrix applied for', Object.keys(byYr).length, 'years');
+        }
+    }
+
+    // mv_fatal_factors → fatalFactorsRollup (only when empty)
+    if (factorRows.length && !(fatalSpeedingState.fatalFactorsRollup &&
+        Object.keys(fatalSpeedingState.fatalFactorsRollup).length > 0)) {
+        const NUMERIC_KEYS = [
+            'fatal_total', 'fatal_impaired', 'fatal_speed', 'fatal_distracted',
+            'fatal_unrestrained', 'fatal_nighttime', 'fatal_intersection',
+            'fatal_weather', 'fatal_animal',
+            'fatal_speed_impaired', 'fatal_night_speed', 'fatal_night_impaired',
+            'fatal_speed_unrestrained', 'fatal_speed_distracted',
+            'fatal_impaired_distracted',
+        ];
+        const rollup = {};
+        for (const r of factorRows) {
+            for (const k of NUMERIC_KEYS) {
+                rollup[k] = (rollup[k] || 0) + (Number(r[k]) || 0);
+            }
+        }
+        fatalSpeedingState.fatalFactorsRollup = rollup;
+        console.log('[FS] Fallback mv_fatal_factors rollup applied:', rollup);
     }
 }
 
