@@ -62298,13 +62298,19 @@ async function _hotspots_fetchMatview() {
         const params = new URLSearchParams({
             state: 'eq.' + String(dc.state || '').toLowerCase(),
             select: '*',
-            order: 'total_epdo.desc.nullslast',
+            order: 'epdo.desc.nullslast',
             limit: '500'
         });
-        if (t.tier === 'planning_district') params.set('planning_district', 'eq.' + t.value);
-        else if (t.tier === 'dot_district' || t.tier === 'region') params.set('dot_district', 'eq.' + t.value);
-        else if (t.tier === 'mpo')          params.set('mpo_name',     'eq.' + t.value);
-        else if (t.tier === 'county' || t.tier === 'city') params.set('physical_juris_name', 'eq.' + t.value);
+        // Round 25 P2.1 — mv_hotspots_with_rates uses jurisdiction_pd /
+        // jurisdiction_mpo / jurisdiction_county / jurisdiction_physical_juris
+        // (NOT planning_district / mpo_name / physical_juris_name). It also
+        // lacks any dot_district column — region tier intentionally falls
+        // through to the state-wide rank.
+        if (t.tier === 'planning_district') params.set('jurisdiction_pd',             'eq.' + t.value);
+        else if (t.tier === 'mpo')          params.set('jurisdiction_mpo',            'eq.' + t.value);
+        else if (t.tier === 'county')       params.set('jurisdiction_county',         'eq.' + t.value);
+        else if (t.tier === 'city')         params.set('jurisdiction_physical_juris', 'eq.' + t.value);
+        // dot_district / region tier: no filter — matview has no such column.
         const url = `${dc.supabaseUrl}/mv_hotspots_with_rates?${params.toString()}`;
         const resp = await fetch(url, {
             headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
@@ -62329,11 +62335,13 @@ async function _hotspots_fetchMatview() {
  */
 function _renderHotspotsTableFromMatview(rows) {
     const mapped = (rows || []).map(r => {
+        // Round 25 P2.1 — schema is total_crashes, k, a, b, c, o, epdo
+        // (NOT total_epdo / fatal_crashes / serious_injury_crashes).
         const total = Number(r.total_crashes) || 0;
-        const K = Number(r.k || r.fatal_crashes) || 0;
-        const A = Number(r.a || r.serious_injury_crashes) || 0;
+        const K = Number(r.k) || 0;
+        const A = Number(r.a) || 0;
         const B = Number(r.b) || 0, C = Number(r.c) || 0, O = Number(r.o) || 0;
-        const epdo = Number(r.total_epdo || r.epdo) || 0;
+        const epdo = Number(r.epdo) || 0;
         const first = Number(r.first_year) || 0;
         const last  = Number(r.last_year)  || 0;
         const span  = Math.max(1, (last && first) ? (last - first + 1) : 1);
@@ -109257,16 +109265,32 @@ async function _fatalSpeeding_fetchMatviews() {
         if (!t || !t.tier) return out;
         const headers = { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey };
         const stateKey = String(dc.state || '').toLowerCase();
+        // Standard tier filter — works for mv_speed_summary + mv_fatal_factors
+        // (both have planning_district / mpo_name / physical_juris_name /
+        // dot_district columns).
         const applyTier = (p) => {
             if (t.tier === 'planning_district')                      p.set('planning_district', 'eq.' + t.value);
             else if (t.tier === 'dot_district' || t.tier === 'region') p.set('dot_district', 'eq.' + t.value);
             else if (t.tier === 'mpo')                                 p.set('mpo_name', 'eq.' + t.value);
             else if (t.tier === 'county' || t.tier === 'city')         p.set('physical_juris_name', 'eq.' + t.value);
         };
-        const mk = () => { const p = new URLSearchParams({ state: 'eq.' + stateKey, select: '*' }); applyTier(p); return p; };
-        const fetchSafe = async (mv) => {
+        // Round 25 P2.1 — mv_speed_severity_matrix has ONLY
+        // jurisdiction_county + physical_juris_name (no PD / MPO / dot_district).
+        // For tiers above county we drop the filter and return the state-wide
+        // matrix; UI labels should reflect this.
+        const applyMatrixTier = (p) => {
+            if (t.tier === 'county') p.set('jurisdiction_county', 'eq.' + t.value);
+            else if (t.tier === 'city') p.set('physical_juris_name', 'eq.' + t.value);
+            // PD / MPO / region / state: state-wide fallback (no filter).
+        };
+        const mk = (tierFn) => {
+            const p = new URLSearchParams({ state: 'eq.' + stateKey, select: '*' });
+            tierFn(p);
+            return p;
+        };
+        const fetchSafe = async (mv, tierFn) => {
             try {
-                const resp = await fetch(`${dc.supabaseUrl}/${mv}?${mk().toString()}`, { headers });
+                const resp = await fetch(`${dc.supabaseUrl}/${mv}?${mk(tierFn).toString()}`, { headers });
                 if (!resp.ok) {
                     console.warn('[FS] fallback', mv, 'HTTP', resp.status);
                     return [];
@@ -109279,9 +109303,9 @@ async function _fatalSpeeding_fetchMatviews() {
             }
         };
         const [speed, matrix, fatalFactors] = await Promise.all([
-            fetchSafe('mv_speed_summary'),
-            fetchSafe('mv_speed_severity_matrix'),
-            fetchSafe('mv_fatal_factors'),
+            fetchSafe('mv_speed_summary',         applyTier),
+            fetchSafe('mv_speed_severity_matrix', applyMatrixTier),
+            fetchSafe('mv_fatal_factors',         applyTier),
         ]);
         return { speed, matrix, fatalFactors };
     } catch (e) {
