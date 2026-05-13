@@ -62308,7 +62308,12 @@ async function _hotspots_fetchMatview() {
         // through to the state-wide rank.
         if (t.tier === 'planning_district') params.set('jurisdiction_pd',             'eq.' + t.value);
         else if (t.tier === 'mpo')          params.set('jurisdiction_mpo',            'eq.' + t.value);
-        else if (t.tier === 'county')       params.set('jurisdiction_county',         'eq.' + t.value);
+        else if (t.tier === 'county') {
+            // Round 25 P2.2 — jurisdiction_county stores canonical
+            // 'Kent County' / 'Sussex County' / etc. Suffix if missing.
+            const canonical = String(t.value).endsWith(' County') ? t.value : t.value + ' County';
+            params.set('jurisdiction_county', 'eq.' + canonical);
+        }
         else if (t.tier === 'city')         params.set('jurisdiction_physical_juris', 'eq.' + t.value);
         // dot_district / region tier: no filter — matview has no such column.
         const url = `${dc.supabaseUrl}/mv_hotspots_with_rates?${params.toString()}`;
@@ -109279,7 +109284,13 @@ async function _fatalSpeeding_fetchMatviews() {
         // For tiers above county we drop the filter and return the state-wide
         // matrix; UI labels should reflect this.
         const applyMatrixTier = (p) => {
-            if (t.tier === 'county') p.set('jurisdiction_county', 'eq.' + t.value);
+            if (t.tier === 'county') {
+                // Round 25 P2.2 — jurisdiction_county stores canonical
+                // 'Kent County' / 'Sussex County' / etc. Suffix the bare
+                // value if the caller didn't already include it.
+                const canonical = String(t.value).endsWith(' County') ? t.value : t.value + ' County';
+                p.set('jurisdiction_county', 'eq.' + canonical);
+            }
             else if (t.tier === 'city') p.set('physical_juris_name', 'eq.' + t.value);
             // PD / MPO / region / state: state-wide fallback (no filter).
         };
