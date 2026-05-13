@@ -66741,13 +66741,36 @@ async function _fetchPedBikeDetailAggregates(mode, selectedNames) {
     });
     if (tierCol && t.value) pbbParams.set(tierCol, 'eq.' + t.value);
 
+    // Round 24 §2 — also fetch raw crashes for the same tier+mode scope. The
+    // matview gives us authoritative aggregates for severity + per-year + light
+    // dim, but the per-row widgets (collision/weather/surface/trafficcontrol/
+    // monthly heatmap/time-of-day/contributing factors/demographics) need the
+    // actual rows. Cap at 5000 to keep the payload bounded — at PD tier the
+    // typical scope is < 1500 rows.
+    const rawParams = new URLSearchParams({
+        state: 'eq.' + stateKey,
+        select: 'crash_severity,crash_year,crash_date,crash_military_time,collision_type,weather_condition,light_condition,roadway_surface_cond,traffic_control_type,intersection_type,roadway_alignment,alcohol,speed,distracted,unrestrained,motorcycle,animal_related,work_zone_related,school_zone,guardrail_related,drug_related,hitrun,drowsy,senior,young,night,rte_name,document_nbr',
+        limit: '5000'
+    });
+    if (tierCol && t.value) rawParams.set(tierCol, 'eq.' + t.value);
+    // mode flag — pedestrian or bike
+    if (mode === 'ped')  rawParams.set('pedestrian', 'eq.Yes');
+    if (mode === 'bike') rawParams.set('bike', 'eq.Yes');
+
     try {
-        const [sflResp, pbbResp] = await Promise.all([
+        const [sflResp, pbbResp, rawResp] = await Promise.all([
             fetch(`${dc.supabaseUrl}/mv_safety_focus_locations?${sflParams}`, { headers }),
-            fetch(`${dc.supabaseUrl}/mv_pedbike_breakdowns?${pbbParams}`, { headers })
+            fetch(`${dc.supabaseUrl}/mv_pedbike_breakdowns?${pbbParams}`, { headers }),
+            fetch(`${dc.supabaseUrl}/crashes?${rawParams}`, { headers })
         ]);
         const sflRows = sflResp.ok ? await sflResp.json() : [];
         const pbbRows = pbbResp.ok ? await pbbResp.json() : [];
+        const rawRowsPg = rawResp.ok ? await rawResp.json() : [];
+        // Convert snake_case → Title-Case so the per-row aggregator (which keys
+        // on COL.SEVERITY = 'Crash Severity' etc.) finds the columns.
+        const rawRows = (typeof dc._pgToFrontend === 'function')
+            ? rawRowsPg.map(r => dc._pgToFrontend(r))
+            : rawRowsPg;
 
         const selectedSet = new Set((selectedNames || []).map(n => String(n).trim()));
         const severity = { K: 0, A: 0, B: 0, C: 0, O: 0 };
@@ -66811,7 +66834,7 @@ async function _fetchPedBikeDetailAggregates(mode, selectedNames) {
             });
         }
 
-        return { total, severity, byYear, byCollision, byLight, byWeather, bySurface, byTrafficControl };
+        return { total, severity, byYear, byCollision, byLight, byWeather, bySurface, byTrafficControl, rawCrashes: rawRows };
     } catch (e) {
         console.warn('[PedBikeDetail] matview fallback failed:', e && e.message);
         return null;
@@ -66861,6 +66884,29 @@ async function updatePedDetailPanel() {
             Object.assign(byTrafficControl, agg.byTrafficControl);
             Object.assign(byYear, agg.byYear);
             console.log('[PedDetail] matview fallback hydrated total=' + totalCrashes + ' for ' + selected.length + ' location(s)');
+            // Round 24 §2 — populate the per-dim widgets the matview can't
+            // (collision/weather/surface/trafficcontrol/demographics/monthly
+            // heatmap/time-of-day/contributing-factors) by running the existing
+            // per-row aggregator over the raw crashes we fetched alongside the
+            // matview. The matview-derived totals/severity/year/light stay as
+            // the authoritative numbers — raw rows ONLY supplement the empty
+            // widgets, not the headline KPIs.
+            if (Array.isArray(agg.rawCrashes) && agg.rawCrashes.length > 0) {
+                _useMatview = false;             // flip the flag so the per-row aggregator below runs
+                allCrashes.push(...agg.rawCrashes);
+                // Reset ALL per-dim accumulators we hydrated from the matview —
+                // the per-row aggregator increments them from zero, so leaving
+                // matview values in place would double-count. The headline
+                // KPI (totalCrashes = agg.total) is preserved separately.
+                ['K','A','B','C','O'].forEach(k => { severity[k] = 0; });
+                Object.keys(byCollision).forEach(k => delete byCollision[k]);
+                Object.keys(byLight).forEach(k => delete byLight[k]);
+                Object.keys(byWeather).forEach(k => delete byWeather[k]);
+                Object.keys(bySurface).forEach(k => delete bySurface[k]);
+                Object.keys(byTrafficControl).forEach(k => delete byTrafficControl[k]);
+                Object.keys(byYear).forEach(k => delete byYear[k]);
+                console.log('[PedDetail] raw rows used: ' + agg.rawCrashes.length);
+            }
         }
     }
 
@@ -67653,6 +67699,26 @@ async function updateBikeDetailPanel() {
             Object.assign(byTrafficControl, agg.byTrafficControl);
             Object.assign(byYear, agg.byYear);
             console.log('[BikeDetail] matview fallback hydrated total=' + totalCrashes + ' for ' + selected.length + ' location(s)');
+            // Round 24 §2 — populate the per-dim widgets the matview can't
+            // (collision/weather/surface/trafficcontrol/demographics/monthly
+            // heatmap/time-of-day/contributing-factors) by running the existing
+            // per-row aggregator over the raw crashes we fetched alongside the
+            // matview. Headline KPI (totalCrashes = agg.total) is preserved.
+            if (Array.isArray(agg.rawCrashes) && agg.rawCrashes.length > 0) {
+                _useMatview = false;             // flip the flag so the per-row aggregator below runs
+                allCrashes.push(...agg.rawCrashes);
+                // Reset ALL per-dim accumulators we hydrated from the matview —
+                // the per-row aggregator increments them from zero, so leaving
+                // matview values in place would double-count.
+                ['K','A','B','C','O'].forEach(k => { severity[k] = 0; });
+                Object.keys(byCollision).forEach(k => delete byCollision[k]);
+                Object.keys(byLight).forEach(k => delete byLight[k]);
+                Object.keys(byWeather).forEach(k => delete byWeather[k]);
+                Object.keys(bySurface).forEach(k => delete bySurface[k]);
+                Object.keys(byTrafficControl).forEach(k => delete byTrafficControl[k]);
+                Object.keys(byYear).forEach(k => delete byYear[k]);
+                console.log('[BikeDetail] raw rows used: ' + agg.rawCrashes.length);
+            }
         }
     }
 
@@ -100237,7 +100303,10 @@ async function _safetyFocusHasCofactors() {
     try {
         const dc = window.crashLensClient;
         if (!dc) return (_safetyFocusHasCofactors._cache = false);
+        // HEAD request avoids logging a red 404 ERROR in console when the matview
+        // is intentionally absent (the fallback note renders gracefully below).
         const resp = await fetch(`${dc.supabaseUrl}/mv_safety_co_factors?limit=1`, {
+            method: 'HEAD',
             headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
         });
         return (_safetyFocusHasCofactors._cache = resp.status === 200);
@@ -157848,20 +157917,29 @@ function _renderTierPills(activeTier) {
 // jurisdictionChanged (county/city/region/MPO/PD picks in Upload Data),
 // tierChanged (view-tier toggles), and crashDataLoaded (state switches).
 (function () {
+  let _scorecardReloadTimer = null;
+  let _scorecardLastReloadAt = 0;
   function _invalidateScorecard(reason) {
     _scorecardData = [];
     const activePanel = document.querySelector('.tab-content.active');
     if (activePanel && activePanel.id === 'tab-scorecard') {
-      console.log('[Scorecard] Active — refetching after ' + reason);
-      if (typeof loadScorecardData === 'function') loadScorecardData();
+      // Round 24 §5 — debounce reload. Three events fire on every state switch:
+      // jurisdictionChanged + tierChanged + crashDataLoaded. Coalesce them.
+      if (_scorecardReloadTimer) clearTimeout(_scorecardReloadTimer);
+      _scorecardReloadTimer = setTimeout(() => {
+        _scorecardReloadTimer = null;
+        _scorecardLastReloadAt = Date.now();
+        console.log('[Scorecard] Active — refetching after ' + reason);
+        if (typeof loadScorecardData === 'function') loadScorecardData();
+      }, 250);   // 250ms gathers all coincident events into one fetch
     } else {
       console.log('[Scorecard] Inactive — marked for refresh on next visit (' + reason + ')');
       _scorecardInited = false;
     }
   }
-  document.addEventListener('jurisdictionChanged', function () { _invalidateScorecard('jurisdictionChanged'); });
-  document.addEventListener('tierChanged',         function () { _invalidateScorecard('tierChanged'); });
-  document.addEventListener('crashDataLoaded',     function (evt) {
+  document.addEventListener('jurisdictionChanged', () => _invalidateScorecard('jurisdictionChanged'));
+  document.addEventListener('tierChanged',         () => _invalidateScorecard('tierChanged'));
+  document.addEventListener('crashDataLoaded',     (evt) => {
     if (evt && evt.detail && evt.detail.source === 'supabase') _invalidateScorecard('crashDataLoaded');
   });
 })();
@@ -158197,7 +158275,9 @@ function renderScorecardTable(data) {
     const dispKsi = normalize ? Number(r._ksiRate||0).toFixed(1) : Number(r.ksi_crashes||0).toLocaleString();
     const yoyRaw = (r.yoy_total != null ? Number(r.yoy_total) : (r.yoy_fatal != null ? Number(r.yoy_fatal) : 0));
     const yoy = isFinite(yoyRaw) ? yoyRaw : 0;
-    const yoyArr = yoy > 0.5 ? `<span class="delta-up">▲ ${yoy.toFixed(1)}%</span>`
+    const _scMode = document.getElementById('scorecard-year-mode')?.value || 'single';
+    const yoyArr = (_scMode === 'rolling') ? ''   // YoY is meaningless across a rolling 3-yr sum
+                : yoy > 0.5 ? `<span class="delta-up">▲ ${yoy.toFixed(1)}%</span>`
                 : yoy < -0.5 ? `<span class="delta-down">▼ ${Math.abs(yoy).toFixed(1)}%</span>`
                 : `<span class="delta-flat">▬ ${yoy.toFixed(1)}%</span>`;
     const sparkVals = Array.isArray(r.spark_5yr) && r.spark_5yr.length
