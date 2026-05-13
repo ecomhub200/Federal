@@ -5840,74 +5840,97 @@ Your data stays private. All processing happens in your browser.
 <div id="tab-map" class="tab-content">
 <div class="card">
 <div class="card-title">🗺️ Crash Location Map</div>
-<div class="map-controls">
+<!-- Round 24 — consolidated map toolbar. The original Section A (chips + date +
+     draw + road-type rows) now lives inside the #mapFiltersPanel dropdown. -->
+<div class="map-controls" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.5rem .75rem">
 <div class="btn-toggle-group">
 <button class="btn-toggle active" id="btnCluster" onclick="setMapMode('cluster')">📍 Clusters</button>
 <button class="btn-toggle" id="btnHeat" onclick="setMapMode('heat')">🔥 Heatmap</button>
 <button class="btn-toggle" id="btnMarkers" onclick="setMapMode('markers')">⚫ Markers</button>
 </div>
-<span style="margin-left:.75rem;color:var(--gray);font-size:.8rem">Filters:</span>
-<span class="filter-chip" data-filter="fatal" onclick="toggleMapFilter(this)">🔴 Fatal</span>
-<span class="filter-chip" data-filter="serious" onclick="toggleMapFilter(this)">🩹 K+A</span>
-<span class="filter-chip" data-filter="ped" onclick="toggleMapFilter(this)">🚶 Ped</span>
-<span class="filter-chip" data-filter="bike" onclick="toggleMapFilter(this)">🚴 Bike</span>
+<!-- Single "Filters" button + active-count badge — opens the panel below -->
+<button class="btn-soft btn-soft-primary" id="btnOpenMapFilters"
+        onclick="toggleMapFiltersPanel()" style="margin-left:.5rem;display:inline-flex;align-items:center;gap:.35rem">
+🎛️ Filters
+<span id="mapActiveFiltersBadge" class="badge"
+      style="display:none;padding:.1rem .45rem;border-radius:9999px;background:#1e40af;color:#fff;font-size:.7rem"></span>
+<span id="mapFiltersChevron" style="font-size:.7rem">▾</span>
+</button>
+<!-- Quick severity / mode chips remain visible inline for one-tap access. -->
+<span id="mapQuickChips" style="display:inline-flex;gap:.3rem;margin-left:.5rem">
+<span class="filter-chip" data-filter="fatal"        onclick="toggleMapFilter(this)">🔴 Fatal</span>
+<span class="filter-chip" data-filter="serious"      onclick="toggleMapFilter(this)">🩹 K+A</span>
+<span class="filter-chip" data-filter="ped"          onclick="toggleMapFilter(this)">🚶 Ped</span>
+<span class="filter-chip" data-filter="bike"         onclick="toggleMapFilter(this)">🚴 Bike</span>
 <span class="filter-chip" data-filter="intersection" onclick="toggleMapFilter(this)">🚦 Intersection</span>
-<!-- Round 16 §3 — factor-chip parity (data-driven, populated by renderMapFactorChips) -->
-<span id="mapFactorChips" class="map-factor-chips" style="display:inline-flex;flex-wrap:wrap;gap:.25rem;margin-left:.5rem"></span>
-<select id="mapYearFilter" onchange="updateMapDisplay()" style="margin-left:auto;padding:.35rem;border-radius:var(--radius);border:1px solid var(--border);font-size:.8rem"><option value="">All Years</option></select>
-<!-- Date Range Filter -->
-<div class="date-filter-container">
-<label>Date:</label>
+</span>
+<!-- Right-aligned: Export KML stays accessible without opening the panel -->
+<button class="btn-soft btn-soft-success btn-soft-sm"
+        onclick="exportMapToKML()"
+        title="Export visible crashes to Google Earth/My Maps"
+        style="margin-left:auto">🌍 Export KML</button>
+</div>
+<!-- Slide-down filters panel -->
+<div id="mapFiltersPanel" class="map-filters-panel" style="display:none;padding:.75rem 1rem;border-top:1px solid var(--border);background:#f8fafc">
+<!-- Factor chips with counts (was Section A — data-driven, populated by renderMapFactorChips) -->
+<div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.65rem">
+<span style="color:var(--gray);font-size:.75rem;font-weight:600">Factors:</span>
+<span id="mapFactorChips" class="map-factor-chips" style="display:inline-flex;flex-wrap:wrap;gap:.3rem"></span>
+</div>
+<!-- Date filter (was Section A) -->
+<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.65rem">
+<span style="color:var(--gray);font-size:.75rem;font-weight:600;min-width:60px">Date:</span>
+<select id="mapYearFilter" onchange="updateMapDisplay()"
+        style="padding:.35rem;border-radius:var(--radius);border:1px solid var(--border);font-size:.8rem">
+<option value="">All Years</option>
+</select>
 <input type="date" id="mapStartDate" title="Start date" onchange="updateMapDisplay()">
 <span class="date-separator">to</span>
 <input type="date" id="mapEndDate" title="End date" onchange="updateMapDisplay()">
 <div class="btn-toggle-group" style="padding:2px">
-<button class="btn-toggle" style="padding:.25rem .5rem;font-size:.7rem" onclick="applyDatePreset(1, 'mapStartDate', 'mapEndDate', updateMapDisplay)" title="Last 1 year">1Y</button>
-<button class="btn-toggle" style="padding:.25rem .5rem;font-size:.7rem" onclick="applyDatePreset(3, 'mapStartDate', 'mapEndDate', updateMapDisplay)" title="Last 3 years">3Y</button>
-<button class="btn-toggle" style="padding:.25rem .5rem;font-size:.7rem" onclick="applyDatePreset(5, 'mapStartDate', 'mapEndDate', updateMapDisplay)" title="Last 5 years">5Y</button>
+<button class="btn-toggle" style="padding:.25rem .5rem;font-size:.7rem"
+        onclick="applyDatePreset(1, 'mapStartDate', 'mapEndDate', updateMapDisplay)" title="Last 1 year">1Y</button>
+<button class="btn-toggle" style="padding:.25rem .5rem;font-size:.7rem"
+        onclick="applyDatePreset(3, 'mapStartDate', 'mapEndDate', updateMapDisplay)" title="Last 3 years">3Y</button>
+<button class="btn-toggle" style="padding:.25rem .5rem;font-size:.7rem"
+        onclick="applyDatePreset(5, 'mapStartDate', 'mapEndDate', updateMapDisplay)" title="Last 5 years">5Y</button>
 </div>
 <button class="date-clear-btn" onclick="clearDateFilter()" title="Clear date filter">&times;</button>
 </div>
-<!-- Drawing Tools -->
-<div class="drawing-tools-container">
-<span style="color:var(--gray);font-size:.75rem;margin-right:.25rem">Draw:</span>
-<button class="drawing-tool-btn" id="btnDrawPolygon" onclick="startDrawing('polygon')" title="Polygon - Click to add vertices, double-click to finish">
-<span style="font-size:.85rem">⬡</span> Polygon
-</button>
-<button class="drawing-tool-btn" id="btnDrawCircle" onclick="startDrawing('circle')" title="Circle - Click center, drag to set radius">
-<span style="font-size:.85rem">◯</span> Circle
-</button>
-<button class="drawing-tool-btn" id="btnMeasureSegment" onclick="openSegmentMeasureTool()" title="Measure - Draw a custom road segment to analyze crashes (click to add points, double-click to finish)">
-<span style="font-size:.85rem">📏</span> Measure
-</button>
-<button class="drawing-tool-btn btn-soft-danger" id="btnClearDrawing" onclick="clearDrawingSelection()" title="Clear drawing selection">
-✕ Clear
-</button>
+<!-- Road type (was Section A bottom row) -->
+<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.65rem">
+<span style="color:var(--gray);font-size:.75rem;font-weight:600;min-width:60px">Road Type:</span>
+<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<input type="radio" name="roadTypeFilterMap" id="filterAllRoadsMap" value="allRoads"
+       onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9"> All Roads
+</label>
+<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<input type="radio" name="roadTypeFilterMap" id="filterCountyOnlyMap" value="countyOnly"
+       onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9"> County Only
+</label>
+<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<input type="radio" name="roadTypeFilterMap" id="filterCityOnlyMap" value="cityOnly"
+       onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9"> City Only
+</label>
+<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<input type="radio" name="roadTypeFilterMap" id="filterCountyPlusVDOTMap" value="countyPlusVDOT"
+       onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9"> All No Interstate
+</label>
 </div>
-<!-- Export to KML -->
-<button class="btn-soft btn-soft-success btn-soft-sm" onclick="exportMapToKML()" title="Export visible crashes to Google Earth/My Maps" style="margin-left:.5rem">
-🌍 Export KML
-</button>
+<!-- Drawing tools + Clear All (was Section A) -->
+<div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
+<span style="color:var(--gray);font-size:.75rem;font-weight:600;min-width:60px">Draw:</span>
+<button class="drawing-tool-btn" id="btnDrawPolygon" onclick="startDrawing('polygon')"
+        title="Polygon - Click to add vertices, double-click to finish">⬡ Polygon</button>
+<button class="drawing-tool-btn" id="btnDrawCircle" onclick="startDrawing('circle')"
+        title="Circle - Click center, drag to set radius">◯ Circle</button>
+<button class="drawing-tool-btn" id="btnMeasureSegment" onclick="openSegmentMeasureTool()"
+        title="Measure - Draw a custom road segment">📏 Measure</button>
+<button class="drawing-tool-btn btn-soft-danger" id="btnClearDrawing" onclick="clearDrawingSelection()"
+        title="Clear drawing selection">✕ Clear Drawing</button>
+<button class="btn-soft btn-soft-secondary btn-soft-sm" onclick="clearQuickFilters()"
+        title="Clear all map filters" style="margin-left:auto">🗑️ Clear All Filters</button>
 </div>
-<!-- Road-Type Filter Row (mirrors Upload tab — bug M1 fix) -->
-<div class="map-roadtype-row" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.4rem .75rem;background:#f8fafc;border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:.8rem">
-<span style="color:var(--gray);font-weight:600">Road Type:</span>
-<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
-<input type="radio" name="roadTypeFilterMap" id="filterAllRoadsMap" value="allRoads" onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9">
-All Roads
-</label>
-<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
-<input type="radio" name="roadTypeFilterMap" id="filterCountyOnlyMap" value="countyOnly" onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9">
-County Only
-</label>
-<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
-<input type="radio" name="roadTypeFilterMap" id="filterCityOnlyMap" value="cityOnly" onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9">
-City Only
-</label>
-<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
-<input type="radio" name="roadTypeFilterMap" id="filterCountyPlusVDOTMap" value="countyPlusVDOT" onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9">
-All No Interstate
-</label>
 </div>
 <div class="map-container" style="position:relative">
 <div id="map"></div>
@@ -28364,6 +28387,22 @@ async function processSampleRowsFromText(csvText) {
                                     isSpeed: isYes(row[COL.SPEED]),
                                     isYoung: isYes(row[COL.YOUNG]),
                                     isNight: isYes(row[COL.NIGHT]),
+                                    // Round 24 — flags so all 18 factor chips can filter map points
+                                    isAlcohol:      isYes(row[COL.ALCOHOL]),
+                                    isImpaired:     isYes(row[COL.ALCOHOL]) || isYes(row[COL.DRUG]),
+                                    isDistracted:   isYes(row[COL.DISTRACTED]),
+                                    isUnrestrained: isYes(row[COL.UNRESTRAINED]),
+                                    isMotorcycle:   isYes(row[COL.MOTORCYCLE]),
+                                    isAnimal:       isYes(row[COL.ANIMAL]),
+                                    isWorkzone:     isYes(row[COL.WORKZONE]),
+                                    isSchoolzone:   isYes(row[COL.SCHOOL]),
+                                    isGuardrail:    isYes(row[COL.GUARDRAIL]),
+                                    isCurve:        /curve/i.test(String(row[COL.ALIGNMENT] || '')),
+                                    isWeather:      (function() {
+                                        var w = String(row[COL.WEATHER] || '').toLowerCase();
+                                        if (!w || w === 'unknown' || w.indexOf('clear') >= 0) return false;
+                                        return true;
+                                    })(),
                                     docNum: row[COL.ID] || ''
                                 });
                             } else {
@@ -28456,7 +28495,24 @@ async function processSampleRowsFromObjects(fields, rows) {
                         isBike: isYes(row[COL.BIKE]), isInt: isIntersection(row),
                         weather: row[COL.WEATHER] || '', light: row[COL.LIGHT] || '',
                         isSpeed: isYes(row[COL.SPEED]), isYoung: isYes(row[COL.YOUNG]),
-                        isNight: isYes(row[COL.NIGHT]), docNum: row[COL.ID] || ''
+                        isNight: isYes(row[COL.NIGHT]),
+                        // Round 24 — flags so all 18 factor chips can filter map points
+                        isAlcohol:      isYes(row[COL.ALCOHOL]),
+                        isImpaired:     isYes(row[COL.ALCOHOL]) || isYes(row[COL.DRUG]),
+                        isDistracted:   isYes(row[COL.DISTRACTED]),
+                        isUnrestrained: isYes(row[COL.UNRESTRAINED]),
+                        isMotorcycle:   isYes(row[COL.MOTORCYCLE]),
+                        isAnimal:       isYes(row[COL.ANIMAL]),
+                        isWorkzone:     isYes(row[COL.WORKZONE]),
+                        isSchoolzone:   isYes(row[COL.SCHOOL]),
+                        isGuardrail:    isYes(row[COL.GUARDRAIL]),
+                        isCurve:        /curve/i.test(String(row[COL.ALIGNMENT] || '')),
+                        isWeather:      (function() {
+                            var w = String(row[COL.WEATHER] || '').toLowerCase();
+                            if (!w || w === 'unknown' || w.indexOf('clear') >= 0) return false;
+                            return true;
+                        })(),
+                        docNum: row[COL.ID] || ''
                     });
                 } else {
                     crashState.missingGPS++;
@@ -34251,6 +34307,22 @@ function processRow(row) {
             isSpeed: isYes(row[COL.SPEED]),
             isYoung: isYes(row[COL.YOUNG]),
             isNight: isYes(row[COL.NIGHT]),
+            // Round 24 — flags so all 18 factor chips can filter map points
+            isAlcohol:      isYes(row[COL.ALCOHOL]),
+            isImpaired:     isYes(row[COL.ALCOHOL]) || isYes(row[COL.DRUG]),
+            isDistracted:   isYes(row[COL.DISTRACTED]),
+            isUnrestrained: isYes(row[COL.UNRESTRAINED]),
+            isMotorcycle:   isYes(row[COL.MOTORCYCLE]),
+            isAnimal:       isYes(row[COL.ANIMAL]),
+            isWorkzone:     isYes(row[COL.WORKZONE]),
+            isSchoolzone:   isYes(row[COL.SCHOOL]),
+            isGuardrail:    isYes(row[COL.GUARDRAIL]),
+            isCurve:        /curve/i.test(String(row[COL.ALIGNMENT] || '')),
+            isWeather:      (function() {
+                var w = String(row[COL.WEATHER] || '').toLowerCase();
+                if (!w || w === 'unknown' || w.indexOf('clear') >= 0) return false;
+                return true;
+            })(),
             docNum: row[COL.ID] || ''
         });
     } else {
@@ -51521,13 +51593,29 @@ function getFilteredMapPoints() {
             }
         }
 
-        // Quick filters (AND logic - all active filters must match)
-        // If a filter is active, the crash must match that criterion
-        if (mf.fatal && p.sev !== 'K') return false;
-        if (mf.serious && !(p.sev === 'K' || p.sev === 'A')) return false;
-        if (mf.ped && !p.isPed) return false;
-        if (mf.bike && !p.isBike) return false;
-        if (mf.intersection && !p.isInt) return false;
+        // Quick filters (AND logic — all active filters must match)
+        if (mf.fatal           && p.sev !== 'K') return false;
+        if (mf.serious         && !(p.sev === 'K' || p.sev === 'A')) return false;
+        if (mf.ka_combined     && !(p.sev === 'K' || p.sev === 'A')) return false;  // alias for chip parity
+        if (mf.ped             && !p.isPed) return false;
+        if (mf.pedestrian      && !p.isPed) return false;                            // factor-chip alias
+        if (mf.bike            && !p.isBike) return false;
+        if (mf.bicycle         && !p.isBike) return false;                           // factor-chip alias
+        if (mf.intersection    && !p.isInt) return false;
+        // Round 24 — newly-wired factor filters
+        if (mf.alcohol         && !p.isImpaired) return false;   // chip 'Impaired' = alcohol OR drug
+        if (mf.impaired        && !p.isImpaired) return false;
+        if (mf.speed           && !p.isSpeed) return false;
+        if (mf.distracted      && !p.isDistracted) return false;
+        if (mf.unrestrained    && !p.isUnrestrained) return false;
+        if (mf.nighttime       && !p.isNight) return false;
+        if (mf.motorcycle      && !p.isMotorcycle) return false;
+        if (mf.animal          && !p.isAnimal) return false;
+        if (mf.workzone        && !p.isWorkzone) return false;
+        if (mf.school_zone     && !p.isSchoolzone) return false;
+        if (mf.guardrail       && !p.isGuardrail) return false;
+        if (mf.curves          && !p.isCurve) return false;
+        if (mf.weather         && !p.isWeather) return false;
 
         return true;
     });
@@ -51775,26 +51863,77 @@ function toggleMapFilter(el) {
     const filter = el.dataset.filter;
     currentFilters.mapFilters[filter] = !currentFilters.mapFilters[filter];
     el.classList.toggle('active', currentFilters.mapFilters[filter]);
+    // Keep any sibling factor chip (data-factor) in sync with the same key.
+    document.querySelectorAll('.map-chip[data-factor="' + filter + '"]')
+        .forEach(c => c.classList.toggle('active', currentFilters.mapFilters[filter]));
     updateMapDisplay();
     updateQuickFilterBadge();
+    if (typeof updateMapFiltersBadge === 'function') updateMapFiltersBadge();
+}
+
+// Round 24 — open/close the consolidated map filters panel.
+function toggleMapFiltersPanel() {
+    const panel = document.getElementById('mapFiltersPanel');
+    const chev  = document.getElementById('mapFiltersChevron');
+    if (!panel) return;
+    const isOpen = panel.style.display !== 'none';
+    panel.style.display = isOpen ? 'none' : 'block';
+    if (chev) chev.textContent = isOpen ? '▾' : '▴';
+    // Refresh the factor chips when opening (matview counts may have changed since last open).
+    if (!isOpen && typeof renderMapFactorChips === 'function') {
+        renderMapFactorChips().catch(() => {});
+    }
+}
+
+// Update the badge on the Filters button so users see at-a-glance how many filters are active.
+function updateMapFiltersBadge() {
+    const mf = currentFilters.mapFilters || {};
+    // Dedup aliases (ka_combined↔serious, pedestrian↔ped, bicycle↔bike, impaired↔alcohol)
+    const aliasTo = { ka_combined:'serious', pedestrian:'ped', bicycle:'bike', impaired:'alcohol' };
+    const seen = new Set();
+    let n = 0;
+    Object.keys(mf).forEach(k => {
+        if (!mf[k]) return;
+        const canonical = aliasTo[k] || k;
+        if (seen.has(canonical)) return;
+        seen.add(canonical);
+        n++;
+    });
+    const badge = document.getElementById('mapActiveFiltersBadge');
+    if (!badge) return;
+    if (n > 0) { badge.textContent = String(n); badge.style.display = 'inline-flex'; }
+    else { badge.style.display = 'none'; }
 }
 
 // Show/hide the quick filter badge on the map
 function updateQuickFilterBadge() {
     const mf = currentFilters.mapFilters || {};
-    const activeFilters = [];
-    if (mf.fatal) activeFilters.push('🔴 Fatal');
-    if (mf.serious) activeFilters.push('🩹 K+A');
-    if (mf.ped) activeFilters.push('🚶 Pedestrian');
-    if (mf.bike) activeFilters.push('🚴 Bicycle');
-    if (mf.intersection) activeFilters.push('🚦 Intersection');
-
-    if (activeFilters.length > 0) {
+    const labels = {
+        fatal:'🔴 Fatal', serious:'🩹 K+A', ka_combined:'⚠️ K+A',
+        ped:'🚶 Ped', pedestrian:'🚶 Ped',
+        bike:'🚴 Bike', bicycle:'🚴 Bike',
+        intersection:'🚦 Intersection',
+        alcohol:'🍺 Impaired', impaired:'🍺 Impaired',
+        speed:'⚡ Speed', distracted:'📱 Distracted',
+        unrestrained:'🪑 Unrestrained', nighttime:'🌙 Nighttime',
+        motorcycle:'🏍️ Motorcycle', animal:'🦌 Animal',
+        workzone:'🚧 Work Zone', school_zone:'🎒 School Zone',
+        guardrail:'🛡️ Guardrail', curves:'〰️ Curves', weather:'🌧️ Weather',
+    };
+    // Dedup aliases (don't show both 'ka_combined' and 'serious')
+    const seen = new Set();
+    const active = [];
+    Object.keys(labels).forEach(k => {
+        if (!mf[k]) return;
+        const lbl = labels[k];
+        if (seen.has(lbl)) return;
+        seen.add(lbl);
+        active.push(lbl);
+    });
+    if (active.length > 0) {
         const filtered = getFilteredMapPoints();
-        const label = activeFilters.join(' + ') + ' Crashes';
-        showMapFilterBadge(label, filtered.length);
+        showMapFilterBadge(active.join(' + ') + ' Crashes', filtered.length);
     } else {
-        // Clear badge when no filters active
         const badge = document.querySelector('.safety-map-badge');
         if (badge) badge.classList.remove('visible');
     }
@@ -51802,11 +51941,12 @@ function updateQuickFilterBadge() {
 
 // Clear all quick filters
 function clearQuickFilters() {
-    currentFilters.mapFilters = { fatal: false, serious: false, ped: false, bike: false, intersection: false };
-    document.querySelectorAll('.filter-chip').forEach(chip => chip.classList.remove('active'));
+    currentFilters.mapFilters = {};   // wipe every key, not just the original 5
+    document.querySelectorAll('.filter-chip, .map-chip').forEach(c => c.classList.remove('active'));
     updateMapDisplay();
     const badge = document.querySelector('.safety-map-badge');
     if (badge) badge.classList.remove('visible');
+    if (typeof updateMapFiltersBadge === 'function') updateMapFiltersBadge();
 }
 
 // ============================================================
@@ -52086,30 +52226,28 @@ async function renderMapFactorChips() {
         }).join('');
 }
 
-// Map factor chip → existing toggleMapFilter equivalent. Factors that map to
-// an existing map filter route there; others are display-only counts.
-const _FACTOR_TO_LEGACY_FILTER = {
-    fatal:        'fatal',
-    serious:      'serious',
-    ka_combined:  'serious',
-    pedestrian:   'ped',
-    bicycle:      'bike',
-    intersection: 'intersection',
-};
-
+// Round 24 — every factor now flips a real filter, not just visual state.
+// `currentFilters.mapFilters[factor]` is the source of truth; the chip's
+// `.active` class follows that boolean.
 function toggleMapFactor(factor) {
-    const legacy = _FACTOR_TO_LEGACY_FILTER[factor];
-    if (legacy) {
-        const el = document.querySelector('.filter-chip[data-filter="' + legacy + '"]');
-        if (el && typeof toggleMapFilter === 'function') {
-            toggleMapFilter(el);
-            return;
-        }
-    }
-    // For factor chips without a row-level filter (e.g. animal, workzone)
-    // just toggle visual active state — the count is the value.
-    const chip = document.querySelector('.map-chip[data-factor="' + factor + '"]');
-    if (chip) chip.classList.toggle('active');
+    if (!factor) return;
+    if (!currentFilters.mapFilters) currentFilters.mapFilters = {};
+    const next = !currentFilters.mapFilters[factor];
+    currentFilters.mapFilters[factor] = next;
+    // Sync visual state on BOTH the legacy filter chip (if any) AND the factor chip.
+    document.querySelectorAll('.filter-chip[data-filter="' + factor + '"], .map-chip[data-factor="' + factor + '"]')
+        .forEach(el => el.classList.toggle('active', next));
+    // Keep alias filters in lockstep so chip + quick-filter never drift.
+    const aliases = {
+        ka_combined: 'serious',
+        pedestrian:  'ped',
+        bicycle:     'bike',
+        impaired:    'alcohol',
+    };
+    if (aliases[factor]) currentFilters.mapFilters[aliases[factor]] = next;
+    if (typeof updateMapDisplay === 'function') updateMapDisplay();
+    if (typeof updateQuickFilterBadge === 'function') updateQuickFilterBadge();
+    if (typeof updateMapFiltersBadge === 'function') updateMapFiltersBadge();
 }
 
 // Re-render chips whenever the tier resolves a new value. Supabase-bridge
