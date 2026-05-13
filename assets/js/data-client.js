@@ -679,7 +679,9 @@ class CrashLensDataClient {
     yearEnd   = parseInt(yearEnd, 10);
     if (!this.preferSupabase || !this.supabaseKey) return [];
     const params = new URLSearchParams({
-      select: 'state,crash_year,total_crashes,total_k,total_a,total_b,total_c,total_killed,total_injured,ped_crashes,bike_crashes,alcohol_crashes,distracted_crashes,speed_crashes,wz_crashes',
+      // Note: federal_summary has total_k (K-severity crash count) but NOT total_killed.
+      // total_k is used as the killed/fatal metric for federal-tier display.
+      select: 'state,crash_year,total_crashes,total_k,total_a,total_b,total_c,total_injured,total_ped_k,total_ped_inj,ped_crashes,bike_crashes,alcohol_crashes,distracted_crashes,speed_crashes,wz_crashes',
       crash_year: `gte.${yearStart - 4}`,  // pull 4 prior years for sparkline + YoY
       order: 'state,crash_year'
     });
@@ -703,7 +705,7 @@ class CrashLensDataClient {
         b.total += tot;
         b.k += k; b.a += a; b.b += bsev; b.c += cs;
         b.ksi += k + a;
-        b.killed  += Number(r.total_killed||0);
+        b.killed  += Number(r.total_k||0);   // total_killed not in federal_summary; total_k (fatal crash count) is the proxy
         b.injured += Number(r.total_injured||0);
         b.ped     += Number(r.ped_crashes||0);
         b.bike    += Number(r.bike_crashes||0);
