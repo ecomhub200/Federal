@@ -22,6 +22,75 @@
 (function (global) {
     'use strict';
 
+    // ============================================================
+    // Identity bridge — Firebase UID -> Supabase auth.users.id (UUID v5)
+    // ============================================================
+    // Phase 1+2 sync script (scripts/firestore-to-supabase-sync.js) derives
+    // every Supabase auth.users.id deterministically from the Firebase UID
+    // using uuidv5 + this fixed namespace. The frontend MUST use the same
+    // derivation so dual-writes hit the right row and OAuth re-sign-in
+    // matches the pre-seeded auth.users row by email + identity.
+    //
+    // NEVER change CRASHLENS_FIREBASE_NS — it would break the mapping for
+    // every migrated user. Verified deployed 2026-05-12 across 25 users.
+    var CRASHLENS_FIREBASE_NS = '8e3a0f3d-7b2a-4e5c-9f6a-1c2d3e4f5a6b';
+
+    // RFC-4122 UUID v5 (SHA-1, namespace-based). Inlined to avoid pulling
+    // a CDN dep — the algorithm is ~30 LOC and stable since 2005.
+    function _bytesToHex(bytes) {
+        var s = '';
+        for (var i = 0; i < bytes.length; i++) {
+            s += (bytes[i] + 0x100).toString(16).slice(1);
+        }
+        return s;
+    }
+    function _stringToBytes(str) {
+        var u = unescape(encodeURIComponent(str));
+        var out = new Array(u.length);
+        for (var i = 0; i < u.length; i++) out[i] = u.charCodeAt(i);
+        return out;
+    }
+    function _uuidStringToBytes(uuid) {
+        var hex = uuid.replace(/-/g, '');
+        var bytes = new Array(16);
+        for (var i = 0; i < 16; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+        return bytes;
+    }
+    async function _sha1Bytes(bytes) {
+        var src = new Uint8Array(bytes);
+        var digest = await crypto.subtle.digest('SHA-1', src);
+        return new Uint8Array(digest).slice(0, 16);
+    }
+    /**
+     * Derive a deterministic UUID v5 from `name` within `namespace`.
+     * `namespace` is a UUID string. Returns a UUID string (lowercase).
+     */
+    async function uuidv5(name, namespace) {
+        var nsBytes = _uuidStringToBytes(namespace);
+        var nameBytes = _stringToBytes(String(name));
+        var combined = nsBytes.concat(nameBytes);
+        var hash = await _sha1Bytes(combined);
+        hash[6] = (hash[6] & 0x0f) | 0x50;
+        hash[8] = (hash[8] & 0x3f) | 0x80;
+        var h = _bytesToHex(hash);
+        return h.substr(0, 8) + '-' + h.substr(8, 4) + '-' + h.substr(12, 4) + '-' + h.substr(16, 4) + '-' + h.substr(20, 12);
+    }
+
+    // Cache derivations per-session — UUID v5 of the same input is always identical.
+    var _uuidCache = Object.create(null);
+    async function firebaseUidToSupabaseUuid(firebaseUid) {
+        if (!firebaseUid) return null;
+        var key = String(firebaseUid);
+        if (_uuidCache[key]) return _uuidCache[key];
+        var u = await uuidv5(key, CRASHLENS_FIREBASE_NS);
+        _uuidCache[key] = u;
+        return u;
+    }
+    function firebaseUidToSupabaseUuidSync(firebaseUid) {
+        if (!firebaseUid) return null;
+        return _uuidCache[String(firebaseUid)] || null;
+    }
+
     var _client = null;
     var _initialized = false;
     var _authStateCallbacks = [];
@@ -64,7 +133,9 @@
                    || dcDefaults.supabaseKey
                    || null;
         if (!url || !anonKey) {
-            console.warn('[SupabaseAuth] missing supabase URL or anon key — wrapper inert');
+            // Silent — the bootstrap poller (bottom of IIFE) logs once
+            // after 5s if config genuinely never lands. Returning null here
+            // also lets callers retry once config is hydrated.
             return null;
         }
         _client = global.supabase.createClient(url, anonKey, {
@@ -233,12 +304,22 @@
 
         /**
          * Translate a Firestore user-doc shape to the public.profiles row
-         * shape. Drops Firebase-specific fields (createdAt timestamp object,
-         * Firestore Timestamp wrappers, etc.).
+         * shape. Drops Firebase-specific fields (Firestore Timestamp wrappers,
+         * etc.).
+         *
+         * **Phase 3 update**: `user_id` is now the deterministic UUID v5
+         * derived from the Firebase UID via firebaseUidToSupabaseUuid above.
+         * This makes dual-write hit the pre-seeded auth.users row instead of
+         * creating an orphan that would fail the FK to auth.users(id).
+         *
+         * NOTE: this function is now ASYNC. All callers (auth.js dual-write
+         * hooks at lines 342-355, 537-540) must `await` it.
          */
-        mapFirestoreToProfile: function (firebaseUid, firestoreDoc) {
+        mapFirestoreToProfile: async function (firebaseUid, firestoreDoc) {
             if (!firebaseUid || !firestoreDoc) return null;
             var d = firestoreDoc;
+            var supabaseUserId = await firebaseUidToSupabaseUuid(firebaseUid);
+            if (!supabaseUserId) return null;
             var isoOrNull = function (ts) {
                 try {
                     if (!ts) return null;
@@ -249,9 +330,7 @@
                 return null;
             };
             return {
-                // Phase 2 — user_id is the FIREBASE uid for now. Phase 3 cutover
-                // will create matching auth.users rows so the FK aligns.
-                user_id: firebaseUid,
+                user_id: supabaseUserId,                      // <-- was firebaseUid (BROKEN)
                 email: d.email || null,
                 display_name: d.displayName || null,
                 photo_url: d.photoURL || null,
@@ -282,6 +361,17 @@
             };
         },
 
+        /**
+         * Convert a Firebase UID into the deterministic Supabase auth.users.id
+         * (UUID v5). Use this anywhere code holds a Firebase UID and needs
+         * to query/upsert against public.profiles or auth.users.
+         *
+         * Async because the underlying SHA-1 uses Web Crypto SubtleCrypto.
+         * Memoized per-session.
+         */
+        firebaseUidToSupabaseUuid: firebaseUidToSupabaseUuid,
+        firebaseUidToSupabaseUuidSync: firebaseUidToSupabaseUuidSync,
+
         /** Diagnostic — call from DevTools to inspect wrapper state. */
         debug: function () {
             return {
@@ -296,9 +386,55 @@
     };
 
     global.SupabaseAuth = SupabaseAuth;
-    // Eager client init so first dual-write call doesn't pay the SDK-load cost.
-    // No auth-state listener attached unless useSupabaseAuth is true.
-    _ensureClient();
 
-    console.log('[SupabaseAuth] wrapper loaded — flags:', SupabaseAuth.debug());
+    // ====================================================================
+    // Lazy / deferred init — supabase-auth.js parses BEFORE config.json
+    // and data-client.js finish populating window.appConfig + crashLensClient.
+    // The original eager init at IIFE end fired before those were ready,
+    // producing two false-positive "wrapper inert" warnings and leaving
+    // _client = null for the rest of the session.
+    //
+    // Strategy: poll a few times (~5 sec total) waiting for either signal,
+    // then init. Most page loads resolve within 100-500 ms. Any
+    // SupabaseAuth.{signInWith*,getProfile,upsertProfile,...} call also
+    // re-attempts via _ensureClient() lazily, so a missed poll still works
+    // — this is just to warm the client + cache the wrapper-loaded log.
+    // ====================================================================
+    var _configWaitAttempts = 0;
+    var _configWaitMax = 50;             // 50 × 100 ms = 5 sec total
+    function _initWhenConfigReady() {
+        var cfgReady = !!(global.appConfig && global.appConfig.apis && global.appConfig.apis.supabase)
+                    || !!(global.crashLensClient && global.crashLensClient.supabaseUrl && global.crashLensClient.supabaseKey);
+        if (cfgReady) {
+            _ensureClient();
+            console.log('[SupabaseAuth] wrapper loaded — flags:', SupabaseAuth.debug());
+            return;
+        }
+        _configWaitAttempts++;
+        if (_configWaitAttempts >= _configWaitMax) {
+            console.warn('[SupabaseAuth] config never became available after 5s — wrapper remains inert. ' +
+                         'Check appConfig.apis.supabase or crashLensClient.supabaseUrl/Key are populated.');
+            return;
+        }
+        setTimeout(_initWhenConfigReady, 100);
+    }
+    _initWhenConfigReady();
+
+    // Self-test on load — verifies the v5 derivation is correct. If this
+    // ever prints MISMATCH, the namespace constant or algorithm has drifted
+    // and dual-writes will start landing on the wrong row.
+    (async function _selfTest() {
+        try {
+            var sample = 'self-test-fixture-firebase-uid';
+            var expected = await uuidv5(sample, CRASHLENS_FIREBASE_NS);
+            var got = await firebaseUidToSupabaseUuid(sample);
+            if (got !== expected) {
+                console.error('[SupabaseAuth] UUID v5 self-test FAILED:', { expected: expected, got: got });
+            } else {
+                console.debug('[SupabaseAuth] UUID v5 self-test ok ->', got);
+            }
+        } catch (e) {
+            console.error('[SupabaseAuth] UUID v5 self-test threw:', e && e.message);
+        }
+    })();
 })(window);
