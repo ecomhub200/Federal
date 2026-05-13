@@ -28231,6 +28231,36 @@ function restoreCrashStateFromCache(cached) {
     return true;
 }
 
+// Round 25 §2 — at aggregate tiers, R2 is skipped (parquet is wrong shape
+// for rollups). Instead, lazy-fetch per-marker rows from mv_map_points so
+// every per-row filter (Map / HotSpots / Intersections / PedBike / etc.)
+// has data to operate on. State-agnostic — keys on resolveTier()'s output.
+async function _hydrateMapPointsFromMatview(reason) {
+    const dc = window.crashLensClient;
+    if (!dc || typeof dc.getMapPoints !== 'function') return;
+    let opts = {};
+    try {
+        const t = (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+            ? CL.data.supabaseBridge.resolveTier()
+            : null;
+        if (t && t.tier) {
+            if (t.tier === 'dot_district')      opts.dotDistrict      = t.value;
+            if (t.tier === 'planning_district') opts.planningDistrict = t.value;
+            if (t.tier === 'mpo')               opts.mpoName          = t.value;
+            if (t.tier === 'county' || t.tier === 'city') opts.jurisdiction = t.value;
+            // 'state' / 'federal' → no tier filter; the state= eq filter alone scopes it.
+        }
+    } catch (e) { /* fall through to state-only scope */ }
+    console.log('[mapPointsHydrate] fetching mv_map_points (' + reason + ')', opts);
+    const t0 = Date.now();
+    const rows = await dc.getMapPoints(opts);
+    crashState.mapPoints = rows || [];
+    console.log('[mapPointsHydrate] populated ' + crashState.mapPoints.length +
+                ' points in ' + (Date.now() - t0) + 'ms — filters now operational');
+    document.dispatchEvent(new CustomEvent('crashDataLoaded', { detail: { source: 'mv_map_points' } }));
+    showBackgroundLoadingIndicator(false);
+}
+
 /**
  * Load sampleRows and mapPoints in background after cache hit.
  * Captures a jurisdiction/state snapshot at call time and verifies it hasn't changed
@@ -28243,30 +28273,29 @@ async function loadSampleRowsInBackground(loadGeneration) {
     // far too large for in-browser use (118 MB+ for _national/).  At the city
     // tier no per-city parquet exists — the legacy fallback would substitute
     // the active county's parquet (Bug 1: 87,073 Sussex rows for Bellefonte).
-    // Skip the background download for any non-county tier — the dashboard
-    // already painted from the Supabase matview, and detail tabs will
-    // lazy-load the county-level file when needed.
+    // Skip the R2 download for any non-county tier and instead hydrate
+    // crashState.mapPoints from mv_map_points so per-row filters still work.
     const _bgTier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
     const _skipTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district', 'city']);
     if (_skipTiers.has(_bgTier)) {
-        console.log(`[CrashCache] Skipping background R2 download for ${_bgTier} tier (Supabase matview is primary)`);
-        showBackgroundLoadingIndicator(false);
+        console.log(`[CrashCache] Skipping R2 (matview path) — fetching mv_map_points instead for ${_bgTier} tier`);
+        _hydrateMapPointsFromMatview('skipTier=' + _bgTier);
         return;
     }
     // County tier with rollup: the bridge painted the planning_district /
     // dot_district total (e.g. Sussex County → PD South = 134K). The
     // <state>/<county>/<roadtype>.parquet on R2 only has the unincorporated
     // remainder — downloading it would feed the detail tabs the wrong rowset
-    // and contradict the dashboard KPIs. Skip in that case too.
+    // and contradict the dashboard KPIs. Hydrate from mv_map_points instead.
     try {
         const _bgResolved = (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
             ? CL.data.supabaseBridge.resolveTier()
             : null;
         if (_bgResolved && _bgResolved.rolledUpFrom === 'county') {
-            console.log('[CrashCache] Skipping background R2 download — county rolled up to ' +
+            console.log('[CrashCache] County rolled up to ' +
                 (_bgResolved.rollupColumn || _bgResolved.tier) + '=' + _bgResolved.value +
-                '. Detail tabs will lazy-fetch from Supabase.');
-            showBackgroundLoadingIndicator(false);
+                ' — fetching mv_map_points for filterability');
+            _hydrateMapPointsFromMatview('rolledUpFrom=county');
             return;
         }
     } catch (e) { /* non-fatal */ }
@@ -52704,6 +52733,20 @@ function updateMapSearchPlaceholder() {
 }
 document.addEventListener('tierChanged',         updateMapSearchPlaceholder);
 document.addEventListener('jurisdictionChanged', updateMapSearchPlaceholder);
+
+// Round 25 §3 — refresh per-row mapPoints whenever the tier/jurisdiction
+// changes. Without this, switching from Kent (PD-rolled) to Sussex
+// (PD-rolled) would leave mapPoints scoped to Kent's PD.
+document.addEventListener('tierChanged', () => {
+    if (typeof _hydrateMapPointsFromMatview === 'function') {
+        _hydrateMapPointsFromMatview('tierChanged');
+    }
+});
+document.addEventListener('jurisdictionChanged', () => {
+    if (typeof _hydrateMapPointsFromMatview === 'function') {
+        _hydrateMapPointsFromMatview('jurisdictionChanged');
+    }
+});
 
 function populateMapList() {
     const container = document.getElementById('mapList');

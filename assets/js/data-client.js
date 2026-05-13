@@ -3187,6 +3187,72 @@ class CrashLensDataClient {
   }
 
   /**
+   * mv_map_points — per-marker projection of crashes table.
+   * Returns rows shaped EXACTLY like the existing crashState.mapPoints
+   * (lat, lng, sev, isPed, isBike, isInt, plus all factor booleans).
+   *
+   * Use at any aggregate tier (planning_district / state / region / mpo /
+   * county-rolled-up) where R2 parquet download is skipped. Replaces the
+   * R2 detour for filter operands.
+   *
+   * @param {Object} opts - { planningDistrict, mpoName, jurisdiction, dotDistrict }
+   *                        state-agnostic tier filters; same shape getMapMetrics accepts.
+   * @returns {Promise<Array>} per-marker rows in the legacy mapPoints shape
+   */
+  async getMapPoints(opts) {
+    const params = new URLSearchParams({
+      state: 'eq.' + (this.state || '').toLowerCase(),
+      select: 'lat,lng,sev,crash_year,route,doc_id,crash_date,time_str,' +
+              'road_type,is_interstate,physical_juris_name,planning_district,dot_district,mpo_name,' +
+              'is_fatal,is_ksi,is_ped,is_bike,is_intersection,is_impaired,is_alcohol,is_drug,' +
+              'is_speed,is_distracted,is_unrestrained,is_motorcycle,is_animal,is_workzone,' +
+              'is_schoolzone,is_guardrail,is_curve,is_weather,is_night,is_young,is_senior,' +
+              'is_drowsy,is_hitrun,is_lgtruck,' +
+              'collision_type,weather_condition,light_condition,roadway_surface_cond,' +
+              'traffic_control_type,intersection_type,roadway_alignment',
+      limit: '200000'
+    });
+    if (opts) {
+      if (opts.dotDistrict)      params.set('dot_district',         'eq.' + opts.dotDistrict);
+      if (opts.planningDistrict) params.set('planning_district',    'eq.' + opts.planningDistrict);
+      if (opts.mpoName)          params.set('mpo_name',             'eq.' + opts.mpoName);
+      if (opts.jurisdiction)     params.set('physical_juris_name',  'eq.' + opts.jurisdiction);
+    }
+    const url = `${this.supabaseUrl}/mv_map_points?${params}`;
+    try {
+      const resp = await fetch(url, {
+        headers: { apikey: this.supabaseKey, Authorization: 'Bearer ' + this.supabaseKey }
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const rows = await resp.json();
+      return rows.map(r => ({
+        lat: r.lat, lng: r.lng, sev: r.sev,
+        route: r.route, date: r.crash_date,
+        time: r.time_str, docNum: r.doc_id,
+        collision: r.collision_type, weather: r.weather_condition, light: r.light_condition,
+        physical_juris_name: r.physical_juris_name,
+        planning_district: r.planning_district,
+        dot_district: r.dot_district,
+        mpo_name: r.mpo_name,
+        road_type: r.road_type,
+        is_interstate: r.is_interstate,
+        isFatal: r.is_fatal,
+        isPed: r.is_ped, isBike: r.is_bike, isInt: r.is_intersection,
+        isAlcohol: r.is_alcohol, isImpaired: r.is_impaired, isDrug: r.is_drug,
+        isSpeed: r.is_speed, isDistracted: r.is_distracted, isUnrestrained: r.is_unrestrained,
+        isMotorcycle: r.is_motorcycle, isAnimal: r.is_animal,
+        isWorkzone: r.is_workzone, isSchoolzone: r.is_schoolzone, isGuardrail: r.is_guardrail,
+        isCurve: r.is_curve, isWeather: r.is_weather, isNight: r.is_night,
+        isYoung: r.is_young, isSenior: r.is_senior, isDrowsy: r.is_drowsy,
+        isHitrun: r.is_hitrun, isLgtruck: r.is_lgtruck
+      }));
+    } catch (e) {
+      console.warn('[DataClient] getMapPoints failed:', e.message);
+      return [];
+    }
+  }
+
+  /**
    * states.capabilities jsonb — drives the BLOCKED-UPSTREAM honest banners
    * (Safety Focus cards, B/C severity cells, Magisterial District panels).
    * Returns the raw capabilities object or null.
