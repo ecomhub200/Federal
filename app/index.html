@@ -1155,6 +1155,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .drawing-tool-btn.btn-soft-danger:hover{border-color:#f87171;background:linear-gradient(135deg,#fecaca 0%,#fca5a5 100%);transform:translateY(-1px);box-shadow:0 3px 10px rgba(239,68,68,.2)}
 @keyframes pulse-green{0%,100%{box-shadow:0 0 0 0 rgba(5,150,105,.4)}50%{box-shadow:0 0 0 6px rgba(5,150,105,0)}}
 
+/* Vertical multi-select Filters dropdown (under map toolbar) */
+.map-filters-panel{display:none;border-top:1px solid var(--border);background:#f8fafc;padding:.75rem 1rem;max-height:60vh;overflow-y:auto}
+.map-filters-section{margin-bottom:1rem}
+.map-filters-section:last-child{margin-bottom:0}
+.map-filters-section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem;padding-bottom:.3rem;border-bottom:1px solid var(--border)}
+.map-filters-section-title{font-size:.7rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.04em}
+.map-filters-section > .map-filters-section-title{display:block;margin-bottom:.4rem;padding-bottom:.3rem;border-bottom:1px solid var(--border)}
+.map-factor-list{display:flex;flex-direction:column;gap:.15rem}
+.map-factor-row{display:flex;align-items:center;gap:.55rem;padding:.4rem .55rem;border-radius:var(--radius);cursor:pointer;transition:background .15s;border:1px solid transparent}
+.map-factor-row:hover{background:#eff6ff;border-color:#bfdbfe}
+.map-factor-row.active{background:#dbeafe;border-color:#93c5fd}
+.map-factor-row-checkbox{margin:0;accent-color:#1d4ed8;cursor:pointer;width:14px;height:14px;flex:0 0 auto}
+.map-factor-row-label{flex:1;font-size:.8rem;color:var(--text,#0f172a);user-select:none}
+.map-factor-row-count{font-weight:600;font-size:.75rem;color:#1e293b;font-variant-numeric:tabular-nums;min-width:48px;text-align:right}
+.map-factor-row-fatal{margin-left:.4rem;font-size:.7rem;color:#dc2626;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.map-roadtype-list{display:flex;flex-direction:column;gap:.15rem}
+.map-roadtype-row{display:flex;align-items:center;gap:.55rem;padding:.4rem .55rem;border-radius:var(--radius);cursor:pointer;font-size:.8rem;transition:background .15s;border:1px solid transparent}
+.map-roadtype-row:hover{background:#eff6ff;border-color:#bfdbfe}
+.map-roadtype-row input[type="radio"]{margin:0;accent-color:#1d4ed8;cursor:pointer;width:14px;height:14px;flex:0 0 auto}
+
 /* Drawing Selection Panel */
 .drawing-selection-panel{position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,.98);padding:1rem;border-radius:var(--radius-lg);z-index:1000;box-shadow:var(--shadow-lg);width:340px;display:none}
 .drawing-selection-panel.visible{display:block}
@@ -5864,13 +5884,15 @@ Your data stays private. All processing happens in your browser.
 <div class="card-title">🗺️ Crash Location Map</div>
 <!-- Round 24 — consolidated map toolbar. The original Section A (chips + date +
      draw + road-type rows) now lives inside the #mapFiltersPanel dropdown. -->
-<div class="map-controls" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.5rem .75rem">
+<!-- Toolbar arrangement mirrors app/index_correct.html. The inline factor chips have been
+     consolidated into the "Filters" dropdown (vertical multi-select panel below). -->
+<div class="map-controls">
 <div class="btn-toggle-group">
 <button class="btn-toggle active" id="btnCluster" onclick="setMapMode('cluster')">📍 Clusters</button>
 <button class="btn-toggle" id="btnHeat" onclick="setMapMode('heat')">🔥 Heatmap</button>
 <button class="btn-toggle" id="btnMarkers" onclick="setMapMode('markers')">⚫ Markers</button>
 </div>
-<!-- Single "Filters" button + active-count badge — opens the panel below -->
+<!-- Single "Filters" button + active-count badge — opens the vertical multi-select panel below -->
 <button class="btn-soft btn-soft-primary" id="btnOpenMapFilters"
         onclick="toggleMapFiltersPanel()" style="margin-left:.5rem;display:inline-flex;align-items:center;gap:.35rem">
 🎛️ Filters
@@ -5878,34 +5900,13 @@ Your data stays private. All processing happens in your browser.
       style="display:none;padding:.1rem .45rem;border-radius:9999px;background:#1e40af;color:#fff;font-size:.7rem"></span>
 <span id="mapFiltersChevron" style="font-size:.7rem">▾</span>
 </button>
-<!-- Quick severity / mode chips remain visible inline for one-tap access. -->
-<span id="mapQuickChips" style="display:inline-flex;gap:.3rem;margin-left:.5rem">
-<span class="filter-chip" data-filter="fatal"        onclick="toggleMapFilter(this)">🔴 Fatal</span>
-<span class="filter-chip" data-filter="serious"      onclick="toggleMapFilter(this)">🩹 K+A</span>
-<span class="filter-chip" data-filter="ped"          onclick="toggleMapFilter(this)">🚶 Ped</span>
-<span class="filter-chip" data-filter="bike"         onclick="toggleMapFilter(this)">🚴 Bike</span>
-<span class="filter-chip" data-filter="intersection" onclick="toggleMapFilter(this)">🚦 Intersection</span>
-</span>
-<!-- Right-aligned: Export KML stays accessible without opening the panel -->
-<button class="btn-soft btn-soft-success btn-soft-sm"
-        onclick="exportMapToKML()"
-        title="Export visible crashes to Google Earth/My Maps"
-        style="margin-left:auto">🌍 Export KML</button>
-</div>
-<!-- Slide-down filters panel -->
-<div id="mapFiltersPanel" class="map-filters-panel" style="display:none;padding:.75rem 1rem;border-top:1px solid var(--border);background:#f8fafc">
-<!-- Factor chips with counts (was Section A — data-driven, populated by renderMapFactorChips) -->
-<div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.65rem">
-<span style="color:var(--gray);font-size:.75rem;font-weight:600">Factors:</span>
-<span id="mapFactorChips" class="map-factor-chips" style="display:inline-flex;flex-wrap:wrap;gap:.3rem"></span>
-</div>
-<!-- Date filter (was Section A) -->
-<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.65rem">
-<span style="color:var(--gray);font-size:.75rem;font-weight:600;min-width:60px">Date:</span>
 <select id="mapYearFilter" onchange="updateMapDisplay()"
-        style="padding:.35rem;border-radius:var(--radius);border:1px solid var(--border);font-size:.8rem">
+        style="margin-left:auto;padding:.35rem;border-radius:var(--radius);border:1px solid var(--border);font-size:.8rem">
 <option value="">All Years</option>
 </select>
+<!-- Date Range Filter (Section B — matches app/index_correct.html) -->
+<div class="date-filter-container">
+<label>Date:</label>
 <input type="date" id="mapStartDate" title="Start date" onchange="updateMapDisplay()">
 <span class="date-separator">to</span>
 <input type="date" id="mapEndDate" title="End date" onchange="updateMapDisplay()">
@@ -5919,50 +5920,72 @@ Your data stays private. All processing happens in your browser.
 </div>
 <button class="date-clear-btn" onclick="clearDateFilter()" title="Clear date filter">&times;</button>
 </div>
-<!-- Road type (was Section A bottom row) -->
-<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.65rem">
-<span style="color:var(--gray);font-size:.75rem;font-weight:600;min-width:60px">Road Type:</span>
-<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<!-- Drawing Tools (Section C — matches app/index_correct.html) -->
+<div class="drawing-tools-container">
+<span style="color:var(--gray);font-size:.75rem;margin-right:.25rem">Draw:</span>
+<button class="drawing-tool-btn" id="btnDrawPolygon" onclick="startDrawing('polygon')"
+        title="Polygon - Click to add vertices, double-click to finish">
+<span style="font-size:.85rem">⬡</span> Polygon
+</button>
+<button class="drawing-tool-btn" id="btnDrawCircle" onclick="startDrawing('circle')"
+        title="Circle - Click center, drag to set radius">
+<span style="font-size:.85rem">◯</span> Circle
+</button>
+<button class="drawing-tool-btn" id="btnMeasureSegment" onclick="openSegmentMeasureTool()"
+        title="Measure - Draw a custom road segment to analyze crashes (click to add points, double-click to finish)">
+<span style="font-size:.85rem">📏</span> Measure
+</button>
+<button class="drawing-tool-btn btn-soft-danger" id="btnClearDrawing" onclick="clearDrawingSelection()"
+        title="Clear drawing selection">✕ Clear</button>
+</div>
+<!-- Export to KML -->
+<button class="btn-soft btn-soft-success btn-soft-sm" onclick="exportMapToKML()"
+        title="Export visible crashes to Google Earth/My Maps" style="margin-left:.5rem">🌍 Export KML</button>
+<!-- Satellite Toggle (inline, matches app/index_correct.html) -->
+<div class="btn-toggle-group satellite-toggle" style="margin-left:.5rem">
+<button class="btn-toggle" id="btnStreetView" onclick="setMapBaseLayer('street')" title="Street Map">🗺️ Street</button>
+<button class="btn-toggle active" id="btnSatellite" onclick="setMapBaseLayer('satellite')" title="Satellite Imagery">🛰️ Satellite</button>
+</div>
+</div>
+<!-- Vertical multi-select filters panel (opens below the toolbar; replaces the old horizontal chip row) -->
+<div id="mapFiltersPanel" class="map-filters-panel" style="display:none">
+<!-- Factor multi-select list (populated by renderMapFactorChips) -->
+<div class="map-filters-section">
+<div class="map-filters-section-header">
+<span class="map-filters-section-title">Factors</span>
+<button class="btn-soft btn-soft-secondary btn-soft-sm" onclick="clearQuickFilters()"
+        title="Clear all selected factors">🗑️ Clear All</button>
+</div>
+<div id="mapFactorChips" class="map-factor-list"></div>
+</div>
+<!-- Road type -->
+<div class="map-filters-section">
+<div class="map-filters-section-title">Road Type</div>
+<div class="map-roadtype-list">
+<label class="map-roadtype-row">
 <input type="radio" name="roadTypeFilterMap" id="filterAllRoadsMap" value="allRoads"
-       onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9"> All Roads
+       onchange="syncRoadTypeFilter(this.value)"> All Roads
 </label>
-<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<label class="map-roadtype-row">
 <input type="radio" name="roadTypeFilterMap" id="filterCountyOnlyMap" value="countyOnly"
-       onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9"> County Only
+       onchange="syncRoadTypeFilter(this.value)"> County Only
 </label>
-<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<label class="map-roadtype-row">
 <input type="radio" name="roadTypeFilterMap" id="filterCityOnlyMap" value="cityOnly"
-       onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9"> City Only
+       onchange="syncRoadTypeFilter(this.value)"> City Only
 </label>
-<label style="display:inline-flex;align-items:center;gap:.25rem;cursor:pointer">
+<label class="map-roadtype-row">
 <input type="radio" name="roadTypeFilterMap" id="filterCountyPlusVDOTMap" value="countyPlusVDOT"
-       onchange="syncRoadTypeFilter(this.value)" style="accent-color:#0ea5e9"> All No Interstate
+       onchange="syncRoadTypeFilter(this.value)"> All No Interstate
 </label>
 </div>
-<!-- Drawing tools + Clear All (was Section A) -->
-<div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
-<span style="color:var(--gray);font-size:.75rem;font-weight:600;min-width:60px">Draw:</span>
-<button class="drawing-tool-btn" id="btnDrawPolygon" onclick="startDrawing('polygon')"
-        title="Polygon - Click to add vertices, double-click to finish">⬡ Polygon</button>
-<button class="drawing-tool-btn" id="btnDrawCircle" onclick="startDrawing('circle')"
-        title="Circle - Click center, drag to set radius">◯ Circle</button>
-<button class="drawing-tool-btn" id="btnMeasureSegment" onclick="openSegmentMeasureTool()"
-        title="Measure - Draw a custom road segment">📏 Measure</button>
-<button class="drawing-tool-btn btn-soft-danger" id="btnClearDrawing" onclick="clearDrawingSelection()"
-        title="Clear drawing selection">✕ Clear Drawing</button>
-<button class="btn-soft btn-soft-secondary btn-soft-sm" onclick="clearQuickFilters()"
-        title="Clear all map filters" style="margin-left:auto">🗑️ Clear All Filters</button>
 </div>
 </div>
 <div class="map-container" style="position:relative">
 <div id="map"></div>
 <!-- Fullscreen Toggle Button -->
 <button class="map-fullscreen-btn" id="mapFullscreenBtn" onclick="toggleMapFullscreen()" title="Toggle fullscreen map (Esc to exit)">⛶ Fullscreen</button>
-<!-- Satellite/Street Toggle (top-right corner of map) -->
-<div class="satellite-toggle-float" id="satelliteToggleFloat">
-<button class="btn-toggle" id="btnStreetView" onclick="setMapBaseLayer('street')" title="Street Map">🗺️ Street</button>
-<button class="btn-toggle active" id="btnSatellite" onclick="setMapBaseLayer('satellite')" title="Satellite Imagery">🛰️ Satellite</button>
-</div>
+<!-- Note: Satellite/Street toggle moved to inline toolbar above (matches app/index_correct.html) -->
 <!-- Map Search Box -->
 <div class="map-search-box" id="mapSearchBox">
 <div style="position:relative">
@@ -51980,7 +52003,8 @@ function updateQuickFilterBadge() {
 // Clear all quick filters
 function clearQuickFilters() {
     currentFilters.mapFilters = {};   // wipe every key, not just the original 5
-    document.querySelectorAll('.filter-chip, .map-chip').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.filter-chip, .map-chip, .map-factor-row').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.map-factor-row input[type="checkbox"]').forEach(cb => { cb.checked = false; });
     updateMapDisplay();
     const badge = document.querySelector('.safety-map-badge');
     if (badge) badge.classList.remove('visible');
@@ -52247,20 +52271,22 @@ async function renderMapFactorChips() {
         if (caps && caps[capKey] === false) hiddenByCaps[factor] = true;
     });
 
+    const active = (currentFilters && currentFilters.mapFilters) || {};
     container.innerHTML = _MAP_FACTOR_DISPLAY
         .filter(([k]) => !hiddenByCaps[k])
         .map(([k, label]) => {
             const d = byFactor[k] || { total: 0, k: 0, a: 0 };
+            const isOn = !!active[k];
             const fatalChip = d.k > 0
-                ? '<span class="chip-k" style="margin-left:.25rem;font-size:.65rem;color:#dc2626;font-weight:600;">' + d.k.toLocaleString() + ' fatal</span>'
+                ? '<span class="map-factor-row-fatal">' + d.k.toLocaleString() + ' fatal</span>'
                 : '';
-            return '<button class="map-chip filter-chip" data-factor="' + k + '" ' +
-                'onclick="toggleMapFactor(\'' + k + '\')" ' +
-                'style="display:inline-flex;align-items:center;gap:.25rem;padding:.25rem .5rem;border:1px solid var(--border);border-radius:9999px;background:#fff;cursor:pointer;font-size:.7rem">' +
-                '<span class="chip-label">' + label + '</span>' +
-                '<span class="chip-count" style="font-weight:600">' + d.total.toLocaleString() + '</span>' +
+            return '<label class="map-factor-row' + (isOn ? ' active' : '') + '" data-factor="' + k + '">' +
+                '<input type="checkbox" class="map-factor-row-checkbox" ' + (isOn ? 'checked' : '') +
+                ' onchange="toggleMapFactor(\'' + k + '\')">' +
+                '<span class="map-factor-row-label">' + label + '</span>' +
+                '<span class="map-factor-row-count">' + d.total.toLocaleString() + '</span>' +
                 fatalChip +
-                '</button>';
+                '</label>';
         }).join('');
 }
 
@@ -52272,17 +52298,29 @@ function toggleMapFactor(factor) {
     if (!currentFilters.mapFilters) currentFilters.mapFilters = {};
     const next = !currentFilters.mapFilters[factor];
     currentFilters.mapFilters[factor] = next;
-    // Sync visual state on BOTH the legacy filter chip (if any) AND the factor chip.
-    document.querySelectorAll('.filter-chip[data-filter="' + factor + '"], .map-chip[data-factor="' + factor + '"]')
-        .forEach(el => el.classList.toggle('active', next));
-    // Keep alias filters in lockstep so chip + quick-filter never drift.
+    // Keep alias filters in lockstep so legacy chip + new row + quick-filter never drift.
     const aliases = {
         ka_combined: 'serious',
         pedestrian:  'ped',
         bicycle:     'bike',
         impaired:    'alcohol',
     };
-    if (aliases[factor]) currentFilters.mapFilters[aliases[factor]] = next;
+    const partner = aliases[factor];
+    if (partner) currentFilters.mapFilters[partner] = next;
+    // Sync visual state across every surface this factor (and any alias) appears on:
+    // legacy .filter-chip, legacy .map-chip, and the new vertical .map-factor-row.
+    const syncKeys = partner ? [factor, partner] : [factor];
+    syncKeys.forEach(key => {
+        document.querySelectorAll(
+            '.filter-chip[data-filter="' + key + '"], ' +
+            '.map-chip[data-factor="' + key + '"], ' +
+            '.map-factor-row[data-factor="' + key + '"]'
+        ).forEach(el => {
+            el.classList.toggle('active', next);
+            const cb = el.querySelector && el.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = next;
+        });
+    });
     if (typeof updateMapDisplay === 'function') updateMapDisplay();
     if (typeof updateQuickFilterBadge === 'function') updateQuickFilterBadge();
     if (typeof updateMapFiltersBadge === 'function') updateMapFiltersBadge();
