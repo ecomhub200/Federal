@@ -3205,7 +3205,7 @@ class CrashLensDataClient {
       state: 'eq.' + (this.state || '').toLowerCase(),
       // Ultra-slim: 4 columns only (90.5% smaller than R26 v2's slim).
       // Quick-filter flags are fetched on-demand by getMapPointFlagMatches().
-      select: 'lat,lng,sev,road_type'
+      select: 'lat,lng,sev,road_type,is_ped,is_bike'
     });
     if (opts) {
       if (opts.dotDistrict)      baseParams.set('dot_district',         'eq.' + opts.dotDistrict);
@@ -3249,12 +3249,13 @@ class CrashLensDataClient {
     }
     const wallMs = Date.now() - t0;
     const sizeMB = +(JSON.stringify(raw).length / 1024 / 1024).toFixed(1);
-    console.log(`[getMapPoints] ULTRA-SLIM ${raw.length}/${totalCount} rows, ${sizeMB}MB, ${pageCount} page(s), ${wallMs}ms`);
+    console.log(`[getMapPoints] ULTRA-SLIM+pb ${raw.length}/${totalCount} rows, ${sizeMB}MB, ${pageCount} page(s), ${wallMs}ms`);
     // Each row gets a sequential index for use as a "match set ID" by lazy flag fetches
     return raw.map((r, idx) => ({
       _idx: idx,
       lat: r.lat, lng: r.lng, sev: r.sev,
-      road_type: r.road_type
+      road_type: r.road_type,
+      isPed: r.is_ped, isBike: r.is_bike
     }));
   }
 
@@ -3312,6 +3313,47 @@ class CrashLensDataClient {
     this._flagMatchCache.set(cacheKey, matches);
     console.log(`[getMapPointFlagMatches] ${flag}: ${rows.length} matches in ${Date.now() - t0}ms (cached)`);
     return matches;
+  }
+
+  /**
+   * Round 26 v3.1 — fetch full crash row by lat/lng for popup display.
+   *
+   * mv_map_points has no PK column; lat+lng is the de-facto join key (with the
+   * caveat that multiple crashes can share coords — we return the FIRST match).
+   * For popup display this is acceptable since the user clicks one marker and
+   * sees the representative crash; clustering already groups co-located crashes.
+   *
+   * Cached per (lat, lng) pair within the session — re-opening a popup is instant.
+   *
+   * @param {number} lat
+   * @param {number} lng
+   * @returns {Promise<Object|null>} full row or null on failure
+   */
+  async getMapPointDetail(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    this._mapPointDetailCache = this._mapPointDetailCache || new Map();
+    const key = `${lat},${lng}`;
+    if (this._mapPointDetailCache.has(key)) return this._mapPointDetailCache.get(key);
+    const params = new URLSearchParams({
+      state: 'eq.' + (this.state || '').toLowerCase(),
+      select: 'route,doc_id,crash_date,time_str,collision_type,weather_condition,light_condition,intersection_type,roadway_alignment,roadway_surface_cond,traffic_control_type,is_ped,is_bike,is_intersection',
+      lat: 'eq.' + lat,
+      lng: 'eq.' + lng,
+      limit: '1'
+    });
+    const headers = { apikey: this.supabaseKey, Authorization: 'Bearer ' + this.supabaseKey };
+    let detail = null;
+    try {
+      const r = await fetch(`${this.supabaseUrl}/mv_map_points?${params}`, { headers });
+      if (r.ok) {
+        const rows = await r.json();
+        detail = (Array.isArray(rows) && rows[0]) ? rows[0] : null;
+      }
+    } catch (e) {
+      console.warn('[getMapPointDetail] fetch failed:', e.message);
+    }
+    this._mapPointDetailCache.set(key, detail);
+    return detail;
   }
 
   /**

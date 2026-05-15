@@ -52044,43 +52044,66 @@ function createMarker(p) {
     const colors = { K: '#dc2626', A: '#ea580c', B: '#eab308', C: '#22c55e', O: '#64748b' };
     const color = colors[p.sev] || '#64748b';
     const size = p.sev === 'K' ? 14 : p.sev === 'A' ? 12 : 10;
-    
+    // Marker icon: ped/bike now wired via ultra-slim is_ped/is_bike (R26 v3.1 §1)
     let iconHtml = `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`;
-    if (p.isPed) iconHtml = `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid #0891b2;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`;
+    if (p.isPed)  iconHtml = `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid #0891b2;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`;
     if (p.isBike) iconHtml = `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid #059669;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`;
-    
     const icon = L.divIcon({ html: iconHtml, className: '', iconSize: [size, size], iconAnchor: [size/2, size/2] });
     const marker = L.marker([p.lat, p.lng], { icon });
-    
-    marker.bindPopup(`
-        <div style="font-size:12px;min-width:220px">
-            <strong style="font-size:13px;color:#1e40af">${esc(formatRouteName(p.route || 'Unknown Route'))}</strong><br>
-            <span style="color:#94a3b8;font-size:10px">${esc(p.route || '')}</span><br>
-            ${p.node ? `<span style="color:#64748b">Node: ${esc(formatNodeId(p.node))}</span><br>` : ''}
-            <span class="severity-badge severity-${p.sev}" style="margin:4px 0;display:inline-block">${p.sev}</span>
-            ${p.isPed ? '<span style="margin-left:4px">🚶</span>' : ''}
-            ${p.isBike ? '<span style="margin-left:4px">🚴</span>' : ''}<br>
-            ${p.docNum ? `<strong>Doc #:</strong> ${esc(p.docNum)}<br>` : ''}
-            <strong>Date:</strong> ${p.date || '--'}<br>
-            <strong>Time:</strong> ${fmtTime(p.time)}<br>
-            <strong>Type:</strong> ${esc((p.collision || '').substring(0,35))}<br>
-            <strong>Weather:</strong> ${esc((p.weather || '').substring(0,25))}<br>
-            <strong>Light:</strong> ${esc((p.light || '').substring(0,25))}<br>
-            <button class="btn-soft btn-soft-success" onclick="viewLocationCMF('${esc(p.route || '')}')"
-                    style="margin-top:8px;width:100%;padding:6px 12px;font-size:11px;font-weight:500">
-                💡 CMF
-            </button>
-            <button class="btn-soft btn-soft-info" onclick="openStreetView(${p.lat}, ${p.lng})"
-                    style="margin-top:4px;width:100%;padding:6px 12px;font-size:11px;font-weight:500">
-                🛣️ Street View
-            </button>
-            ${p.isPed ? `<button class="btn-soft btn-soft-purple" onclick="openCrossingEvalModal()"
-                    style="margin-top:4px;width:100%;padding:6px 12px;font-size:11px;font-weight:500">
-                📋 Crossing Eval
-            </button>` : ''}
-        </div>
-    `);
-    
+    // Round 26 v3.1 §4 — popup renders with what we have (county R2 path: full
+    // fields on p; aggregate ultra-slim path: only sev/ped/bike), then re-renders
+    // with server-fetched detail after popupopen.
+    function _renderPopup(detail) {
+        const route       = (detail?.route || p.route) || 'Unknown Route';
+        const docNum      = detail?.doc_id || p.docNum;
+        const date        = detail?.crash_date || p.date;
+        const time        = detail?.time_str || p.time;
+        const collision   = detail?.collision_type || p.collision;
+        const weather     = detail?.weather_condition || p.weather;
+        const light       = detail?.light_condition || p.light;
+        const node        = p.node;
+        return `
+            <div style="font-size:12px;min-width:220px">
+                <strong style="font-size:13px;color:#1e40af">${esc(formatRouteName(route))}</strong><br>
+                <span style="color:#94a3b8;font-size:10px">${esc(route)}</span><br>
+                ${node ? `<span style="color:#64748b">Node: ${esc(formatNodeId(node))}</span><br>` : ''}
+                <span class="severity-badge severity-${p.sev}" style="margin:4px 0;display:inline-block">${p.sev}</span>
+                ${p.isPed ? '<span style="margin-left:4px">🚶</span>' : ''}
+                ${p.isBike ? '<span style="margin-left:4px">🚴</span>' : ''}<br>
+                ${docNum ? `<strong>Doc #:</strong> ${esc(docNum)}<br>` : ''}
+                <strong>Date:</strong> ${date || '--'}<br>
+                <strong>Time:</strong> ${fmtTime(time)}<br>
+                <strong>Type:</strong> ${esc((collision || '').substring(0,35)) || '--'}<br>
+                <strong>Weather:</strong> ${esc((weather || '').substring(0,25)) || '--'}<br>
+                <strong>Light:</strong> ${esc((light || '').substring(0,25)) || '--'}<br>
+                <button class="btn-soft btn-soft-success" onclick="viewLocationCMF('${esc(route || '')}')"
+                        style="margin-top:8px;width:100%;padding:6px 12px;font-size:11px;font-weight:500">
+                    💡 CMF
+                </button>
+                <button class="btn-soft btn-soft-info" onclick="openStreetView(${p.lat}, ${p.lng})"
+                        style="margin-top:4px;width:100%;padding:6px 12px;font-size:11px;font-weight:500">
+                    🛣️ Street View
+                </button>
+                ${p.isPed ? `<button class="btn-soft btn-soft-purple" onclick="openCrossingEvalModal()"
+                        style="margin-top:4px;width:100%;padding:6px 12px;font-size:11px;font-weight:500">
+                    📋 Crossing Eval
+                </button>` : ''}
+            </div>
+        `;
+    }
+    marker.bindPopup(_renderPopup(null));
+    marker.on('popupopen', async (e) => {
+        // If p already has the full set (R2 county-tier path), no fetch needed.
+        if (p.route !== undefined && p.collision !== undefined) return;
+        const dc = window.crashLensClient;
+        if (!dc || typeof dc.getMapPointDetail !== 'function') return;
+        try {
+            const detail = await dc.getMapPointDetail(p.lat, p.lng);
+            if (detail) {
+                e.popup.setContent(_renderPopup(detail));
+            }
+        } catch (_e) { /* keep initial popup */ }
+    });
     return marker;
 }
 
@@ -52965,9 +52988,14 @@ document.addEventListener('jurisdictionChanged', updateMapSearchPlaceholder);
 // changes. Without this, switching from Kent (PD-rolled) to Sussex
 // (PD-rolled) would leave mapPoints scoped to Kent's PD.
 document.addEventListener('tierChanged', () => {
-    // Round 26 v3 — flag-match cache is keyed by tier; clear on tier change
+    // Round 26 v3 — flag-match cache is keyed by tier; clear on tier change.
+    // Round 26 v3.1 — also clear the popup-detail cache (keyed by lat,lng but
+    // the same lat,lng may resolve to a different crash in another jurisdiction).
     if (window.crashLensClient?._flagMatchCache) {
         window.crashLensClient._flagMatchCache.clear();
+    }
+    if (window.crashLensClient?._mapPointDetailCache) {
+        window.crashLensClient._mapPointDetailCache.clear();
     }
     window._flagMatchSets = [];
     if (typeof _hydrateMapPointsFromMatview === 'function') {
@@ -52975,6 +53003,17 @@ document.addEventListener('tierChanged', () => {
     }
 });
 document.addEventListener('jurisdictionChanged', () => {
+    // Round 26 v3.1 — flag-match cache + matchSets are keyed by jurisdiction;
+    // clear them on change (same fix as tierChanged listener above). Without
+    // this, switching jurisdictions within the same tier leaves the old
+    // jurisdiction's flag Sets intersected against new mapPoints → empty map.
+    if (window.crashLensClient?._flagMatchCache) {
+        window.crashLensClient._flagMatchCache.clear();
+    }
+    if (window.crashLensClient?._mapPointDetailCache) {
+        window.crashLensClient._mapPointDetailCache.clear();
+    }
+    window._flagMatchSets = [];
     if (typeof _hydrateMapPointsFromMatview === 'function') {
         _hydrateMapPointsFromMatview('jurisdictionChanged');
     }
