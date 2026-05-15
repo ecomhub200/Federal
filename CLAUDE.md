@@ -622,3 +622,71 @@ uv run python scripts/lint.py --structural-only # free, no LLM
 - **Prefer updating** an existing concept over creating a near-duplicate
 
 See `memory/AGENTS.md` for the complete schema, article templates, hook internals, and customization guide.
+
+---
+
+## Modular Extraction Refactor (Round X+)
+
+### Current refactor task
+`app/index.html` (159,387 lines / 3,685 declarations) is being split into
+≤500-line `CL.*` modules under `app/modules/`. The queue lives in
+`modular-prompts/`. **Run them in numbered order, ONE per session.** Companion
+docs: `INDEX_MAP.md` (+ `INDEX_MAP_part1..4.md`) is the authoritative
+function inventory; `MODULAR_PLAN.md` is the module structure, load order, and
+risk register.
+
+### Protected files — DO NOT modify unless the active prompt explicitly says so
+- `app/index.html` — only the specific contiguous block named (and re-verified)
+  in the active prompt's §0/§4. Nothing else.
+- `INDEX_MAP.md`, `INDEX_MAP_part1.md`..`INDEX_MAP_part4.md`, `MODULAR_PLAN.md`,
+  `modular-prompts/*.md` — refactor source-of-truth; do not edit during an extraction.
+- `assets/js/data-client.js`, `assets/js/supabase-auth.js`,
+  `assets/js/firebase-config.js`, `assets/js/auth.js`
+- `app/modules/loader.js` — namespace skeleton; edit ONLY to add a new
+  top-level `CL.*` key when a module needs a new namespace root.
+- All already-extracted modules under `app/modules/` (off-limits list — see
+  `MODULAR_PLAN.md` §1): `core/constants`, `core/epdo`, `utils/date-utils`,
+  `analysis/{crash-profile,baselines,hotspots}`, `warrants/signal` (math —
+  distinct from new `warrants/signal-tmc`), `ai/context`, `grants/ranking`,
+  all `batch-ba/*`, all `upload/*`, `upload/worker/*`,
+  `data/{road-type-mapping,matview-cache,prewarm,chunk-loader,supabase-bridge,lazy-loader,tab-loaders,supabase-map-bridge}`,
+  `ui/skeletons`.
+- **After each successful extraction, append the newly created module to this
+  protected list** (orchestrator does this once the prompt verifies green).
+
+### Extraction rules — follow EXACTLY
+1. **Read the active prompt completely** before any edit.
+2. **Run §0 pre-flight.** ABORT if any check fails (block not contiguous,
+   target exists, anchor missing, any name maps to an off-limits module).
+3. **Extract verbatim** — byte-for-byte copy of the confirmed block. No
+   reformatting, rename, "improvement," or comment edits.
+4. **One module per session** — never combine two extraction prompts. Each must
+   complete + verify + ship before the next starts.
+5. **Run §5 post-flight.** Not done until every check passes and the console
+   shows `[CL] Module loaded: <area>/<file>`.
+6. **Dual public API** — expose both `window.<fn>` AND `CL.<area>.<fn>`
+   (HTML `onclick=`/hoisting back-compat).
+7. **NO ES module syntax** — raw `<script src>` only. IIFE wrappers, never
+   `import`/`export`.
+8. **NO behavior changes** — the app must work identically before and after.
+   Do NOT relocate app-wide shared globals still read by remaining inline code
+   (expose a `window` mirror; move only module-private globals).
+
+### Verification rules (before declaring any extraction done)
+- `wc -l app/index.html` decreased by ≈ the extracted block size.
+- Named-function count dropped by the moved-fn count.
+- New module exists, `node --check` passes, script tag in the correct cluster.
+- `git diff --stat` shows ONLY `app/index.html` + the one new module file.
+- The feature governed by the extracted code still works (§6 Playwright smoke
+  test on `https://ecomhub200.github.io/Federal/app/`).
+
+### What "done" looks like for the whole refactor
+- `app/index.html` < 30,000 lines (from 159,387).
+- All inline JavaScript moved to `app/modules/`; every module calls
+  `CL._registerModule()` and appears in the console load tracker.
+- Zero behavior changes (every feature works exactly as before).
+
+### When in doubt
+- Re-read the active prompt — every constraint is spelled out there.
+- If a prompt's §0 disagrees with reality (drift), ABORT and ask before
+  improvising. Never edit `app/index.html` outside the confirmed block.
