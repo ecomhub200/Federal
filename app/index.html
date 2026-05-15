@@ -26181,7 +26181,7 @@ function saveFilterProfile(opts) {
     // viewed county's parquet (Bug 1: Ardentown showing kent/county_roads).
     const _aggTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district', 'city']);
     if (_aggTiers.has(_filterTier)) {
-        console.log(`[Config] Filter changed at ${_filterTier} tier — refreshing Supabase matview (R2 skipped)`);
+        console.log(`[Config] Road-type changed at aggregate tier (${_filterTier}) — refreshing Supabase matview (R2 skipped)`);
         // Fix 6 — debounced so a single radio click → ONE bridge fetch.
         _debouncedBridgeRefresh();
         showFilterLoadingState(false);
@@ -28297,6 +28297,11 @@ async function _writeMapPointsCache(state, tier, value, points) {
     } catch (e) { /* non-fatal */ }
 }
 
+// Round 26 v3 §2 — in-flight dedupe. Multiple events (jurisdictionChanged +
+// tierChanged + crashDataLoaded + filter changes) all trigger
+// _hydrateMapPointsFromMatview. Map<key, Promise> coalesces them.
+const _mapPointsInFlight = new Map();
+
 async function _hydrateMapPointsFromMatview(reason) {
     const dc = window.crashLensClient;
     if (!dc || typeof dc.getMapPoints !== 'function') return;
@@ -28316,27 +28321,39 @@ async function _hydrateMapPointsFromMatview(reason) {
         }
     } catch (e) { /* fall through to state-only scope */ }
 
-    // Round 25 §6 — try IndexedDB cache first
     const stateKey = (dc.state || '').toLowerCase();
-    const cached = await _readMapPointsCache(stateKey, tier, value);
-    if (cached) {
-        crashState.mapPoints = cached;
-        console.log('[mapPointsHydrate] HIT cache (' + reason + ') ' + cached.length + ' points');
-        document.dispatchEvent(new CustomEvent('crashDataLoaded', { detail: { source: 'mv_map_points_cached' } }));
-        showBackgroundLoadingIndicator(false);
-        return;
+    const dedupeKey = `${stateKey}|${tier}|${value}`;
+    if (_mapPointsInFlight.has(dedupeKey)) {
+        console.log('[mapPointsHydrate] DEDUPE — already fetching ' + dedupeKey + ' (reason: ' + reason + ')');
+        return _mapPointsInFlight.get(dedupeKey);
     }
 
-    console.log('[mapPointsHydrate] MISS cache (' + reason + '), fetching mv_map_points', opts);
-    const t0 = Date.now();
-    const rows = await dc.getMapPoints(opts);
-    crashState.mapPoints = rows || [];
-    console.log('[mapPointsHydrate] populated ' + crashState.mapPoints.length +
-                ' points in ' + (Date.now() - t0) + 'ms — filters now operational');
-    // Write to cache (best-effort)
-    _writeMapPointsCache(stateKey, tier, value, crashState.mapPoints);
-    document.dispatchEvent(new CustomEvent('crashDataLoaded', { detail: { source: 'mv_map_points' } }));
-    showBackgroundLoadingIndicator(false);
+    const promise = (async () => {
+        // Round 25 §6 — try IndexedDB cache first
+        const cached = await _readMapPointsCache(stateKey, tier, value);
+        if (cached) {
+            crashState.mapPoints = cached;
+            console.log('[mapPointsHydrate] HIT cache (' + reason + ') ' + cached.length + ' points');
+            document.dispatchEvent(new CustomEvent('crashDataLoaded', { detail: { source: 'mv_map_points_cached' } }));
+            showBackgroundLoadingIndicator(false);
+            return;
+        }
+
+        console.log('[mapPointsHydrate] MISS cache (' + reason + '), fetching mv_map_points', opts);
+        const t0 = Date.now();
+        const rows = await dc.getMapPoints(opts);
+        crashState.mapPoints = rows || [];
+        console.log('[mapPointsHydrate] populated ' + crashState.mapPoints.length +
+                    ' points in ' + (Date.now() - t0) + 'ms — filters now operational');
+        // Write to cache (best-effort)
+        _writeMapPointsCache(stateKey, tier, value, crashState.mapPoints);
+        document.dispatchEvent(new CustomEvent('crashDataLoaded', { detail: { source: 'mv_map_points' } }));
+        showBackgroundLoadingIndicator(false);
+    })();
+
+    _mapPointsInFlight.set(dedupeKey, promise);
+    try { return await promise; }
+    finally { _mapPointsInFlight.delete(dedupeKey); }
 }
 
 /**
@@ -51741,6 +51758,19 @@ function getFilteredMapPoints() {
         }
     } catch (_e) { /* non-fatal — skip city clip */ }
 
+    // Round 26 v3 §4a — road_type client-side filter (column is in ultra-slim).
+    // Honor either an explicit window.currentFilters.roadType or the localStorage
+    // road-type profile selected on the Upload tab.
+    let _roadTypeSel = (window.currentFilters && window.currentFilters.roadType) || null;
+    if (!_roadTypeSel) {
+        try { _roadTypeSel = localStorage.getItem('selectedFilterProfile') || null; } catch (_e) {}
+    }
+
+    // Round 26 v3 §4b — quick-filter intersection via lazy flag match Sets.
+    // _flagMatchSets is populated by toggleQuickFilter() (async-loaded).
+    const activeFlagSets = (window._flagMatchSets && window._flagMatchSets.length)
+        ? window._flagMatchSets : null;
+
     return crashState.mapPoints.filter(p => {
         // Validate coordinates using dynamic state-aware bounds
         if (!p.lat || !p.lng || p.lat < coordBounds.latMin || p.lat > coordBounds.latMax || p.lng < coordBounds.lonMin || p.lng > coordBounds.lonMax) return false;
@@ -51761,6 +51791,15 @@ function getFilteredMapPoints() {
             }
         }
 
+        // Round 26 v3 §4a — road_type filter (only enforced when point carries
+        // a road_type column, i.e. coming from mv_map_points ultra-slim).
+        if (_roadTypeSel && p.road_type !== undefined) {
+            if (_roadTypeSel === 'countyOnly'     && p.road_type !== 'county_roads') return false;
+            if (_roadTypeSel === 'cityOnly'       && p.road_type !== 'city_roads')   return false;
+            if (_roadTypeSel === 'countyPlusVDOT' && p.road_type === 'interstate')   return false;
+            // 'allRoads' / unknown → no filtering
+        }
+
         // Year filter
         // Note: p.date is a Unix timestamp in milliseconds stored as string
         if (yearFilter && p.date) {
@@ -51768,9 +51807,9 @@ function getFilteredMapPoints() {
             if (year !== parseInt(yearFilter)) return false;
         }
 
-        // Date range filter
-        if (startDate || endDate) {
-            if (!p.date) return false; // Exclude crashes without date data
+        // Date range filter — only enforced when point carries a date (R2 path).
+        // At aggregate tier the ultra-slim matview omits date, so this is a no-op.
+        if ((startDate || endDate) && p.date) {
             const crashDate = new Date(Number(p.date));
             if (isNaN(crashDate.getTime())) return false;
             crashDate.setHours(0, 0, 0, 0); // Normalize to start of day
@@ -51791,8 +51830,9 @@ function getFilteredMapPoints() {
         // Severity filter
         if (!f.severity.includes(p.sev)) return false;
 
-        // Location filter (supports route:XXX or node:XXX format)
-        if (f.route) {
+        // Location filter (supports route:XXX or node:XXX format).
+        // Only enforced when point carries route/node (R2 path).
+        if (f.route && (p.route !== undefined || p.node !== undefined)) {
             if (f.route.startsWith('route:')) {
                 if (p.route !== f.route.substring(6)) return false;
             } else if (f.route.startsWith('node:')) {
@@ -51803,29 +51843,20 @@ function getFilteredMapPoints() {
             }
         }
 
-        // Quick filters (AND logic — all active filters must match)
-        if (mf.fatal           && p.sev !== 'K') return false;
-        if (mf.serious         && !(p.sev === 'K' || p.sev === 'A')) return false;
-        if (mf.ka_combined     && !(p.sev === 'K' || p.sev === 'A')) return false;  // alias for chip parity
-        if (mf.ped             && !p.isPed) return false;
-        if (mf.pedestrian      && !p.isPed) return false;                            // factor-chip alias
-        if (mf.bike            && !p.isBike) return false;
-        if (mf.bicycle         && !p.isBike) return false;                           // factor-chip alias
-        if (mf.intersection    && !p.isInt) return false;
-        // Round 24 — newly-wired factor filters
-        if (mf.alcohol         && !p.isImpaired) return false;   // chip 'Impaired' = alcohol OR drug
-        if (mf.impaired        && !p.isImpaired) return false;
-        if (mf.speed           && !p.isSpeed) return false;
-        if (mf.distracted      && !p.isDistracted) return false;
-        if (mf.unrestrained    && !p.isUnrestrained) return false;
-        if (mf.nighttime       && !p.isNight) return false;
-        if (mf.motorcycle      && !p.isMotorcycle) return false;
-        if (mf.animal          && !p.isAnimal) return false;
-        if (mf.workzone        && !p.isWorkzone) return false;
-        if (mf.school_zone     && !p.isSchoolzone) return false;
-        if (mf.guardrail       && !p.isGuardrail) return false;
-        if (mf.curves          && !p.isCurve) return false;
-        if (mf.weather         && !p.isWeather) return false;
+        // Severity-based quick filters work on ultra-slim's `sev` column.
+        if (mf.fatal       && p.sev !== 'K') return false;
+        if (mf.serious     && !(p.sev === 'K' || p.sev === 'A')) return false;
+        if (mf.ka_combined && !(p.sev === 'K' || p.sev === 'A')) return false;
+
+        // Round 26 v3 §4b — flag-based quick filters use the lazy-loaded
+        // _flagMatchSets intersection. Point passes if it appears in EVERY
+        // active flag's match set (AND logic). lat,lng is the join key.
+        if (activeFlagSets) {
+            const key = `${p.lat},${p.lng}`;
+            for (let i = 0; i < activeFlagSets.length; i++) {
+                if (!activeFlagSets[i].has(key)) return false;
+            }
+        }
 
         return true;
     });
@@ -52069,16 +52100,92 @@ function setMapMode(mode) {
     updateMapDisplay();
 }
 
+// Round 26 v3 §5 — quick-filter toggle with lazy server-side fetch.
+// Maintains window._flagMatchSets = [Set, Set, ...] of currently-active flag
+// matches. _flagMatchSets is consumed by getFilteredMapPoints (§4b).
+// Severity-based filters (fatal/serious/ka_combined) stay in-memory because
+// the `sev` column is in ultra-slim — no fetch needed.
+window._flagMatchSets = window._flagMatchSets || [];
+const FILTER_TO_COLUMN = {
+    // ped/bike/intersection
+    ped: 'is_ped', pedestrian: 'is_ped',
+    bike: 'is_bike', bicycle: 'is_bike',
+    intersection: 'is_intersection',
+    // impaired / alcohol / drug
+    alcohol: 'is_impaired', impaired: 'is_impaired', drug: 'is_drug',
+    // behavior / vehicle / environment
+    speed: 'is_speed', speeding: 'is_speed',
+    distracted: 'is_distracted', unrestrained: 'is_unrestrained',
+    nighttime: 'is_night', night: 'is_night',
+    motorcycle: 'is_motorcycle', animal: 'is_animal',
+    workzone: 'is_workzone', school_zone: 'is_schoolzone', schoolzone: 'is_schoolzone',
+    guardrail: 'is_guardrail', curves: 'is_curve', curve: 'is_curve',
+    weather: 'is_weather',
+    // demographic / disposition
+    young: 'is_young', senior: 'is_senior',
+    drowsy: 'is_drowsy', hitrun: 'is_hitrun', lgtruck: 'is_lgtruck'
+};
+
+async function toggleQuickFilter(filterId) {
+    const f = window.currentFilters;
+    if (!f) return;
+    f.mapFilters = f.mapFilters || {};
+    f.mapFilters[filterId] = !f.mapFilters[filterId];
+
+    // Rebuild _flagMatchSets from currently-active filters that need server lookup.
+    const dc = window.crashLensClient;
+    const tier = (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
+        ? CL.data.supabaseBridge.resolveTier()
+        : null;
+    const opts = {};
+    if (tier?.tier === 'planning_district')              opts.planningDistrict = tier.value;
+    if (tier?.tier === 'dot_district')                   opts.dotDistrict      = tier.value;
+    if (tier?.tier === 'mpo')                            opts.mpoName          = tier.value;
+    if (tier?.tier === 'county' || tier?.tier === 'city') opts.jurisdiction    = tier.value;
+
+    // Dedup column lookups: pedestrian + ped both → is_ped, only fetch once.
+    const wantedCols = new Set();
+    Object.keys(f.mapFilters).forEach(id => {
+        if (!f.mapFilters[id]) return;
+        const col = FILTER_TO_COLUMN[id];
+        if (col) wantedCols.add(col);
+    });
+
+    if (dc && typeof dc.getMapPointFlagMatches === 'function' && wantedCols.size) {
+        const flagPromises = [];
+        wantedCols.forEach(col => flagPromises.push(dc.getMapPointFlagMatches(col, opts)));
+        try {
+            window._flagMatchSets = await Promise.all(flagPromises);
+        } catch (e) {
+            console.warn('[toggleQuickFilter] flag-match fetch failed:', e.message);
+            window._flagMatchSets = [];
+        }
+    } else {
+        window._flagMatchSets = [];
+    }
+
+    // Re-render map + dashboard against the new filter intersection.
+    if (typeof updateMapDisplay === 'function') updateMapDisplay();
+    if (typeof updateQuickFilterBadge === 'function') updateQuickFilterBadge();
+    if (typeof updateMapFiltersBadge === 'function') updateMapFiltersBadge();
+    if (typeof updateAllDashboardWidgets === 'function') {
+        updateAllDashboardWidgets();
+    } else if (typeof renderDashboard === 'function') {
+        renderDashboard();
+    }
+}
+window.toggleQuickFilter = toggleQuickFilter;
+
 function toggleMapFilter(el) {
     const filter = el.dataset.filter;
-    currentFilters.mapFilters[filter] = !currentFilters.mapFilters[filter];
-    el.classList.toggle('active', currentFilters.mapFilters[filter]);
-    // Keep any sibling factor chip (data-factor) in sync with the same key.
+    // Visual toggle stays synchronous so the chip flips immediately; the actual
+    // filter application happens after toggleQuickFilter()'s lazy fetch resolves.
+    const willBeActive = !currentFilters.mapFilters[filter];
+    el.classList.toggle('active', willBeActive);
     document.querySelectorAll('.map-chip[data-factor="' + filter + '"]')
-        .forEach(c => c.classList.toggle('active', currentFilters.mapFilters[filter]));
-    updateMapDisplay();
-    updateQuickFilterBadge();
-    if (typeof updateMapFiltersBadge === 'function') updateMapFiltersBadge();
+        .forEach(c => c.classList.toggle('active', willBeActive));
+    // Delegate state mutation + lazy fetch to toggleQuickFilter (fire and forget).
+    toggleQuickFilter(filter);
 }
 
 // Round 24 — open/close the consolidated map filters panel.
@@ -52858,6 +52965,11 @@ document.addEventListener('jurisdictionChanged', updateMapSearchPlaceholder);
 // changes. Without this, switching from Kent (PD-rolled) to Sussex
 // (PD-rolled) would leave mapPoints scoped to Kent's PD.
 document.addEventListener('tierChanged', () => {
+    // Round 26 v3 — flag-match cache is keyed by tier; clear on tier change
+    if (window.crashLensClient?._flagMatchCache) {
+        window.crashLensClient._flagMatchCache.clear();
+    }
+    window._flagMatchSets = [];
     if (typeof _hydrateMapPointsFromMatview === 'function') {
         _hydrateMapPointsFromMatview('tierChanged');
     }
