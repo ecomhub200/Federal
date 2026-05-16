@@ -651,6 +651,8 @@ risk register.
   all `batch-ba/*`, all `upload/*`, `upload/worker/*`,
   `data/{road-type-mapping,matview-cache,prewarm,chunk-loader,supabase-bridge,lazy-loader,tab-loaders,supabase-map-bridge}`,
   `ui/skeletons`.
+- **Round X extracted (prompts 01–05, off-limits):**
+  `spatial/{hierarchy-registry,boundary-service,federal-boundaries,spatial-clip,aggregate-loader}`.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
