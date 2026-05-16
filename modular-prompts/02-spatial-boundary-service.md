@@ -66,12 +66,11 @@ Create `app/modules/spatial/boundary-service.js`:
  * Round X modular refactor — see modular-prompts/02-spatial-boundary-service.md.
  * Responsibility: TIGERweb / BTS MPO boundary queries + ArcGIS→GeoJSON.
  *
- * Public API (back-compat dual exposure):
- *   - window.BoundaryService → CL.spatial.boundaryService.BoundaryService
- *   - window._queryTigerWeb → CL.spatial.boundaryService._queryTigerWeb
- *   - window._arcgisJsonToGeoJSON → CL.spatial.boundaryService._arcgisJsonToGeoJSON
- *   - window._queryBtsMpo → CL.spatial.boundaryService._queryBtsMpo
- *   - window._spatialQueryBtsMpo → CL.spatial.boundaryService._spatialQueryBtsMpo
+ * Public API (back-compat dual exposure) — public singleton ONLY; the
+ * _queryTigerWeb/_arcgisJsonToGeoJSON/_queryBtsMpo/_spatialQueryBtsMpo
+ * helpers are private to the arrow-IIFE (not in outer scope) and have 0
+ * bare-global callers — do NOT expose them (would ReferenceError on load):
+ *   - window.BoundaryService → CL.spatial.BoundaryService
  *
  * Depends on (must load before this file): `spatial/hierarchy-registry`
  */
@@ -87,10 +86,6 @@ Create `app/modules/spatial/boundary-service.js`:
   window.CL = window.CL || {};
   CL.spatial = CL.spatial || {};
   window.BoundaryService = BoundaryService; CL.spatial.BoundaryService = BoundaryService;
-  window._queryTigerWeb = _queryTigerWeb; CL.spatial._queryTigerWeb = _queryTigerWeb;
-  window._arcgisJsonToGeoJSON = _arcgisJsonToGeoJSON; CL.spatial._arcgisJsonToGeoJSON = _arcgisJsonToGeoJSON;
-  window._queryBtsMpo = _queryBtsMpo; CL.spatial._queryBtsMpo = _queryBtsMpo;
-  window._spatialQueryBtsMpo = _spatialQueryBtsMpo; CL.spatial._spatialQueryBtsMpo = _spatialQueryBtsMpo;
   CL._registerModule('spatial/boundary-service');
 })();
 ```

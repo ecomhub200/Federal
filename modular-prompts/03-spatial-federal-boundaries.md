@@ -66,12 +66,12 @@ Create `app/modules/spatial/federal-boundaries.js`:
  * Round X modular refactor — see modular-prompts/03-spatial-federal-boundaries.md.
  * Responsibility: Multi-state boundary rendering / color map.
  *
- * Public API (back-compat dual exposure):
- *   - window.FederalBoundaries → CL.spatial.federalBoundaries.FederalBoundaries
- *   - window._buildColorMap → CL.spatial.federalBoundaries._buildColorMap
- *   - window.getActiveStates → CL.spatial.federalBoundaries.getActiveStates
- *   - window.render → CL.spatial.federalBoundaries.render
- *   - window.remove → CL.spatial.federalBoundaries.remove
+ * Public API (back-compat dual exposure) — public singleton ONLY; the
+ * _buildColorMap/getActiveStates/render/remove helpers are private to the
+ * arrow-IIFE (not in outer scope) and have 0 bare-global callers — do NOT
+ * expose them (would ReferenceError on load; render/remove would also
+ * pollute the global namespace):
+ *   - window.FederalBoundaries → CL.spatial.FederalBoundaries
  *
  * Depends on (must load before this file): `spatial/boundary-service`
  */
@@ -87,10 +87,6 @@ Create `app/modules/spatial/federal-boundaries.js`:
   window.CL = window.CL || {};
   CL.spatial = CL.spatial || {};
   window.FederalBoundaries = FederalBoundaries; CL.spatial.FederalBoundaries = FederalBoundaries;
-  window._buildColorMap = _buildColorMap; CL.spatial._buildColorMap = _buildColorMap;
-  window.getActiveStates = getActiveStates; CL.spatial.getActiveStates = getActiveStates;
-  window.render = render; CL.spatial.render = render;
-  window.remove = remove; CL.spatial.remove = remove;
   CL._registerModule('spatial/federal-boundaries');
 })();
 ```
