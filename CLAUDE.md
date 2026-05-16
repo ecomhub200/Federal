@@ -715,3 +715,42 @@ risk register.
 - Re-read the active prompt — every constraint is spelled out there.
 - If a prompt's §0 disagrees with reality (drift), ABORT and ask before
   improvising. Never edit `app/index.html` outside the confirmed block.
+
+---
+
+## Stage A — ESM Migration Rules (next stage, AFTER IIFE round 01–46)
+
+Stage A converts the ~53 `app/modules/*.js` files from IIFE +
+dual-exposure to native ES Modules. Source of truth: `STAGE_A_*.md`
+(root) + `modular-prompts/STAGE_A_01..54`.
+
+- **One coordinated cutover, NOT one-ship-per-session.** A file with
+  `export` cannot load via a classic `<script src>` (`Unexpected token
+  'export'`). `STAGE_A_01..53` convert files; `STAGE_A_54-cutover`
+  creates `app/main.js` and swaps all 52+1 `<script src>` tags for one
+  `<script type="module" src="main.js">`. The app runs again only after
+  54. Roll back the whole Stage A branch, never a single file.
+- **No mixed ESM/IIFE in one file.** A module is either fully converted
+  (`export`, no IIFE wrapper) or untouched — never half.
+- **HTML `onclick=` still works only via explicit `window.X = X`.** Keep
+  the `window.*` exposure for the onclick survivor set
+  (`STAGE_A_ONCLICK_API.md`, 25-fn floor — re-scan vs the final tree);
+  delete every other `window.*` write (consumers `import` instead). Do
+  NOT convert `onclick=` → `addEventListener` in Stage A.
+- **Transitional `CL.area.*` writes stay one round**, stripped in a
+  later Stage A-cleanup. Keep `CL._registerModule()` (load tracker).
+- **Entry point is `app/main.js`** (single `type="module"` script). No
+  bundler, no bare specifiers, no `.mjs` — relative `./`/`../` paths
+  with explicit `.js`. `loader.js` is imported FIRST as a side effect
+  (`window.CL` must remain — inline `index.html` still reads `CL.*`).
+- **Singleton slots are not imports.** `CL.data.client`,
+  `CL.data.supabaseBridge`, `CL.data.mapBridge`, `CL.data.lazyLoader`
+  are runtime-populated — keep them as `CL.data.*` reads; do NOT
+  `import` them.
+- **`worker/csv-worker.js`** is a Web Worker: `new Worker(url, { type:
+  'module' })` at `app/index.html:30324` is the one allowed
+  `index.html` edit outside the cutover script-tag swap.
+- **CL root key ≠ directory for `batch-ba/`.** Directory is `batch-ba/`,
+  CL key is `CL.batchBA`. The `batch-ba/*` files form a runtime-safe
+  import cycle — never reference an imported sibling at module top
+  level.

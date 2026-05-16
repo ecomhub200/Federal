@@ -755,3 +755,45 @@ Numbered queue:
 
 Generic shared utilities that the heuristic routed to `app/unassigned` (e.g. `esc` with ~6.7k refs, `safeJsonParse`, `isMajor`) are intentionally **deferred**: they are NOT in the numbered queue. They will be batched into a `utils/*` follow-up round after the feature modules land, because moving a 6.7k-caller helper before its callers are modularized maximizes blast radius.
 
+---
+
+## §X Stage A — ESM Migration Queue (runs AFTER the IIFE round 01–46)
+
+Stage A converts every `app/modules/*.js` from the IIFE + dual-exposure
+pattern to native ES Modules (`import`/`export`), with a single
+`<script type="module" src="main.js">` entry. Planning artifacts (this
+session): `STAGE_A_MODULE_SURVEY.md`, `STAGE_A_ONCLICK_API.md`,
+`STAGE_A_CONVERSION_TEMPLATE.md`, `STAGE_A_IMPORT_GRAPH.md`,
+`STAGE_A_MAIN_ENTRY_DRAFT.js`, and `modular-prompts/STAGE_A_01..54`.
+
+### ⚠️ Stage A is ONE coordinated cutover — NOT one-ship-per-session
+
+Unlike IIFE extraction (01–46, shippable one at a time), a file containing
+`export` **cannot** be loaded by a classic `<script src>`
+(`Unexpected token 'export'`). Therefore:
+
+- `STAGE_A_01..53` convert files but leave the app **non-runnable** in
+  isolation. They are applied together on one Stage A branch.
+- `STAGE_A_54-cutover` creates `app/main.js` and atomically swaps the 52+1
+  `<script src>` tags for the single module entry. The app runs again
+  only after 54.
+- Per-file gate during 01–53 = `node --check` only. Full Playwright
+  verification happens once, in 54.
+- Rollback = revert the whole Stage A branch (all-or-nothing), not a
+  single file.
+
+### Queue order (topological — see `STAGE_A_IMPORT_GRAPH.md`)
+
+| # | Prompt | Notes |
+|---|---|---|
+| 01 | `STAGE_A_01-loader` | Namespace root → side-effect module, imported FIRST; `window.CL` stays |
+| 02–35 | leaf modules | 41 of 53 are import-free leaves; drop all non-onclick `window.*` |
+| 36–50 | one-hop + `batch-ba/*` cluster | real `import`s (`STAGE_A_IMPORT_GRAPH.md`); batch-ba is a runtime-safe cycle |
+| 51–52 | `app/tab-dispatcher`, `map/map-points-hydrate` | singleton-slot consumers (keep `CL.data.*` runtime reads) |
+| 53 | `STAGE_A_53-worker-csv-worker` | Web Worker; the only allowed `app/index.html` non-tag edit (`{ type:'module' }` @ L30324) |
+| 54 | `STAGE_A_54-cutover` | create `app/main.js`, swap script tags, full smoke test |
+
+Onclick survivor set (25 floor — `STAGE_A_ONCLICK_API.md`) retains
+`window.X = X`; all other `window.*` writes are dropped. Transitional
+`CL.area.*` writes stay one round, stripped in a later Stage A-cleanup.
+
