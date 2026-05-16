@@ -65,11 +65,11 @@ Create `app/modules/spatial/aggregate-loader.js`:
  * Round X modular refactor — see modular-prompts/05-spatial-aggregate-loader.md.
  * Responsibility: R2/Supabase aggregate fetch + URL resolution.
  *
- * Public API (back-compat dual exposure):
- *   - window.AggregateLoader → CL.spatial.aggregateLoader.AggregateLoader
- *   - window._resolveR2Url → CL.spatial.aggregateLoader._resolveR2Url
- *   - window._isSupabaseOnlyAggregatePath → CL.spatial.aggregateLoader._isSupabaseOnlyAggregatePath
- *   - window._fetch → CL.spatial.aggregateLoader._fetch
+ * Public API (back-compat dual exposure) — public singleton ONLY; the
+ * _resolveR2Url/_isSupabaseOnlyAggregatePath/_fetch helpers are private to
+ * the arrow-IIFE (not in outer scope) and have 0 bare-global callers — do
+ * NOT expose them (would ReferenceError on load):
+ *   - window.AggregateLoader → CL.spatial.AggregateLoader
  *
  * Depends on (must load before this file): `spatial/spatial-clip`
  */
@@ -85,9 +85,6 @@ Create `app/modules/spatial/aggregate-loader.js`:
   window.CL = window.CL || {};
   CL.spatial = CL.spatial || {};
   window.AggregateLoader = AggregateLoader; CL.spatial.AggregateLoader = AggregateLoader;
-  window._resolveR2Url = _resolveR2Url; CL.spatial._resolveR2Url = _resolveR2Url;
-  window._isSupabaseOnlyAggregatePath = _isSupabaseOnlyAggregatePath; CL.spatial._isSupabaseOnlyAggregatePath = _isSupabaseOnlyAggregatePath;
-  window._fetch = _fetch; CL.spatial._fetch = _fetch;
   CL._registerModule('spatial/aggregate-loader');
 })();
 ```

@@ -66,12 +66,12 @@ Create `app/modules/spatial/spatial-clip.js`:
  * Round X modular refactor — see modular-prompts/04-spatial-spatial-clip.md.
  * Responsibility: Turf-based point/line/polygon clipping to a jurisdiction polygon.
  *
- * Public API (back-compat dual exposure):
- *   - window.SpatialClipService → CL.spatial.spatialClip.SpatialClipService
- *   - window.getJurisdictionPolygon → CL.spatial.spatialClip.getJurisdictionPolygon
- *   - window.clipPoints → CL.spatial.spatialClip.clipPoints
- *   - window.clipLines → CL.spatial.spatialClip.clipLines
- *   - window.clipPolygons → CL.spatial.spatialClip.clipPolygons
+ * Public API (back-compat dual exposure) — public singleton ONLY; the
+ * getJurisdictionPolygon/clipPoints/clipLines/clipPolygons helpers are
+ * private to the arrow-IIFE (not in outer scope) and have 0 bare-global
+ * callers (consumers use SpatialClipService.clipPoints(...)) — do NOT
+ * expose them (would ReferenceError on load):
+ *   - window.SpatialClipService → CL.spatial.SpatialClipService
  *
  * Depends on (must load before this file): `spatial/federal-boundaries`
  */
@@ -87,10 +87,6 @@ Create `app/modules/spatial/spatial-clip.js`:
   window.CL = window.CL || {};
   CL.spatial = CL.spatial || {};
   window.SpatialClipService = SpatialClipService; CL.spatial.SpatialClipService = SpatialClipService;
-  window.getJurisdictionPolygon = getJurisdictionPolygon; CL.spatial.getJurisdictionPolygon = getJurisdictionPolygon;
-  window.clipPoints = clipPoints; CL.spatial.clipPoints = clipPoints;
-  window.clipLines = clipLines; CL.spatial.clipLines = clipLines;
-  window.clipPolygons = clipPolygons; CL.spatial.clipPolygons = clipPolygons;
   CL._registerModule('spatial/spatial-clip');
 })();
 ```
