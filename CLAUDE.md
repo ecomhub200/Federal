@@ -658,6 +658,10 @@ risk register.
   `scorecard/scorecard` (coordinated 12+13+14 — shared `_scorecard*` state),
   `core/epdo-presets`, `core/tier`, `spatial/r2-resolve`,
   `map/map-safe-helpers`, `map/map-points-hydrate`.
+- **Round X extracted (batch 3, off-limits):**
+  `app/tab-dispatcher` (EARLY-cluster script tag — must load before the inline
+  Round-18 `(function(){'use strict';…})()` IIFE @ ~L153392 that wraps
+  `showTab`; LATE placement would silently skip that wrapper).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
