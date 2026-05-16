@@ -15,8 +15,8 @@ re-derive the ACTUAL block in §0.
 wc -l app/index.html                                  # record N_LINES
 grep -cE '^\s*(async\s+)?function ' app/index.html    # record N_FNS
 
-# 1. Locate the block. Snapshot range: L37501-L40000 (feature: Grant AI agents + narrative generation.)
-grep -nE 'grant' app/index.html
+# 1. Locate the block. Snapshot range: L37501-L39672 (feature: Grant AI agents + narrative generation.)
+grep -nE 'function +showNotifTab\b|const +showNotifTab\b|let +showNotifTab\b|window\.showNotifTab\b|showNotifTab *= *function|showNotifTab *= *async|showNotifTab *= *\(|function +syncFromStandardReportsTab\b|const +syncFromStandardReportsTab\b|let +syncFromStandardReportsTab\b|window\.syncFromStandardReportsTab\b|syncFromStandardReportsTab *= *function|syncFromStandardReportsTab *= *async|syncFromStandardReportsTab *= *\(|function +updateEmailLocationVisibility\b|const +updateEmailLocationVisibility\b|let +updateEmailLocationVisibility\b|window\.updateEmailLocationVisibility\b|updateEmailLocationVisibility *= *function|updateEmailLocationVisibility *= *async|updateEmailLocationVisibility *= *\(|function +toggleGrantAlertOptions\b|const +toggleGrantAlertOptions\b|let +toggleGrantAlertOptions\b|window\.toggleGrantAlertOptions\b|toggleGrantAlertOptions *= *function|toggleGrantAlertOptions *= *async|toggleGrantAlertOptions *= *\(|function +calculateGrantNextDelivery\b|const +calculateGrantNextDelivery\b|let +calculateGrantNextDelivery\b|window\.calculateGrantNextDelivery\b|calculateGrantNextDelivery *= *function|calculateGrantNextDelivery *= *async|calculateGrantNextDelivery *= *\(' app/index.html
 #    Read the braces around the matches to find the ACTUAL contiguous
 #    block [BLK_START, BLK_END]. Use THOSE, not the snapshot, from here on.
 
@@ -24,7 +24,7 @@ grep -nE 'grant' app/index.html
 #    `Start L` falls in [BLK_START, BLK_END] is a declaration to move
 #    (name + Start/End L + type). Snapshot-range preview (if BLK spans a
 #    40k boundary, also grep the adjacent INDEX_MAP_part file):
-awk -F'|' 'NR>9 && ($2+0)>=37501 && ($2+0)<=40000' INDEX_MAP_part*.md
+awk -F'|' 'NR>9 && ($2+0)>=37501 && ($2+0)<=39672' INDEX_MAP_part*.md
 #    Cross-check: none of those names belong to an off-limits module in CLAUDE.md.
 
 # 3. Target module must not exist yet
@@ -38,10 +38,14 @@ any name maps to an off-limits module): **ABORT and report — do not edit.**
 
 ## §1 What to move
 From `app/index.html`, extract the **single contiguous block [BLK_START,
-BLK_END]** confirmed in §0 (snapshot L37501–L40000, ~2500 lines). The exact
+BLK_END]** confirmed in §0 (snapshot L37501–L39672, ~2172 lines). The exact
 declarations are the `INDEX_MAP_part1.md` rows inside that range. Anchor
 declarations (use to find the block):
-- `(grant AI agent fns — see INDEX_MAP part1)` (and the helpers between it and the next named decl)
+- `showNotifTab` (and the helpers between it and the next named decl)
+- `syncFromStandardReportsTab` (and the helpers between it and the next named decl)
+- `updateEmailLocationVisibility` (and the helpers between it and the next named decl)
+- `toggleGrantAlertOptions` (and the helpers between it and the next named decl)
+- `calculateGrantNextDelivery` (and the helpers between it and the next named decl)
 
 Copy bytes **verbatim** — preserve every blank line, comment, and leading space.
 The diff between the original lines and the new module body must be byte-for-byte
@@ -56,12 +60,16 @@ Create `app/modules/grants/grants-ai.js`:
 /**
  * CL grants.ai module
  *
- * Extracted from app/index.html (snapshot L37501-L40000) on 2026-05-15.
+ * Extracted from app/index.html (snapshot L37501-L39672) on 2026-05-15.
  * Round X modular refactor — see modular-prompts/28-grants-grants-ai.md.
  * Responsibility: Grant AI agents + narrative generation.
  *
  * Public API (back-compat dual exposure):
- *   - window.(grant AI agent fns — see INDEX_MAP part1) → CL.grants.ai.(grant AI agent fns — see INDEX_MAP part1)
+ *   - window.showNotifTab → CL.grants.ai.showNotifTab
+ *   - window.syncFromStandardReportsTab → CL.grants.ai.syncFromStandardReportsTab
+ *   - window.updateEmailLocationVisibility → CL.grants.ai.updateEmailLocationVisibility
+ *   - window.toggleGrantAlertOptions → CL.grants.ai.toggleGrantAlertOptions
+ *   - window.calculateGrantNextDelivery → CL.grants.ai.calculateGrantNextDelivery
  *
  * Depends on (must load before this file): `grants/grants-rank`, `ai/ai-mode`
  */
@@ -76,7 +84,11 @@ Create `app/modules/grants/grants-ai.js`:
   // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
   window.CL = window.CL || {};
   CL.grants = CL.grants || {};
-  // expose the extracted named declarations: window.<fn> = <fn>; CL.grants.<fn> = <fn>;
+  window.showNotifTab = showNotifTab; CL.grants.showNotifTab = showNotifTab;
+  window.syncFromStandardReportsTab = syncFromStandardReportsTab; CL.grants.syncFromStandardReportsTab = syncFromStandardReportsTab;
+  window.updateEmailLocationVisibility = updateEmailLocationVisibility; CL.grants.updateEmailLocationVisibility = updateEmailLocationVisibility;
+  window.toggleGrantAlertOptions = toggleGrantAlertOptions; CL.grants.toggleGrantAlertOptions = toggleGrantAlertOptions;
+  window.calculateGrantNextDelivery = calculateGrantNextDelivery; CL.grants.calculateGrantNextDelivery = calculateGrantNextDelivery;
   CL._registerModule('grants/grants-ai');
 })();
 ```
@@ -109,8 +121,8 @@ sed -n '<start>,<end>p' app/index.html | tail -5
 wc -l app/index.html            # ≈ N_LINES − (BLK_END−BLK_START+1)
 grep -cE '^\s*(async\s+)?function ' app/index.html   # decreased by the named-fn count moved
 wc -l app/modules/grants/grants-ai.js                      # ≈ extracted + ~25 wrapper
-grep -nE 'grant' app/index.html                     # expected: 0 matches (anchors gone)
-grep -nE 'grant' app/modules/grants/grants-ai.js       # expected: the anchors present
+grep -nE 'function +showNotifTab\b|const +showNotifTab\b|let +showNotifTab\b|window\.showNotifTab\b|showNotifTab *= *function|showNotifTab *= *async|showNotifTab *= *\(|function +syncFromStandardReportsTab\b|const +syncFromStandardReportsTab\b|let +syncFromStandardReportsTab\b|window\.syncFromStandardReportsTab\b|syncFromStandardReportsTab *= *function|syncFromStandardReportsTab *= *async|syncFromStandardReportsTab *= *\(|function +updateEmailLocationVisibility\b|const +updateEmailLocationVisibility\b|let +updateEmailLocationVisibility\b|window\.updateEmailLocationVisibility\b|updateEmailLocationVisibility *= *function|updateEmailLocationVisibility *= *async|updateEmailLocationVisibility *= *\(|function +toggleGrantAlertOptions\b|const +toggleGrantAlertOptions\b|let +toggleGrantAlertOptions\b|window\.toggleGrantAlertOptions\b|toggleGrantAlertOptions *= *function|toggleGrantAlertOptions *= *async|toggleGrantAlertOptions *= *\(|function +calculateGrantNextDelivery\b|const +calculateGrantNextDelivery\b|let +calculateGrantNextDelivery\b|window\.calculateGrantNextDelivery\b|calculateGrantNextDelivery *= *function|calculateGrantNextDelivery *= *async|calculateGrantNextDelivery *= *\(' app/index.html                     # expected: 0 matches (anchors gone)
+grep -nE 'function +showNotifTab\b|const +showNotifTab\b|let +showNotifTab\b|window\.showNotifTab\b|showNotifTab *= *function|showNotifTab *= *async|showNotifTab *= *\(|function +syncFromStandardReportsTab\b|const +syncFromStandardReportsTab\b|let +syncFromStandardReportsTab\b|window\.syncFromStandardReportsTab\b|syncFromStandardReportsTab *= *function|syncFromStandardReportsTab *= *async|syncFromStandardReportsTab *= *\(|function +updateEmailLocationVisibility\b|const +updateEmailLocationVisibility\b|let +updateEmailLocationVisibility\b|window\.updateEmailLocationVisibility\b|updateEmailLocationVisibility *= *function|updateEmailLocationVisibility *= *async|updateEmailLocationVisibility *= *\(|function +toggleGrantAlertOptions\b|const +toggleGrantAlertOptions\b|let +toggleGrantAlertOptions\b|window\.toggleGrantAlertOptions\b|toggleGrantAlertOptions *= *function|toggleGrantAlertOptions *= *async|toggleGrantAlertOptions *= *\(|function +calculateGrantNextDelivery\b|const +calculateGrantNextDelivery\b|let +calculateGrantNextDelivery\b|window\.calculateGrantNextDelivery\b|calculateGrantNextDelivery *= *function|calculateGrantNextDelivery *= *async|calculateGrantNextDelivery *= *\(' app/modules/grants/grants-ai.js       # expected: the anchors present
 grep -c '<script src="modules/grants/grants-ai.js"></script>' app/index.html  # 1
 node --check app/modules/grants/grants-ai.js               # must pass
 git diff --stat                 # ONLY app/index.html + the new module file
@@ -124,7 +136,7 @@ playwright-cli snapshot
 playwright-cli console      # expected: NO new errors; [CL] Module loaded line present
 ```
 - Exercise the feature these functions drive: Grant AI agents + narrative generation.
-- In DevTools confirm `typeof window.grant` → `'function'` and
+- In DevTools confirm `typeof window.showNotifTab` → `'function'` and
   `typeof CL.grants.ai` is defined.
 - Verify the feature behaves identically to before extraction.
 - `playwright-cli close` when done. Capture a screenshot for the PR if UI-visible.

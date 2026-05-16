@@ -15,7 +15,7 @@ re-derive the ACTUAL block in §0.
 wc -l app/index.html                                  # record N_LINES
 grep -cE '^\s*(async\s+)?function ' app/index.html    # record N_FNS
 
-# 1. Locate the block. Snapshot range: L19966-L20030 (feature: Safe Leaflet fly/fit wrappers.)
+# 1. Locate the block. Snapshot range: L19966-L20032 (feature: Safe Leaflet fly/fit wrappers.)
 grep -nE 'function +safeFlyTo\b|const +safeFlyTo\b|let +safeFlyTo\b|window\.safeFlyTo\b|safeFlyTo *= *function|safeFlyTo *= *async|safeFlyTo *= *\(|function +safeFitBounds\b|const +safeFitBounds\b|let +safeFitBounds\b|window\.safeFitBounds\b|safeFitBounds *= *function|safeFitBounds *= *async|safeFitBounds *= *\(|function +safeFlyToBounds\b|const +safeFlyToBounds\b|let +safeFlyToBounds\b|window\.safeFlyToBounds\b|safeFlyToBounds *= *function|safeFlyToBounds *= *async|safeFlyToBounds *= *\(' app/index.html
 #    Read the braces around the matches to find the ACTUAL contiguous
 #    block [BLK_START, BLK_END]. Use THOSE, not the snapshot, from here on.
@@ -24,7 +24,7 @@ grep -nE 'function +safeFlyTo\b|const +safeFlyTo\b|let +safeFlyTo\b|window\.safe
 #    `Start L` falls in [BLK_START, BLK_END] is a declaration to move
 #    (name + Start/End L + type). Snapshot-range preview (if BLK spans a
 #    40k boundary, also grep the adjacent INDEX_MAP_part file):
-awk -F'|' 'NR>9 && ($2+0)>=19966 && ($2+0)<=20030' INDEX_MAP_part*.md
+awk -F'|' 'NR>9 && ($2+0)>=19966 && ($2+0)<=20032' INDEX_MAP_part*.md
 #    Cross-check: none of those names belong to an off-limits module in CLAUDE.md.
 
 # 3. Target module must not exist yet
@@ -38,7 +38,7 @@ any name maps to an off-limits module): **ABORT and report — do not edit.**
 
 ## §1 What to move
 From `app/index.html`, extract the **single contiguous block [BLK_START,
-BLK_END]** confirmed in §0 (snapshot L19966–L20030, ~65 lines). The exact
+BLK_END]** confirmed in §0 (snapshot L19966–L20032, ~67 lines). The exact
 declarations are the `INDEX_MAP_part1.md` rows inside that range. Anchor
 declarations (use to find the block):
 - `safeFlyTo` (and the helpers between it and the next named decl)
@@ -58,7 +58,7 @@ Create `app/modules/map/map-safe-helpers.js`:
 /**
  * CL map.safe module
  *
- * Extracted from app/index.html (snapshot L19966-L20030) on 2026-05-15.
+ * Extracted from app/index.html (snapshot L19966-L20032) on 2026-05-15.
  * Round X modular refactor — see modular-prompts/34-map-map-safe-helpers.md.
  * Responsibility: Safe Leaflet fly/fit wrappers.
  *

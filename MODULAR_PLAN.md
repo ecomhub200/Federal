@@ -200,7 +200,7 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 
 - **Namespace:** `CL.dashboard.tab` (+ `window.<fn>` back-compat)
 - **Responsibility:** Dashboard KPI painting + district stats + matview fallback.
-- **Source range (snapshot):** L48700–L51326  ·  **Cluster:** LATE (after `modules/scorecard/scorecard-choropleth.js`)
+- **Source range (snapshot):** L48699–L51326  ·  **Cluster:** LATE (after `modules/scorecard/scorecard-choropleth.js`)
 - **Representative functions:** `updateDashboard`
 - **Globals to extract:** — (none; do NOT move app-wide globals still read by inline code)
 - **Listeners to extract:** — (none)
@@ -296,7 +296,7 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 
 - **Namespace:** `CL.core.epdoPresets` (+ `window.<fn>` back-compat)
 - **Responsibility:** EPDO preset load/save/UI + per-state weights.
-- **Source range (snapshot):** L19956–L20399  ·  **Cluster:** EARLY (after `modules/warrants/signal-thresholds.js`)
+- **Source range (snapshot):** L20090–L20399  ·  **Cluster:** EARLY (after `modules/warrants/signal-thresholds.js`)
 - **Representative functions:** `loadEPDOPreset`, `saveCustomEPDOWeights`, `recalculateAllEPDO`, `applyStateDefaultEPDO`, `updateEPDOPresetUI`
 - **Globals to extract:** `EPDO_WEIGHTS`, `EPDO_ACTIVE_PRESET`, `EPDO_PRESETS`, `STATE_EPDO_WEIGHTS`
 - **Listeners to extract:** — (none)
@@ -356,8 +356,8 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 
 - **Namespace:** `CL.grants.ai` (+ `window.<fn>` back-compat)
 - **Responsibility:** Grant AI agents + narrative generation.
-- **Source range (snapshot):** L37501–L40000  ·  **Cluster:** LATE (after `modules/grants/grants-rank.js`)
-- **Representative functions:** `(grant AI agent fns — see INDEX_MAP part1)`
+- **Source range (snapshot):** L37501–L39672  ·  **Cluster:** LATE (after `modules/grants/grants-rank.js`)
+- **Representative functions:** `showNotifTab`, `syncFromStandardReportsTab`, `updateEmailLocationVisibility`, `toggleGrantAlertOptions`, `calculateGrantNextDelivery`
 - **Globals to extract:** — (none; do NOT move app-wide globals still read by inline code)
 - **Listeners to extract:** — (none)
 - **Depends on (load before):** `grants/grants-rank`, `ai/ai-mode`
@@ -368,8 +368,8 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 
 - **Namespace:** `CL.grants.email` (+ `window.<fn>` back-compat)
 - **Responsibility:** Grant email scheduling + notification prefs.
-- **Source range (snapshot):** L39669–L41500  ·  **Cluster:** LATE (after `modules/grants/grants-ai.js`)
-- **Representative functions:** `(email scheduler fns)`
+- **Source range (snapshot):** L39673–L41500  ·  **Cluster:** LATE (after `modules/grants/grants-ai.js`)
+- **Representative functions:** `generateReportForEmail`, `buildEmailSubjectLine`, `buildEmailStatsSection`, `buildEmailFindings`, `displayGrantLocations`
 - **Globals to extract:** — (none; do NOT move app-wide globals still read by inline code)
 - **Listeners to extract:** `DOMContentLoaded@39669`
 - **Depends on (load before):** `grants/grants-rank`
@@ -380,8 +380,8 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 
 - **Namespace:** `CL.grants.ui` (+ `window.<fn>` back-compat)
 - **Responsibility:** Grants tab filtering/render/search UI.
-- **Source range (snapshot):** L41501–L46100  ·  **Cluster:** LATE (after `modules/grants/grants-email.js`)
-- **Representative functions:** `(grant UI/filter/search fns)`
+- **Source range (snapshot):** L41501–L44527  ·  **Cluster:** LATE (after `modules/grants/grants-email.js`)
+- **Representative functions:** `scrollToGrantSearch`, `populateGrantProgramDropdown`, `getGrantAISystemPrompt`, `runGrant4AgentAnalysis`, `updateGrantProgramUI`
 - **Globals to extract:** — (none; do NOT move app-wide globals still read by inline code)
 - **Listeners to extract:** — (none)
 - **Depends on (load before):** `grants/grants-rank`, `grants/grants-ai`, `grants/grants-email`
@@ -404,7 +404,7 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 
 - **Namespace:** `CL.cmf.ai` (+ `window.<fn>` back-compat)
 - **Responsibility:** CMF AI agents + recommendation narrative.
-- **Source range (snapshot):** L48345–L50000  ·  **Cluster:** LATE (after `modules/cmf/cmf-search.js`)
+- **Source range (snapshot):** L48345–L48698  ·  **Cluster:** LATE (after `modules/cmf/cmf-search.js`)
 - **Representative functions:** `initCMFAI`
 - **Globals to extract:** — (none; do NOT move app-wide globals still read by inline code)
 - **Listeners to extract:** — (none)
@@ -417,7 +417,7 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 - **Namespace:** `CL.cmf.deficiency` (+ `window.<fn>` back-compat)
 - **Responsibility:** CMF deficiency analysis + countermeasure matching.
 - **Source range (snapshot):** L90000–L99600  ·  **Cluster:** LATE (after `modules/cmf/cmf-ai.js`)
-- **Representative functions:** `(cmf deficiency fns — see INDEX_MAP part3)`
+- **Representative functions:** `runADAnalysis`, `runGPT4VAnalysis`, `getGPT4VPrompt`, `detectDeficiencies`, `calculateRiskScore`
 - **Globals to extract:** — (none; do NOT move app-wide globals still read by inline code)
 - **Listeners to extract:** — (none)
 - **Depends on (load before):** `cmf/cmf-search`
@@ -428,7 +428,7 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 
 - **Namespace:** `CL.map.safe` (+ `window.<fn>` back-compat)
 - **Responsibility:** Safe Leaflet fly/fit wrappers.
-- **Source range (snapshot):** L19966–L20030  ·  **Cluster:** EARLY (after `modules/spatial/r2-resolve.js`)
+- **Source range (snapshot):** L19966–L20032  ·  **Cluster:** EARLY (after `modules/spatial/r2-resolve.js`)
 - **Representative functions:** `safeFlyTo`, `safeFitBounds`, `safeFlyToBounds`
 - **Globals to extract:** — (none; do NOT move app-wide globals still read by inline code)
 - **Listeners to extract:** — (none)
@@ -453,7 +453,7 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 - **Namespace:** `CL.map.layers` (+ `window.<fn>` back-compat)
 - **Responsibility:** Tile/Mapillary/overlay layer management.
 - **Source range (snapshot):** L53501–L56000  ·  **Cluster:** LATE (after `modules/map/map-init.js`)
-- **Representative functions:** `(map layer fns — see INDEX_MAP part2)`
+- **Representative functions:** `updateMapScopeLabel`, `searchMapboxAddresses`, `selectAddressResult`, `clearMapAddressSearch`, `findCrashesNearPoint`
 - **Globals to extract:** — (none; do NOT move app-wide globals still read by inline code)
 - **Listeners to extract:** — (none)
 - **Depends on (load before):** `map/map-init`
@@ -476,7 +476,7 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 
 - **Namespace:** `CL.map.boundary` (+ `window.<fn>` back-compat)
 - **Responsibility:** Boundary display + tier boundary restore.
-- **Source range (snapshot):** L59001–L63000  ·  **Cluster:** LATE (after `modules/map/map-render.js`)
+- **Source range (snapshot):** L59001–L61499  ·  **Cluster:** LATE (after `modules/map/map-render.js`)
 - **Representative functions:** `ensureTierBoundaryDisplayed`, `(boundary restore fns)`
 - **Globals to extract:** — (none; do NOT move app-wide globals still read by inline code)
 - **Listeners to extract:** `jurisdictionChanged`, `tierChanged`
@@ -501,7 +501,7 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 - **Namespace:** `CL.ai.mode` (+ `window.<fn>` back-compat)
 - **Responsibility:** MUTCD AI mode toggle + location dropdown + chat.
 - **Source range (snapshot):** L12100–L16557  ·  **Cluster:** LATE (after `modules/map/map-points-hydrate.js`)
-- **Representative functions:** `(ai mode fns — see INDEX_MAP part1)`
+- **Representative functions:** `(ai mode fns — see INDEX_MAP part1)` — ⛔ BLOCKED (range inside `navigateTo` mega-fn L121–L16561; no in-range decls; not extractable — see prompt §1)
 - **Globals to extract:** `aiState`
 - **Listeners to extract:** `DOMContentLoaded@31271`
 - **Depends on (load before):** `ai/context`, `core/constants`
@@ -525,7 +525,7 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 - **Namespace:** `CL.reports.standard` (+ `window.<fn>` back-compat)
 - **Responsibility:** Standard report generation + Before/After report.
 - **Source range (snapshot):** L9500–L14000  ·  **Cluster:** LATE (after `modules/ai/ai-domain-knowledge.js`)
-- **Representative functions:** `(report fns — see INDEX_MAP part1)`
+- **Representative functions:** `(report fns — see INDEX_MAP part1)` — ⛔ BLOCKED (range inside `navigateTo` mega-fn L121–L16561; no in-range decls; not extractable — see prompt §1)
 - **Globals to extract:** — (none; do NOT move app-wide globals still read by inline code)
 - **Listeners to extract:** — (none)
 - **Depends on (load before):** `core/epdo-presets`, `analysis/crash-profile`
@@ -579,6 +579,48 @@ These ~36 files are already extracted and **off-limits**. Do not re-extract, ren
 - **Depends on (load before):** `app/tab-dispatcher`, `spatial/r2-resolve`, `data/supabase-bridge`
 - **Used by (load after):** (none — entry point)
 - **Risk:** HIGHEST. crashState is app-wide — do NOT relocate the global; window mirror only. Bundle the remaining bootstrap DOMContentLoaded handlers. Extract LAST; full Playwright regression.
+
+### ⚠️ Flagged for Cowork triage (prompt-prep round — overlap/anchor fix)
+
+The overlap + placeholder-anchor fix (see `modular-prompts/`) resolved the 5
+listed Class A collisions (23⊥34, 28⊥29, 30⊥31, 32⊥15, 38⊥16) and replaced
+placeholder anchors in 28/33/36 (plus 29/30, which had unusable `grep 'grant'`
+anchors). The following could **not** be auto-fixed and need human triage
+before extraction starts:
+
+1. **⛔ Prompts 40 (ai-mode) & 42 (reports-standard) are BLOCKED.** Their
+   snapshot ranges (L12100–L16557 / L9500–L14000) fall entirely inside the
+   `navigateTo` mega-function (INDEX_MAP: `navigateTo` spans L121–L16561).
+   There are no in-range top-level declarations to anchor on and the blocks
+   are not independently extractable. Class C resolution is impossible until
+   `navigateTo` itself is decomposed. Self-check #1
+   (`grep -l "see INDEX_MAP part"`) will still list 40 & 42 — expected.
+2. **Residual snapshot-hint overlaps (intentionally NOT fixed).** Self-check
+   #2 will still report: 42↔40 and 40↔43 (both BLOCKED, inside `navigateTo`);
+   05↔26 (3-line overlap — prompt 05 is off-limits per task constraints);
+   33↔22 (1-line off-by-one at L99600 — trivial; Cowork may simply trim
+   prompt 33's snapshot end to L99599). These are flagged, not failures.
+3. **Systemic snapshot↔anchor drift / interleaving.** Several prompts have
+   snapshot ranges that no longer match their §0 anchors' live locations
+   (e.g. 31 `loadCMFDatabase` now ~L91790 vs snapshot L44528; 38
+   `ensureTierBoundaryDisplayed` ~L22k vs snapshot L59001). The overlap fix
+   makes the snapshot HINT strings disjoint (self-check #2 green for the 5
+   targets), but each block must still be re-derived by NAME at §0 runtime.
+   Collision bands 30↔31 (grants↔CMF) and 38↔16 are physically **interleaved**
+   in `app/index.html` — the "single contiguous block" model may not hold.
+   Cowork should review §0 grep output before §4 delete on 30/31/38/16
+   (all carry the 🔴 LARGE BLOCK callout where applicable).
+4. **Other soft placeholders not in the Class C list (not fixed):** prompt 38
+   §1/§2 still has `(boundary restore fns)` as a secondary bullet (its §0 grep
+   uses the real `ensureTierBoundaryDisplayed`, so it still runs); prompt 37
+   §0/§1/§2 still uses `(map render/cluster fns)`. Neither contains the literal
+   "see INDEX_MAP part" string so they pass self-check #1, but Cowork should
+   give them real anchors before extracting 37/38.
+5. **Prompt 29 listener annotation.** `Listeners to extract:
+   DOMContentLoaded@39669` now sits 4 lines before 29's new snapshot start
+   (L39673); the L39669 listener falls in prompt 28's territory. The §0
+   name-derived block is authoritative, but Cowork should confirm
+   listener ownership when running 28/29.
 
 ## §3 Dependency-ordered `<script src>` insert list
 

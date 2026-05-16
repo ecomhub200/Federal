@@ -15,7 +15,7 @@ re-derive the ACTUAL block in §0.
 wc -l app/index.html                                  # record N_LINES
 grep -cE '^\s*(async\s+)?function ' app/index.html    # record N_FNS
 
-# 1. Locate the block. Snapshot range: L48345-L50000 (feature: CMF AI agents + recommendation narrative.)
+# 1. Locate the block. Snapshot range: L48345-L48698 (feature: CMF AI agents + recommendation narrative.)
 grep -nE 'function +initCMFAI\b|const +initCMFAI\b|let +initCMFAI\b|window\.initCMFAI\b|initCMFAI *= *function|initCMFAI *= *async|initCMFAI *= *\(' app/index.html
 #    Read the braces around the matches to find the ACTUAL contiguous
 #    block [BLK_START, BLK_END]. Use THOSE, not the snapshot, from here on.
@@ -24,7 +24,7 @@ grep -nE 'function +initCMFAI\b|const +initCMFAI\b|let +initCMFAI\b|window\.init
 #    `Start L` falls in [BLK_START, BLK_END] is a declaration to move
 #    (name + Start/End L + type). Snapshot-range preview (if BLK spans a
 #    40k boundary, also grep the adjacent INDEX_MAP_part file):
-awk -F'|' 'NR>9 && ($2+0)>=48345 && ($2+0)<=50000' INDEX_MAP_part*.md
+awk -F'|' 'NR>9 && ($2+0)>=48345 && ($2+0)<=48698' INDEX_MAP_part*.md
 #    Cross-check: none of those names belong to an off-limits module in CLAUDE.md.
 
 # 3. Target module must not exist yet
@@ -38,7 +38,7 @@ any name maps to an off-limits module): **ABORT and report — do not edit.**
 
 ## §1 What to move
 From `app/index.html`, extract the **single contiguous block [BLK_START,
-BLK_END]** confirmed in §0 (snapshot L48345–L50000, ~1656 lines). The exact
+BLK_END]** confirmed in §0 (snapshot L48345–L48698, ~354 lines). The exact
 declarations are the `INDEX_MAP_part2.md` rows inside that range. Anchor
 declarations (use to find the block):
 - `initCMFAI` (and the helpers between it and the next named decl)
@@ -56,7 +56,7 @@ Create `app/modules/cmf/cmf-ai.js`:
 /**
  * CL cmf.ai module
  *
- * Extracted from app/index.html (snapshot L48345-L50000) on 2026-05-15.
+ * Extracted from app/index.html (snapshot L48345-L48698) on 2026-05-15.
  * Round X modular refactor — see modular-prompts/32-cmf-cmf-ai.md.
  * Responsibility: CMF AI agents + recommendation narrative.
  *

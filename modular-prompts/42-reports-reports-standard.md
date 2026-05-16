@@ -37,6 +37,20 @@ If any check fails (block not found/contiguous, target exists, anchor missing,
 any name maps to an off-limits module): **ABORT and report — do not edit.**
 
 ## §1 What to move
+
+> 🔴 **LARGE BLOCK — Cowork review required before extraction.** Pause after
+> §0 grep and BEFORE §4 delete; surface §0 + §5 output for human review rather
+> than auto-running.
+>
+> ⛔ **BLOCKED — NOT autonomously runnable.** This snapshot range
+> (L9500–L14000) falls entirely inside the `navigateTo` mega-function
+> (INDEX_MAP: `navigateTo` spans L121–L16561). There are **no in-range
+> top-level declarations** to anchor on, and the block is not independently
+> extractable (you cannot lift a fragment out of the middle of one function
+> into an IIFE). Class C anchor resolution is impossible here. Do **not** run
+> this prompt until `navigateTo` itself is decomposed; Cowork must re-scope.
+> The placeholder anchor below is intentionally retained as a marker.
+
 From `app/index.html`, extract the **single contiguous block [BLK_START,
 BLK_END]** confirmed in §0 (snapshot L9500–L14000, ~4501 lines). The exact
 declarations are the `INDEX_MAP_part1.md` rows inside that range. Anchor

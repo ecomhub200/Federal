@@ -16,7 +16,7 @@ wc -l app/index.html                                  # record N_LINES
 grep -cE '^\s*(async\s+)?function ' app/index.html    # record N_FNS
 
 # 1. Locate the block. Snapshot range: L90000-L99600 (feature: CMF deficiency analysis + countermeasure matching.)
-grep -nE '[Cc]mf|CMF' app/index.html
+grep -nE 'function +runADAnalysis\b|const +runADAnalysis\b|let +runADAnalysis\b|window\.runADAnalysis\b|runADAnalysis *= *function|runADAnalysis *= *async|runADAnalysis *= *\(|function +runGPT4VAnalysis\b|const +runGPT4VAnalysis\b|let +runGPT4VAnalysis\b|window\.runGPT4VAnalysis\b|runGPT4VAnalysis *= *function|runGPT4VAnalysis *= *async|runGPT4VAnalysis *= *\(|function +getGPT4VPrompt\b|const +getGPT4VPrompt\b|let +getGPT4VPrompt\b|window\.getGPT4VPrompt\b|getGPT4VPrompt *= *function|getGPT4VPrompt *= *async|getGPT4VPrompt *= *\(|function +detectDeficiencies\b|const +detectDeficiencies\b|let +detectDeficiencies\b|window\.detectDeficiencies\b|detectDeficiencies *= *function|detectDeficiencies *= *async|detectDeficiencies *= *\(|function +calculateRiskScore\b|const +calculateRiskScore\b|let +calculateRiskScore\b|window\.calculateRiskScore\b|calculateRiskScore *= *function|calculateRiskScore *= *async|calculateRiskScore *= *\(' app/index.html
 #    Read the braces around the matches to find the ACTUAL contiguous
 #    block [BLK_START, BLK_END]. Use THOSE, not the snapshot, from here on.
 
@@ -37,11 +37,20 @@ If any check fails (block not found/contiguous, target exists, anchor missing,
 any name maps to an off-limits module): **ABORT and report — do not edit.**
 
 ## §1 What to move
+
+> 🔴 **LARGE BLOCK — Cowork review required before extraction.** Pause after
+> §0 grep and BEFORE §4 delete; surface §0 + §5 output for human review rather
+> than auto-running.
+
 From `app/index.html`, extract the **single contiguous block [BLK_START,
 BLK_END]** confirmed in §0 (snapshot L90000–L99600, ~9601 lines). The exact
 declarations are the `INDEX_MAP_part3.md` rows inside that range. Anchor
 declarations (use to find the block):
-- `(cmf deficiency fns — see INDEX_MAP part3)` (and the helpers between it and the next named decl)
+- `runADAnalysis` (and the helpers between it and the next named decl)
+- `runGPT4VAnalysis` (and the helpers between it and the next named decl)
+- `getGPT4VPrompt` (and the helpers between it and the next named decl)
+- `detectDeficiencies` (and the helpers between it and the next named decl)
+- `calculateRiskScore` (and the helpers between it and the next named decl)
 
 Copy bytes **verbatim** — preserve every blank line, comment, and leading space.
 The diff between the original lines and the new module body must be byte-for-byte
@@ -61,7 +70,11 @@ Create `app/modules/cmf/cmf-deficiency.js`:
  * Responsibility: CMF deficiency analysis + countermeasure matching.
  *
  * Public API (back-compat dual exposure):
- *   - window.(cmf deficiency fns — see INDEX_MAP part3) → CL.cmf.deficiency.(cmf deficiency fns — see INDEX_MAP part3)
+ *   - window.runADAnalysis → CL.cmf.deficiency.runADAnalysis
+ *   - window.runGPT4VAnalysis → CL.cmf.deficiency.runGPT4VAnalysis
+ *   - window.getGPT4VPrompt → CL.cmf.deficiency.getGPT4VPrompt
+ *   - window.detectDeficiencies → CL.cmf.deficiency.detectDeficiencies
+ *   - window.calculateRiskScore → CL.cmf.deficiency.calculateRiskScore
  *
  * Depends on (must load before this file): `cmf/cmf-search`
  */
@@ -76,7 +89,11 @@ Create `app/modules/cmf/cmf-deficiency.js`:
   // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
   window.CL = window.CL || {};
   CL.cmf = CL.cmf || {};
-  // expose the extracted named declarations: window.<fn> = <fn>; CL.cmf.<fn> = <fn>;
+  window.runADAnalysis = runADAnalysis; CL.cmf.runADAnalysis = runADAnalysis;
+  window.runGPT4VAnalysis = runGPT4VAnalysis; CL.cmf.runGPT4VAnalysis = runGPT4VAnalysis;
+  window.getGPT4VPrompt = getGPT4VPrompt; CL.cmf.getGPT4VPrompt = getGPT4VPrompt;
+  window.detectDeficiencies = detectDeficiencies; CL.cmf.detectDeficiencies = detectDeficiencies;
+  window.calculateRiskScore = calculateRiskScore; CL.cmf.calculateRiskScore = calculateRiskScore;
   CL._registerModule('cmf/cmf-deficiency');
 })();
 ```
@@ -109,8 +126,8 @@ sed -n '<start>,<end>p' app/index.html | tail -5
 wc -l app/index.html            # ≈ N_LINES − (BLK_END−BLK_START+1)
 grep -cE '^\s*(async\s+)?function ' app/index.html   # decreased by the named-fn count moved
 wc -l app/modules/cmf/cmf-deficiency.js                      # ≈ extracted + ~25 wrapper
-grep -nE '[Cc]mf|CMF' app/index.html                     # expected: 0 matches (anchors gone)
-grep -nE '[Cc]mf|CMF' app/modules/cmf/cmf-deficiency.js       # expected: the anchors present
+grep -nE 'function +runADAnalysis\b|const +runADAnalysis\b|let +runADAnalysis\b|window\.runADAnalysis\b|runADAnalysis *= *function|runADAnalysis *= *async|runADAnalysis *= *\(|function +runGPT4VAnalysis\b|const +runGPT4VAnalysis\b|let +runGPT4VAnalysis\b|window\.runGPT4VAnalysis\b|runGPT4VAnalysis *= *function|runGPT4VAnalysis *= *async|runGPT4VAnalysis *= *\(|function +getGPT4VPrompt\b|const +getGPT4VPrompt\b|let +getGPT4VPrompt\b|window\.getGPT4VPrompt\b|getGPT4VPrompt *= *function|getGPT4VPrompt *= *async|getGPT4VPrompt *= *\(|function +detectDeficiencies\b|const +detectDeficiencies\b|let +detectDeficiencies\b|window\.detectDeficiencies\b|detectDeficiencies *= *function|detectDeficiencies *= *async|detectDeficiencies *= *\(|function +calculateRiskScore\b|const +calculateRiskScore\b|let +calculateRiskScore\b|window\.calculateRiskScore\b|calculateRiskScore *= *function|calculateRiskScore *= *async|calculateRiskScore *= *\(' app/index.html                     # expected: 0 matches (anchors gone)
+grep -nE 'function +runADAnalysis\b|const +runADAnalysis\b|let +runADAnalysis\b|window\.runADAnalysis\b|runADAnalysis *= *function|runADAnalysis *= *async|runADAnalysis *= *\(|function +runGPT4VAnalysis\b|const +runGPT4VAnalysis\b|let +runGPT4VAnalysis\b|window\.runGPT4VAnalysis\b|runGPT4VAnalysis *= *function|runGPT4VAnalysis *= *async|runGPT4VAnalysis *= *\(|function +getGPT4VPrompt\b|const +getGPT4VPrompt\b|let +getGPT4VPrompt\b|window\.getGPT4VPrompt\b|getGPT4VPrompt *= *function|getGPT4VPrompt *= *async|getGPT4VPrompt *= *\(|function +detectDeficiencies\b|const +detectDeficiencies\b|let +detectDeficiencies\b|window\.detectDeficiencies\b|detectDeficiencies *= *function|detectDeficiencies *= *async|detectDeficiencies *= *\(|function +calculateRiskScore\b|const +calculateRiskScore\b|let +calculateRiskScore\b|window\.calculateRiskScore\b|calculateRiskScore *= *function|calculateRiskScore *= *async|calculateRiskScore *= *\(' app/modules/cmf/cmf-deficiency.js       # expected: the anchors present
 grep -c '<script src="modules/cmf/cmf-deficiency.js"></script>' app/index.html  # 1
 node --check app/modules/cmf/cmf-deficiency.js               # must pass
 git diff --stat                 # ONLY app/index.html + the new module file
@@ -124,7 +141,7 @@ playwright-cli snapshot
 playwright-cli console      # expected: NO new errors; [CL] Module loaded line present
 ```
 - Exercise the feature these functions drive: CMF deficiency analysis + countermeasure matching.
-- In DevTools confirm `typeof window.cmf` → `'function'` and
+- In DevTools confirm `typeof window.runADAnalysis` → `'function'` and
   `typeof CL.cmf.deficiency` is defined.
 - Verify the feature behaves identically to before extraction.
 - `playwright-cli close` when done. Capture a screenshot for the PR if UI-visible.
