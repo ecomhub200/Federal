@@ -655,7 +655,8 @@ risk register.
   `spatial/{hierarchy-registry,boundary-service,federal-boundaries,spatial-clip,aggregate-loader}`.
 - **Round X extracted (batch 06-to-NN, off-limits):**
   `warrants/signal-tmc`, `warrants/signal-thresholds`, `assets/asset-export`,
-  `scorecard/scorecard` (coordinated 12+13+14 — shared `_scorecard*` state).
+  `scorecard/scorecard` (coordinated 12+13+14 — shared `_scorecard*` state),
+  `core/epdo-presets`.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
