@@ -664,6 +664,10 @@ risk register.
   `showTab`; LATE placement would silently skip that wrapper).
   `assets/school-tab` (all 12 moved schoolTab*/escapeXML fns dual-exposed —
   several are HTML onclick=/generated-row bound, not just the prompt's 5).
+  `assets/transit-tab` (975-line module by design; all 21 moved fns
+  dual-exposed; transitTabState const + FINAL-AUTOLOAD IIFE stay inline;
+  EARLY placement safe — its jurisdictionChanged/tierChanged listeners
+  only fire on post-load user selection).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
