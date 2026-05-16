@@ -19,6 +19,7 @@ CL.data.lazyLoader = null;      // Populated by lazy-loader.js (Phase 6)
 CL.spatial = CL.spatial || {};
 CL.assets = CL.assets || {};
 CL.scorecard = CL.scorecard || {};
+CL.map = CL.map || {};
 CL.upload = CL.upload || {};
 CL.utils = CL.utils || {};
 CL.batchBA = CL.batchBA || {};
