@@ -654,7 +654,8 @@ risk register.
 - **Round X extracted (prompts 01–05, off-limits):**
   `spatial/{hierarchy-registry,boundary-service,federal-boundaries,spatial-clip,aggregate-loader}`.
 - **Round X extracted (batch 06-to-NN, off-limits):**
-  `warrants/signal-tmc`, `warrants/signal-thresholds`, `assets/asset-export`.
+  `warrants/signal-tmc`, `warrants/signal-thresholds`, `assets/asset-export`,
+  `scorecard/scorecard` (coordinated 12+13+14 — shared `_scorecard*` state).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
