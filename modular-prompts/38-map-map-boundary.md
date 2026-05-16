@@ -15,7 +15,7 @@ re-derive the ACTUAL block in §0.
 wc -l app/index.html                                  # record N_LINES
 grep -cE '^\s*(async\s+)?function ' app/index.html    # record N_FNS
 
-# 1. Locate the block. Snapshot range: L59001-L63000 (feature: Boundary display + tier boundary restore.)
+# 1. Locate the block. Snapshot range: L59001-L61499 (feature: Boundary display + tier boundary restore.)
 grep -nE 'function +ensureTierBoundaryDisplayed\b|const +ensureTierBoundaryDisplayed\b|let +ensureTierBoundaryDisplayed\b|window\.ensureTierBoundaryDisplayed\b|ensureTierBoundaryDisplayed *= *function|ensureTierBoundaryDisplayed *= *async|ensureTierBoundaryDisplayed *= *\(' app/index.html
 #    Read the braces around the matches to find the ACTUAL contiguous
 #    block [BLK_START, BLK_END]. Use THOSE, not the snapshot, from here on.
@@ -24,7 +24,7 @@ grep -nE 'function +ensureTierBoundaryDisplayed\b|const +ensureTierBoundaryDispl
 #    `Start L` falls in [BLK_START, BLK_END] is a declaration to move
 #    (name + Start/End L + type). Snapshot-range preview (if BLK spans a
 #    40k boundary, also grep the adjacent INDEX_MAP_part file):
-awk -F'|' 'NR>9 && ($2+0)>=59001 && ($2+0)<=63000' INDEX_MAP_part*.md
+awk -F'|' 'NR>9 && ($2+0)>=59001 && ($2+0)<=61499' INDEX_MAP_part*.md
 #    Cross-check: none of those names belong to an off-limits module in CLAUDE.md.
 
 # 3. Target module must not exist yet
@@ -37,8 +37,13 @@ If any check fails (block not found/contiguous, target exists, anchor missing,
 any name maps to an off-limits module): **ABORT and report — do not edit.**
 
 ## §1 What to move
+
+> 🔴 **LARGE BLOCK — Cowork review required before extraction.** Pause after
+> §0 grep and BEFORE §4 delete; surface §0 + §5 output for human review rather
+> than auto-running.
+
 From `app/index.html`, extract the **single contiguous block [BLK_START,
-BLK_END]** confirmed in §0 (snapshot L59001–L63000, ~4000 lines). The exact
+BLK_END]** confirmed in §0 (snapshot L59001–L61499, ~2499 lines). The exact
 declarations are the `INDEX_MAP_part2.md` rows inside that range. Anchor
 declarations (use to find the block):
 - `ensureTierBoundaryDisplayed` (and the helpers between it and the next named decl)
@@ -60,7 +65,7 @@ Create `app/modules/map/map-boundary.js`:
 /**
  * CL map.boundary module
  *
- * Extracted from app/index.html (snapshot L59001-L63000) on 2026-05-15.
+ * Extracted from app/index.html (snapshot L59001-L61499) on 2026-05-15.
  * Round X modular refactor — see modular-prompts/38-map-map-boundary.md.
  * Responsibility: Boundary display + tier boundary restore.
  *

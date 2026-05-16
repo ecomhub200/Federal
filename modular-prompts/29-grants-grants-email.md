@@ -15,8 +15,8 @@ re-derive the ACTUAL block in §0.
 wc -l app/index.html                                  # record N_LINES
 grep -cE '^\s*(async\s+)?function ' app/index.html    # record N_FNS
 
-# 1. Locate the block. Snapshot range: L39669-L41500 (feature: Grant email scheduling + notification prefs.)
-grep -nE 'grant' app/index.html
+# 1. Locate the block. Snapshot range: L39673-L41500 (feature: Grant email scheduling + notification prefs.)
+grep -nE 'function +generateReportForEmail\b|const +generateReportForEmail\b|let +generateReportForEmail\b|window\.generateReportForEmail\b|generateReportForEmail *= *function|generateReportForEmail *= *async|generateReportForEmail *= *\(|function +buildEmailSubjectLine\b|const +buildEmailSubjectLine\b|let +buildEmailSubjectLine\b|window\.buildEmailSubjectLine\b|buildEmailSubjectLine *= *function|buildEmailSubjectLine *= *async|buildEmailSubjectLine *= *\(|function +buildEmailStatsSection\b|const +buildEmailStatsSection\b|let +buildEmailStatsSection\b|window\.buildEmailStatsSection\b|buildEmailStatsSection *= *function|buildEmailStatsSection *= *async|buildEmailStatsSection *= *\(|function +buildEmailFindings\b|const +buildEmailFindings\b|let +buildEmailFindings\b|window\.buildEmailFindings\b|buildEmailFindings *= *function|buildEmailFindings *= *async|buildEmailFindings *= *\(|function +displayGrantLocations\b|const +displayGrantLocations\b|let +displayGrantLocations\b|window\.displayGrantLocations\b|displayGrantLocations *= *function|displayGrantLocations *= *async|displayGrantLocations *= *\(' app/index.html
 #    Read the braces around the matches to find the ACTUAL contiguous
 #    block [BLK_START, BLK_END]. Use THOSE, not the snapshot, from here on.
 
@@ -24,7 +24,7 @@ grep -nE 'grant' app/index.html
 #    `Start L` falls in [BLK_START, BLK_END] is a declaration to move
 #    (name + Start/End L + type). Snapshot-range preview (if BLK spans a
 #    40k boundary, also grep the adjacent INDEX_MAP_part file):
-awk -F'|' 'NR>9 && ($2+0)>=39669 && ($2+0)<=41500' INDEX_MAP_part*.md
+awk -F'|' 'NR>9 && ($2+0)>=39673 && ($2+0)<=41500' INDEX_MAP_part*.md
 #    Cross-check: none of those names belong to an off-limits module in CLAUDE.md.
 
 # 3. Target module must not exist yet
@@ -38,10 +38,14 @@ any name maps to an off-limits module): **ABORT and report — do not edit.**
 
 ## §1 What to move
 From `app/index.html`, extract the **single contiguous block [BLK_START,
-BLK_END]** confirmed in §0 (snapshot L39669–L41500, ~1832 lines). The exact
+BLK_END]** confirmed in §0 (snapshot L39673–L41500, ~1828 lines). The exact
 declarations are the `INDEX_MAP_part1.md` rows inside that range. Anchor
 declarations (use to find the block):
-- `(email scheduler fns)` (and the helpers between it and the next named decl)
+- `generateReportForEmail` (and the helpers between it and the next named decl)
+- `buildEmailSubjectLine` (and the helpers between it and the next named decl)
+- `buildEmailStatsSection` (and the helpers between it and the next named decl)
+- `buildEmailFindings` (and the helpers between it and the next named decl)
+- `displayGrantLocations` (and the helpers between it and the next named decl)
 
 Event listeners (move with the code, do not duplicate):
 - `DOMContentLoaded@39669`
@@ -58,12 +62,16 @@ Create `app/modules/grants/grants-email.js`:
 /**
  * CL grants.email module
  *
- * Extracted from app/index.html (snapshot L39669-L41500) on 2026-05-15.
+ * Extracted from app/index.html (snapshot L39673-L41500) on 2026-05-15.
  * Round X modular refactor — see modular-prompts/29-grants-grants-email.md.
  * Responsibility: Grant email scheduling + notification prefs.
  *
  * Public API (back-compat dual exposure):
- *   - window.(email scheduler fns) → CL.grants.email.(email scheduler fns)
+ *   - window.generateReportForEmail → CL.grants.email.generateReportForEmail
+ *   - window.buildEmailSubjectLine → CL.grants.email.buildEmailSubjectLine
+ *   - window.buildEmailStatsSection → CL.grants.email.buildEmailStatsSection
+ *   - window.buildEmailFindings → CL.grants.email.buildEmailFindings
+ *   - window.displayGrantLocations → CL.grants.email.displayGrantLocations
  *
  * Depends on (must load before this file): `grants/grants-rank`
  */
@@ -78,7 +86,11 @@ Create `app/modules/grants/grants-email.js`:
   // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
   window.CL = window.CL || {};
   CL.grants = CL.grants || {};
-  // expose the extracted named declarations: window.<fn> = <fn>; CL.grants.<fn> = <fn>;
+  window.generateReportForEmail = generateReportForEmail; CL.grants.generateReportForEmail = generateReportForEmail;
+  window.buildEmailSubjectLine = buildEmailSubjectLine; CL.grants.buildEmailSubjectLine = buildEmailSubjectLine;
+  window.buildEmailStatsSection = buildEmailStatsSection; CL.grants.buildEmailStatsSection = buildEmailStatsSection;
+  window.buildEmailFindings = buildEmailFindings; CL.grants.buildEmailFindings = buildEmailFindings;
+  window.displayGrantLocations = displayGrantLocations; CL.grants.displayGrantLocations = displayGrantLocations;
   CL._registerModule('grants/grants-email');
 })();
 ```
@@ -111,8 +123,8 @@ sed -n '<start>,<end>p' app/index.html | tail -5
 wc -l app/index.html            # ≈ N_LINES − (BLK_END−BLK_START+1)
 grep -cE '^\s*(async\s+)?function ' app/index.html   # decreased by the named-fn count moved
 wc -l app/modules/grants/grants-email.js                      # ≈ extracted + ~25 wrapper
-grep -nE 'grant' app/index.html                     # expected: 0 matches (anchors gone)
-grep -nE 'grant' app/modules/grants/grants-email.js       # expected: the anchors present
+grep -nE 'function +generateReportForEmail\b|const +generateReportForEmail\b|let +generateReportForEmail\b|window\.generateReportForEmail\b|generateReportForEmail *= *function|generateReportForEmail *= *async|generateReportForEmail *= *\(|function +buildEmailSubjectLine\b|const +buildEmailSubjectLine\b|let +buildEmailSubjectLine\b|window\.buildEmailSubjectLine\b|buildEmailSubjectLine *= *function|buildEmailSubjectLine *= *async|buildEmailSubjectLine *= *\(|function +buildEmailStatsSection\b|const +buildEmailStatsSection\b|let +buildEmailStatsSection\b|window\.buildEmailStatsSection\b|buildEmailStatsSection *= *function|buildEmailStatsSection *= *async|buildEmailStatsSection *= *\(|function +buildEmailFindings\b|const +buildEmailFindings\b|let +buildEmailFindings\b|window\.buildEmailFindings\b|buildEmailFindings *= *function|buildEmailFindings *= *async|buildEmailFindings *= *\(|function +displayGrantLocations\b|const +displayGrantLocations\b|let +displayGrantLocations\b|window\.displayGrantLocations\b|displayGrantLocations *= *function|displayGrantLocations *= *async|displayGrantLocations *= *\(' app/index.html                     # expected: 0 matches (anchors gone)
+grep -nE 'function +generateReportForEmail\b|const +generateReportForEmail\b|let +generateReportForEmail\b|window\.generateReportForEmail\b|generateReportForEmail *= *function|generateReportForEmail *= *async|generateReportForEmail *= *\(|function +buildEmailSubjectLine\b|const +buildEmailSubjectLine\b|let +buildEmailSubjectLine\b|window\.buildEmailSubjectLine\b|buildEmailSubjectLine *= *function|buildEmailSubjectLine *= *async|buildEmailSubjectLine *= *\(|function +buildEmailStatsSection\b|const +buildEmailStatsSection\b|let +buildEmailStatsSection\b|window\.buildEmailStatsSection\b|buildEmailStatsSection *= *function|buildEmailStatsSection *= *async|buildEmailStatsSection *= *\(|function +buildEmailFindings\b|const +buildEmailFindings\b|let +buildEmailFindings\b|window\.buildEmailFindings\b|buildEmailFindings *= *function|buildEmailFindings *= *async|buildEmailFindings *= *\(|function +displayGrantLocations\b|const +displayGrantLocations\b|let +displayGrantLocations\b|window\.displayGrantLocations\b|displayGrantLocations *= *function|displayGrantLocations *= *async|displayGrantLocations *= *\(' app/modules/grants/grants-email.js       # expected: the anchors present
 grep -c '<script src="modules/grants/grants-email.js"></script>' app/index.html  # 1
 node --check app/modules/grants/grants-email.js               # must pass
 git diff --stat                 # ONLY app/index.html + the new module file
@@ -126,7 +138,7 @@ playwright-cli snapshot
 playwright-cli console      # expected: NO new errors; [CL] Module loaded line present
 ```
 - Exercise the feature these functions drive: Grant email scheduling + notification prefs.
-- In DevTools confirm `typeof window.email` → `'function'` and
+- In DevTools confirm `typeof window.generateReportForEmail` → `'function'` and
   `typeof CL.grants.email` is defined.
 - Verify the feature behaves identically to before extraction.
 - `playwright-cli close` when done. Capture a screenshot for the PR if UI-visible.

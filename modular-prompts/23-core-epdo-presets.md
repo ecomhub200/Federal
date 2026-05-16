@@ -15,7 +15,7 @@ re-derive the ACTUAL block in §0.
 wc -l app/index.html                                  # record N_LINES
 grep -cE '^\s*(async\s+)?function ' app/index.html    # record N_FNS
 
-# 1. Locate the block. Snapshot range: L19956-L20399 (feature: EPDO preset load/save/UI + per-state weights.)
+# 1. Locate the block. Snapshot range: L20090-L20399 (feature: EPDO preset load/save/UI + per-state weights.)
 grep -nE 'function +loadEPDOPreset\b|const +loadEPDOPreset\b|let +loadEPDOPreset\b|window\.loadEPDOPreset\b|loadEPDOPreset *= *function|loadEPDOPreset *= *async|loadEPDOPreset *= *\(|function +saveCustomEPDOWeights\b|const +saveCustomEPDOWeights\b|let +saveCustomEPDOWeights\b|window\.saveCustomEPDOWeights\b|saveCustomEPDOWeights *= *function|saveCustomEPDOWeights *= *async|saveCustomEPDOWeights *= *\(|function +recalculateAllEPDO\b|const +recalculateAllEPDO\b|let +recalculateAllEPDO\b|window\.recalculateAllEPDO\b|recalculateAllEPDO *= *function|recalculateAllEPDO *= *async|recalculateAllEPDO *= *\(|function +applyStateDefaultEPDO\b|const +applyStateDefaultEPDO\b|let +applyStateDefaultEPDO\b|window\.applyStateDefaultEPDO\b|applyStateDefaultEPDO *= *function|applyStateDefaultEPDO *= *async|applyStateDefaultEPDO *= *\(|function +updateEPDOPresetUI\b|const +updateEPDOPresetUI\b|let +updateEPDOPresetUI\b|window\.updateEPDOPresetUI\b|updateEPDOPresetUI *= *function|updateEPDOPresetUI *= *async|updateEPDOPresetUI *= *\(' app/index.html
 #    Read the braces around the matches to find the ACTUAL contiguous
 #    block [BLK_START, BLK_END]. Use THOSE, not the snapshot, from here on.
@@ -24,7 +24,7 @@ grep -nE 'function +loadEPDOPreset\b|const +loadEPDOPreset\b|let +loadEPDOPreset
 #    `Start L` falls in [BLK_START, BLK_END] is a declaration to move
 #    (name + Start/End L + type). Snapshot-range preview (if BLK spans a
 #    40k boundary, also grep the adjacent INDEX_MAP_part file):
-awk -F'|' 'NR>9 && ($2+0)>=19956 && ($2+0)<=20399' INDEX_MAP_part*.md
+awk -F'|' 'NR>9 && ($2+0)>=20090 && ($2+0)<=20399' INDEX_MAP_part*.md
 #    Cross-check: none of those names belong to an off-limits module in CLAUDE.md.
 
 # 3. Target module must not exist yet
@@ -38,7 +38,7 @@ any name maps to an off-limits module): **ABORT and report — do not edit.**
 
 ## §1 What to move
 From `app/index.html`, extract the **single contiguous block [BLK_START,
-BLK_END]** confirmed in §0 (snapshot L19956–L20399, ~444 lines). The exact
+BLK_END]** confirmed in §0 (snapshot L20090–L20399, ~310 lines). The exact
 declarations are the `INDEX_MAP_part1.md` rows inside that range. Anchor
 declarations (use to find the block):
 - `loadEPDOPreset` (and the helpers between it and the next named decl)
@@ -65,7 +65,7 @@ Create `app/modules/core/epdo-presets.js`:
 /**
  * CL core.epdoPresets module
  *
- * Extracted from app/index.html (snapshot L19956-L20399) on 2026-05-15.
+ * Extracted from app/index.html (snapshot L20090-L20399) on 2026-05-15.
  * Round X modular refactor — see modular-prompts/23-core-epdo-presets.md.
  * Responsibility: EPDO preset load/save/UI + per-state weights.
  *

@@ -15,7 +15,7 @@ re-derive the ACTUAL block in §0.
 wc -l app/index.html                                  # record N_LINES
 grep -cE '^\s*(async\s+)?function ' app/index.html    # record N_FNS
 
-# 1. Locate the block. Snapshot range: L48700-L51326 (feature: Dashboard KPI painting + district stats + matview fallback.)
+# 1. Locate the block. Snapshot range: L48699-L51326 (feature: Dashboard KPI painting + district stats + matview fallback.)
 grep -nE 'function +updateDashboard\b|const +updateDashboard\b|let +updateDashboard\b|window\.updateDashboard\b|updateDashboard *= *function|updateDashboard *= *async|updateDashboard *= *\(' app/index.html
 #    Read the braces around the matches to find the ACTUAL contiguous
 #    block [BLK_START, BLK_END]. Use THOSE, not the snapshot, from here on.
@@ -24,7 +24,7 @@ grep -nE 'function +updateDashboard\b|const +updateDashboard\b|let +updateDashbo
 #    `Start L` falls in [BLK_START, BLK_END] is a declaration to move
 #    (name + Start/End L + type). Snapshot-range preview (if BLK spans a
 #    40k boundary, also grep the adjacent INDEX_MAP_part file):
-awk -F'|' 'NR>9 && ($2+0)>=48700 && ($2+0)<=51326' INDEX_MAP_part*.md
+awk -F'|' 'NR>9 && ($2+0)>=48699 && ($2+0)<=51326' INDEX_MAP_part*.md
 #    Cross-check: none of those names belong to an off-limits module in CLAUDE.md.
 
 # 3. Target module must not exist yet
@@ -38,7 +38,7 @@ any name maps to an off-limits module): **ABORT and report — do not edit.**
 
 ## §1 What to move
 From `app/index.html`, extract the **single contiguous block [BLK_START,
-BLK_END]** confirmed in §0 (snapshot L48700–L51326, ~2627 lines). The exact
+BLK_END]** confirmed in §0 (snapshot L48699–L51326, ~2628 lines). The exact
 declarations are the `INDEX_MAP_part2.md` rows inside that range. Anchor
 declarations (use to find the block):
 - `updateDashboard` (and the helpers between it and the next named decl)
@@ -56,7 +56,7 @@ Create `app/modules/dashboard/dashboard-tab.js`:
 /**
  * CL dashboard.tab module
  *
- * Extracted from app/index.html (snapshot L48700-L51326) on 2026-05-15.
+ * Extracted from app/index.html (snapshot L48699-L51326) on 2026-05-15.
  * Round X modular refactor — see modular-prompts/15-dashboard-dashboard-tab.md.
  * Responsibility: Dashboard KPI painting + district stats + matview fallback.
  *

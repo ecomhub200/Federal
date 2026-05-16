@@ -37,6 +37,11 @@ If any check fails (block not found/contiguous, target exists, anchor missing,
 any name maps to an off-limits module): **ABORT and report — do not edit.**
 
 ## §1 What to move
+
+> 🔴 **LARGE BLOCK — Cowork review required before extraction.** Pause after
+> §0 grep and BEFORE §4 delete; surface §0 + §5 output for human review rather
+> than auto-running.
+
 From `app/index.html`, extract the **single contiguous block [BLK_START,
 BLK_END]** confirmed in §0 (snapshot L99600–L105299, ~5700 lines). The exact
 declarations are the `INDEX_MAP_part3.md` rows inside that range. Anchor

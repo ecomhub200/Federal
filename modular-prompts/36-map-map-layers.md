@@ -16,7 +16,7 @@ wc -l app/index.html                                  # record N_LINES
 grep -cE '^\s*(async\s+)?function ' app/index.html    # record N_FNS
 
 # 1. Locate the block. Snapshot range: L53501-L56000 (feature: Tile/Mapillary/overlay layer management.)
-grep -nE '[Mm]ap' app/index.html
+grep -nE 'function +updateMapScopeLabel\b|const +updateMapScopeLabel\b|let +updateMapScopeLabel\b|window\.updateMapScopeLabel\b|updateMapScopeLabel *= *function|updateMapScopeLabel *= *async|updateMapScopeLabel *= *\(|function +searchMapboxAddresses\b|const +searchMapboxAddresses\b|let +searchMapboxAddresses\b|window\.searchMapboxAddresses\b|searchMapboxAddresses *= *function|searchMapboxAddresses *= *async|searchMapboxAddresses *= *\(|function +selectAddressResult\b|const +selectAddressResult\b|let +selectAddressResult\b|window\.selectAddressResult\b|selectAddressResult *= *function|selectAddressResult *= *async|selectAddressResult *= *\(|function +clearMapAddressSearch\b|const +clearMapAddressSearch\b|let +clearMapAddressSearch\b|window\.clearMapAddressSearch\b|clearMapAddressSearch *= *function|clearMapAddressSearch *= *async|clearMapAddressSearch *= *\(|function +findCrashesNearPoint\b|const +findCrashesNearPoint\b|let +findCrashesNearPoint\b|window\.findCrashesNearPoint\b|findCrashesNearPoint *= *function|findCrashesNearPoint *= *async|findCrashesNearPoint *= *\(' app/index.html
 #    Read the braces around the matches to find the ACTUAL contiguous
 #    block [BLK_START, BLK_END]. Use THOSE, not the snapshot, from here on.
 
@@ -41,7 +41,11 @@ From `app/index.html`, extract the **single contiguous block [BLK_START,
 BLK_END]** confirmed in §0 (snapshot L53501–L56000, ~2500 lines). The exact
 declarations are the `INDEX_MAP_part2.md` rows inside that range. Anchor
 declarations (use to find the block):
-- `(map layer fns — see INDEX_MAP part2)` (and the helpers between it and the next named decl)
+- `updateMapScopeLabel` (and the helpers between it and the next named decl)
+- `searchMapboxAddresses` (and the helpers between it and the next named decl)
+- `selectAddressResult` (and the helpers between it and the next named decl)
+- `clearMapAddressSearch` (and the helpers between it and the next named decl)
+- `findCrashesNearPoint` (and the helpers between it and the next named decl)
 
 Copy bytes **verbatim** — preserve every blank line, comment, and leading space.
 The diff between the original lines and the new module body must be byte-for-byte
@@ -61,7 +65,11 @@ Create `app/modules/map/map-layers.js`:
  * Responsibility: Tile/Mapillary/overlay layer management.
  *
  * Public API (back-compat dual exposure):
- *   - window.(map layer fns — see INDEX_MAP part2) → CL.map.layers.(map layer fns — see INDEX_MAP part2)
+ *   - window.updateMapScopeLabel → CL.map.layers.updateMapScopeLabel
+ *   - window.searchMapboxAddresses → CL.map.layers.searchMapboxAddresses
+ *   - window.selectAddressResult → CL.map.layers.selectAddressResult
+ *   - window.clearMapAddressSearch → CL.map.layers.clearMapAddressSearch
+ *   - window.findCrashesNearPoint → CL.map.layers.findCrashesNearPoint
  *
  * Depends on (must load before this file): `map/map-init`
  */
@@ -76,7 +84,11 @@ Create `app/modules/map/map-layers.js`:
   // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
   window.CL = window.CL || {};
   CL.map = CL.map || {};
-  // expose the extracted named declarations: window.<fn> = <fn>; CL.map.<fn> = <fn>;
+  window.updateMapScopeLabel = updateMapScopeLabel; CL.map.updateMapScopeLabel = updateMapScopeLabel;
+  window.searchMapboxAddresses = searchMapboxAddresses; CL.map.searchMapboxAddresses = searchMapboxAddresses;
+  window.selectAddressResult = selectAddressResult; CL.map.selectAddressResult = selectAddressResult;
+  window.clearMapAddressSearch = clearMapAddressSearch; CL.map.clearMapAddressSearch = clearMapAddressSearch;
+  window.findCrashesNearPoint = findCrashesNearPoint; CL.map.findCrashesNearPoint = findCrashesNearPoint;
   CL._registerModule('map/map-layers');
 })();
 ```
@@ -109,8 +121,8 @@ sed -n '<start>,<end>p' app/index.html | tail -5
 wc -l app/index.html            # ≈ N_LINES − (BLK_END−BLK_START+1)
 grep -cE '^\s*(async\s+)?function ' app/index.html   # decreased by the named-fn count moved
 wc -l app/modules/map/map-layers.js                      # ≈ extracted + ~25 wrapper
-grep -nE '[Mm]ap' app/index.html                     # expected: 0 matches (anchors gone)
-grep -nE '[Mm]ap' app/modules/map/map-layers.js       # expected: the anchors present
+grep -nE 'function +updateMapScopeLabel\b|const +updateMapScopeLabel\b|let +updateMapScopeLabel\b|window\.updateMapScopeLabel\b|updateMapScopeLabel *= *function|updateMapScopeLabel *= *async|updateMapScopeLabel *= *\(|function +searchMapboxAddresses\b|const +searchMapboxAddresses\b|let +searchMapboxAddresses\b|window\.searchMapboxAddresses\b|searchMapboxAddresses *= *function|searchMapboxAddresses *= *async|searchMapboxAddresses *= *\(|function +selectAddressResult\b|const +selectAddressResult\b|let +selectAddressResult\b|window\.selectAddressResult\b|selectAddressResult *= *function|selectAddressResult *= *async|selectAddressResult *= *\(|function +clearMapAddressSearch\b|const +clearMapAddressSearch\b|let +clearMapAddressSearch\b|window\.clearMapAddressSearch\b|clearMapAddressSearch *= *function|clearMapAddressSearch *= *async|clearMapAddressSearch *= *\(|function +findCrashesNearPoint\b|const +findCrashesNearPoint\b|let +findCrashesNearPoint\b|window\.findCrashesNearPoint\b|findCrashesNearPoint *= *function|findCrashesNearPoint *= *async|findCrashesNearPoint *= *\(' app/index.html                     # expected: 0 matches (anchors gone)
+grep -nE 'function +updateMapScopeLabel\b|const +updateMapScopeLabel\b|let +updateMapScopeLabel\b|window\.updateMapScopeLabel\b|updateMapScopeLabel *= *function|updateMapScopeLabel *= *async|updateMapScopeLabel *= *\(|function +searchMapboxAddresses\b|const +searchMapboxAddresses\b|let +searchMapboxAddresses\b|window\.searchMapboxAddresses\b|searchMapboxAddresses *= *function|searchMapboxAddresses *= *async|searchMapboxAddresses *= *\(|function +selectAddressResult\b|const +selectAddressResult\b|let +selectAddressResult\b|window\.selectAddressResult\b|selectAddressResult *= *function|selectAddressResult *= *async|selectAddressResult *= *\(|function +clearMapAddressSearch\b|const +clearMapAddressSearch\b|let +clearMapAddressSearch\b|window\.clearMapAddressSearch\b|clearMapAddressSearch *= *function|clearMapAddressSearch *= *async|clearMapAddressSearch *= *\(|function +findCrashesNearPoint\b|const +findCrashesNearPoint\b|let +findCrashesNearPoint\b|window\.findCrashesNearPoint\b|findCrashesNearPoint *= *function|findCrashesNearPoint *= *async|findCrashesNearPoint *= *\(' app/modules/map/map-layers.js       # expected: the anchors present
 grep -c '<script src="modules/map/map-layers.js"></script>' app/index.html  # 1
 node --check app/modules/map/map-layers.js               # must pass
 git diff --stat                 # ONLY app/index.html + the new module file
@@ -124,7 +136,7 @@ playwright-cli snapshot
 playwright-cli console      # expected: NO new errors; [CL] Module loaded line present
 ```
 - Exercise the feature these functions drive: Tile/Mapillary/overlay layer management.
-- In DevTools confirm `typeof window.map` → `'function'` and
+- In DevTools confirm `typeof window.updateMapScopeLabel` → `'function'` and
   `typeof CL.map.layers` is defined.
 - Verify the feature behaves identically to before extraction.
 - `playwright-cli close` when done. Capture a screenshot for the PR if UI-visible.
