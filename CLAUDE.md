@@ -657,7 +657,7 @@ risk register.
   `warrants/signal-tmc`, `warrants/signal-thresholds`, `assets/asset-export`,
   `scorecard/scorecard` (coordinated 12+13+14 — shared `_scorecard*` state),
   `core/epdo-presets`, `core/tier`, `spatial/r2-resolve`,
-  `map/map-safe-helpers`.
+  `map/map-safe-helpers`, `map/map-points-hydrate`.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
