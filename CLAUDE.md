@@ -668,6 +668,14 @@ risk register.
   dual-exposed; transitTabState const + FINAL-AUTOLOAD IIFE stay inline;
   EARLY placement safe — its jurisdictionChanged/tierChanged listeners
   only fire on post-load user selection).
+- **Round X extracted (batch 4, off-limits):**
+  `spatial/geo-tier` (1,357-line verbatim block — GEOGRAPHY-BASED TIER
+  HELPERS: loadGeoData/populateGeoTierDropdown/tier-selection handlers/
+  bounds + module-private `_geoDataCache`; EARLY-cluster after
+  `core/tier.js`; all 24 previously-global fns mirrored to `window` so
+  remaining inline code is unaffected, anchors also on
+  `CL.spatial`/`CL.spatial.geoTier`). Batch 4 prompts 41/43/31/44 were
+  BLOCKED at hard §0 gates — see `MODULAR_PLAN_PROMPT_44_RESOLUTION.md`.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
