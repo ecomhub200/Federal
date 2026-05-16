@@ -755,3 +755,51 @@ Numbered queue:
 
 Generic shared utilities that the heuristic routed to `app/unassigned` (e.g. `esc` with ~6.7k refs, `safeJsonParse`, `isMajor`) are intentionally **deferred**: they are NOT in the numbered queue. They will be batched into a `utils/*` follow-up round after the feature modules land, because moving a 6.7k-caller helper before its callers are modularized maximizes blast radius.
 
+
+---
+
+## § navigateTo split round (RESOLVED — non-issue; supersedes prompts 40 & 42)
+
+**Added 2026-05-16 (CC Session B).** See `NAVIGATETO_STRUCTURE_SURVEY.md`
++ `NAVIGATETO_SPLIT_PLAN.md` (repo root) for the full forensic record.
+
+**Finding.** `navigateTo` is NOT a mega-function. `app/index.html` L121-L132
+is a 12-line early-boot stub; the real `showTab`/`navigateTo` dispatcher was
+already extracted to `app/modules/app/tab-dispatcher.js` (prompt 45, done).
+The `INDEX_MAP_part1.md` row `navigateTo | L121-L16561 | 16441 LOC` is a
+heuristic artifact: that inventory was built from a stale 159,387-line
+snapshot (live file = 153,085) and its "End L = next declaration - 1" rule
+swallowed the CSS `<style>` block (L143-4438) + HTML body into the stub.
+
+**Consequence.** Prompts 40 (ai-mode) & 42 (reports-standard) were never
+blocked by a mega-function — only by stale snapshot ranges pointing at HTML
+markup. The real AI-mode/reports code is ordinary top-level declarations,
+extractable now (survey §4). Both exceed the 500-line cap, so they are
+re-anchored and sub-split. **Self-check #1/#2 BLOCKED/overlap notes for
+40/42/43 are artifacts of the same phantom range — disregard; re-anchor by
+function name, not line range.**
+
+**Superseding prompts (run in this order; one module per session):**
+
+1. `40a-navigateTo-shell.md` — REFRAMED: no shell to extract; payload is
+   INDEX_MAP regeneration + BLOCKED-claim re-validation (advisory).
+2. `40b-ai-mode-toggle.md` -> `ai/ai-mode-toggle.js` (~232 LOC, L28041-L28273).
+3. `40c-ai-analyst.md` (parent) -> `40c1-ai-analyst-chat.md` (owns `aiState`),
+   `40c2-ai-analyst-mutcd.md` (mutcd/engine/warrant; engine = oversized
+   exception; SKIP off-limits dups `buildCountyWideCrashProfile` L81823 &
+   `buildLocationCrashProfile` L81878), `40c3-ai-analyst-context.md`
+   (context/ui). Band ~L80084-L82947.
+4. `42b-reports-standard.md` (parent) -> `42b1-reports-standard-core.md`,
+   `42b2-reports-pdf.md`, `42b3-reports-charts.md`. Band ~L68281-L70781.
+5. `42d-reports-countermeasures.md` -> countermeasures/memo/recommend.
+   Band ~L75038-L77330.
+6. `42c-reports-before-after.md` (parent) -> `42c1-report-ba-engine.md`,
+   `42c3-report-ba-export.md`, `42c2-report-ba-monitoring.md`.
+   Band ~L77331-L79908.
+
+Original numbered prompts `40-ai-ai-mode.md` and `42-reports-reports-standard.md`
+are **SUPERSEDED** — do not run them; use the prompts above. (Their files
+are left intact per the no-edit-original-prompts rule; this pointer is the
+authoritative redirect.) Risk register: `NAVIGATETO_SPLIT_PLAN.md` §5
+(R1 off-limits name collisions, R3 oversized indivisible fn, R5 stale
+ranges -> always name-anchor).

@@ -707,3 +707,25 @@ risk register.
 - Re-read the active prompt — every constraint is spelled out there.
 - If a prompt's §0 disagrees with reality (drift), ABORT and ask before
   improvising. Never edit `app/index.html` outside the confirmed block.
+
+### ⚠️ Prompts 40 & 42 are SUPERSEDED (navigateTo split round, 2026-05-16)
+
+`navigateTo` is **not** a mega-function — `app/index.html` L121–L132 is a
+12-line boot stub; the real dispatcher is already in
+`app/modules/app/tab-dispatcher.js` (prompt 45, done). The
+`INDEX_MAP_part1.md` `navigateTo L121–L16561 / 16,441 LOC` row is a
+**heuristic artifact**: INDEX_MAP was built from a stale **159,387-line**
+snapshot (live file ≈ **153,085** lines) and its "End L = next declaration −
+1" rule swallowed the CSS + HTML body. **INDEX_MAP\*.md is stale** —
+regenerate it (or at minimum re-derive every block by **function-name
+anchor**, never by snapshot line range) before trusting any range-based or
+"⛔ BLOCKED inside mega-fn" prompt.
+
+- **Do NOT run** `40-ai-ai-mode.md` or `42-reports-reports-standard.md`.
+- **Use instead:** `40a-navigateTo-shell.md` (INDEX_MAP regen, advisory),
+  `40b-ai-mode-toggle.md`, the `40c*` AI-analyst chain,
+  `42b*`/`42c*`/`42d` reports chain — see `MODULAR_PLAN.md` §"navigateTo
+  split round" and `NAVIGATETO_SPLIT_PLAN.md` for order, manifest, and the
+  risk register (R1 off-limits name collisions `buildCountyWideCrashProfile`
+  / `buildLocationCrashProfile`; R3 oversized indivisible fn
+  `buildProgrammaticCrashAnalysis`).
