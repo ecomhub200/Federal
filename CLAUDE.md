@@ -658,6 +658,16 @@ risk register.
   `scorecard/scorecard` (coordinated 12+13+14 — shared `_scorecard*` state),
   `core/epdo-presets`, `core/tier`, `spatial/r2-resolve`,
   `map/map-safe-helpers`, `map/map-points-hydrate`.
+- **Round X extracted (batch 3, off-limits):**
+  `app/tab-dispatcher` (EARLY-cluster script tag — must load before the inline
+  Round-18 `(function(){'use strict';…})()` IIFE @ ~L153392 that wraps
+  `showTab`; LATE placement would silently skip that wrapper).
+  `assets/school-tab` (all 12 moved schoolTab*/escapeXML fns dual-exposed —
+  several are HTML onclick=/generated-row bound, not just the prompt's 5).
+  `assets/transit-tab` (975-line module by design; all 21 moved fns
+  dual-exposed; transitTabState const + FINAL-AUTOLOAD IIFE stay inline;
+  EARLY placement safe — its jurisdictionChanged/tierChanged listeners
+  only fire on post-load user selection).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 

@@ -4,6 +4,7 @@
  * This file initializes the namespace structure.
  */
 window.CL = window.CL || {};
+CL.app = CL.app || {};
 CL.core = CL.core || {};
 CL.analysis = CL.analysis || {};
 CL.warrants = CL.warrants || {};
