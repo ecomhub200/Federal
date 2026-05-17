@@ -98,3 +98,72 @@ Format:
 > corrected by the override layer `MODULAR_PLAN_42b_PREFLIGHT.md` (repo
 > root), which a runner MUST read alongside each 42b prompt and apply at §0.
 > Verdict: SAFE-WITH-PAUSE.
+
+---
+
+`41-ai-ai-domain-knowledge.md`  →  SUPERSEDED BY  `41-v2-ai-domain-knowledge.md`  (Session N, 2026-05-17)
+  reason: 3 prompt-authoring defects (NOT drift) — placeholder anchor
+  `(domain knowledge fns)`; un-satisfiable `grep 'ai[A-Z]|[Aa]ssistant'` §5
+  ("expected 0 matches" impossible); wrong snapshot L86463–L88000 + "rescue"
+  satellite anchors that are Asset-Deficiency, a different feature. Perpetually
+  SKIPPED in Sessions A/G/J. Real DK block is contiguous L76221–L78015
+  (~1,795 LOC, 3.6× ceiling) → 6-child re-split. Root cause + manifest:
+  `MODULAR_PLAN_PROMPT_41_FIX.md`. Do NOT run `41-ai-ai-domain-knowledge.md`.
+
+---
+
+`15-dashboard-dashboard-tab.md`  →  SUPERSEDED BY  `15-v2-dashboard-tab.md`  (Session N, 2026-05-17)
+  reason: stale snapshot L48699–L51326; live `updateDashboard`@41954, true
+  band L41954–~L43824 (~1,871 LOC, 4× ceiling) → 4-child re-split (DASHBOARD
+  SEARCH sub-feature excluded). Analysis: `NEVER_RUN_PROMPTS_ANALYSIS.md`.
+
+---
+
+`16-hotspots-hotspots-tab.md`  →  SUPERSEDED BY  `16-v2-hotspots-tab.md`  (Session N, 2026-05-17)
+  reason: stale snapshot L61500–L63344; live `analyzeHotspots`@54717, band
+  L54717–~L55790 (~1,074 LOC) → 3-child re-split. NOT superseded by off-limits
+  `analysis/hotspots.js` (that is the hotspot-math module; this is the tab UI).
+  Cleanest of the never-run set.
+
+---
+
+`17-intersection-intersection-tab.md`  →  SUPERSEDED BY  `17-v2-intersection-tab.md`  (Session N, 2026-05-17)
+  reason: stale snapshot L64600–L65800; live `updateIntersectionTab`@57641,
+  band L57641–~L59222 (~1,582 LOC) → 4–5-child re-split (detail-panel tail
+  split by brace read).
+
+---
+
+`18-pedbike-pedbike-tab.md`  →  SUPERSEDED BY  `18-v2-pedbike-tab.md`  (Session N, 2026-05-17)
+  reason: stale snapshot L66772–L68500 / "~1729"; live `updatePedBikeTab`@59225,
+  true band L59225–~L62692 (~3,468 LOC, ~2× the stale figure, 7× ceiling) →
+  7 feature-band children. Highest split risk of the set.
+
+---
+
+`27-grants-grants-rank.md`  →  SUPERSEDED BY  `27-v2-grants-rank.md`  (Session N, 2026-05-17)
+  reason: v1 anchor set NON-CONTIGUOUS — `grantState`@22688 /
+  `GRANT_SCORING_PROFILES`@22742 sit inside a shared state-decl cluster (with
+  `districtState`/`mutcdState`/`selectionState`/`warrantsState`) ~7,200 lines
+  from `initGrantModule`@29876; CLAUDE.md mandates `grantState` stays inline.
+  v2 scope = contiguous grant engine L29665–L31813 (~2,149 LOC) → 5-child
+  re-split, state window-mirrored not moved, dashboard-resize listener tail
+  caveat. Not superseded by `grants-ui.js`.
+
+---
+
+`28-grants-grants-ai.md`  →  SUPERSEDED BY  `28-v2-grants-ai.md`  (Session N, 2026-05-17)
+  reason: anchor/responsibility mismatch — v1 anchors (`showNotifTab` etc.)
+  are email-notification UI (now owned by 29-v2); v1 *responsibility*
+  ("Grant AI agents + narrative generation") = the AI-POWERED FULL APPLICATION
+  GENERATION band `generateFullApplicationContent`@35591–`exportAppWord`@37035
+  (~1,452 LOC), still inline (NOT in off-limits `grants-ui.js`) → 3-child
+  re-split.
+
+---
+
+`29-grants-grants-email.md`  →  SUPERSEDED BY  `29-v2-grants-email.md`  (Session N, 2026-05-17)
+  reason: anchors valid but mid-block; original snapshot L39673–L41500. True
+  band = whole EMAIL NOTIFICATION SYSTEM region L31814–~L35464 (~3,651 LOC,
+  7× ceiling); absorbs prompt 28's stray email-UI anchors → 7 sub-header
+  children. High split risk; run last in the grants chain (after 27-v2, 28-v2).
