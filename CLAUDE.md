@@ -778,6 +778,23 @@ risk register.
   ~354-line "CMF AI agents" block); see
   `MODULAR_PLAN_PROMPT_32_RESOLUTION.md`. Leaves prompt 33-v2 only
   partially unblocked (needs a re-derived 32).
+- **Round X extracted (Session O, off-limits):**
+  `ai/ai-domain-knowledge-core` (prompt 41-v2 child **41a** — 371-line
+  verbatim block L75086–L75456: `// DOMAIN KNOWLEDGE STATE` divider →
+  `const dkState` → `// DOMAIN KNOWLEDGE FUNCTIONS`/`initDomainKnowledge` →
+  `// QDRANT INTEGRATION` (`shouldUseQdrantProxy`..`testQdrantConnection`,
+  12 fns). EARLY cluster right after `modules/ai/ai-mode-toggle.js`. ALL
+  13 moved decls — incl. `const dkState` — dual-mirrored
+  `window`/`CL.ai.domainKnowledge`: `dkState` is read by the still-inline
+  41b–41f DK code, so the window-mirror is mandatory (resolves bare
+  `dkState`/`qdrant*` refs in inline code via global-object fall-through).
+  41b–41f NOT run this session — the rest of the DK band
+  (`voyageEmbed`..`runDKDeepAnalysis`) stays inline; run them via
+  `modular-prompts/41-v2-ai-domain-knowledge.md`. **Prompt 32 (cmf-ai)
+  re-confirmed unrunnable** as a single file; superseded by the new
+  `modular-prompts/32-v2-cmf-ai.md` 6-child re-split (32a..32c2) — see
+  `MODULAR_PLAN_PROMPT_32_RESOLUTION.md` (2026-05-17 addendum). 32-v2
+  authored only, NOT run.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
