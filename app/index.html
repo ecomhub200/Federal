@@ -4465,6 +4465,7 @@ textarea:focus-visible {
 <script src="modules/grants/ranking.js"></script>
 <script src="modules/grants/grants-ui.js"></script>
 <script src="modules/cmf/cmf-search.js"></script>
+<script src="modules/cmf/cmf-ai.js"></script>
 <script src="modules/spatial/hierarchy-registry.js"></script>
 <script src="modules/spatial/boundary-service.js"></script>
 <script src="modules/spatial/federal-boundaries.js"></script>
@@ -41046,24 +41047,6 @@ function updateCMFAIDataBadge() {
     }
 }
 
-// Initialize CMF AI on page load
-function initCMFAI() {
-    // Load saved provider
-    const savedProvider = localStorage.getItem('cmfAI_provider') || localStorage.getItem('grantTool_ai_provider') || 'claude';
-    cmfAIState.provider = savedProvider;
-    // Sync with header provider
-    const headerProvider = document.getElementById('headerAIProvider');
-    if (headerProvider) headerProvider.value = savedProvider;
-    // Also sync with popover provider
-    const popoverProvider = document.getElementById('cmfPopoverProvider');
-    if (popoverProvider) popoverProvider.value = savedProvider;
-
-    // Load saved API key from security manager
-    const savedKey = ApiKeySecurity.getKey();
-    if (savedKey) {
-        cmfAIState.apiKey = savedKey;
-    }
-}
 
 // Hook into displayCrashProfile to update the AI data badge
 const originalDisplayCrashProfile = typeof displayCrashProfile === 'function' ? displayCrashProfile : null;
