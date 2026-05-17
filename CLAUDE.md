@@ -721,6 +721,12 @@ risk register.
   moved — it has 419 refs (CMF/Warrants/AI) and stays inline as
   `const cmfState` so all inline readers keep resolving it; moved fns
   reference it only at runtime. Unblocks prompt 32 (cmf-ai)).
+  `cmf/cmf-ai` (18-line verbatim single-fn block — `initCMFAI`: CMF AI
+  provider + API-key bootstrap on page load; EARLY cluster right after
+  `modules/cmf/cmf-search.js` per prompt §3; dual-exposed
+  `window.initCMFAI` + `CL.cmf.initCMFAI`. `cmfAIState` shared global left
+  inline (referenced only at runtime); external caller
+  `setTimeout(initCMFAI,500)` resolves via `window`).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
