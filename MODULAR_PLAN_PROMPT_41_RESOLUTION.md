@@ -63,3 +63,47 @@ anchor-gone grep (use the actual moved-fn names, not `ai[A-Z]`), and the
 correct load anchor (`ai-mode-toggle.js`). Then run as its own session and
 re-verify the L81006 lower boundary and the `qdrant*/rag*/voyage*` external
 reference count.
+
+---
+
+## Session J re-attempt (2026-05-17) — SKIPPED again
+
+**Session:** J — retries from G + 44-v2. **Outcome:** SKIPPED, batch
+continues with prompt 19 (skip-then-continue rule). No edit to
+`app/index.html`.
+
+The Session J runbook listed "cowork-verified" satellite anchors
+(`initSatelliteConnection`, `captureMapboxSatelliteImage`,
+`loadADSatelliteImage`, `toggleADApiKeyPanel`) and asked for a retry "with
+real anchors." Those anchors **do** exist live (file now **146,633 lines**;
+drift ≈ −2,681 lines vs. the 149,314-line snapshot above):
+
+| Anchor | Session G line (149,314 file) | Session J line (146,633 file) |
+|---|---|---|
+| `initSatelliteConnection` | 82357 | 79676 |
+| `captureMapboxSatelliteImage` | — | 79707 |
+| `loadADSatelliteImage` | 82464 | 79783 |
+| `toggleADApiKeyPanel` | — | 79944 |
+
+But the Session G finding still holds: **these are Asset-Deficiency
+satellite-imagery functions, not the Domain Knowledge feature.** The
+contiguous AD subsystem they belong to runs from the satellite/Mapbox
+helpers (`calculateZoomForBoxSize`@79616, `checkMapboxSatelliteConnection`
+@79640) — and AD data-source loaders above (`loadAllADDataSources`@79213
+etc.) — down through the AD-cache helpers, ending cleanly at the
+`// ===` divider @L81644 immediately before the unrelated CMF date-filter
+feature (`applyCMFDatePreset`@81647).
+
+- Block from the Session-J start anchor `initSatelliteConnection`@79676 to
+  the AD-block end @81646 = **1,971 lines** — ~4× the ~500-line ceiling that
+  prompt 41 §1 mandates a STOP-and-report for.
+- The prompt's own §0 description ("Domain Knowledge tab init + retrieval",
+  snapshot L86463–L88000) still does **not** match the satellite anchors —
+  two different features, exactly as Session G documented.
+
+Both candidate blocks (the AD satellite subsystem ≈1,971 lines AND the real
+Domain Knowledge block ≈1,830 lines per the Session G re-derivation) exceed
+the single-session ≤500-line verbatim limit. Prompt 41 remains
+**un-runnable as a single-file verbatim extraction** until it is re-authored
+with correct anchors AND a `MODULAR_PLAN.md` §2 sub-split (multiple ≤500-line
+child modules), per the recommendation above. No further action in Session J.
