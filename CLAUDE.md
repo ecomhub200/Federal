@@ -819,6 +819,39 @@ risk register.
   Rules" section) — pinned here so neither top-level `worker/` file is ever
   treated as re-extractable inline code. Doc-only audit, no code moved
   (Session Q, 2026-05-17).
+- **Round X extracted (Sessions R+S+T mega-batch, off-limits):**
+  Phase R — 41-v2 children 2–6 (41a was Session O): `ai/ai-domain-knowledge-rag`,
+  `ai/ai-domain-knowledge-location`, `ai/ai-domain-knowledge-sources`,
+  `ai/ai-domain-knowledge-query`, `ai/ai-domain-knowledge-chat-ui` (verbatim
+  band L74016–75438 / 51 fns split per `MODULAR_PLAN_PROMPT_41_FIX.md`; all
+  dual-exposed `window`/`CL.ai.domainKnowledge`; LATE cluster after
+  `ai/ai-domain-knowledge-core.js`; `dkState`/Qdrant globals already
+  window-mirrored by 41a). Phase S — 15-v2 dashboard:
+  `dashboard/dashboard-tab-kpi`, `dashboard/dashboard-tab-comparison`
+  (553-line documented size-exception — shared comparison state must stay
+  together), `dashboard/dashboard-tab-drill`, `dashboard/dashboard-tab-matview`
+  (verbatim band L41966–43836 / 33 fns; `CL.dashboard` root added to
+  `loader.js`; cross-IIFE `const _tierNavHistory`/`_lastComparisonItems`
+  window-mirrored from 15b; **one behavior-preserving non-verbatim
+  qualification**: `_tierComparisonCache` → `window._tierComparisonCache` at
+  all 5 sites because it is a reassigned `let` declared/mutated in 15b but
+  invalidated from 15d's `updateDashboardTierSections` — a footer mirror would
+  capture only the initial `null` and regress tier-switch cache invalidation;
+  `_tierComparisonCacheKey` stays 15b-local). Phase T — 17-v2 intersection:
+  `intersection/intersection-tab-table`, `intersection/intersection-tab-export`
+  (421L, one indivisible `exportIntersectionPDF` + `const intDetailState`),
+  `intersection/intersection-tab-selection`,
+  `intersection/intersection-tab-detail`,
+  `intersection/intersection-tab-charts` (verbatim band L54708–56286 / 32 fns;
+  `CL.intersection` root added to `loader.js`; cross-IIFE `const intDetailState`
+  window-mirrored from 17b — used by 17a/c/d/e + a defensive `typeof` guard at
+  inline L51383; `intFilters`/`applyIntersectionFilters` left INLINE — shared
+  global lexical env / global object; 17e's filter-change wrapper reassigns
+  the global `applyIntersectionFilters` at load time as before; pure verbatim,
+  no code edits). All 14 modules `node --check`-clean; LATE-cluster script
+  tags wired after `data/supabase-map-bridge.js` (Phase R after
+  `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
+  2026-05-17).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
