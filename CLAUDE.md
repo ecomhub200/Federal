@@ -729,6 +729,24 @@ risk register.
   41 (ai-domain-knowledge) SKIPPED again — AD-satellite contiguous block
   ≈1,971 lines (>500 ceiling); see `MODULAR_PLAN_PROMPT_41_RESOLUTION.md`
   (Session J addendum).
+- **Round X extracted (Session J, 44-v2 whole-IIFE wholesale, off-limits):**
+  `data/dashboard-filter-bindings` (700-line verbatim block incl. the ROUND 18
+  banner box — the shared Round 18/19 filter-audit `(function () { 'use
+  strict'; … })();` IIFE: 14 inner fns `_activeStateKey`..`_restoreFilterInputs`
+  + `const _trafficCtrlCache`). Inner IIFE body diff-proven byte-for-byte
+  identical (690 lines); the ONLY edit is the 5 prompt-44 anchor mirrors
+  (`window.*` + `CL.data.*` for `_r18ApplyDashboardYearFilter`,
+  `_r18ReloadHotspots`, `_r19LoadSafetyCategoriesWithFilter`,
+  `_bindFilterInputs`, `_restoreFilterInputs`) inserted INSIDE the inner IIFE
+  immediately before its original `[Round 18]` log line. The 9 helpers
+  (`_r18ReloadIntersections`/`_bindOnce`/etc.) + `_trafficCtrlCache` stay
+  closure-private (no mirror); the original verbatim code's own
+  `window.populateTrafficControlDropdown`/`applyStateAwareCheckboxDefaults`/
+  `_syncVirginiaFirstDefault` self-exposures are preserved as-is. LATE
+  cluster right after `modules/data/supabase-map-bridge.js`. Behaviorally
+  inert. **SUPERSEDES the BLOCKED `44-data-filter-wiring.md`** — prompt 44 is
+  now COMPLETE; do NOT run that prompt. See `44-v2-iife-wholesale.md` /
+  `MODULAR_PLAN_44_v2_IIFE_WHOLESALE_PLAN.md`.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
