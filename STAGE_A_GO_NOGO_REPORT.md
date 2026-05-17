@@ -196,3 +196,62 @@ Session I. But the GO criteria are not met:
 
 **Next blocker = Item 1.** No further deterministic prep is possible until
 the IIFE round substantially completes.
+
+---
+
+## Session Q re-evaluation (2026-05-17)
+
+Read-only recount + go/no-go re-run against the live tree. Documentation
+only — no code extracted or modified. Branch:
+`claude/sync-stage-a-docs-Re12D`. Survey delta:
+`STAGE_A_MODULE_SURVEY.md` §"Session Q refresh".
+
+### Criteria checklist
+
+**Hard prerequisites**
+
+- [ ] `app/index.html` ≤ 50,000 lines → **144,245 — FAIL** (down from
+  149,314 at Session I; the gap is narrowing but the target is far off)
+- [ ] ≥ 80 modules extracted → **66 — FAIL** (61 → 66 since Session K)
+- [ ] All "Class A overlap" prompts resolved → **FAIL** — prompts
+  41/19/32/44 carry open `MODULAR_PLAN_PROMPT_*_RESOLUTION.md` notes
+  (44 superseded by the completed 44-v2; 41 re-anchored but unrun;
+  32 skipped → 33-v2 only partially unblocked)
+- [ ] No prompt BLOCKED for >2 sessions → **FAIL** — prompt 41
+  (ai-domain-knowledge) skipped at §0 across Sessions G/J and still open
+- [ ] All core/* + spatial/* + ai/* clusters complete → **MIXED**:
+  `core/*` (4) and `spatial/*` (7) substantially extracted; `ai/*` is
+  only `ai/context` + `ai/ai-mode-toggle` — the ai-analyst chain
+  (40c\*) and `ai/ai-domain-knowledge` (41) are **not** done → FAIL
+
+**Soft prerequisites**
+
+- [ ] CLAUDE.md off-limits list up to date → **PASS** — Session Q audit
+  found all 64 registered modules already named in the existing "Round X
+  extracted (… off-limits)" prose bullets (the +5 are covered by the
+  Session J/M bullets); no CLAUDE.md edit required
+- [ ] Total module LOC > inline LOC remaining → **FAIL** — 27,167 module
+  LOC vs 144,245 inline; inline still dominates ~5:1
+- [ ] No console errors on deployed app → **NOT RE-CHECKED** this session
+  (doc-only; no Playwright/Chrome run)
+
+### Verdict: **NO-GO** (unchanged)
+
+The dominant blocker is identical to Sessions I and K: **the IIFE
+extraction round 01–46 is far from complete.** `app/index.html` is still
+144,245 lines (definition of done: < 30,000 / all inline JS extracted).
+The +5 post-Session-K modules have **no `STAGE_A_NN` conversion prompt**
+and are absent from all three frozen design docs — the same Item 1 /
+Item 2 failure mode the Session I report described, just with a larger
+module count. The readiness gap continues to narrow slowly (149,314 →
+144,245; 56 → 66 modules) but no hard prerequisite is met.
+
+**Path to GO is unchanged** — execute the §5 punch list in order:
+burn down the outstanding IIFE extraction queue (Item 1, the gating,
+out-of-scope item), then re-run survey / onclick / import-edge scans,
+author the now-**5** missing conversion prompts, keep `STAGE_A_62-cutover`
+terminal, and only then re-run this go/no-go. Every regenerated doc's
+KEEP/import/survivor list is a **floor, not a ceiling**.
+
+**Next blocker = Item 1** (unchanged). No further deterministic doc prep
+is possible until the IIFE round substantially completes.

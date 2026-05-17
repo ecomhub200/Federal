@@ -790,11 +790,35 @@ risk register.
   `dkState`/`qdrant*` refs in inline code via global-object fall-through).
   41b–41f NOT run this session — the rest of the DK band
   (`voyageEmbed`..`runDKDeepAnalysis`) stays inline; run them via
-  `modular-prompts/41-v2-ai-domain-knowledge.md`. **Prompt 32 (cmf-ai)
-  re-confirmed unrunnable** as a single file; superseded by the new
-  `modular-prompts/32-v2-cmf-ai.md` 6-child re-split (32a..32c2) — see
+  `modular-prompts/41-v2-ai-domain-knowledge.md`.
+  `hotspots/hotspots-tab-core` + `hotspots/hotspots-tab-render` +
+  `hotspots/hotspots-tab-modal` (prompt 16-v2 children **16a/16b/16c** —
+  the full Hot Spots TAB UI verbatim, original block L54721–L55790:
+  16a `analyzeHotspots`+matview loaders+auto-select/banner (6 fns, 435 L),
+  16b `getFilteredHotspotAggregates`+filter-summary+table render+pagination
+  +MUTCD/StreetView (6 fns, 313 L), 16c `showLocationModal`+`zoomToLocation`
+  +`filterMapForLocation`+CSV/PDF export (5 fns + nested `drawKPI`, 326 L).
+  New `CL.hotspots` root added to `loader.js`; all 17 moved fns triple-
+  mirrored `window`/`CL.hotspots`/`CL.hotspots.tab` (cross-child + dynamic
+  `onclick=` callers). EARLY cluster, in order, right after
+  `modules/analysis/hotspots.js` (the off-limits hotspot-*math* module —
+  distinct feature). `updateAnalysis`@(post)L54727 + the `// ANALYSIS TAB`
+  divider deliberately left INLINE (CLAUDE.md fence). NOT superseded by
+  `analysis/hotspots.js`. **Prompt 32 (cmf-ai) re-confirmed unrunnable**
+  as a single file; superseded by the new `modular-prompts/32-v2-cmf-ai.md`
+  6-child re-split (32a..32c2) — see
   `MODULAR_PLAN_PROMPT_32_RESOLUTION.md` (2026-05-17 addendum). 32-v2
   authored only, NOT run.
+- **Round X extracted (Session Q audit, off-limits):**
+  `worker/sample-rows-loader` (registered + `<script src>`-loaded module
+  that instantiates the `csv-worker` thread; the existing `upload/worker/*`
+  wildcard does NOT cover top-level `worker/`, so this file was previously
+  unnamed in the protected list). `worker/csv-worker` is the documented
+  Web-Worker special case (loaded via `new Worker()`, intentionally no
+  `<script>` tag / no `_registerModule` — see the "Stage A — ESM Migration
+  Rules" section) — pinned here so neither top-level `worker/` file is ever
+  treated as re-extractable inline code. Doc-only audit, no code moved
+  (Session Q, 2026-05-17).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 

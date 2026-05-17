@@ -844,3 +844,61 @@ Unlike IIFE extraction (01–46, shippable one at a time), a file containing
 Onclick survivor set (25 floor — `STAGE_A_ONCLICK_API.md`) retains
 `window.X = X`; all other `window.*` writes are dropped. Transitional
 `CL.area.*` writes stay one round, stripped in a later Stage A-cleanup.
+
+---
+
+## Progress (refreshed 2026-05-17, Session Q)
+
+Read-only recount. Sections §0–§X above are unchanged.
+
+| Metric | R1 start | Now (Session Q) | Delta |
+|---|---|---|---|
+| `app/index.html` LOC | 159,387 | **144,245** | **−15,142 (−9.5%)** |
+| Inline named declarations | 3,685 | not recounted this session (doc-only) | — |
+| Modules extracted (`*.js` under `app/modules/`) | 0 | **66** | **+66** |
+| Modules with `CL._registerModule()` | 0 | **64** | +64 (+`loader.js` registrar, −`worker/csv-worker` Worker) |
+| Total module LOC | 0 | **27,167** | +27,167 |
+| `<script src="modules/…">` tags | 0 | **65** | +65 |
+
+`app/index.html` is still ~4.8× the < 30,000-line "done" target; module LOC
+(27,167) is ~19% of the remaining inline LOC (144,245). The refactor is
+materially incomplete — Stage A (ESM cutover) remains **NO-GO** (see
+`STAGE_A_GO_NOGO_REPORT.md` §"Session Q re-evaluation").
+
+## Per-cluster status (file counts; targets per §2 prompt map)
+
+Counts are live `*.js` files per directory. No fixed numeric target is
+asserted here — the authoritative remaining-work list is §2 (46 proposed
+prompts) plus the navigateTo-split / Stage A queues; treat these as a
+snapshot, not a completion ratio.
+
+| Cluster | Files | Cluster | Files |
+|---|---|---|---|
+| `batch-ba/` | 10 | `map/` | 3 |
+| `data/` | 9 | `assets/` | 3 |
+| `spatial/` | 7 | `ai/` | 2 |
+| `reports/` | 6 | `grants/` | 2 |
+| `upload/` | 5 | `worker/` | 2 |
+| `core/` | 4 | `utils/` | 1 |
+| `analysis/` | 4 | `ui/` | 1 |
+| `warrants/` | 3 | `scorecard/` | 1 |
+| | | `cmf/` | 1 |
+| | | `app/` | 1 |
+
+Plus the top-level `loader.js` namespace root. `core/*` and `spatial/*`
+are substantially extracted; `ai/*` is the dominant laggard (only
+`ai/context` + `ai/ai-mode-toggle`; the ai-analyst chain `40c*` and
+`ai/ai-domain-knowledge` prompt 41 are unrun — see
+`MODULAR_PLAN_PROMPT_41_RESOLUTION.md`).
+
+## Next-phase queue
+
+- Outstanding IIFE extraction queue (the Stage A gating item) is **not**
+  burned down — `modular-prompts/` still holds the bulk of the unrun
+  01–46 set plus the navigateTo-split / reports / cmf chains.
+- Sessions O / P / R / S / T referenced by the Session Q task prompt:
+  status **per task prompt — not verified this session** (Session Q is
+  doc-only and does not inspect other in-flight session branches).
+- Next deterministic doc work is gated on the IIFE round substantially
+  completing (go/no-go punch-list Item 1); the +5 post-Session-K modules
+  still need `STAGE_A_NN` conversion prompts before any cutover.
