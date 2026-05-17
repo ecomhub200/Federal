@@ -676,6 +676,16 @@ risk register.
   remaining inline code is unaffected, anchors also on
   `CL.spatial`/`CL.spatial.geoTier`). Batch 4 prompts 41/43/31/44 were
   BLOCKED at hard §0 gates — see `MODULAR_PLAN_PROMPT_44_RESOLUTION.md`.
+- **Round X extracted (prompt 30, off-limits):**
+  `grants/grants-ui` (2,185-line verbatim LARGE BLOCK — application/help
+  modals, grant program dropdown + writing context, AI system-prompt
+  builders, 4-agent grant-analysis orchestration + PDF/Word export; LATE
+  cluster right after `modules/grants/ranking.js`; all 36 previously-global
+  fns mirrored to `window`, 5 prompt-30 anchors also on
+  `CL.grants`/`CL.grants.ui`). Prompts 27/28/29 (grants-rank/ai/email)
+  never ran — those helpers + `grantState` + `grant*Attachments` stay
+  inline/global; grants-ui only calls them at runtime so load order is
+  safe. Unblocks prompt 31 (cmf-search).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
