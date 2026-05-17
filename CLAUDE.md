@@ -699,6 +699,19 @@ risk register.
   fns mirrored `window`/`CL.reports.standard*`; `CL.reports` root added to
   `loader.js`; 42b2-pdf / 42b3-charts left inline). Prompts 41 & 43 §0/§3
   re-anchored to `ai/ai-mode-toggle` / `reports/reports-standard-types2`.
+- **Round X extracted (Session G, off-limits):**
+  `map/map-layers` (256-line verbatim block — map address search:
+  `updateMapScopeLabel`, `searchMapboxAddresses`, `selectAddressResult`,
+  `clearMapAddressSearch`, `updateMapSearchClearButton`,
+  `findCrashesNearPoint`, `getDistanceMeters`, `calculateNearbyCrashSeverity`;
+  EARLY cluster right after `modules/map/map-safe-helpers.js` — prompt's
+  `map/map-init.js` anchor does not exist, pragmatic placement; all 8 fns
+  mirrored to `window` + `CL.map` because `getDistanceMeters` has 6 external
+  inline callers and `updateMapSearchClearButton` has 2). Session G prompts
+  41 (ai-domain-knowledge) and 19 (analysis-tab) were SKIPPED at §0 — see
+  `MODULAR_PLAN_PROMPT_41_RESOLUTION.md` / `MODULAR_PLAN_PROMPT_19_RESOLUTION.md`
+  (every spec anchor invalid / identity-anchor unisolable). NOTE: main later
+  re-anchored `modular-prompts/41` — a future session may re-attempt 41.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
