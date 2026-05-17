@@ -344,3 +344,18 @@ Auth provider config, Firestore-export script, Stripe webhook live flag.
 Files touched: `config.json`, `assets/js/supabase-auth.js` (new),
 `assets/js/auth.js`, `login/index.html`, `app/index.html`, `pricing.html`,
 `log.md`.
+
+## 2026-05-17 — Day 2 start (compressed roadmap)
+
+- O+P+Q verified clean (origin/main = `9be31e5`, PR #150 Session O extraction).
+- Baseline snapshot: `app/index.html` 142,804 LOC · 70 modules · 28,687 module
+  LOC · −16,583 (−10.4%) vs the 159,387 R1 baseline.
+- 5 parallel lanes pushed: R+S+T (extract), Lane 2 (verify next-v2), Lane 3
+  (author U+V), Lane 4 (Phase 4 survey), Lane 5 (housekeeping — this lane).
+- New ledger `STAGE_A_INVENTORY.md` created (Lane-5-owned, per-wave snapshots).
+- Expected end of Day 2: 13-14 new modules, `app/index.html` → ~137.5K, U+V
+  prompts ready, Phase 4 plan ready.
+- Branch: `claude/sync-meta-docs-Ouaq5` (system-required; task-template
+  `claude/day2-lane5-housekeeping` overridden per Lane 5 branch decision).
+
+Files touched: `STAGE_A_INVENTORY.md` (new), `MODULAR_PLAN.md`, `log.md`.
