@@ -1,0 +1,804 @@
+/**
+ * CL reports.standardCore — extracted (name-anchored). navigateTo-split
+ * round, prompt 42b1. Dispatcher + systemwide report generators.
+ * Depends: core/epdo-presets, analysis/crash-profile (via window/CL mirrors).
+ * Public API (dual exposure): window.<fn> ↔ CL.reports.standardCore.<fn>
+ */
+(function(){ 'use strict';
+  // ─── EXTRACTED CODE START (verbatim) ───
+function showReportSubTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('#tab-reports .grant-tabs .grant-tab').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    if (tabName === 'standard') {
+        document.getElementById('reportSubTabStandard').classList.add('active');
+    } else if (tabName === 'beforeafter') {
+        document.getElementById('reportSubTabBA').classList.add('active');
+    }
+
+    // Show/hide content
+    document.querySelectorAll('#tab-reports .grant-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(`reportSubTabContent-${tabName}`).classList.add('active');
+
+    // Initialize BA location dropdown when switching to Before & After tab
+    if (tabName === 'beforeafter') {
+        initBALocationDropdown();
+    }
+}
+
+function updateReportOptions() {
+    const type = document.getElementById('reportType').value;
+
+    // Hide route/node selectors for countermeasures (uses CMF tab selection)
+    const showRouteGroup = (type === 'corridor' || type === 'intersection');
+    document.getElementById('reportRouteGroup').style.display = showRouteGroup ? 'flex' : 'none';
+    document.getElementById('reportNodeGroup').style.display = type === 'intersection' ? 'flex' : 'none';
+
+    // Show/hide CMF location info for countermeasures report
+    let cmfLocationInfo = document.getElementById('cmfLocationInfo');
+    if (!cmfLocationInfo) {
+        // Create the info element if it doesn't exist
+        const container = document.getElementById('reportRouteGroup').parentElement;
+        cmfLocationInfo = document.createElement('div');
+        cmfLocationInfo.id = 'cmfLocationInfo';
+        cmfLocationInfo.className = 'filter-group';
+        cmfLocationInfo.style.flex = '2';
+        container.insertBefore(cmfLocationInfo, document.getElementById('reportRouteGroup'));
+    }
+
+    if (type === 'countermeasures') {
+        if (cmfState.selectedLocation && cmfState.locationCrashes.length > 0) {
+            const locName = cmfState.selectedLocation.type === 'node'
+                ? `Node ${cmfState.selectedLocation.name}`
+                : formatRouteName(cmfState.selectedLocation.name);
+            cmfLocationInfo.innerHTML = `
+                <label>Selected Location (from Countermeasures tab)</label>
+                <div style="padding:.5rem .75rem;background:#dcfce7;border:2px solid #22c55e;border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
+                    <span>
+                        <strong style="color:#166534">${cmfState.selectedLocation.type === 'node' ? '🚦' : '🛣️'} ${locName}</strong>
+                        <span style="color:#15803d;margin-left:.5rem">(${cmfState.locationCrashes.length} crashes)</span>
+                    </span>
+                    <button class="btn btn-sm" style="background:#22c55e;color:white;padding:.2rem .5rem;font-size:.7rem" onclick="showTab('cmf')">Change</button>
+                </div>
+            `;
+            cmfLocationInfo.style.display = 'flex';
+        } else {
+            cmfLocationInfo.innerHTML = `
+                <label>Selected Location</label>
+                <div style="padding:.5rem .75rem;background:#fef3c7;border:2px solid #f59e0b;border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:#92400e">⚠️ No location selected</span>
+                    <button class="btn btn-sm" style="background:#f59e0b;color:white;padding:.2rem .5rem;font-size:.7rem" onclick="showTab('cmf')">Select Location</button>
+                </div>
+            `;
+            cmfLocationInfo.style.display = 'flex';
+        }
+    } else if (type === 'beforeafter') {
+        if (baState.selectedLocation && baState.locationCrashes.length > 0) {
+            cmfLocationInfo.innerHTML = `
+                <label>Selected Location (from Before/After tab)</label>
+                <div style="padding:.5rem .75rem;background:#dcfce7;border:2px solid #22c55e;border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
+                    <span>
+                        <strong style="color:#166534">📍 ${baState.locationName || 'Selected Location'}</strong>
+                        <span style="color:#15803d;margin-left:.5rem">(${baState.locationCrashes.length} crashes)</span>
+                    </span>
+                    <button class="btn btn-sm" style="background:#22c55e;color:white;padding:.2rem .5rem;font-size:.7rem" onclick="showTab('beforeafter')">Change</button>
+                </div>
+            `;
+            cmfLocationInfo.style.display = 'flex';
+        } else {
+            cmfLocationInfo.innerHTML = `
+                <label>Selected Location</label>
+                <div style="padding:.5rem .75rem;background:#fef3c7;border:2px solid #f59e0b;border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:#92400e">⚠️ No location selected - go to Before/After tab first</span>
+                    <button class="btn btn-sm" style="background:#f59e0b;color:white;padding:.2rem .5rem;font-size:.7rem" onclick="showTab('beforeafter')">Select Location</button>
+                </div>
+            `;
+            cmfLocationInfo.style.display = 'flex';
+        }
+    } else {
+        cmfLocationInfo.style.display = 'none';
+    }
+
+    // Update title based on type
+    const titles = {
+        'corridor': 'Corridor & Segment Analysis Report',
+        'intersection': 'Intersection Safety Analysis Report',
+        'dashboard': 'Executive Dashboard Summary',
+        'systemwide': 'System-Wide Crash Summary',
+        'safety': 'Safety Performance Report',
+        'safetyfocus': 'Safety Focus Category Report',
+        'pedbike': 'Vulnerable Road User Safety Report',
+        'trend': 'Multi-Year Trend Analysis Report',
+        'countermeasures': 'Countermeasures Effectiveness Report',
+        'infographic': 'Traffic Safety Report',
+        'comprehensive': 'Quarterly Traffic Safety Report',
+        'crashtree': 'Systemic Safety Analysis Report',
+        'fatalspeed': 'Fatal & Speed-Related Analysis Report',
+        'hotspot': 'High-Crash Location Report',
+        'beforeafter': 'Before/After Study Report',
+        'grantsupport': 'Grant Application Support Package'
+    };
+    document.getElementById('reportTitle').value = titles[type] || 'Crash Analysis Report';
+}
+
+/**
+ * Round 14 §7 — shared AI context builder used by the 5 AI chats
+ * (Countermeasure, Domain Knowledge, MUTCD, Grant Search, Grant Writing).
+ * Each chat now starts every prompt with a JSON header that captures the
+ * user's active state, jurisdiction, road-type, and selected location row
+ * (when one of the LocationPicker dropdowns has a value). State-agnostic.
+ *
+ * Returns an object — callers JSON.stringify it and prepend to the user
+ * prompt. Lookups are best-effort: missing pieces simply land as null in
+ * the context.
+ */
+function buildAIContext() {
+    const stateKey = (window.crashLensClient && window.crashLensClient.state)
+        ? String(window.crashLensClient.state).toLowerCase() : '';
+
+    let tier = null, jurisdiction = null, roadType = null;
+    try {
+        if (window.CL && CL.data && CL.data.supabaseBridge && typeof CL.data.supabaseBridge.resolveTier === 'function') {
+            const t = CL.data.supabaseBridge.resolveTier();
+            if (t) { tier = t.tier; jurisdiction = t.value; }
+            const rt = (CL.data.supabaseBridge.roadTypeSpec && CL.data.supabaseBridge.roadTypeSpec()) || {};
+            roadType = rt.noInterstate ? 'all_no_interstate'
+                       : (rt.roadType || (Array.isArray(rt.roadTypes) && rt.roadTypes[0]) || 'all');
+        }
+    } catch (e) { /* fall through */ }
+
+    const ctx = {
+        state: stateKey,
+        tier: tier,
+        jurisdiction: jurisdiction,
+        road_type: roadType,
+        active_location: null,
+    };
+
+    // Locate the active LocationPicker selection from any of the 7 dropdowns
+    // wired in Round 13 (cmf, warrant, dk, report, ba, newApp, mutcd).
+    const ids = [
+        'cmfLocationSelect', 'warrantLocationSelect', 'dkLocationSelect',
+        'reportLocationSelect', 'baLocationSelect', 'newAppLocation',
+        'mutcdLocationSelect',
+    ];
+    if (window.LocationPicker && typeof window.LocationPicker.resolveValue === 'function') {
+        for (const id of ids) {
+            const el = document.getElementById(id);
+            if (!el || !el.value) continue;
+            const row = window.LocationPicker.resolveValue(el.value);
+            if (row) {
+                ctx.active_location = {
+                    type:    row.location_type,
+                    name:    row.location_name,
+                    display: row.display_name,
+                    total:   row.total_crashes,
+                    k:       row.k,
+                    a:       row.a,
+                    county:  row.jurisdiction_county || null,
+                    mpo:     row.jurisdiction_mpo || null,
+                };
+                break;
+            }
+        }
+    }
+    return ctx;
+}
+
+/**
+ * Round 14 §0.2 — defensive accessor for crashState.aggregates paths used
+ * across the Reports tab. In Supabase-only mode the aggregates object can be
+ * partially initialised (e.g. byCollision is empty when no row hydration ran),
+ * which crashed Comprehensive Quarterly with "Cannot read properties of
+ * undefined (reading 'count')". _safeAgg returns the requested nested value
+ * or the supplied fallback when any segment is missing.
+ *
+ * Usage: _safeAgg('byCollision.Angle.count', 0)
+ */
+function _safeAgg(path, fallback) {
+    try {
+        if (typeof crashState === 'undefined' || !crashState || !crashState.aggregates) return fallback;
+        const parts = String(path).split('.');
+        let v = crashState.aggregates;
+        for (const p of parts) {
+            if (v == null) return fallback;
+            v = v[p];
+        }
+        return v == null ? fallback : v;
+    } catch (e) {
+        return fallback;
+    }
+}
+
+/**
+ * Round 14 §0.3 — per-type Supabase data dispatcher for the Reports tab.
+ * Returns a Promise that resolves to a payload bundle the matching report
+ * generator can read from window._reportDataCache, OR returns null to let
+ * the legacy row-hydration code-path render the report (for types that
+ * already work end-to-end without a Supabase pre-fetch — comprehensive,
+ * infographic, executive_summary).
+ *
+ * Each report type maps to an existing data-client method. State-agnostic —
+ * keys on tier resolved from the supabase-bridge.
+ */
+// Round 23 §1.1 — for matview-friendly report types, skip the 100K-row pull
+// and hydrate aggregations directly from matviews. Mirrors what each tab
+// already reads from Supabase. Cuts report-generate wall time from 50-100s
+// to ~3s. State-agnostic: keys on resolved tier + stateKey.
+async function hydrateReportFromMatviews(reportType, tier, value) {
+    const dc = window.crashLensClient;
+    if (!dc || !window.CL || !CL.data || !CL.data.supabaseBridge) return null;
+    const tierColMap = {
+        federal: null, state: null, region: 'dot_district', mpo: 'mpo_name',
+        planning_district: 'planning_district', county: 'planning_district',
+        city: 'physical_juris_name', city_town: 'physical_juris_name'
+    };
+    const tierCol = tierColMap[tier];
+    const stateKey = String(dc.state || '').toLowerCase();
+    const headers = { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey };
+    const baseParams = (extra = {}) => {
+        const p = new URLSearchParams({ state: 'eq.' + stateKey, ...extra });
+        if (tierCol && value) p.set(tierCol, 'eq.' + value);
+        return p.toString();
+    };
+    const fetchJson = async (path, extra) => {
+        try {
+            const r = await fetch(`${dc.supabaseUrl}/${path}?${baseParams(extra)}`, { headers });
+            return r.ok ? await r.json() : [];
+        } catch (e) {
+            return [];
+        }
+    };
+
+    const [dash, hotspots, fatal, speed, safety, intersection, analysis] = await Promise.all([
+        fetchJson('dashboard_summary', { select: 'crash_count,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,night_crashes,alcohol_crashes,animal_crashes,crash_severity,crash_year,collision_type,functional_class,road_type,is_interstate' }),
+        fetchJson('mv_hotspots', { select: '*', order: 'total_crashes.desc', limit: '100' }),
+        fetchJson('mv_fatal_factors', { select: '*' }),
+        fetchJson('mv_speed_summary', { select: '*' }),
+        fetchJson('mv_safety_categories', { select: '*' }),
+        fetchJson('mv_intersection_summary', { select: 'intersection_type,traffic_control_type,collision_type,total,k,a,b,c,o,crash_year' }),
+        fetchJson('mv_analysis_summary', { select: 'dimension,dim_value,total,k,a,b,c,o' })
+    ]);
+
+    const aggregated = {
+        total: dash.reduce((s, r) => s + (Number(r.crash_count) || 0), 0),
+        fatals: dash.reduce((s, r) => s + (Number(r.fatals) || 0), 0),
+        seriousInjuries: dash.reduce((s, r) => s + (Number(r.serious_injuries) || 0), 0),
+        totalInjured: dash.reduce((s, r) => s + (Number(r.total_injured) || 0), 0),
+        ped: dash.reduce((s, r) => s + (Number(r.ped_crashes) || 0), 0),
+        bike: dash.reduce((s, r) => s + (Number(r.bike_crashes) || 0), 0),
+        speed: dash.reduce((s, r) => s + (Number(r.speed_crashes) || 0), 0),
+        night: dash.reduce((s, r) => s + (Number(r.night_crashes) || 0), 0),
+        alcohol: dash.reduce((s, r) => s + (Number(r.alcohol_crashes) || 0), 0),
+        animal: dash.reduce((s, r) => s + (Number(r.animal_crashes) || 0), 0),
+        bySeverity: { K: 0, A: 0, B: 0, C: 0, O: 0 },
+        byYear: {},
+        byCollision: {},
+        byFuncClass: {},
+        topHotspots: hotspots,
+        fatalFactors: fatal,
+        speedSummary: speed,
+        safetyCategories: safety,
+        intersectionSummary: intersection,
+        analysisSummary: analysis,
+    };
+    dash.forEach(r => {
+        const sev = String(r.crash_severity || '').charAt(0).toUpperCase();
+        if (sev in aggregated.bySeverity) aggregated.bySeverity[sev] += Number(r.crash_count) || 0;
+        const y = r.crash_year;
+        if (y) aggregated.byYear[y] = (aggregated.byYear[y] || 0) + (Number(r.crash_count) || 0);
+        if (r.collision_type) aggregated.byCollision[r.collision_type] = (aggregated.byCollision[r.collision_type] || 0) + (Number(r.crash_count) || 0);
+        if (r.functional_class) aggregated.byFuncClass[r.functional_class] = (aggregated.byFuncClass[r.functional_class] || 0) + (Number(r.crash_count) || 0);
+    });
+    return aggregated;
+}
+window.hydrateReportFromMatviews = hydrateReportFromMatviews;
+
+async function fetchReportDataForType(reportType, ctx) {
+    if (!window.crashLensClient || !window.CL || !CL.data || !CL.data.supabaseBridge) return null;
+    const t = CL.data.supabaseBridge.resolveTier();
+    const stateKey = (window.crashLensClient.state || '').toLowerCase();
+    const c = window.crashLensClient;
+    const rt = (CL.data.supabaseBridge.roadTypeSpec && CL.data.supabaseBridge.roadTypeSpec()) || {};
+    const roadType = rt.noInterstate ? 'all_no_interstate'
+                    : (rt.roadType || (Array.isArray(rt.roadTypes) && rt.roadTypes[0]) || 'all');
+    ctx = ctx || {};
+
+    try {
+        switch (reportType) {
+            case 'comprehensive':
+            case 'infographic':
+            case 'executive_summary':
+                return null; // existing flow (with _safeAgg) handles these
+            case 'corridor':
+            case 'segment_analysis':
+                if (!ctx.locationName) return { error: 'Select a location.' };
+                return c.getHotspotDetail(stateKey, 'segment', ctx.locationName);
+            case 'crashtree':
+            case 'systemic':
+                return c.getCrashTree(t.tier, t.value, { roadType });
+            case 'safety':
+            case 'safety_focus':
+            case 'safetyfocus':
+                return c.getSafetyCategories(t.tier, t.value, { roadType });
+            case 'fatal_speed':
+            case 'fatalspeed':
+                return Promise.all([
+                    c.getFatalFactors(t.tier, t.value, { roadType }),
+                    c.getSpeedSummary(t.tier, t.value, { roadType }),
+                    c.getSafetyFocusLocations(t.tier, t.value, 'speed', { limit: 25 }),
+                ]).then(([fatal, speed, locs]) => ({ fatal, speed, locs }));
+            case 'hotspot':
+                return c.getHotspots(t.tier, t.value, { roadType, limit: 25 });
+            case 'intersection':
+                return c.getIntersectionSummary(t.tier, t.value, { roadType });
+            case 'pedbike':
+                return Promise.all([
+                    c.getPedBikeLocations(t.tier, t.value, 'pedestrian', { limit: 25 }),
+                    c.getPedBikeLocations(t.tier, t.value, 'bicycle',    { limit: 25 }),
+                ]).then(([ped, bike]) => ({ ped, bike }));
+            case 'countermeasures':
+                // Countermeasures uses the in-memory cmfLibrary; no matview wiring needed.
+                return null;
+            case 'beforeafter':
+                if (!ctx.locationName || !ctx.installDate) return { error: 'Provide Treatment Date and Location.' };
+                return c.runBeforeAfterStudy({
+                    state: stateKey,
+                    locationName: ctx.locationName,
+                    locationType: ctx.locationType || 'segment',
+                    installDate: ctx.installDate,
+                });
+            case 'grant':
+            case 'grantsupport':
+                return c.getGrantReadyLocations({ roadType, limit: 50 });
+            case 'performance':
+            case 'trend':
+                return c.getSafetyCategories(t.tier, t.value, { roadType });
+            default:
+                return null;
+        }
+    } catch (e) {
+        console.warn('[Report] fetchReportDataForType(' + reportType + ') failed:', e && e.message);
+        return null;
+    }
+}
+
+function generateReport() {
+    let type = document.getElementById('reportType').value;
+    // Backward compatibility: map systemwide to dashboard
+    if (type === 'systemwide') type = 'dashboard';
+
+    // Round 15 §12.9 — validate location before kicking off generation.
+    // Corridor / intersection report types require a route or node — without
+    // one the generators silently produce an empty PDF. Surface a clear toast
+    // and focus the input instead of failing silently. countermeasures and
+    // beforeafter are still validated downstream against their own state.
+    if (type === 'corridor' || type === 'intersection') {
+        const routeEl = document.getElementById('reportRoute');
+        const nodeEl  = document.getElementById('reportNode');
+        const hasRoute = routeEl && String(routeEl.value || '').trim();
+        const hasNode  = (type === 'intersection') ? (nodeEl && String(nodeEl.value || '').trim()) : true;
+        if (!hasRoute || (type === 'intersection' && !hasNode)) {
+            const fld = (!hasRoute) ? 'Route' : 'Node';
+            const target = (!hasRoute) ? routeEl : nodeEl;
+            if (typeof showToast === 'function') {
+                showToast('This report type requires a ' + fld + '. Please select one before generating.', 'warning', 5000);
+            } else {
+                alert('This report type requires a ' + fld + '. Please select one before generating.');
+            }
+            if (target && typeof target.focus === 'function') target.focus();
+            return;
+        }
+    }
+
+    showLoading('Generating report...');
+
+    // Round 14 §0.3 — kick off the per-type Supabase pre-fetch in parallel
+    // with the row hydration. The result lands on window._reportDataCache for
+    // generators that opt in; legacy generators continue to read crashState
+    // unchanged. Errors here are non-fatal — generators fall back to the
+    // legacy data path.
+    try {
+        const reportLocSelect = document.getElementById('reportLocationSelect');
+        const installDateEl = document.getElementById('baTreatmentDate');
+        const pickerRow = (window.LocationPicker && reportLocSelect)
+            ? window.LocationPicker.resolveValue(reportLocSelect.value)
+            : null;
+        const ctx = {
+            locationName: pickerRow ? pickerRow.location_name : null,
+            locationType: pickerRow ? pickerRow.location_type : null,
+            installDate:  installDateEl ? installDateEl.value : null,
+        };
+        Promise.resolve(fetchReportDataForType(type, ctx))
+            .then(data => {
+                if (data && data.error) {
+                    console.warn('[Report] Pre-fetch error for', type, ':', data.error);
+                    return;
+                }
+                if (data) window._reportDataCache = data;
+            })
+            .catch(e => console.warn('[Report] Pre-fetch failed:', e && e.message));
+    } catch (e) {
+        console.warn('[Report] Pre-fetch setup failed:', e && e.message);
+    }
+
+    setTimeout(async () => {
+        const title = document.getElementById('reportTitle').value || 'Crash Analysis Report';
+        const author = document.getElementById('reportAuthor').value || 'Traffic Engineering Division';
+        const route = document.getElementById('reportRoute').value;
+        const startDate = document.getElementById('reportStartDate').value;
+        const endDate = document.getElementById('reportEndDate').value;
+
+        // For countermeasures report, use CMF tab selection
+        if (type === 'countermeasures') {
+            if (!cmfState.selectedLocation || cmfState.locationCrashes.length === 0) {
+                hideLoading();
+                alert('Please select a location in the Countermeasures tab first.\n\nGo to the Countermeasures tab, search for a road or intersection, and then come back to generate the report.');
+                return;
+            }
+            let crashes = cmfState.locationCrashes;
+            if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
+            if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
+            const locationName = cmfState.selectedLocation.type === 'node'
+                ? `Node ${cmfState.selectedLocation.name}`
+                : formatRouteName(cmfState.selectedLocation.name);
+            generateCountermeasuresReport(crashes, locationName, title, author);
+            document.getElementById('reportOutput').style.display = 'block';
+            hideLoading();
+            document.getElementById('reportOutput').scrollIntoView({ behavior: 'smooth' });
+            return;
+        }
+
+        // For before/after report, use BA tab data
+        if (type === 'beforeafter') {
+            if (!baState.selectedLocation || baState.locationCrashes.length === 0) {
+                hideLoading();
+                alert('Please select a location in the Before/After Study tab first.\n\nGo to the Before/After tab, select a location and run the study, then come back to generate the report.');
+                return;
+            }
+            generateBeforeAfterStudyReport(title, author);
+            document.getElementById('reportOutput').style.display = 'block';
+            hideLoading();
+            document.getElementById('reportOutput').scrollIntoView({ behavior: 'smooth' });
+            return;
+        }
+
+        // ROUND-8 (2026-05-09): in Supabase-only mode `crashState.sampleRows`
+        // is empty for every aggregate tier, which used to break all 13
+        // report types (infographic, comprehensive, pedbike, fatalspeed,
+        // hotspot, dashboard, corridor, safety, safetyfocus, trend,
+        // intersection, crashtree, grantsupport).
+        // Hydrate row-level crashes from Supabase first; cap at 200k to
+        // keep the PDF/HTML generators responsive. The matview-driven tabs
+        // are unaffected — this is only used by the Reports-tab generators
+        // that iterate per-row for chart and table data.
+        let crashes = crashState.sampleRows;
+        let _hydratedFromSupabase = false;
+        // Clear stale matview data from a previous generate-report run so
+        // generators that check window._reportMatviewData don't read leftover
+        // numbers from a different report.
+        window._reportMatviewData = null;
+
+        // Round 23 §1.2 — for aggregate report types whose generators have
+        // been ported to read window._reportMatviewData, hydrate aggregations
+        // directly from matviews (~3s) instead of pulling 100K row-level
+        // crashes (~60-90s). Other report types fall through to the legacy
+        // row pull below. State-agnostic — keys on resolved tier + stateKey.
+        // NOTE: keep this set narrow — only include generators that have been
+        // ported in §1.3 to read window._reportMatviewData. Unported generators
+        // iterating an empty stub array would render mostly-empty reports.
+        // Other types fall through to the legacy row pull below.
+        const MATVIEW_REPORT_TYPES = new Set(['dashboard', 'systemwide']);
+        if (MATVIEW_REPORT_TYPES.has(type) &&
+            window.CL && CL.data && CL.data.supabaseBridge &&
+            typeof CL.data.supabaseBridge.resolveTier === 'function' &&
+            (!crashes || crashes.length === 0)) {
+            try {
+                const t = CL.data.supabaseBridge.resolveTier();
+                if (t && t.tier) {
+                    const t0 = Date.now();
+                    const matviewData = await hydrateReportFromMatviews(type, t.tier, t.value);
+                    if (matviewData && matviewData.total > 0) {
+                        window._reportMatviewData = matviewData;
+                        // Stub crashes (length = total) so generators that
+                        // gate on length>0 don't bail. Generators ported in
+                        // §1.3 read window._reportMatviewData for the actual
+                        // numbers and never iterate the stub rows.
+                        crashes = new Array(Math.min(matviewData.total, 10000)).fill(null).map(() => ({}));
+                        _hydratedFromSupabase = true;
+                        console.log('[Report] Matview hydration complete in ' + (Date.now() - t0) + 'ms (total=' + matviewData.total + ')');
+                    }
+                }
+            } catch (e) {
+                console.warn('[Report] Matview hydration failed:', e && e.message);
+            }
+        }
+
+        if (!_hydratedFromSupabase &&
+            (!crashes || crashes.length === 0) &&
+            window.crashLensClient &&
+            window.CL && window.CL.data && window.CL.data.supabaseBridge &&
+            typeof window.CL.data.supabaseBridge.resolveTier === 'function') {
+            try {
+                const t = window.CL.data.supabaseBridge.resolveTier();
+                // Round 17 §9.6 — drop the cap to a workable chunked budget.
+                // getCrashes now pages internally at 10K/request, so 100K is
+                // ~10 chunks. Statement-timeout 500s at 200K are gone, and
+                // PDF/HTML generators were already truncating anything above
+                // ~100K for chart legibility.
+                const fetchOpts = { all: true, maxRows: 100000 };
+                if (route) fetchOpts.route = route;
+                if (startDate) fetchOpts.dateFrom = startDate;
+                if (endDate) fetchOpts.dateTo = endDate;
+                const result = await window.crashLensClient.getCrashes(t.tier, t.value, fetchOpts);
+                if (result && Array.isArray(result.rows) && result.rows.length > 0) {
+                    crashes = result.rows;
+                    _hydratedFromSupabase = true;
+                    console.log('[Report] Hydrated ' + crashes.length + ' crashes from Supabase for tier=' + t.tier);
+                }
+            } catch (e) {
+                console.warn('[Report] Hydration failed:', e && e.message);
+            }
+        }
+
+        // For infographic, use dedicated generator
+        if (type === 'infographic') {
+            const agency = document.getElementById('reportAgency').value || getJurisdictionLabel();
+            const department = document.getElementById('reportDepartment').value || 'Traffic Engineering Division';
+            await generateInfographic(crashes, title, agency, department, startDate, endDate);
+            hideLoading();
+            return;
+        }
+
+        // For comprehensive quarterly report, use dedicated generator
+        if (type === 'comprehensive') {
+            const agency = document.getElementById('reportAgency').value || getJurisdictionLabel();
+            const department = document.getElementById('reportDepartment').value || 'Traffic Engineering Division';
+            generateComprehensiveReport(crashes, title, agency, department, author, startDate, endDate);
+            return;
+        }
+
+        // Filter data for other report types. Skip post-filtering when we
+        // hydrated from Supabase — server-side already applied route +
+        // dateFrom/dateTo and the row date format differs (string ISO vs.
+        // legacy epoch milliseconds), which would otherwise null out the
+        // hydrated set.
+        if (!_hydratedFromSupabase) {
+            if (route) crashes = crashes.filter(r => r[COL.ROUTE] === route);
+            if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
+            if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
+        }
+
+        if (!crashes || crashes.length === 0) {
+            hideLoading();
+            alert('No crash data available for the current tier/filter. Try selecting a different tier or removing date filters.');
+            return;
+        }
+
+        try {
+            // Generate based on type
+            if (type === 'dashboard') generateDashboardReport(crashes, title, author);
+            else if (type === 'corridor') generateCorridorReport(crashes, route || 'All Routes', title, author);
+            else if (type === 'safety') generateSafetyReport(crashes, title, author);
+            else if (type === 'safetyfocus') generateSafetyFocusReport(crashes, title, author, startDate, endDate);
+            else if (type === 'pedbike') generatePedBikeReport(crashes, title, author);
+            else if (type === 'trend') generateTrendReport(crashes, title, author);
+            else if (type === 'intersection') generateIntersectionReport(crashes, route, title, author);
+            else if (type === 'crashtree') generateCrashTreeSystemicReport(crashes, title, author);
+            else if (type === 'fatalspeed') await generateFatalSpeedReport(crashes, title, author);
+            else if (type === 'hotspot') generateHotspotRankingReport(crashes, title, author);
+            else if (type === 'grantsupport') generateGrantSupportReport(crashes, title, author);
+
+            document.getElementById('reportOutput').style.display = 'block';
+            document.getElementById('reportOutput').scrollIntoView({ behavior: 'smooth' });
+        } catch (err) {
+            console.error('Report generation error:', err);
+            alert('Error generating report: ' + err.message);
+        } finally {
+            hideLoading();
+        }
+    }, 100);
+}
+
+function generateSystemwideReport(crashes, title, author) {
+    // Backward compatibility: delegate to dashboard report
+    return generateDashboardReport(crashes, title, author);
+}
+
+function _legacySystemwideReport(crashes, title, author) {
+    const stats = computeStats(crashes);
+    // Prefer the Reports tab's user-selected timeline (reportStartDate /
+    // reportEndDate) so the rendered HTML preview and the Word memo both
+    // show the same period the user asked for. Fall back to the crash
+    // min/max when no filter is set (legacy behavior).
+    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+        ? resolveReportPeriod('reportStartDate', 'reportEndDate')
+        : getDateRange(crashes);
+    const reportId = generateReportId();
+
+    document.getElementById('rptTitle').textContent = title;
+    document.getElementById('rptSubtitle').textContent = `${getJurisdictionLabel()} System-Wide Safety Analysis`;
+    document.getElementById('rptMeta').textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
+
+    // Update footer and report ID with crash count
+    updateReportFooter(yearRange, reportId, stats.total);
+
+    // Show executive summary
+    showExecutiveSummary(stats, crashes, 'system-wide analysis', getJurisdictionLabel());
+
+    // Show Table of Contents with new structure
+    showTableOfContents('systemwide');
+
+    // Compute category-specific data for the report
+    const categoryData = computeSystemwideCategoryData(crashes);
+
+    // Primary KPIs - Key safety metrics
+    document.getElementById('rptKPIs').innerHTML = `
+        <div class="report-kpi" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5">
+            <div class="value" style="color:#dc2626">${stats.K}</div><div class="label">Fatal Crashes</div>
+        </div>
+        <div class="report-kpi" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1px solid #fdba74">
+            <div class="value" style="color:#ea580c">${stats.A}</div><div class="label">Serious Injury</div>
+        </div>
+        <div class="report-kpi">
+            <div class="value">${stats.total.toLocaleString()}</div><div class="label">Total Crashes</div>
+        </div>
+        <div class="report-kpi">
+            <div class="value">${pct(stats.K + stats.A, stats.total)}%</div><div class="label">K+A Rate</div>
+        </div>
+        <div class="report-kpi" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd">
+            <div class="value" style="color:#2563eb">${stats.ped}</div><div class="label">Pedestrian</div>
+        </div>
+        <div class="report-kpi" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac">
+            <div class="value" style="color:#16a34a">${stats.bike}</div><div class="label">Bicycle</div>
+        </div>
+        <div class="report-kpi">
+            <div class="value">${categoryData.speed.total}</div><div class="label">Speed-Related</div>
+        </div>
+        <div class="report-kpi">
+            <div class="value">${calcEPDO(stats).toLocaleString()}</div><div class="label">EPDO Score</div>
+        </div>
+    `;
+
+    // Safety Focus Exploration Dashboard - Visual tiles for key categories
+    const explorationHtml = generateExplorationDashboard(crashes, categoryData);
+
+    // Key Findings with enhanced insights
+    const findings = generateEnhancedFindings(stats, crashes, categoryData);
+    document.getElementById('rptFindings').innerHTML = `
+        <h4>Key Safety Insights</h4>
+        ${findings.map(f => `<div class="finding-item ${f.type}">${f.text}</div>`).join('')}
+    `;
+
+    // Yearly section
+    document.getElementById('rptYearlySection').innerHTML = generateYearlySection(crashes);
+
+    // Charts section with exploration dashboard
+    document.getElementById('rptChartsSection').innerHTML = `
+        <div class="report-section" style="grid-column:1/-1">
+            <h4 style="display:flex;align-items:center;gap:.5rem">
+                <svg style="width:18px;height:18px" fill="currentColor" viewBox="0 0 20 20"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                Safety Focus Exploration
+            </h4>
+            ${explorationHtml}
+        </div>
+        <div class="report-section"><h4>Collision Types</h4><div style="height:220px"><canvas id="rptChartCollision"></canvas></div></div>
+        <div class="report-section"><h4>Severity Distribution</h4><div style="height:220px"><canvas id="rptChartSeverity"></canvas></div></div>
+    `;
+
+    setTimeout(() => {
+        createReportCharts(stats, crashes);
+    }, 100);
+
+    // Top Locations by Category - Replace the large uninformative table
+    document.getElementById('rptTablesSection').innerHTML = generateCategoryTopLocations(crashes, categoryData);
+
+    // Enhanced Recommendations based on category data
+    document.getElementById('rptRecommendations').innerHTML = generateEnhancedRecommendations(stats, crashes, categoryData);
+}
+
+/**
+ * Compute category-specific crash data for systemwide report
+ */
+function computeSystemwideCategoryData(crashes) {
+    const categories = {
+        fatal: { total: 0, crashes: [], byRoute: {} },
+        pedestrian: { total: 0, crashes: [], byRoute: {}, K: 0, A: 0 },
+        bicycle: { total: 0, crashes: [], byRoute: {}, K: 0, A: 0 },
+        speed: { total: 0, crashes: [], byRoute: {}, K: 0, A: 0 },
+        intersection: { total: 0, crashes: [], byRoute: {}, K: 0, A: 0 },
+        nighttime: { total: 0, crashes: [], byRoute: {}, K: 0, A: 0 },
+        impaired: { total: 0, crashes: [], byRoute: {}, K: 0, A: 0 }
+    };
+
+    crashes.forEach(row => {
+        const sev = (row[COL.SEVERITY] || 'O').charAt(0).toUpperCase();
+        const route = row[COL.ROUTE] || 'Unknown';
+
+        // Fatal crashes
+        if (sev === 'K') {
+            categories.fatal.total++;
+            categories.fatal.crashes.push(row);
+            categories.fatal.byRoute[route] = (categories.fatal.byRoute[route] || 0) + 1;
+        }
+
+        // Pedestrian crashes
+        if ((row[COL.PED] || '').toLowerCase() === 'yes') {
+            categories.pedestrian.total++;
+            categories.pedestrian.crashes.push(row);
+            categories.pedestrian.byRoute[route] = (categories.pedestrian.byRoute[route] || 0) + 1;
+            if (sev === 'K') categories.pedestrian.K++;
+            if (sev === 'A') categories.pedestrian.A++;
+        }
+
+        // Bicycle crashes
+        if ((row[COL.BIKE] || '').toLowerCase() === 'yes') {
+            categories.bicycle.total++;
+            categories.bicycle.crashes.push(row);
+            categories.bicycle.byRoute[route] = (categories.bicycle.byRoute[route] || 0) + 1;
+            if (sev === 'K') categories.bicycle.K++;
+            if (sev === 'A') categories.bicycle.A++;
+        }
+
+        // Speed-related crashes
+        if ((row[COL.SPEED] || '').toLowerCase() === 'yes') {
+            categories.speed.total++;
+            categories.speed.crashes.push(row);
+            categories.speed.byRoute[route] = (categories.speed.byRoute[route] || 0) + 1;
+            if (sev === 'K') categories.speed.K++;
+            if (sev === 'A') categories.speed.A++;
+        }
+
+        // Intersection crashes
+        const intAnalysis = (row['Intersection Analysis'] || '').toLowerCase();
+        const intType = row[COL.INT_TYPE] || row['Intersection Type'] || '';
+        if ((intAnalysis !== '' && !intAnalysis.includes('not intersection')) ||
+            (intType !== '' && !intType.toLowerCase().includes('not at intersection') && !intType.startsWith('0.'))) {
+            categories.intersection.total++;
+            categories.intersection.crashes.push(row);
+            categories.intersection.byRoute[route] = (categories.intersection.byRoute[route] || 0) + 1;
+            if (sev === 'K') categories.intersection.K++;
+            if (sev === 'A') categories.intersection.A++;
+        }
+
+        // Nighttime crashes
+        if ((row[COL.NIGHT] || row['Night?'] || '').toLowerCase() === 'yes') {
+            categories.nighttime.total++;
+            categories.nighttime.crashes.push(row);
+            categories.nighttime.byRoute[route] = (categories.nighttime.byRoute[route] || 0) + 1;
+            if (sev === 'K') categories.nighttime.K++;
+            if (sev === 'A') categories.nighttime.A++;
+        }
+
+        // Impaired driving crashes
+        const alc = row[COL.ALCOHOL] || row['Alcohol?'] || '';
+        const drug = row[COL.DRUG] || row['Drug Related?'] || '';
+        if (alc.toLowerCase() === 'yes' || drug.toLowerCase() === 'yes') {
+            categories.impaired.total++;
+            categories.impaired.crashes.push(row);
+            categories.impaired.byRoute[route] = (categories.impaired.byRoute[route] || 0) + 1;
+            if (sev === 'K') categories.impaired.K++;
+            if (sev === 'A') categories.impaired.A++;
+        }
+    });
+
+    return categories;
+}
+  // ─── EXTRACTED CODE END ───
+  window.CL = window.CL || {}; CL.reports = CL.reports || {};
+  CL.reports.standardCore = CL.reports.standardCore || {};
+  window.showReportSubTab = showReportSubTab; CL.reports.standardCore.showReportSubTab = showReportSubTab;
+  window.updateReportOptions = updateReportOptions; CL.reports.standardCore.updateReportOptions = updateReportOptions;
+  window.buildAIContext = buildAIContext; CL.reports.standardCore.buildAIContext = buildAIContext;
+  window._safeAgg = _safeAgg; CL.reports.standardCore._safeAgg = _safeAgg;
+  window.hydrateReportFromMatviews = hydrateReportFromMatviews; CL.reports.standardCore.hydrateReportFromMatviews = hydrateReportFromMatviews;
+  window.fetchReportDataForType = fetchReportDataForType; CL.reports.standardCore.fetchReportDataForType = fetchReportDataForType;
+  window.generateReport = generateReport; CL.reports.standardCore.generateReport = generateReport;
+  window.generateSystemwideReport = generateSystemwideReport; CL.reports.standardCore.generateSystemwideReport = generateSystemwideReport;
+  window._legacySystemwideReport = _legacySystemwideReport; CL.reports.standardCore._legacySystemwideReport = _legacySystemwideReport;
+  window.computeSystemwideCategoryData = computeSystemwideCategoryData; CL.reports.standardCore.computeSystemwideCategoryData = computeSystemwideCategoryData;
+  CL._registerModule('reports/reports-standard-core');
+})();

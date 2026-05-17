@@ -31,7 +31,7 @@ awk -F'|' 'NR>9 && ($2+0)>=14001 && ($2+0)<=16556' INDEX_MAP_part*.md
 test -f app/modules/reports/reports-custom.js && echo "ABORT: target exists" || echo "OK: target free"
 
 # 4. Confirm load anchor still present
-grep -n '<script src="modules/reports/reports-standard.js"></script>' app/index.html   # expected: 1 match
+grep -n '<script src="modules/reports/reports-standard-types2.js"></script>' app/index.html   # expected: 1 match
 ```
 If any check fails (block not found/contiguous, target exists, anchor missing,
 any name maps to an off-limits module): **ABORT and report — do not edit.**
@@ -63,7 +63,7 @@ Create `app/modules/reports/reports-custom.js`:
  * Public API (back-compat dual exposure):
  *   - window.(custom report builder fns) → CL.reports.custom.(custom report builder fns)
  *
- * Depends on (must load before this file): `reports/reports-standard`
+ * Depends on (must load before this file): `reports/reports-standard-types2`
  */
 (function(){
   'use strict';
@@ -86,7 +86,7 @@ top-level `CL.` key not in `loader.js`, add ONLY that key to `loader.js`.
 
 ## §3 Wire the script tag
 Add this line in `app/index.html` immediately AFTER the existing
-`<script src="modules/reports/reports-standard.js"></script>` (this places it in the **LATE** cluster
+`<script src="modules/reports/reports-standard-types2.js"></script>` (this places it in the **LATE** cluster
 with correct load order vs. its dependencies):
 
 ```html

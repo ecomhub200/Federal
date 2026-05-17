@@ -31,7 +31,7 @@ awk -F'|' 'NR>9 && ($2+0)>=86463 && ($2+0)<=88000' INDEX_MAP_part*.md
 test -f app/modules/ai/ai-domain-knowledge.js && echo "ABORT: target exists" || echo "OK: target free"
 
 # 4. Confirm load anchor still present
-grep -n '<script src="modules/ai/ai-mode.js"></script>' app/index.html   # expected: 1 match
+grep -n '<script src="modules/ai/ai-mode-toggle.js"></script>' app/index.html   # expected: 1 match
 ```
 If any check fails (block not found/contiguous, target exists, anchor missing,
 any name maps to an off-limits module): **ABORT and report — do not edit.**
@@ -65,7 +65,7 @@ Create `app/modules/ai/ai-domain-knowledge.js`:
  * Public API (back-compat dual exposure):
  *   - window.(domain knowledge fns) → CL.ai.domainKnowledge.(domain knowledge fns)
  *
- * Depends on (must load before this file): `ai/ai-mode`
+ * Depends on (must load before this file): `ai/ai-mode-toggle`
  */
 (function(){
   'use strict';
@@ -88,7 +88,7 @@ top-level `CL.` key not in `loader.js`, add ONLY that key to `loader.js`.
 
 ## §3 Wire the script tag
 Add this line in `app/index.html` immediately AFTER the existing
-`<script src="modules/ai/ai-mode.js"></script>` (this places it in the **LATE** cluster
+`<script src="modules/ai/ai-mode-toggle.js"></script>` (this places it in the **LATE** cluster
 with correct load order vs. its dependencies):
 
 ```html
