@@ -913,3 +913,15 @@ are substantially extracted; `ai/*` is the dominant laggard (only
 - Sessions complete: O, P, Q
 - In flight: R+S+T extraction mega-batch + Lanes 2, 3, 4, 5
 - Ledger: `STAGE_A_INVENTORY.md` created this wave (Lane-5-owned, per-wave snapshots)
+
+### Day 2 mid checkpoint — R landed (2026-05-17)
+
+- origin/main advanced to `32fa9d0` (R+S+T merged as one batch commit).
+- Session **R** landed: +5 `ai/ai-domain-knowledge-*` modules
+  (`-query`, `-rag`, `-sources`, `-location`, `-chat-ui`; the 41b–41f
+  children completing the band started by 41a `ai-domain-knowledge-core`).
+- Tree at `32fa9d0`: 84 modules · 33,863 module LOC · `app/index.html`
+  137,945 LOC · −21,442 (−13.4%) vs the 159,387 R1 baseline.
+- CLAUDE.md off-limits list: +1 bullet (Session R, 5 ai/ modules).
+- Note: S+T modules landed in the same merge — accounted in the Day 2 end
+  checkpoint below to keep one-commit-per-wave separation.

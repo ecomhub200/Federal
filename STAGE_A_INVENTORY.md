@@ -17,6 +17,14 @@ R1 baseline: `app/index.html` = **159,387** LOC, 0 modules.
 | Snapshot | Commit | Modules | Module LOC | `app/index.html` LOC | Reduction vs 159,387 |
 |---|---|---|---|---|---|
 | Day 2 start | `9be31e5` | 70 | 28,687 | 142,804 | −16,583 (−10.4%) |
+| Day 2 mid (R landed) | `32fa9d0` | 84 | 33,863 | 137,945 | −21,442 (−13.4%) |
+
+> **Note:** Session R, S and T merged to `origin/main` as a single batch
+> commit (`32fa9d0`), so the "mid" (R) and "end" (S+T) snapshots coincide on
+> the same tree. R contributed the 5 new `ai/ai-domain-knowledge-*` modules
+> (41b–41f); S+T contributed the 4 `dashboard/*` + 5 `intersection/*` modules.
+> The full 84-module list is regenerated in the Wave 3 (Day 2 end) refresh
+> below.
 
 ## Current module list (Day 2 start — 70 files)
 

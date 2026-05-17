@@ -819,6 +819,17 @@ risk register.
   Rules" section) — pinned here so neither top-level `worker/` file is ever
   treated as re-extractable inline code. Doc-only audit, no code moved
   (Session Q, 2026-05-17).
+- **Round X extracted (Session R, Day 2 batch, off-limits):**
+  `ai/ai-domain-knowledge-query`, `ai/ai-domain-knowledge-rag`,
+  `ai/ai-domain-knowledge-sources`, `ai/ai-domain-knowledge-location`,
+  `ai/ai-domain-knowledge-chat-ui` — the 41b–41f children that complete the
+  `ai/ai-domain-knowledge` band begun by Session O's
+  `ai/ai-domain-knowledge-core` (41a) and queued in
+  `modular-prompts/41-v2-ai-domain-knowledge.md`. Landed on `origin/main` as
+  part of the Day 2 R+S+T extraction batch (merge `32fa9d0`); the full
+  `ai/ai-domain-knowledge-*` set (6 files incl. 41a) is now off-limits — do
+  not re-extract any DK code from `app/index.html`. Recorded doc-only by
+  Lane 5 (2026-05-17).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
