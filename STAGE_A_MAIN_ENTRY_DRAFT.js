@@ -2,14 +2,14 @@
 // STAGE A — DRAFT of app/main.js  (ESM entry point)
 // =============================================================================
 // THIS IS A PLANNING ARTIFACT, NOT THE LIVE ENTRY POINT.
-// It shows what app/main.js will look like AFTER all 53 modules are converted
-// (IIFE -> ESM) and the 52+1 <script src> tags in app/index.html are replaced
+// It shows what app/main.js will look like AFTER all 61 modules are converted
+// (IIFE -> ESM) and the 60 <script src> tags in app/index.html are replaced
 // with a single:
 //
 //     <script type="module" src="main.js"></script>
 //
 // Do NOT wire this in until the single coordinated Stage A cutover
-// (STAGE_A_54-cutover). A half-migrated state is broken: a file containing
+// (STAGE_A_62-cutover). A half-migrated state is broken: a file containing
 // `export` cannot be loaded by a classic <script src> (Unexpected token).
 //
 // Path note: app/index.html lives at app/, so src="main.js" => app/main.js,
@@ -42,10 +42,12 @@ import './modules/data/lazy-loader.js';
 import './modules/data/supabase-map-bridge.js';
 import './modules/data/chunk-loader.js';
 import './modules/ai/context.js';
+import './modules/ai/ai-mode-toggle.js';
 import './modules/analysis/crash-profile.js';
 import './modules/analysis/baselines.js';
 import './modules/analysis/hotspots.js';
 import './modules/grants/ranking.js';
+import './modules/grants/grants-ui.js';
 import './modules/warrants/signal.js';
 import './modules/warrants/signal-tmc.js';
 import './modules/warrants/signal-thresholds.js';
@@ -56,6 +58,7 @@ import './modules/spatial/spatial-clip.js';
 import './modules/spatial/aggregate-loader.js';
 import './modules/spatial/r2-resolve.js';
 import './modules/map/map-safe-helpers.js';
+import './modules/map/map-layers.js';
 import './modules/upload/api-connector.js';
 import './modules/upload/road-defaults.js';
 import './modules/upload/upload-tier-ui.js';
@@ -63,14 +66,19 @@ import './modules/core/epdo-presets.js';
 import './modules/assets/asset-export.js';
 import './modules/assets/school-tab.js';
 import './modules/assets/transit-tab.js';
+import './modules/reports/reports-standard-core.js';
+import './modules/reports/reports-standard-types.js';
 import './modules/worker/sample-rows-loader.js';
 
 // --- L2: one-hop dependents (their own import lines pull L1 deps) -----------
 import './modules/core/tier.js';
+import './modules/spatial/geo-tier.js';
 import './modules/upload/upload-pipeline.js';
 import './modules/upload/upload-tab.js';
 import './modules/data/supabase-bridge.js';
 import './modules/scorecard/scorecard.js';
+import './modules/reports/reports-standard-core2.js';
+import './modules/reports/reports-standard-types2.js';
 
 // batch-ba cluster (cyclic — runtime-safe; see STAGE_A_IMPORT_GRAPH.md).
 // Importing any one pulls the rest via their cross-imports; listed in full
@@ -98,7 +106,7 @@ import './modules/map/map-points-hydrate.js';
 // =============================================================================
 // Legacy global re-exposure for HTML onclick= handlers
 // =============================================================================
-// Each owning module already keeps its own `window.<fn> = <fn>` for the 25
+// Each owning module already keeps its own `window.<fn> = <fn>` for the 72
 // onclick survivors (STAGE_A_ONCLICK_API.md), so in the common case main.js
 // needs NOTHING here. This block is a SAFETY NET / single source of truth: if
 // a module's self-exposure is ever dropped, re-add it here by importing the

@@ -8,7 +8,7 @@
 > file containing `export` cannot load via a classic `<script src>`
 > (`Unexpected token 'export'`). Convert on the Stage A branch and DO NOT
 > ship/verify in isolation — the app only runs again after
-> `STAGE_A_54-cutover` swaps the script tags. Per-file `node --check` is
+> `STAGE_A_62-cutover` swaps the script tags. Per-file `node --check` is
 > the only standalone gate here.
 
 - **Module:** `app/modules/worker/csv-worker.js`
@@ -44,7 +44,7 @@ See the **Special: Web Worker** block above — it governs §1 entirely.
   actually pulls in; otherwise leave it import-free (it may stay classic).
 - Do the mandatory `app/index.html:30324` `{ type: 'module' }` edit.
 
-## §2 Entry-point wiring (NOT index.html script tags — that is STAGE_A_54)
+## §2 Entry-point wiring (NOT index.html script tags — that is STAGE_A_62)
 - Add this module to `app/main.js` at its topo position (see
   `STAGE_A_MAIN_ENTRY_DRAFT.js`). Do **not** touch `app/index.html`
   script tags in this prompt.
@@ -56,7 +56,7 @@ See the **Special: Web Worker** block above — it governs §1 entirely.
 - [ ] No new `export`/`import` beyond this prompt's lists.
 - [ ] `git diff --stat` = ONLY `app/modules/worker/csv-worker.js` + the 1-line `app/index.html:30324` edit (+ the `app/main.js` import line
       if you maintain `main.js` incrementally).
-- [ ] Full app verification is DEFERRED to `STAGE_A_54-cutover`
+- [ ] Full app verification is DEFERRED to `STAGE_A_62-cutover`
       (Playwright smoke on `https://ecomhub200.github.io/Federal/app/`):
       no `Unexpected token` / worker `Failed to load module
       script`; CSV upload → worker sample-rows path runs error-free.

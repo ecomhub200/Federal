@@ -8,7 +8,7 @@
 > file containing `export` cannot load via a classic `<script src>`
 > (`Unexpected token 'export'`). Convert on the Stage A branch and DO NOT
 > ship/verify in isolation — the app only runs again after
-> `STAGE_A_54-cutover` swaps the script tags. Per-file `node --check` is
+> `STAGE_A_62-cutover` swaps the script tags. Per-file `node --check` is
 > the only standalone gate here.
 
 - **Module:** `app/modules/loader.js`
@@ -37,7 +37,7 @@
 confirming it is import-safe (pure side effect). Keep `window.CL`, all
 `CL.*` key creation, `CL._loaded`, and `CL._registerModule` exactly as-is.
 
-## §2 Entry-point wiring (NOT index.html script tags — that is STAGE_A_54)
+## §2 Entry-point wiring (NOT index.html script tags — that is STAGE_A_62)
 - Add this module to `app/main.js` at its topo position (see
   `STAGE_A_MAIN_ENTRY_DRAFT.js`). Do **not** touch `app/index.html`
   script tags in this prompt.
@@ -47,7 +47,7 @@ confirming it is import-safe (pure side effect). Keep `window.CL`, all
 - [ ] No new `export`/`import` beyond this prompt's lists.
 - [ ] `git diff --stat` = ONLY `app/modules/loader.js` (+ the `app/main.js` import line
       if you maintain `main.js` incrementally).
-- [ ] Full app verification is DEFERRED to `STAGE_A_54-cutover`
+- [ ] Full app verification is DEFERRED to `STAGE_A_62-cutover`
       (Playwright smoke on `https://ecomhub200.github.io/Federal/app/`):
       no `Unexpected token` / `Failed to resolve module specifier`;
       `window.CL` + every `CL.*` key exist before any module runs.

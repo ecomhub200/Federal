@@ -11,7 +11,7 @@ the single-shot ESM cutover day. Documentation only — no code changed.
 Stage A is a **single coordinated cutover**: a file with `export` cannot
 load via classic `<script src>` (`Unexpected token 'export'`), so all
 52+1 script tags swap to one `<script type="module" src="main.js">` in
-**`STAGE_A_54-cutover`**. The app runs again only after 54. Therefore
+**`STAGE_A_62-cutover`**. The app runs again only after 54. Therefore
 *every* module must be conversion-ready before the cutover is scheduled.
 
 ---
@@ -40,7 +40,7 @@ a gap.**
 None of the three appears in `STAGE_A_MODULE_SURVEY.md`'s 53-row table, in
 `STAGE_A_ONCLICK_API.md`, in `STAGE_A_IMPORT_GRAPH.md`, or as a numbered
 `STAGE_A_NN-*.md` conversion prompt. The 54-prompt queue
-(`STAGE_A_01..53` convert + `STAGE_A_54-cutover`) maps 1:1 to the **53**
+(`STAGE_A_01..53` convert + `STAGE_A_62-cutover`) maps 1:1 to the **53**
 surveyed modules only. **3 conversion prompts are missing.** This is
 exactly the "counts will grow — re-run the survey before executing"
 condition the survey doc itself flags.
@@ -155,9 +155,44 @@ documentation scope.
    added after the snapshot (`ai/ai-mode-toggle`, `grants/grants-ui`,
    `spatial/geo-tier`, + any new ones from step 1), using
    `STAGE_A_CONVERSION_TEMPLATE.md`.
-6. **Renumber/insert** so `STAGE_A_54-cutover` (or its successor number)
+6. **Renumber/insert** so `STAGE_A_62-cutover` (or its successor number)
    remains the single terminal step that swaps all `<script src>` tags for
    one `<script type="module" src="main.js">`.
 7. **Only then** re-run this go/no-go. A GO requires: every module has a
    conversion prompt; all 3 design docs match the live tree; the IIFE round
    is done; rollback (whole Stage A branch) is rehearsed.
+
+---
+
+## Session K addendum (2026-05-17) — punch-list items 2–6 closed
+
+Session K executed the **deterministic, runnable-now** subset of the §5
+punch list (items 2–6). Documentation only — no code extracted or
+modified. Branch: `claude/session-k-stage-a-prep`. Full delta:
+`STAGE_A_PRECUTOVER_DELTA.md`.
+
+| Item | Before (Session I) | After (Session K) |
+|---|---|---|
+| 2 — Module survey | 53 (stale, "+3" est.) | **61** — `STAGE_A_MODULE_SURVEY.md` regenerated (+8 real) |
+| 3 — Onclick floor | 25 (stale) | **72** — `STAGE_A_ONCLICK_API.md` regenerated; 14 owning modules; +5-fn watch list |
+| 4 — Import edges | 12 (stale) | **15** clusters — `STAGE_A_IMPORT_GRAPH.md` + `STAGE_A_MAIN_ENTRY_DRAFT.js` regenerated (8 modules folded in) |
+| 5 — Missing prompts | 3 missing (est.) | **8 authored** — `STAGE_A_54..61`; all 61 modules now covered 1:1 |
+| 6 — Terminal cutover | `STAGE_A_54-cutover` | **`STAGE_A_62-cutover`** — renumbered, references swapped, verified last |
+
+**Verdict: still NO-GO.** The three frozen design docs and the prompt
+queue now match the live 61-module tree and the terminal cutover is
+correctly positioned — the readiness gap is materially smaller than at
+Session I. But the GO criteria are not met:
+
+- **Item 1 (still PENDING, blocking, gated):** the outstanding IIFE
+  extraction queue is not burned down. Stage A's own prerequisite
+  ("AFTER IIFE round 01–46") remains unmet; not-yet-extracted inline
+  IIFEs cannot coexist with a `type="module"` graph after cutover. This
+  is large and outside Session K's documentation scope.
+- **Item 7 (still PENDING, gated on Item 1):** re-run this go/no-go after
+  Item 1 closes, and re-run the Items 2–6 scans once more against the
+  final post-IIFE tree — every regenerated doc's KEEP/import/survivor
+  list is an explicit **floor**, not a ceiling.
+
+**Next blocker = Item 1.** No further deterministic prep is possible until
+the IIFE round substantially completes.
