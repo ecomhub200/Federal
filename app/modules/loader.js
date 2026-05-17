@@ -27,6 +27,7 @@ CL.batchBA = CL.batchBA || {};
 CL.reports = CL.reports || {};
 CL.hotspots = CL.hotspots || {};
 CL.ui = CL.ui || {};
+CL.dashboard = CL.dashboard || {};
 
 // Module loading tracker (for debugging)
 CL._loaded = [];
