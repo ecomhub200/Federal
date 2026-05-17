@@ -686,6 +686,18 @@ risk register.
   never ran — those helpers + `grantState` + `grant*Attachments` stay
   inline/global; grants-ui only calls them at runtime so load order is
   safe. Unblocks prompt 31 (cmf-search).
+- **Round X extracted (Session G, off-limits):**
+  `map/map-layers` (256-line verbatim block — map address search:
+  `updateMapScopeLabel`, `searchMapboxAddresses`, `selectAddressResult`,
+  `clearMapAddressSearch`, `updateMapSearchClearButton`,
+  `findCrashesNearPoint`, `getDistanceMeters`, `calculateNearbyCrashSeverity`;
+  EARLY cluster right after `modules/map/map-safe-helpers.js` — prompt's
+  `map/map-init.js` anchor does not exist, pragmatic placement; all 8 fns
+  mirrored to `window` + `CL.map` because `getDistanceMeters` has 6 external
+  inline callers and `updateMapSearchClearButton` has 2). Session G prompts
+  41 (ai-domain-knowledge) and 19 (analysis-tab) were SKIPPED at §0 — see
+  `MODULAR_PLAN_PROMPT_41_RESOLUTION.md` / `MODULAR_PLAN_PROMPT_19_RESOLUTION.md`
+  (every spec anchor invalid / identity-anchor unisolable).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
