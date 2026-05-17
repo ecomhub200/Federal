@@ -778,6 +778,16 @@ risk register.
   ~354-line "CMF AI agents" block); see
   `MODULAR_PLAN_PROMPT_32_RESOLUTION.md`. Leaves prompt 33-v2 only
   partially unblocked (needs a re-derived 32).
+- **Round X extracted (Session Q audit, off-limits):**
+  `worker/sample-rows-loader` (registered + `<script src>`-loaded module
+  that instantiates the `csv-worker` thread; the existing `upload/worker/*`
+  wildcard does NOT cover top-level `worker/`, so this file was previously
+  unnamed in the protected list). `worker/csv-worker` is the documented
+  Web-Worker special case (loaded via `new Worker()`, intentionally no
+  `<script>` tag / no `_registerModule` — see the "Stage A — ESM Migration
+  Rules" section) — pinned here so neither top-level `worker/` file is ever
+  treated as re-extractable inline code. Doc-only audit, no code moved
+  (Session Q, 2026-05-17).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
