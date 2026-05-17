@@ -902,3 +902,14 @@ are substantially extracted; `ai/*` is the dominant laggard (only
 - Next deterministic doc work is gated on the IIFE round substantially
   completing (go/no-go punch-list Item 1); the +5 post-Session-K modules
   still need `STAGE_A_NN` conversion prompts before any cutover.
+
+### Day 2 start (2026-05-17 14:17)
+
+- Reference commit: `9be31e5` (origin/main = PR #150, Session O extraction)
+- `app/index.html`: 142,804 LOC
+- Modules (`find app/modules -name '*.js' -type f`): 70
+- Total module LOC: 28,687
+- Reduction vs R1 baseline (159,387): −16,583 (−10.4%)
+- Sessions complete: O, P, Q
+- In flight: R+S+T extraction mega-batch + Lanes 2, 3, 4, 5
+- Ledger: `STAGE_A_INVENTORY.md` created this wave (Lane-5-owned, per-wave snapshots)
