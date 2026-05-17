@@ -6,9 +6,9 @@ verifiable counts (module count, total module LOC, `app/index.html` remaining
 LOC, reduction vs the 159,387-line R1 baseline) so other lanes/sessions can
 see refactor progress at a glance without re-counting.
 
-> Generated read-only from `find app/modules -name '*.js' -type f` +
-> `wc -l app/index.html`. No code is changed by this document. Other lanes
-> MUST NOT edit this file (Lane 5 conflict guard).
+> Generated read-only from `git ls-tree -r origin/main` +
+> `git show origin/main:app/index.html | wc -l`. No code is changed by this
+> document. Other lanes MUST NOT edit this file (Lane 5 conflict guard).
 
 R1 baseline: `app/index.html` = **159,387** LOC, 0 modules.
 
@@ -18,21 +18,46 @@ R1 baseline: `app/index.html` = **159,387** LOC, 0 modules.
 |---|---|---|---|---|---|
 | Day 2 start | `9be31e5` | 70 | 28,687 | 142,804 | −16,583 (−10.4%) |
 | Day 2 mid (R landed) | `32fa9d0` | 84 | 33,863 | 137,945 | −21,442 (−13.4%) |
+| Day 2 end (S+T landed) | `32fa9d0` | 84 | 33,863 | 137,945 | −21,442 (−13.4%) |
 
-> **Note:** Session R, S and T merged to `origin/main` as a single batch
+> **Note:** Sessions R, S and T merged to `origin/main` as a single batch
 > commit (`32fa9d0`), so the "mid" (R) and "end" (S+T) snapshots coincide on
 > the same tree. R contributed the 5 new `ai/ai-domain-knowledge-*` modules
-> (41b–41f); S+T contributed the 4 `dashboard/*` + 5 `intersection/*` modules.
-> The full 84-module list is regenerated in the Wave 3 (Day 2 end) refresh
-> below.
+> (41b–41f); S+T contributed the 4 `dashboard/*` + 5 `intersection/*`
+> modules. Day 2 net: +14 modules (70→84), +5,176 module LOC
+> (28,687→33,863), `app/index.html` −4,859 LOC (142,804→137,945).
 
-## Current module list (Day 2 start — 70 files)
+## New in Day 2 batch (14 modules)
+
+| Session | Module | LOC |
+|---|---|---|
+| R | `ai/ai-domain-knowledge-query.js` | 361 |
+| R | `ai/ai-domain-knowledge-rag.js` | 343 |
+| R | `ai/ai-domain-knowledge-sources.js` | 270 |
+| R | `ai/ai-domain-knowledge-location.js` | 405 |
+| R | `ai/ai-domain-knowledge-chat-ui.js` | 170 |
+| S+T | `dashboard/dashboard-tab-kpi.js` | 500 |
+| S+T | `dashboard/dashboard-tab-matview.js` | 503 |
+| S+T | `dashboard/dashboard-tab-drill.js` | 375 |
+| S+T | `dashboard/dashboard-tab-comparison.js` | 580 |
+| S+T | `intersection/intersection-tab-table.js` | 281 |
+| S+T | `intersection/intersection-tab-detail.js` | 351 |
+| S+T | `intersection/intersection-tab-charts.js` | 426 |
+| S+T | `intersection/intersection-tab-selection.js` | 188 |
+| S+T | `intersection/intersection-tab-export.js` | 421 |
+
+## Current module list (Day 2 end — 84 files @ `32fa9d0`)
 
 Sorted by path; `loader.js` is the namespace-root registrar.
 
 | Module | LOC |
 |---|---|
+| `ai/ai-domain-knowledge-chat-ui.js` | 170 |
 | `ai/ai-domain-knowledge-core.js` | 398 |
+| `ai/ai-domain-knowledge-location.js` | 405 |
+| `ai/ai-domain-knowledge-query.js` | 361 |
+| `ai/ai-domain-knowledge-rag.js` | 343 |
+| `ai/ai-domain-knowledge-sources.js` | 270 |
 | `ai/ai-mode-toggle.js` | 259 |
 | `ai/context.js` | 39 |
 | `analysis/analysis-tab.js` | 351 |
@@ -58,6 +83,10 @@ Sorted by path; `loader.js` is the namespace-root registrar.
 | `core/epdo-presets.js` | 267 |
 | `core/epdo.js` | 32 |
 | `core/tier.js` | 390 |
+| `dashboard/dashboard-tab-comparison.js` | 580 |
+| `dashboard/dashboard-tab-drill.js` | 375 |
+| `dashboard/dashboard-tab-kpi.js` | 500 |
+| `dashboard/dashboard-tab-matview.js` | 503 |
 | `data/chunk-loader.js` | 123 |
 | `data/dashboard-filter-bindings.js` | 746 |
 | `data/lazy-loader.js` | 227 |
@@ -72,7 +101,12 @@ Sorted by path; `loader.js` is the namespace-root registrar.
 | `hotspots/hotspots-tab-core.js` | 451 |
 | `hotspots/hotspots-tab-modal.js` | 341 |
 | `hotspots/hotspots-tab-render.js` | 329 |
-| `loader.js` | 36 |
+| `intersection/intersection-tab-charts.js` | 426 |
+| `intersection/intersection-tab-detail.js` | 351 |
+| `intersection/intersection-tab-export.js` | 421 |
+| `intersection/intersection-tab-selection.js` | 188 |
+| `intersection/intersection-tab-table.js` | 281 |
+| `loader.js` | 38 |
 | `map/map-layers.js` | 304 |
 | `map/map-points-hydrate.js` | 154 |
 | `map/map-safe-helpers.js` | 95 |
@@ -103,5 +137,5 @@ Sorted by path; `loader.js` is the namespace-root registrar.
 | `worker/csv-worker.js` | 403 |
 | `worker/sample-rows-loader.js` | 198 |
 
-**Totals:** 70 modules · 28,687 module LOC · `app/index.html` 142,804 LOC
-(−16,583 / −10.4% vs the 159,387 R1 baseline).
+**Totals (Day 2 end @ `32fa9d0`):** 84 modules · 33,863 module LOC ·
+`app/index.html` 137,945 LOC (−21,442 / −13.4% vs the 159,387 R1 baseline).

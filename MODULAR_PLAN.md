@@ -925,3 +925,45 @@ are substantially extracted; `ai/*` is the dominant laggard (only
 - CLAUDE.md off-limits list: +1 bullet (Session R, 5 ai/ modules).
 - Note: S+T modules landed in the same merge — accounted in the Day 2 end
   checkpoint below to keep one-commit-per-wave separation.
+
+### Day 2 end checkpoint — R+S+T complete (2026-05-17)
+
+origin/main `32fa9d0`. **70 → 84 modules** (+14), total module LOC
+**28,687 → 33,863** (+5,176), `app/index.html` **142,804 → 137,945**
+(−4,859 this batch; **−21,442 / −13.4%** vs the 159,387 R1 baseline).
+
+R+S+T landed: **14/14** children — 0 skipped.
+
+- **Session R (5):** `ai/ai-domain-knowledge-{query,rag,sources,location,chat-ui}`
+  — completes the `ai/ai-domain-knowledge-*` band (with 41a core = 6 files).
+- **Session S+T (9):** new `dashboard/` cluster (4:
+  `-kpi`,`-matview`,`-drill`,`-comparison`) + new `intersection/` cluster (5:
+  `-table`,`-detail`,`-charts`,`-selection`,`-export`).
+
+Per-cluster file counts @ `32fa9d0` (live `*.js` per directory):
+
+| Cluster | Files | Cluster | Files |
+|---|---|---|---|
+| `batch-ba/` | 10 | `map/` | 3 |
+| `data/` | 9 | `hotspots/` | 3 |
+| `ai/` | 8 | `assets/` | 3 |
+| `spatial/` | 7 | `grants/` | 2 |
+| `reports/` | 6 | `worker/` | 2 |
+| `upload/` | 5 | `core/` | 4 |
+| `intersection/` | 5 | `analysis/` | 4 |
+| `dashboard/` | 4 | `warrants/` | 3 |
+| `utils/` `ui/` `scorecard/` `cmf/` `app/` | 1 each | `loader.js` (root) | 1 |
+
+CLAUDE.md off-limits list: **+2 bullets** total this Day 2 (Session R;
+Session S+T) — 14 new modules pinned.
+
+**Next-phase queue (Day 3):**
+
+- Session **U** (pedbike supervised) + Session **V** (grants family) —
+  prompts authored by Lane 3 this Day 2 (`CC_SESSION_U_*.md` /
+  `CC_SESSION_V_*.md`), scheduled to run Day 3.
+- Lane 4 Phase 4 survey output (Phase 4 prompt mega-authoring) feeds the
+  remaining IIFE queue.
+- The +14 Day 2 modules still need `STAGE_A_NN` ESM-conversion prompts
+  before any cutover (Stage A remains gated on the IIFE round; see
+  `STAGE_A_GO_NOGO_REPORT.md`).

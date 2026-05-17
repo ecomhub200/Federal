@@ -830,6 +830,19 @@ risk register.
   `ai/ai-domain-knowledge-*` set (6 files incl. 41a) is now off-limits — do
   not re-extract any DK code from `app/index.html`. Recorded doc-only by
   Lane 5 (2026-05-17).
+- **Round X extracted (Session S+T, Day 2 batch, off-limits):**
+  Dashboard TAB UI — `dashboard/dashboard-tab-kpi`,
+  `dashboard/dashboard-tab-matview`, `dashboard/dashboard-tab-drill`,
+  `dashboard/dashboard-tab-comparison`; Intersection TAB UI —
+  `intersection/intersection-tab-table`,
+  `intersection/intersection-tab-detail`,
+  `intersection/intersection-tab-charts`,
+  `intersection/intersection-tab-selection`,
+  `intersection/intersection-tab-export`. Two new cluster roots
+  (`dashboard/`, `intersection/`); 9 modules total. Landed on `origin/main`
+  in the same Day 2 batch merge (`32fa9d0`) as Session R — now off-limits;
+  do not re-extract any dashboard- or intersection-tab code from
+  `app/index.html`. Recorded doc-only by Lane 5 (2026-05-17).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
