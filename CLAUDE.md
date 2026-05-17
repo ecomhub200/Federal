@@ -712,6 +712,15 @@ risk register.
   `MODULAR_PLAN_PROMPT_41_RESOLUTION.md` / `MODULAR_PLAN_PROMPT_19_RESOLUTION.md`
   (every spec anchor invalid / identity-anchor unisolable). NOTE: main later
   re-anchored `modular-prompts/41` — a future session may re-attempt 41.
+  `cmf/cmf-search` (244-line verbatim block — CMF database load + location
+  dropdown population: `loadCMFDatabase`, `transformCMFData`,
+  `showCMFLoadedStatus`, `initCMFLocationDropdown`, `updateCMFLocationDropdown`,
+  `buildCMFSearchData`, `populateCMFLocations`; EARLY cluster right after
+  `modules/grants/grants-ui.js` per prompt §3; all 7 fns mirrored to
+  `window` + `CL.cmf`. DEVIATION: prompt §1's `cmfState` global was NOT
+  moved — it has 419 refs (CMF/Warrants/AI) and stays inline as
+  `const cmfState` so all inline readers keep resolving it; moved fns
+  reference it only at runtime. Unblocks prompt 32 (cmf-ai)).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
