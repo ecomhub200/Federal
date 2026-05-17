@@ -747,6 +747,37 @@ risk register.
   inert. **SUPERSEDES the BLOCKED `44-data-filter-wiring.md`** — prompt 44 is
   now COMPLETE; do NOT run that prompt. See `44-v2-iife-wholesale.md` /
   `MODULAR_PLAN_44_v2_IIFE_WHOLESALE_PLAN.md`.
+- **Round X extracted (Session M, off-limits):**
+  `reports/reports-pdf` (prompt 42b2 — **intentional oversized
+  size-exception ~1,100 lines**: the contiguous block L64022–L65091 is
+  dominated by one indivisible ~982-line fn `generateStandardReportPDF`
+  that cannot be sub-split without a behavior change; same precedent as
+  `assets/transit-tab` / `reports/reports-standard-core/types`. 5 moved
+  fns: `printReport`, `storeReportData`, `downloadReportPDF`,
+  `generateStandardReportPDF`, `copyReportText` — the 4 onclick/inline
+  callers dual-mirrored `window`/`CL.reports.pdf`; `storeReportData`
+  module-private (zero external refs, no mirror). LATE cluster between
+  `reports-standard-types.js` and `reports-standard-types2.js`).
+  `reports/reports-charts` (prompt 42b3 — clean 68-line block
+  L63954–L64021, 4 Chart.js builders `createReportCharts`,
+  `createSafetyCharts`, `createPedBikeCharts`, `createTrendCharts`, all
+  dual-mirrored `window`/`CL.reports.charts`; LATE cluster right after
+  `reports-pdf.js`).
+  `cmf/cmf-search` (prompt 31 — 244-line block L80361–L80604, 7 fns
+  `loadCMFDatabase`/`transformCMFData`/`showCMFLoadedStatus`/
+  `initCMFLocationDropdown`/`updateCMFLocationDropdown`/`buildCMFSearchData`/
+  `populateCMFLocations`, all dual-mirrored `window`/`CL.cmf` (external
+  callers incl. `app/tab-dispatcher`, `analysis/analysis-tab`). Shared
+  globals `cmfState` (inline ~L76192), `COL`, `crashState` left **inline,
+  NOT mirrored** — resolved via the shared classic-script global lexical
+  environment (proven by `batch-ba/batch-ba-engine.js`); this
+  intentionally overrides the prompt's "window-mirror cmfState" note
+  (would be an out-of-block edit, unnecessary). LATE cluster right after
+  `modules/grants/grants-ui.js`). **Prompt 32 SKIPPED** — severe drift
+  (`initCMFAI` is a 17-line key/provider loader, not the prompt's stale
+  ~354-line "CMF AI agents" block); see
+  `MODULAR_PLAN_PROMPT_32_RESOLUTION.md`. Leaves prompt 33-v2 only
+  partially unblocked (needs a re-derived 32).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
