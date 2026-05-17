@@ -686,6 +686,19 @@ risk register.
   never ran — those helpers + `grantState` + `grant*Attachments` stay
   inline/global; grants-ui only calls them at runtime so load order is
   safe. Unblocks prompt 31 (cmf-search).
+- **Round X extracted (Session D, navigateTo-split, off-limits):**
+  `ai/ai-mode-toggle` (prompt 40b — AI Mode header toggle + header API-key
+  manager, 9 fns + 1 const + DOMContentLoaded listener, 232-line verbatim
+  block; LATE-cluster after `app/tab-dispatcher.js`; `AI_MODE_STORAGE_KEY`
+  module-private; all 9 fns mirrored `window`/`CL.ai.modeToggle`).
+  `reports/reports-standard-core`, `reports/reports-standard-core2`,
+  `reports/reports-standard-types`, `reports/reports-standard-types2`
+  (prompt 42b1 — Standard Reports band, ~2,430-line verbatim block, 44 fns,
+  prompt's 2-way-per-band split; -types/-core oversized size exceptions like
+  `assets/transit-tab`; `reportSequence` module-private to `-types`; all 44
+  fns mirrored `window`/`CL.reports.standard*`; `CL.reports` root added to
+  `loader.js`; 42b2-pdf / 42b3-charts left inline). Prompts 41 & 43 §0/§3
+  re-anchored to `ai/ai-mode-toggle` / `reports/reports-standard-types2`.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
