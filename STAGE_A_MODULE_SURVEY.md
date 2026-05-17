@@ -164,3 +164,50 @@ runtime singleton-slot / still-inline reads kept as-is.
   `grants/grants-ui.js` (37 win), `spatial/geo-tier.js` (25 win)** —
   largest legacy `window.*` surfaces; only the on\* subset survives
   (see `STAGE_A_ONCLICK_API.md`), the rest become module-private + `CL.*`.
+
+---
+
+## Session Q refresh (2026-05-17) — recount only, table NOT rewritten
+
+Read-only recount of the live tree against the Session K 61-module snapshot.
+**No code changed; the Session K table above is left verbatim** — this
+section records the delta only.
+
+| Metric | Session K | Live (Session Q) | Delta |
+|---|---|---|---|
+| `app/modules/**/*.js` files | 61 | **66** | **+5** |
+| Have `CL._registerModule()` | 60 (+loader) | **64** | +4 |
+| `<script src="modules/…">` tags in `app/index.html` | 60 | **65** | +5 |
+| Total module LOC | — | **27,167** | — |
+| `app/index.html` LOC | 149,314 (Session I cite) | **144,245** | −5,069 |
+
+`_registerModule` gap is still the two documented special cases only —
+`loader.js` (the registrar itself) and `worker/csv-worker.js` (Worker
+thread). `worker/csv-worker.js` is the only file with no `<script src>` tag
+(loaded via `new Worker()`). **No registered-but-unloaded module** — the
+load-order integrity gate passes.
+
+### The +5 modules added since the Session K snapshot
+
+| New module | Lines | CL namespace | Origin (IIFE prompt/session) | `STAGE_A_NN` conversion prompt? |
+|---|---|---|---|---|
+| `analysis/analysis-tab.js` | 351 | `analysis/analysis-tab` | prompt 19 (Session J) | **NONE** |
+| `cmf/cmf-search.js` | 281 | `cmf/cmf-search` | prompt 31 (Session M) | **NONE** |
+| `data/dashboard-filter-bindings.js` | 746 | `data/dashboard-filter-bindings` | 44-v2 wholesale (Session J) | **NONE** |
+| `reports/reports-charts.js` | 92 | `reports/reports-charts` | prompt 42b3 (Session M) | **NONE** |
+| `reports/reports-pdf.js` | 1100 | `reports/reports-pdf` | prompt 42b2 (Session M, oversized exception) | **NONE** |
+
+> **Stage A gap (unchanged in kind from Session I §1):** the prompt queue is
+> **62** (`STAGE_A_01..61` convert + `STAGE_A_62-cutover`) covering the **61**
+> Session K modules 1:1. **All 5 post-K modules lack a `STAGE_A_NN`
+> conversion prompt** and are absent from this survey's main table, from
+> `STAGE_A_ONCLICK_API.md`, and from `STAGE_A_IMPORT_GRAPH.md`. Before the
+> cutover can be scheduled, items 2–6 of the go/no-go punch list must be
+> re-run against the final post-IIFE tree (regenerate this table, re-scan
+> onclick, re-derive import edges, author the 5 missing conversion prompts,
+> keep `STAGE_A_62-cutover` terminal).
+
+This re-affirms the survey's own standing caveat: **counts will keep growing
+as the remaining IIFE extraction queue lands — re-run this full survey loop
+once more against the final post-IIFE tree before scheduling the cutover.**
+Every KEEP/import/survivor list remains a **floor, not a ceiling.**
