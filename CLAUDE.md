@@ -712,6 +712,23 @@ risk register.
   `MODULAR_PLAN_PROMPT_41_RESOLUTION.md` / `MODULAR_PLAN_PROMPT_19_RESOLUTION.md`
   (every spec anchor invalid / identity-anchor unisolable). NOTE: main later
   re-anchored `modular-prompts/41` — a future session may re-attempt 41.
+- **Round X extracted (Session J, off-limits):**
+  `analysis/analysis-tab` (311-line verbatim block — "ANALYSIS TAB SEARCH
+  FUNCTIONS (Merged Search Feature)": 7 module-private state vars
+  (`analysisSearchResults`/`analysisSearchTotal`/`analysisCurrentSearchPage`/
+  `analysisSearchFilters`/`analysisSearchMode`/`analysisSearchInFlight`/
+  `analysisSelectedQuickLocation`, verified zero external refs — no mirror)
+  + 15 fns `_analysisReadFilters`..`initAnalysisSearch`, all dual-mirrored to
+  `window`/`CL.analysis`/`CL.analysis.tab` (dynamically-injected
+  `onclick=` handlers resolve against global scope). EARLY cluster right
+  after `modules/analysis/hotspots.js`. Session-J-pre-authorized deviations
+  from prompt 19's stale §0: real anchor is the `initAnalysisSearch`/
+  `analysis*` set, NOT the prompt's `updateAnalysis` (a separate fn @ L55794,
+  left inline/untouched); script tag after `analysis/hotspots.js` because the
+  prompt's `pedbike/pedbike-tab.js` anchor does not exist. Session J prompt
+  41 (ai-domain-knowledge) SKIPPED again — AD-satellite contiguous block
+  ≈1,971 lines (>500 ceiling); see `MODULAR_PLAN_PROMPT_41_RESOLUTION.md`
+  (Session J addendum).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
