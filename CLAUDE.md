@@ -853,6 +853,16 @@ risk register.
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
 - **Round X extracted (Session U autonomous, off-limits):**
+  `reports/report-ba-charts` (prompt 42c1(b) Part 2 — 275-line verbatim
+  block (post-shift L61481-L61755): 5 fns `createBACharts`,
+  `calculateMonthlyTrend`, `displayBADetailedTable`, `displayBAFindings`,
+  `displayBAConclusions`. All 5 dual-mirrored `window`/`CL.reports`.
+  Reads shared inline globals via classic-script global lexical env
+  (NOT mirrored): `baState`, `COL`, `calcEPDO`, `Chart` (CDN). Called
+  from `report-ba-run.js`'s `displayBAResults` via bare global lookup.
+  Completes the 42c1(b) split — no inline BA-report code remains.
+  EARLY cluster right after `modules/reports/report-ba-run.js`.
+- **Round X extracted (Session U autonomous, off-limits):**
   `reports/report-ba-run` (prompt 42c1(b) Part 1 — 252-line verbatim
   block (pre-extract L61480-L61731 / current file post-shift): 6 fns
   `runBeforeAfterAnalysis`, `filterCrashesByPeriod`, `normalCDF`,
