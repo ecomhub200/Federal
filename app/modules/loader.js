@@ -30,6 +30,7 @@ CL.ui = CL.ui || {};
 CL.dashboard = CL.dashboard || {};
 CL.intersection = CL.intersection || {};
 CL.pedbike = CL.pedbike || {};
+CL.notifications = CL.notifications || {};
 
 // Module loading tracker (for debugging)
 CL._loaded = [];
