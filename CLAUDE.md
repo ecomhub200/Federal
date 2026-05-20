@@ -852,6 +852,23 @@ risk register.
   tags wired after `data/supabase-map-bridge.js` (Phase R after
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
+- **Round X extracted (Session U autonomous, off-limits):**
+  `ai/ai-analyst-chat` (prompt 40c1 — 278-line verbatim block L64205–L64482
+  in pre-extract file: `const aiState` + 11 chat fns `loadSavedKey`,
+  `handleAIFileSelect`, `renderAttachments`, `removeAttachment`,
+  `askSuggestion`, `clearAIChat`, `clearApiKey`, `addMessage`,
+  `addTypingIndicator`, `removeTypingIndicator`, `buildCrashDataContext`.
+  All 12 decls dual-mirrored `window`/`CL.ai` — `aiState` has 11 remaining
+  inline external readers (PDF export L39087, MUTCD analysis tail L65650,
+  askAI body L66374+), so the `window.aiState` mirror is mandatory.
+  External callers (`esc`, `ApiKeySecurity`, `askAI`, `crashState`,
+  `calcEPDO`, `updateMUTCDAILocationBar`, `updateMUTCDRefCounters`,
+  `copyMessageContent`, `clearAllApiKeys`, `triggerMUTCDAnalysis`) stay
+  inline / global, resolved via the shared classic-script global lexical
+  environment. EARLY cluster right after `modules/ai/ai-mode-toggle.js`.
+  Orphan `// AI ANALYST` banner left at L64202–L64204 (verbatim rule — no
+  out-of-block edits). No Playwright smoke this session — `playwright-cli`
+  not installed in the ephemeral remote container; deferred until deploy.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
