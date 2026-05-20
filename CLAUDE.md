@@ -853,6 +853,20 @@ risk register.
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
 - **Round X extracted (Session U autonomous, off-limits):**
+  `reports/report-ba-email` (prompt 42c2(a) — 427-line verbatim block
+  (post-shift L61929-L62355): 6 fns `openBAEmailSchedule`,
+  `generateBAPDFForEmail`, `testBAEmailNotification` (async — extra helper
+  between anchors), `updateBADeliveryModeUI`, `updateBAFrequencyUI`,
+  `calculateBANextDelivery`. Includes 1 nested `buildBAEmailHtml` inside
+  `testBAEmailNotification` (counts as 7 total fn declarations under the
+  regex). All 6 top-level dual-mirrored `window`/`CL.reports`. Reads
+  shared inline globals via classic-script global lexical env (NOT
+  mirrored): `baState`, `notificationState`, `showToast`, `calcEPDO`,
+  `brevoApi`, `showLoading`, `hideLoading`, etc. Many external callers
+  (HTML onchange/onclick at L31872-L31906, L32118, L32733, button
+  L10835) resolve via window mirrors. EARLY cluster right after
+  `modules/reports/report-ba-charts.js`. Extraction via python file-slice.
+- **Round X extracted (Session U autonomous, off-limits):**
   `reports/report-ba-charts` (prompt 42c1(b) Part 2 — 275-line verbatim
   block (post-shift L61481-L61755): 5 fns `createBACharts`,
   `calculateMonthlyTrend`, `displayBADetailedTable`, `displayBAFindings`,
