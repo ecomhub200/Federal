@@ -853,6 +853,16 @@ risk register.
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
 - **Round X extracted (Session U autonomous, off-limits):**
+  `reports/report-ba-export` (prompt 42c3 — 440-line verbatim block
+  (post-shift L61485-L61924): 4 top-level fns `printBAReport`,
+  `downloadBAPDF`, `exportBAData`, `copyBAReport` + 1 nested helper
+  (5 total under indent-tolerant regex). All 4 top-level dual-mirrored
+  `window`/`CL.reports`. HTML onclick at L10832-L10835 resolve via window
+  mirrors. EARLY cluster between `report-ba-charts.js` and
+  `report-ba-email.js`. Extraction via python file-slice. Note: initial
+  slice was off-by-one (missed outer `}` at L61924); reverted via
+  `git checkout` and redone with correct boundary.
+- **Round X extracted (Session U autonomous, off-limits):**
   `reports/report-ba-email` (prompt 42c2(a) — 427-line verbatim block
   (post-shift L61929-L62355): 6 fns `openBAEmailSchedule`,
   `generateBAPDFForEmail`, `testBAEmailNotification` (async — extra helper
