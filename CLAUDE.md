@@ -853,6 +853,18 @@ risk register.
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
 - **Round X extracted (Session U autonomous, off-limits):**
+  `reports/reports-memo` (prompt 42d(b) — 290-line verbatim block
+  L60397-L60686 in pre-extract file: leading doc comment + 6 fns
+  `buildMemoHeader`, `buildMemoStatsTable`, `buildMemoFindings`,
+  `buildMemoLocationsTable`, `buildMemoFooter`,
+  `createWordDocumentWithHeaderFooter`. All 6 dual-mirrored
+  `window`/`CL.reports`. Reads shared inline globals via classic-script
+  global lexical env (NOT mirrored): `docx`, `COL`, `MEMO_STYLES`,
+  `calcEPDO`, `getDataSourceLabel`, `getFullTimestamp`. Many inline
+  callers across L60709-L60952+ region resolve via window mirrors. EARLY
+  cluster right after `modules/reports/reports-recommend.js`. Deletion
+  done via python file-slice (block too large for Edit tool string match).
+- **Round X extracted (Session U autonomous, off-limits):**
   `reports/reports-recommend` (prompt 42d(c) — 249-line verbatim block
   L61183-L61431 in pre-extract file: 6 memo-recommendation fns
   `buildCollisionTypeBreakdown`, `buildSevereCrashPatterns`,
