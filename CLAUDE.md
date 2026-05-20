@@ -853,6 +853,24 @@ risk register.
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
 - **Round X extracted (Session U autonomous, off-limits):**
+  `ai/ai-analyst-context` (prompt 40c3(a) — 287-line verbatim block
+  L65690-L65976 in pre-extract file: 4 fns `buildSystemPrompt`,
+  `getAIAnalysisContext`, `buildLocationCrashContext`,
+  `updateAIContextIndicator`. All 4 dual-mirrored `window`/`CL.ai`.
+  `buildLocationCrashContext` is the inline 1-line wrapper that delegates
+  to off-limits `CL.ai.context.buildLocationCrashContext` (method on
+  object, NOT global fn — no R1 collision). Reads shared inline globals
+  via classic-script global lexical env (`selectionState`, `cmfState`,
+  `warrantsState`, `crashState`, `EPDO_WEIGHTS`,
+  `selectedCrashesFromDrawing` (typeof-guarded), `getJurisdictionLabel`,
+  `getJurisdictionStateLabel`, `buildLocationCrashProfile`,
+  `buildCountyWideCrashProfile`, `updateMUTCDAILocationBar` — last one
+  still inline because 40c3(b) is deferred). LATE cluster right after
+  `modules/ai/ai-analyst-mutcd.js`. External callers preserved: inline
+  L66104, L66114, many `updateAIContextIndicator` callers across inline,
+  tab-dispatcher module, epdo-presets module — all resolve via window
+  mirrors.
+- **Round X extracted (Session U autonomous, off-limits):**
   `ai/ai-analyst-mutcd` (prompt 40c2(a) — 297-line verbatim block
   L64206–L64502 in pre-extract file: MUTCD AI INTEGRATION banner +
   Round-13 doc comment + 7 fns `initMUTCDLocationDropdown`,
