@@ -853,6 +853,21 @@ risk register.
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
 - **Round X extracted (Session U autonomous, off-limits):**
+  `ai/ai-analyst-mutcd` (prompt 40c2(a) — 297-line verbatim block
+  L64206–L64502 in pre-extract file: MUTCD AI INTEGRATION banner +
+  Round-13 doc comment + 7 fns `initMUTCDLocationDropdown`,
+  `loadMUTCDLocation`, `clearMUTCDLocation`, `loadMUTCDIndex` (async),
+  `buildMUTCDContext`, `queryPineconeRAG` (async),
+  `buildPineconeRAGContext` + 1 const `PINECONE_CONFIG`. 7 fns
+  dual-mirrored `window`/`CL.ai`; `PINECONE_CONFIG` module-private (zero
+  external refs). Shared global `mutcdState` (inline ~L22873, top-level
+  const) read by `buildMUTCDContext`/`loadMUTCDIndex` — left INLINE,
+  resolved via shared classic-script global lexical env (batch-ba
+  precedent). LATE cluster right after `modules/ai/ai-analyst-chat.js`.
+  External callers preserved: HTML onclick/onchange (L12325, L12329),
+  inline calls at L64819, L66143, L66153, L66155, L66483 — all resolve
+  via window mirrors. No Playwright smoke (container limitation).
+- **Round X extracted (Session U autonomous, off-limits):**
   `ai/ai-analyst-chat` (prompt 40c1 — 278-line verbatim block L64205–L64482
   in pre-extract file: `const aiState` + 11 chat fns `loadSavedKey`,
   `handleAIFileSelect`, `renderAttachments`, `removeAttachment`,
