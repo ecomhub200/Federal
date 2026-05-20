@@ -4471,6 +4471,7 @@ textarea:focus-visible {
 <script src="modules/grants/grants-rank-init.js"></script>
 <script src="modules/grants/grants-rank-score.js"></script>
 <script src="modules/grants/grants-ui.js"></script>
+<script src="modules/grants/grants-controls.js"></script>
 <script src="modules/cmf/cmf-search.js"></script>
 <script src="modules/spatial/hierarchy-registry.js"></script>
 <script src="modules/spatial/boundary-service.js"></script>
@@ -30556,60 +30557,6 @@ async function _loadGrantsFromMatview() {
         showGrantRankingProgress(false);
         return false;
     }
-}
-
-// Apply location limit based on dropdown selection
-function applyLocationLimit() {
-    const limit = grantState.locationLimit;
-    if (limit === 'all' || limit === 0) {
-        grantState.rankedLocations = [...grantState.allRankedLocations];
-    } else {
-        grantState.rankedLocations = grantState.allRankedLocations.slice(0, limit);
-    }
-}
-
-// Handle location limit dropdown change
-function changeLocationLimit() {
-    const selectEl = document.getElementById('grantLocationLimit');
-    const value = selectEl.value;
-    grantState.locationLimit = value === 'all' ? 'all' : parseInt(value);
-    applyLocationLimit();
-    grantState.selectedLocationIndices = [];
-    grantState.selectedLocationIdx = null;
-    displayGrantLocations();
-}
-
-// UI Control Handlers for Enhanced Grant Matching
-function changeGrantAggregation() {
-    const select = document.getElementById('grantAggregationLevel');
-    grantState.aggregationLevel = select.value;
-    rankLocationsForGrants();
-}
-
-function changeGrantScoringProfile() {
-    const select = document.getElementById('grantScoringProfile');
-    grantState.scoringProfile = select.value;
-
-    // Show profile banner
-    const profile = GRANT_SCORING_PROFILES[select.value];
-    if (profile) {
-        const banner = document.getElementById('scoringProfileBanner');
-        document.getElementById('scoringProfileName').textContent = profile.name;
-        document.getElementById('scoringProfileDesc').textContent = profile.description;
-        banner.style.display = 'block';
-    }
-
-    rankLocationsForGrants();
-}
-
-function hideScoringProfileBanner() {
-    document.getElementById('scoringProfileBanner').style.display = 'none';
-}
-
-function changeGrantMinCrashes() {
-    const input = document.getElementById('grantMinCrashes');
-    grantState.minCrashThreshold = parseInt(input.value) || 3;
-    rankLocationsForGrants();
 }
 
 function showScoringProfileHelp() {
