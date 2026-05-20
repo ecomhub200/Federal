@@ -853,6 +853,18 @@ risk register.
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
 - **Round X extracted (Session U autonomous, off-limits):**
+  `reports/reports-recommend` (prompt 42d(c) — 249-line verbatim block
+  L61183-L61431 in pre-extract file: 6 memo-recommendation fns
+  `buildCollisionTypeBreakdown`, `buildSevereCrashPatterns`,
+  `generateMemoRecommendations`, `generateSafetyMemoRecommendations`,
+  `generateVRURecommendations`, `generateTrendAnalysis`. All 6 dual-mirrored
+  `window`/`CL.reports`. Reads shared inline globals via classic-script
+  global lexical env (NOT mirrored): `docx` (CDN browser-global), `COL`,
+  `MEMO_STYLES`. All 7 inline callers (L60751, L60846, L60851, L60939,
+  L60949, L61039, L61164) resolve via window mirrors. EARLY cluster right
+  after `modules/reports/reports-charts.js`. New root `CL.reports` already
+  exists in `loader.js` (added by Session R/S/T).
+- **Round X extracted (Session U autonomous, off-limits):**
   `ai/ai-analyst-context` (prompt 40c3(a) — 287-line verbatim block
   L65690-L65976 in pre-extract file: 4 fns `buildSystemPrompt`,
   `getAIAnalysisContext`, `buildLocationCrashContext`,
