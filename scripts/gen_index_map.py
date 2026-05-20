@@ -28,7 +28,8 @@ from collections import Counter, defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "app", "index.html")
-SNAPSHOT_DATE = "2026-05-16"
+OUT_DIR = os.path.join(ROOT, "docs", "Cowork")
+SNAPSHOT_DATE = "2026-05-20"
 
 BANDS = [
     (1, 40000, "INDEX_MAP_part1.md", "L1–40000", 1),
@@ -281,25 +282,41 @@ def brace_end(lines, start_idx, hard_cap):
 def parse_old_parts():
     """name -> consensus(curated triple) / TODO ; name -> refs (unique only)."""
     by_name = defaultdict(list)
-    row = re.compile(
-        r"^\|\s*(\d+)\s*\|\s*([\d—]+)\s*\|\s*([\d—]+)\s*\|\s*`([^`]+)`\s*\|"
+    # Original 9-col layout: Start | End | LOC | Name | Type | Dep | Used | Tab | Module
+    row9 = re.compile(
+        r"^\|\s*(\d+)\s*\|\s*([\d—\?]+)\s*\|\s*([\d—\?]+)\s*\|\s*`([^`]+)`\s*\|"
         r"\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|"
         r"\s*`([^`]+)`\s*\|\s*$"
     )
+    # Extended 11-col layout (post-2026-05-16):
+    # Start | End | TrueEnd | LOC | TrueLOC | Name | Type | Dep | Used | Tab | Module
+    row11 = re.compile(
+        r"^\|\s*(\d+)\s*\|\s*([\d—\?]+)\s*\|\s*([\d—\?]+)\s*\|\s*([\d—\?]+)\s*\|"
+        r"\s*([\d—\?]+)\s*\|\s*`([^`]+)`\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|"
+        r"\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*`([^`]+)`\s*\|\s*$"
+    )
     for _, _, fn, _, _ in BANDS:
-        p = os.path.join(ROOT, fn)
+        p = os.path.join(OUT_DIR, fn)
         if not os.path.exists(p):
             continue
         with open(p, encoding="utf-8") as f:
             for line in f:
-                m = row.match(line)
-                if not m:
-                    continue
-                name = m.group(4)
-                depends = m.group(6).strip()
-                used = m.group(7).strip()
-                tab = m.group(8).strip()
-                module = m.group(9).strip()
+                m = row11.match(line)
+                if m:
+                    name = m.group(6)
+                    depends = m.group(8).strip()
+                    used = m.group(9).strip()
+                    tab = m.group(10).strip()
+                    module = m.group(11).strip()
+                else:
+                    m = row9.match(line)
+                    if not m:
+                        continue
+                    name = m.group(4)
+                    depends = m.group(6).strip()
+                    used = m.group(7).strip()
+                    tab = m.group(8).strip()
+                    module = m.group(9).strip()
                 by_name[name].append((depends, tab, module, used))
     curated = {}
     used_unique = {}
@@ -318,7 +335,7 @@ def parse_old_parts():
 
 def parse_old_globals_listeners():
     """master globals: name->module ; listeners: event->module (most common)."""
-    p = os.path.join(ROOT, "INDEX_MAP.md")
+    p = os.path.join(OUT_DIR, "INDEX_MAP.md")
     g_mod = {}
     l_mod = defaultdict(Counter)
     if not os.path.exists(p):
@@ -459,7 +476,7 @@ def main():
             out.append("| %d | %d | %s | %d | %s | `%s` | %s | %s | %s | %s | `%s` |"
                        % (d["start"], d["hend"], te, d["hloc"], tl, d["name"],
                           d["type"], d["dep"], d["used"], d["tab"], d["mod"]))
-        with open(os.path.join(ROOT, fn + suffix), "w", encoding="utf-8") as fh:
+        with open(os.path.join(OUT_DIR, fn + suffix), "w", encoding="utf-8") as fh:
             fh.write("\n".join(out) + "\n")
 
     # ---- emit master ----
@@ -499,7 +516,7 @@ def main():
     m.append("|---|---|---|---|---|")
     for ln, ev, target, mod in listener_rows:
         m.append("| %d | `%s` | `%s` | inline | `%s` |" % (ln, ev, target, mod))
-    with open(os.path.join(ROOT, "INDEX_MAP.md" + suffix), "w", encoding="utf-8") as fh:
+    with open(os.path.join(OUT_DIR, "INDEX_MAP.md" + suffix), "w", encoding="utf-8") as fh:
         fh.write("\n".join(m) + "\n")
 
     nav = next((d for d in decls if d["name"] == "navigateTo"), None)

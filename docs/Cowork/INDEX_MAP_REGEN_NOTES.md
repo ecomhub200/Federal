@@ -1,4 +1,42 @@
-# INDEX_MAP regeneration notes — 2026-05-16
+# INDEX_MAP regeneration notes — 2026-05-20
+
+## 2026-05-20 refresh
+
+Re-ran `scripts/gen_index_map.py` against the live `app/index.html` after
+17,243 lines of further extraction (151,729 → **134,486**). Counts:
+
+| Metric | 2026-05-16 | 2026-05-20 |
+|---|---|---|
+| Source lines | 151,729 | 134,486 |
+| Declarations | 3,556 | 2,926 |
+| named fns | 2,388 | 2,012 |
+| const-arrow | 1,161 | 907 |
+| Globals | 287 | 251 |
+| Listeners | 58 | 52 |
+| Part 1 / 2 / 3 / 4 rows | 513 / 1233 / 1044 / 766 | 496 / 1086 / 969 / 375 |
+
+Two generator fixes shipped this run:
+
+1. **Output path** — generator was writing to repo ROOT; the canonical files
+   live under `docs/Cowork/`. Added `OUT_DIR = docs/Cowork` and routed all
+   reads + writes through it. Stale root copies (`/INDEX_MAP*.md`) deleted.
+2. **Name-join regex** — `parse_old_parts()` only matched the original 9-col
+   layout. The 2026-05-16 run wrote 11 columns (added `True End L` /
+   `True LOC`), so the join silently produced `matched=0` and dropped every
+   curated `Proposed module` assignment. Added an 11-col regex with the 9-col
+   pattern as fallback. This run: **matched=2,926 / dup_todo=0 / new=0**
+   (100% join — all current declarations preserve their curated mapping).
+
+`navigateTo` row spot-check: heuristic end 19159 (legacy heuristic still
+emits the bogus phantom — kept for continuity), **True end 132 / True LOC 12**
+— correct. Use only the `True *` columns for span decisions.
+
+No `app/index.html` edits this session. Read-only on source; writes confined
+to `docs/Cowork/INDEX_MAP*.md` and `scripts/gen_index_map.py` (generator fix).
+
+---
+
+# INDEX_MAP regeneration notes — 2026-05-16 (historical)
 
 ## Why
 

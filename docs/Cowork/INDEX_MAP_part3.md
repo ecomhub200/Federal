@@ -1,8 +1,8 @@
 # index.html function inventory — PART 3 (L80001–120000)
 
-Snapshot: 2026-05-16 · source `app/index.html` (151729 lines)
+Snapshot: 2026-05-20 · source `app/index.html` (134486 lines)
 
-Declarations in this part: **1044**
+Declarations in this part: **969**
 
 > **End L is a heuristic** (next declaration start − 1). **Used by** = approximate whole-file substring fan-out (coarse risk signal). **Depends on** is filled only for deep-trace targets — see `MODULAR_PLAN.md` §5. Tab/module are prefix/line-band heuristics.
 >
@@ -12,1047 +12,972 @@ Declarations in this part: **1044**
 
 | Start L | End L | True End L | LOC | True LOC | Name | Type | Depends on | Used by | Tab/feature | Proposed module |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 80029 | 80082 | 80077 | 54 | 49 | `buildRAGQueries` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 80083 | 80166 | 80161 | 84 | 79 | `buildNewAgent1Input` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 80167 | 80231 | 80227 | 65 | 61 | `buildNewAgent2Input` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 80232 | 80371 | 80366 | 140 | 135 | `formatMUTCDAnalysisForChat` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 80372 | 80415 | 80461 | 44 | 90 | `triggerMUTCDAnalysis` | async fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 80416 | 80466 | 80438 | 51 | 23 | `updateProgress` | const arrow | — | refs:52 | Unassigned | `app/modules/app/unassigned.js` |
-| 80467 | 80472 | 80470 | 6 | 4 | `buildCountyWideCrashProfile` | fn | — | refs:2 | Analysis | `app/modules/analysis/analysis.js` |
-| 80473 | 80521 | 80519 | 49 | 47 | `askMUTCDGuidance` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 80522 | 80526 | 80524 | 5 | 3 | `buildLocationCrashProfile` | fn | — | refs:7 | Analysis | `app/modules/analysis/analysis.js` |
-| 80527 | 80557 | 80538 | 31 | 12 | `askMUTCDForSafetyCategory` | fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
-| 80558 | 80603 | 80608 | 46 | 51 | `initSignalWarrantChecker` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 80604 | 80610 | 80604 | 7 | 1 | `routeNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 80611 | 80623 | 80621 | 13 | 11 | `toggleWarrantChecker` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 80624 | 80636 | 80634 | 13 | 11 | `toggleCrossingEvalSection` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 80637 | 80641 | 80639 | 5 | 3 | `openCrossingEvalModal` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 80642 | 80646 | 80644 | 5 | 3 | `closeCrossingEvalModal` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 80647 | 80657 | 80757 | 11 | 111 | `analyzeSignalWarrant` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 80658 | 80676 | 80658 | 19 | 1 | `crashes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
-| 80677 | 80759 | 80677 | 83 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 80760 | 80787 | 80786 | 28 | 27 | `askAboutWarrant7` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 80788 | 80888 | 80878 | 101 | 91 | `buildSystemPrompt` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 80889 | 81043 | 81039 | 155 | 151 | `getAIAnalysisContext` | fn | — | refs:8 | Analysis | `app/modules/analysis/analysis.js` |
-| 81044 | 81050 | 81046 | 7 | 3 | `buildLocationCrashContext` | fn | — | refs:2 | Analysis | `app/modules/analysis/analysis.js` |
-| 81051 | 81075 | 81074 | 25 | 24 | `updateAIContextIndicator` | fn | — | refs:17 | Unassigned | `app/modules/app/unassigned.js` |
-| 81076 | 81118 | 81117 | 43 | 42 | `updateMUTCDAILocationBar` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 81119 | 81135 | 81134 | 17 | 16 | `copyMessageContent` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 81136 | 81154 | 81153 | 19 | 18 | `updateMUTCDRefCounters` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 81155 | 81163 | 81162 | 9 | 8 | `askAboutMUTCDSection` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 81164 | 81290 | 81289 | 127 | 126 | `askAI` | async fn | — | refs:13 | Unassigned | `app/modules/app/unassigned.js` |
-| 81291 | 81334 | 81333 | 44 | 43 | `callOpenAI` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 81335 | 81392 | 81391 | 58 | 57 | `callClaude` | async fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 81393 | 81428 | 81427 | 36 | 35 | `callGemini` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 81429 | 81494 | 81462 | 66 | 34 | `formatAIResponse` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 81495 | 81534 | 81532 | 40 | 38 | `convertMUTCDReferencesToCards` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 81535 | 81559 | 81557 | 25 | 23 | `renderMUTCDCitationCard` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 81560 | 81706 | 81573 | 147 | 14 | `copyMUTCDCitation` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 81707 | 81760 | 81754 | 54 | 48 | `initDomainKnowledge` | fn | — | refs:1 | AI Mode | `app/modules/ai/ai.js` |
-| 81761 | 81774 | 81772 | 14 | 12 | `shouldUseQdrantProxy` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 81775 | 81814 | 81775 | 40 | 1 | `qdrantFetch` | async fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 81815 | 81846 | 81865 | 32 | 51 | `initQdrantConnection` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 81847 | 81867 | 81847 | 21 | 1 | `exists` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 81868 | 81873 | 81871 | 6 | 4 | `qdrantGetCollections` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 81874 | 81888 | 81886 | 15 | 13 | `qdrantCreateCollection` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 81889 | 81911 | 81909 | 23 | 21 | `qdrantCreatePayloadIndex` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 81912 | 81921 | 81919 | 10 | 8 | `qdrantEnsurePayloadIndexes` | async fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 81922 | 81947 | 81945 | 26 | 24 | `qdrantSearch` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 81948 | 81957 | 81955 | 10 | 8 | `qdrantGetCollectionInfo` | async fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 81958 | 81966 | 81964 | 9 | 7 | `qdrantUpsertPoints` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 81967 | 82002 | 81996 | 36 | 30 | `testQdrantConnection` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82003 | 82029 | 82027 | 27 | 25 | `voyageEmbed` | async fn | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
-| 82030 | 82035 | 82033 | 6 | 4 | `voyageEmbedQuery` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82036 | 82040 | 82038 | 5 | 3 | `voyageEmbedDocuments` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82041 | 82062 | 82056 | 22 | 16 | `testVoyageConnection` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82063 | 82073 | 82092 | 11 | 30 | `ragSearch` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82074 | 82095 | 82083 | 22 | 10 | `formattedResults` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 82096 | 82106 | 82104 | 11 | 9 | `generateQdrantId` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82107 | 82143 | 82141 | 37 | 35 | `indexDocument` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82144 | 82150 | 82184 | 7 | 41 | `indexDocumentsBatch` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82151 | 82154 | 82151 | 4 | 1 | `contents` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 82155 | 82186 | 82170 | 32 | 16 | `points` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 82187 | 82226 | 82224 | 40 | 38 | `testRAGPipeline` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82227 | 82316 | 82314 | 90 | 88 | `indexSampleDocuments` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82317 | 82321 | 82319 | 5 | 3 | `populateDKLocationDropdown` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82322 | 82379 | 82377 | 58 | 56 | `updateDKLocationDropdown` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82380 | 82433 | 82431 | 54 | 52 | `filterDKLocations` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82434 | 82440 | 82438 | 7 | 5 | `handleDKSearchKeypress` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82441 | 82446 | 82444 | 6 | 4 | `triggerDKSearch` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82447 | 82459 | 82457 | 13 | 11 | `selectDKSearchResult` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82460 | 82489 | 82487 | 30 | 28 | `loadDKLocation` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82490 | 82517 | 82515 | 28 | 26 | `loadDKCrashes` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 82518 | 82530 | 82528 | 13 | 11 | `applyDKDateFilter` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
-| 82531 | 82539 | 82556 | 9 | 26 | `applyDKDatePreset` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 82540 | 82558 | 82540 | 19 | 1 | `formatDate` | const arrow | — | refs:35 | Unassigned | `app/modules/app/unassigned.js` |
-| 82559 | 82576 | 82574 | 18 | 16 | `clearDKDateFilter` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82577 | 82590 | 82588 | 14 | 12 | `updateDKDateFilterStatus` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 82591 | 82608 | 82606 | 18 | 16 | `applyDKDateFilterInternal` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 82609 | 82676 | 82690 | 68 | 82 | `buildDKCrashProfile` | fn | — | refs:4 | Analysis | `app/modules/analysis/analysis.js` |
-| 82677 | 82698 | 82677 | 22 | 1 | `sortedTypes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 82699 | 82732 | 82752 | 34 | 54 | `renderDomainKnowledgeSources` | fn | — | refs:5 | AI Mode | `app/modules/ai/ai.js` |
-| 82733 | 82753 | 82733 | 21 | 1 | `escapeHtml` | const arrow | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
-| 82754 | 82767 | 82765 | 14 | 12 | `toggleDKSource` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
-| 82768 | 82778 | 82776 | 11 | 9 | `syncDKSourcesFromUI` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 82779 | 82793 | 82823 | 15 | 45 | `autoSelectDKSources` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 82794 | 82825 | 82797 | 32 | 4 | `_dkCheck` | const arrow | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
-| 82826 | 82831 | 82829 | 6 | 4 | `selectDKFromMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82832 | 82836 | 82834 | 5 | 3 | `enableDKPolygonMode` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82837 | 82850 | 82848 | 14 | 12 | `clearDKChat` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82851 | 82857 | 82855 | 7 | 5 | `askDKSuggestion` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 82858 | 82904 | 82902 | 47 | 45 | `askDKQuestion` | async fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 82905 | 82923 | 82915 | 19 | 11 | `buildDKContext` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 82924 | 82935 | 82934 | 12 | 11 | `_dkResolveOpenAIKey` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 82936 | 82981 | 82978 | 46 | 43 | `loadCorpusCounts` | async fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 82982 | 83018 | 83044 | 37 | 63 | `embedPendingCorpus` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 83019 | 83038 | 83019 | 20 | 1 | `errText` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83039 | 83048 | 83039 | 10 | 1 | `safeMsg` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83049 | 83068 | 83067 | 20 | 19 | `_dkOpenAIEmbed` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 83069 | 83097 | 83095 | 29 | 27 | `_dkPgvectorSearch` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 83098 | 83104 | 83233 | 7 | 136 | `queryDKSources` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 83105 | 83129 | 83107 | 25 | 3 | `qdrantSources` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83130 | 83153 | 83130 | 24 | 1 | `_key` | const arrow | — | refs:35 | Unassigned | `app/modules/app/unassigned.js` |
-| 83154 | 83235 | 83160 | 82 | 7 | `citations` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83236 | 83262 | 83260 | 27 | 25 | `callClaudeSimple` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 83263 | 83275 | 83273 | 13 | 11 | `getActiveApiKey` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 83276 | 83311 | 83309 | 36 | 34 | `addDKMessage` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 83312 | 83336 | 83334 | 25 | 23 | `showDKCitation` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 83337 | 83355 | 83353 | 19 | 17 | `updateDKSourcesPanel` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 83356 | 83374 | 83372 | 19 | 17 | `loadDKStreetView` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 83375 | 83387 | 83385 | 13 | 11 | `switchDKStreetView` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 83388 | 83393 | 83391 | 6 | 4 | `changeDKViewDirection` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 83394 | 83407 | 83405 | 14 | 12 | `toggleDKReferencePanel` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 83408 | 83412 | 83410 | 5 | 3 | `attachDKImage` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 83413 | 83519 | 83420 | 107 | 8 | `runDKDeepAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 83520 | 83536 | 83520 | 17 | 1 | `hasPedCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83537 | 83552 | 83537 | 16 | 1 | `hasPedCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83553 | 83570 | 83555 | 18 | 3 | `hasRelevantCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83571 | 83589 | 83571 | 19 | 1 | `hasPedCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83590 | 83590 | 83590 | 1 | 1 | `schoolNearby` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83591 | 83608 | 83593 | 18 | 3 | `noSchoolSigns` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83609 | 83626 | 83609 | 18 | 1 | `schoolNearby` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83627 | 83647 | 83629 | 21 | 3 | `darkCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83648 | 83648 | 83648 | 1 | 1 | `transitNearby` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83649 | 83666 | 83649 | 18 | 1 | `hasPedCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83667 | 83688 | 83686 | 22 | 20 | `switchCMFSubtab` | fn | — | refs:5 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 83689 | 83706 | 83704 | 18 | 16 | `initAssetDeficiencyTab` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 83707 | 83729 | 83770 | 23 | 64 | `syncADFromCMF` | fn | — | refs:7 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 83730 | 83730 | 83730 | 1 | 1 | `lats` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83731 | 83733 | 83731 | 3 | 1 | `lngs` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83734 | 83734 | 83734 | 1 | 1 | `avgLat` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83735 | 83772 | 83735 | 38 | 1 | `avgLng` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83773 | 83794 | 83792 | 22 | 20 | `showCMFDeficiencyPanelLoading` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 83795 | 83831 | 83829 | 37 | 35 | `loadAllADDataSourcesQuietly` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 83832 | 83877 | 84021 | 46 | 190 | `updateCMFDeficiencySummary` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 83878 | 83890 | 83878 | 13 | 1 | `pedCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83891 | 83902 | 83891 | 12 | 1 | `pedCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83903 | 83917 | 83906 | 15 | 4 | `nightCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 83918 | 84023 | 83921 | 106 | 4 | `intCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 84024 | 84040 | 84050 | 17 | 27 | `updateADLocationDisplay` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 84041 | 84041 | 84041 | 1 | 1 | `fatal` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 84042 | 84052 | 84042 | 11 | 1 | `serious` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 84053 | 84094 | 84092 | 42 | 40 | `clearADLocation` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84095 | 84130 | 84128 | 36 | 34 | `parseADCoordinates` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84131 | 84135 | 84148 | 5 | 18 | `filterCrashesForADLocation` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 84136 | 84150 | 84143 | 15 | 8 | `crashes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
-| 84151 | 84156 | 84154 | 6 | 4 | `selectADFromMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84157 | 84172 | 84171 | 16 | 15 | `updateADDataSourcesUI` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
-| 84173 | 84240 | 84238 | 68 | 66 | `updateSourceUI` | fn | — | refs:18 | Unassigned | `app/modules/app/unassigned.js` |
-| 84241 | 84251 | 84249 | 11 | 9 | `toggleADMapillaryList` | fn | — | refs:1 | Map | `app/modules/map/map.js` |
-| 84252 | 84271 | 84306 | 20 | 55 | `renderADMapillaryList` | fn | — | refs:1 | Map | `app/modules/map/map.js` |
-| 84272 | 84288 | 84283 | 17 | 12 | `getAssetInfo` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84289 | 84308 | 84289 | 20 | 1 | `sortedTypes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 84309 | 84344 | 84342 | 36 | 34 | `loadAllADDataSources` | async fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 84345 | 84359 | 84398 | 15 | 54 | `loadADSchools` | async fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 84360 | 84370 | 84360 | 11 | 1 | `schoolAsset` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 84371 | 84400 | 84379 | 30 | 9 | `nearbySchools` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 84401 | 84415 | 84457 | 15 | 57 | `loadADTransit` | async fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 84416 | 84429 | 84419 | 14 | 4 | `transitAsset` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 84430 | 84459 | 84438 | 30 | 9 | `nearbyStops` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 84460 | 84478 | 84476 | 19 | 17 | `updateADSchoolRadius` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84479 | 84497 | 84495 | 19 | 17 | `updateADTransitRadius` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84498 | 84586 | 84584 | 89 | 87 | `loadADTrafficInventory` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 84587 | 84609 | 84607 | 23 | 21 | `filterInventoryToLocation` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 84610 | 84675 | 84662 | 66 | 53 | `loadADMapillary` | async fn | — | refs:2 | Map | `app/modules/map/map.js` |
-| 84676 | 84711 | 84704 | 36 | 29 | `calculateOffsetCoordinates` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 84712 | 84735 | 84730 | 24 | 19 | `calculateZoomForBoxSize` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84736 | 84771 | 84767 | 36 | 32 | `checkMapboxSatelliteConnection` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84772 | 84802 | 84794 | 31 | 23 | `initSatelliteConnection` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84803 | 84826 | 84834 | 24 | 32 | `captureMapboxSatelliteImage` | async fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
-| 84827 | 84844 | 84831 | 18 | 5 | `base64Data` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 84845 | 84878 | 84876 | 34 | 32 | `captureAllSatelliteImages` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84879 | 84935 | 84930 | 57 | 52 | `loadADSatelliteImage` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84936 | 84990 | 84985 | 55 | 50 | `updateSatelliteImageGrid` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 84991 | 85019 | 85017 | 29 | 27 | `openSatelliteImageView` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
-| 85020 | 85039 | 85037 | 20 | 18 | `updateADAnalysisButton` | fn | — | refs:9 | Analysis | `app/modules/analysis/analysis.js` |
-| 85040 | 85045 | 85043 | 6 | 4 | `toggleADApiKeyPanel` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85046 | 85055 | 85053 | 10 | 8 | `checkADApiKeys` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85056 | 85078 | 85076 | 23 | 21 | `loadADApiKeys` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 85079 | 85102 | 85101 | 24 | 23 | `saveADApiKeys` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85103 | 85124 | 85122 | 22 | 20 | `updateADApiKeyStatus` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 85125 | 85252 | 85251 | 128 | 127 | `runADAnalysis` | async fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 85253 | 85274 | 85272 | 22 | 20 | `updateADProgressStep` | fn | — | refs:9 | Unassigned | `app/modules/app/unassigned.js` |
-| 85275 | 85335 | 85328 | 61 | 54 | `runGPT4VAnalysis` | async fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 85336 | 85382 | 85381 | 47 | 46 | `getGPT4VPrompt` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85383 | 85406 | 85405 | 24 | 23 | `getGeminiVerificationPrompt` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 85407 | 85470 | 85468 | 64 | 62 | `getClaudeConsensusPrompt` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 85471 | 85563 | 85561 | 93 | 91 | `runGeminiVerification` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85564 | 85673 | 85691 | 110 | 128 | `runClaudeConsensus` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85674 | 85693 | 85674 | 20 | 1 | `error` | const arrow | — | refs:215 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 85694 | 85721 | 85719 | 28 | 26 | `buildConsensusResult` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85722 | 85750 | 85749 | 29 | 28 | `detectDeficiencies` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85751 | 85760 | 85758 | 10 | 8 | `determineDeficiencySource` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85761 | 85804 | 85802 | 44 | 42 | `calculateRiskScore` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 85805 | 85820 | 85819 | 16 | 15 | `displayADResults` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 85821 | 85852 | 85851 | 32 | 31 | `displayADRiskScore` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85853 | 85912 | 85908 | 60 | 56 | `displayADInfrastructure` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85913 | 85967 | 85963 | 55 | 51 | `formatApproachesSection` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85968 | 85993 | 85992 | 26 | 25 | `formatCrosswalksSection` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 85994 | 85997 | 86027 | 4 | 34 | `formatInfraSection` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 85998 | 86028 | 85998 | 31 | 1 | `label` | const arrow | — | refs:3022 | Unassigned | `app/modules/app/unassigned.js` |
-| 86029 | 86082 | 86080 | 54 | 52 | `displayADDeficiencies` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 86083 | 86091 | 86100 | 9 | 18 | `sortADDeficiencies` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 86092 | 86092 | 86092 | 1 | 1 | `aCMF` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 86093 | 86102 | 86093 | 10 | 1 | `bCMF` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 86103 | 86114 | 86112 | 12 | 10 | `addDeficiencyToCMF` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86115 | 86123 | 86121 | 9 | 7 | `addDeficiencyToGrant` | fn | — | refs:1 | Grants | `app/modules/grants/grants.js` |
-| 86124 | 86135 | 86133 | 12 | 10 | `addADToCMFRecommendations` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86136 | 86141 | 86139 | 6 | 4 | `addADToGrant` | fn | — | refs:1 | Grants | `app/modules/grants/grants.js` |
-| 86142 | 86152 | 86150 | 11 | 9 | `viewADOnMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 86153 | 86158 | 86156 | 6 | 4 | `toggleADInfraExpand` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 86159 | 86166 | 86164 | 8 | 6 | `openADSatelliteFullView` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 86167 | 86205 | 86203 | 39 | 37 | `exportADPDF` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 86206 | 86232 | 86227 | 27 | 22 | `exportADJSON` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 86233 | 86361 | 86356 | 129 | 124 | `exportADCSV` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 86362 | 86387 | 86607 | 26 | 246 | `exportADPDFEnhanced` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 86388 | 86615 | 86393 | 228 | 6 | `checkPageBreak` | const arrow | — | refs:39 | Unassigned | `app/modules/app/unassigned.js` |
-| 86616 | 86623 | 86622 | 8 | 7 | `getADCacheKey` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 86624 | 86634 | 86633 | 11 | 10 | `loadADAnalysisCache` | fn | — | refs:3 | Analysis | `app/modules/analysis/analysis.js` |
-| 86635 | 86668 | 86667 | 34 | 33 | `saveADAnalysisToCache` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 86669 | 86691 | 86690 | 23 | 22 | `getADAnalysisFromCache` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 86692 | 86696 | 86695 | 5 | 4 | `clearADCache` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 86697 | 86702 | 86700 | 6 | 4 | `getCachedAnalysisCount` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 86703 | 86725 | 86723 | 23 | 21 | `checkADCacheForLocation` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 86726 | 86742 | 86731 | 17 | 6 | `updateADCacheDisplay` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 86743 | 86751 | 86766 | 9 | 24 | `applyCMFDatePreset` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86752 | 86768 | 86752 | 17 | 1 | `formatDate` | const arrow | — | refs:35 | Unassigned | `app/modules/app/unassigned.js` |
-| 86769 | 86784 | 86782 | 16 | 14 | `clearCMFDateFilter` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86785 | 86812 | 86810 | 28 | 26 | `applyCMFDateFilter` | fn | — | refs:4 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86813 | 86853 | 86851 | 41 | 39 | `filterCMFCrashesByDate` | fn | — | refs:4 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86854 | 86878 | 86876 | 25 | 23 | `updateCMFDateFilterStatus` | fn | — | refs:5 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86879 | 86903 | 86901 | 25 | 23 | `checkCMFSampleSize` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86904 | 86954 | 86952 | 51 | 49 | `loadCMFDatabase` | async fn | — | refs:7 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86955 | 86983 | 86982 | 29 | 28 | `transformCMFData` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86984 | 86993 | 87030 | 10 | 47 | `showCMFLoadedStatus` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 86994 | 86994 | 86994 | 1 | 1 | `provenCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 86995 | 86995 | 86995 | 1 | 1 | `hsmCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 86996 | 87031 | 86996 | 36 | 1 | `vaCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 87032 | 87041 | 87040 | 10 | 9 | `initCMFLocationDropdown` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87042 | 87093 | 87092 | 52 | 51 | `updateCMFLocationDropdown` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87094 | 87115 | 87141 | 22 | 48 | `buildCMFSearchData` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87116 | 87138 | 87116 | 23 | 1 | `sortedRoutes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 87139 | 87142 | 87139 | 4 | 1 | `sortedNodes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 87143 | 87148 | 87146 | 6 | 4 | `populateCMFLocations` | fn | — | refs:6 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87149 | 87156 | 87154 | 8 | 6 | `formatNodeId` | fn | — | refs:28 | Unassigned | `app/modules/app/unassigned.js` |
-| 87157 | 87206 | 87204 | 50 | 48 | `formatRouteName` | fn | — | refs:101 | Unassigned | `app/modules/app/unassigned.js` |
-| 87207 | 87220 | 87212 | 14 | 6 | `getRoadNameOnly` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 87221 | 87242 | 87259 | 22 | 39 | `getLocationDisplayName` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 87243 | 87289 | 87243 | 47 | 1 | `nodeInfo` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 87290 | 87292 | 87329 | 3 | 40 | `_buildLocationDataFromHotspots` | fn | — | refs:1 | Hot Spots | `app/modules/hotspots/hotspots.js` |
-| 87293 | 87330 | 87293 | 38 | 1 | `isNodeId` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 87331 | 87448 | 87331 | 118 | 1 | `buildLocationData` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 87449 | 87469 | 87449 | 21 | 1 | `populateLocationDropdown` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
-| 87470 | 87523 | 87485 | 54 | 16 | `createOption` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 87524 | 87551 | 87545 | 28 | 22 | `createLocationTypeSelector` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 87552 | 87561 | 87555 | 10 | 4 | `getSelectedLocationType` | fn | — | refs:13 | Unassigned | `app/modules/app/unassigned.js` |
-| 87562 | 87567 | 87565 | 6 | 4 | `setSelectedLocationType` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 87568 | 87633 | 87631 | 66 | 64 | `filterCMFLocations` | fn | — | refs:6 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87634 | 87647 | 87645 | 14 | 12 | `selectCMFLocation` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87648 | 87655 | 87653 | 8 | 6 | `handleCMFSearchKeypress` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87656 | 87711 | 87709 | 56 | 54 | `triggerCMFSearch` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87712 | 87731 | 87729 | 20 | 18 | `runActiveCMFMode` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87732 | 87738 | 87736 | 7 | 5 | `selectFromMap` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 87739 | 87779 | 87774 | 41 | 36 | `showToast` | fn | — | refs:382 | Unassigned | `app/modules/app/unassigned.js` |
-| 87780 | 87790 | 87787 | 11 | 8 | `showCrashTreeFilterUnavailableToast` | fn | — | refs:2 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 87791 | 87799 | 87798 | 9 | 8 | `showFSFilterUnavailableToast` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 87800 | 87845 | 87955 | 46 | 156 | `loadLocationForCMF` | fn | — | refs:5 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87846 | 87957 | 87862 | 112 | 17 | `_finalizeCMFAfterLocationLoad` | const arrow | — | refs:4 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 87958 | 88002 | 88067 | 45 | 110 | `extractRoadProperties` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 88003 | 88024 | 88003 | 22 | 1 | `topIntType` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 88025 | 88035 | 88025 | 11 | 1 | `topTrafficCtrl` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 88036 | 88070 | 88036 | 35 | 1 | `topRoadDesc` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 88071 | 88074 | 88073 | 4 | 3 | `buildCMFCrashProfile` | fn | — | refs:10 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88075 | 88165 | 88159 | 91 | 85 | `displayCrashProfile` | fn | — | refs:9 | Analysis | `app/modules/analysis/analysis.js` |
-| 88166 | 88179 | 88177 | 14 | 12 | `toggleDetailedCrashPanel` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 88180 | 88187 | 88185 | 8 | 6 | `getRiskClass` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 88188 | 88385 | 88426 | 198 | 239 | `displayDetailedCrashAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 88386 | 88432 | 88386 | 47 | 1 | `yearCounts` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 88433 | 88501 | 88499 | 69 | 67 | `setCMFMode` | fn | — | refs:11 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88502 | 88533 | 88531 | 32 | 30 | `showCachedResultsIndicator` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 88534 | 88544 | 88542 | 11 | 9 | `getTimeAgo` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 88545 | 88569 | 88563 | 25 | 19 | `refreshCMFResults` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88570 | 88594 | 88592 | 25 | 23 | `saveAIResultsToSessionStorage` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 88595 | 88623 | 88621 | 29 | 27 | `loadAIResultsFromSessionStorage` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 88624 | 88632 | 88630 | 9 | 7 | `clearAISessionStorage` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 88633 | 88649 | 88647 | 17 | 15 | `updateCMFModeBadge` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88650 | 88668 | 88666 | 19 | 17 | `showCMFApiPopover` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88669 | 88674 | 88672 | 6 | 4 | `closeCMFApiPopover` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88675 | 88685 | 88683 | 11 | 9 | `syncCMFPopoverProvider` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88686 | 88704 | 88702 | 19 | 17 | `updateCMFPopoverKeyHelper` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88705 | 88715 | 88713 | 11 | 9 | `syncCMFPopoverApiKey` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88716 | 88725 | 88723 | 10 | 8 | `clearCMFPopoverApiKey` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88726 | 88768 | 88766 | 43 | 41 | `saveCMFPopoverApiKey` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88769 | 88820 | 88880 | 52 | 112 | `runAIRecommendation` | async fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 88821 | 88882 | 88823 | 62 | 3 | `progressCallback` | const arrow | — | refs:12 | Unassigned | `app/modules/app/unassigned.js` |
-| 88883 | 88918 | 88916 | 36 | 34 | `cancelCMFAIAnalysis` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 88919 | 88971 | 88969 | 53 | 51 | `buildDataSourceIndicators` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 88972 | 89004 | 89002 | 33 | 31 | `renderDataSourceIndicatorsHTML` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 89005 | 89043 | 89041 | 39 | 37 | `update4AgentLoadingUI` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 89044 | 89080 | 89078 | 37 | 35 | `update4AgentProgress` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 89081 | 89320 | 89318 | 240 | 238 | `display4AgentResults` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 89321 | 89380 | 89534 | 60 | 214 | `buildAIContextString` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 89381 | 89390 | 89381 | 10 | 1 | `topLight` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 89391 | 89401 | 89391 | 11 | 1 | `topWeather` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 89402 | 89417 | 89402 | 16 | 1 | `topSurface` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 89418 | 89434 | 89418 | 17 | 1 | `topAlign` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 89435 | 89446 | 89435 | 12 | 1 | `topRelation` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 89447 | 89536 | 89447 | 90 | 1 | `topHarmful` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 89537 | 89562 | 89560 | 26 | 24 | `updateAILoadingStep` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 89563 | 89570 | 89733 | 8 | 171 | `displayAIRecommendations` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 89571 | 89577 | 89575 | 7 | 5 | `uniqueRecs` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 89578 | 89578 | 89598 | 1 | 21 | `fullCMFs` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 89579 | 89762 | 89579 | 184 | 1 | `fullCMF` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 89763 | 89779 | 89772 | 17 | 10 | `getCMFReductionPercent` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 89780 | 89817 | 89810 | 38 | 31 | `calculateExpectedReduction` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 89818 | 89858 | 89852 | 41 | 35 | `findMatchingCrashTypes` | fn | — | refs:3 | Analysis | `app/modules/analysis/analysis.js` |
-| 89859 | 89876 | 89870 | 18 | 12 | `estimateCostTier` | fn | — | refs:1 | Core/Tier | `app/modules/core/tier.js` |
-| 89877 | 89909 | 89900 | 33 | 24 | `calculateConfidence` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 89910 | 89999 | 89990 | 90 | 81 | `generateRelevanceReasons` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 90000 | 90073 | 90063 | 74 | 64 | `calculateRelevanceScore` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 90074 | 90101 | 90095 | 28 | 22 | `enrichCMFData` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 90102 | 90110 | 90349 | 9 | 248 | `displayAIRecommendationsAsCards` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 90111 | 90117 | 90115 | 7 | 5 | `uniqueCMFs` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 90118 | 90128 | 90120 | 11 | 3 | `recommendations` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 90129 | 90129 | 90129 | 1 | 1 | `provenCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 90130 | 90130 | 90130 | 1 | 1 | `hsmCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 90131 | 90134 | 90131 | 4 | 1 | `vaCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 90135 | 90206 | 90135 | 72 | 1 | `maxRelevance` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 90207 | 90351 | 90207 | 145 | 1 | `crashTypesFiltered` | const arrow | — | refs:9 | Analysis | `app/modules/analysis/analysis.js` |
-| 90352 | 90389 | 91835 | 38 | 1484 | `printFullCMFReport` | async fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 90390 | 90403 | 90401 | 14 | 12 | `addPageHeader` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 90404 | 90416 | 90414 | 13 | 11 | `addPageFooter` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 90417 | 90424 | 90422 | 8 | 6 | `addNewPage` | fn | — | refs:22 | Unassigned | `app/modules/app/unassigned.js` |
-| 90425 | 90432 | 90430 | 8 | 6 | `checkNewPage` | fn | — | refs:18 | Unassigned | `app/modules/app/unassigned.js` |
-| 90433 | 90443 | 90441 | 11 | 9 | `drawSectionTitle` | fn | — | refs:9 | Unassigned | `app/modules/app/unassigned.js` |
-| 90444 | 90915 | 90454 | 472 | 11 | `sanitizePropertyLabel` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 90916 | 91005 | 90920 | 90 | 5 | `crashTypeData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 91006 | 91247 | 91012 | 242 | 7 | `createMiniDistribution` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 91248 | 91323 | 91248 | 76 | 1 | `yearTrendData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 91324 | 91324 | 91324 | 1 | 1 | `positiveRecs` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 91325 | 91373 | 91325 | 49 | 1 | `negativeRecs` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 91374 | 91613 | 91387 | 240 | 14 | `summaryTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 91614 | 91837 | 91614 | 224 | 1 | `reasonTexts` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 91838 | 91844 | 91842 | 7 | 5 | `estimateTotalPages` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 91845 | 91849 | 91848 | 5 | 4 | `getPercentage` | fn | — | refs:31 | Unassigned | `app/modules/app/unassigned.js` |
-| 91850 | 92024 | 92824 | 175 | 975 | `findCountermeasures` | fn | — | refs:11 | Unassigned | `app/modules/app/unassigned.js` |
-| 92025 | 92032 | 92025 | 8 | 1 | `matchingTypes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 92033 | 92481 | 92033 | 449 | 1 | `topMatches` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 92482 | 92735 | 92482 | 254 | 1 | `totalTemporal` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 92736 | 92747 | 92739 | 12 | 4 | `cmMatch` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 92748 | 92826 | 92750 | 79 | 3 | `crashTypeMatch` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 92827 | 92828 | 92974 | 2 | 148 | `generateCountermeasureBundles` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 92829 | 92930 | 92829 | 102 | 1 | `recNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 92931 | 92942 | 92934 | 12 | 4 | `matchingCMs` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 92943 | 92948 | 92947 | 6 | 5 | `combinedCRF` | const arrow | — | refs:13 | Unassigned | `app/modules/app/unassigned.js` |
-| 92949 | 92975 | 92949 | 27 | 1 | `avgRating` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 92976 | 93026 | 93289 | 51 | 314 | `displayCMFRecommendations` | fn | — | refs:5 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93027 | 93027 | 93027 | 1 | 1 | `provenCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 93028 | 93028 | 93028 | 1 | 1 | `hsmCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 93029 | 93029 | 93029 | 1 | 1 | `vaCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 93030 | 93032 | 93030 | 3 | 1 | `highRelevanceCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 93033 | 93114 | 93033 | 82 | 1 | `maxRelevance` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 93115 | 93115 | 93115 | 1 | 1 | `crashTypesFiltered` | const arrow | — | refs:9 | Analysis | `app/modules/analysis/analysis.js` |
-| 93116 | 93291 | 93116 | 176 | 1 | `matchedTypes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 93292 | 93292 | 93348 | 1 | 57 | `expandBundle` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 93293 | 93350 | 93293 | 58 | 1 | `bundle` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 93351 | 93351 | 93363 | 1 | 13 | `addBundleToShortlist` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 93352 | 93365 | 93352 | 14 | 1 | `bundle` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 93366 | 93384 | 93382 | 19 | 17 | `copyCMFToClipboard` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93385 | 93406 | 93404 | 22 | 20 | `toggleCMFShortlist` | fn | — | refs:7 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93407 | 93416 | 93414 | 10 | 8 | `updateShortlistCount` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
-| 93417 | 93432 | 93430 | 16 | 14 | `clearCMFShortlist` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93433 | 93441 | 93595 | 9 | 163 | `updateCombinedEffectCalculator` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 93442 | 93597 | 93444 | 156 | 3 | `shortlistedCMFs` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 93598 | 93618 | 93616 | 21 | 19 | `toggleCMFShortlistView` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93619 | 93635 | 93662 | 17 | 44 | `askAIAboutCMF` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93636 | 93639 | 93636 | 4 | 1 | `crashTypes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
-| 93640 | 93664 | 93640 | 25 | 1 | `reasons` | const arrow | — | refs:146 | Unassigned | `app/modules/app/unassigned.js` |
-| 93665 | 93673 | 93707 | 9 | 43 | `askMUTCDAboutCMF` | fn | — | refs:3 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93674 | 93708 | 93674 | 35 | 1 | `crashTypes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
-| 93709 | 93736 | 93735 | 28 | 27 | `sortCMFResults` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93737 | 93774 | 93773 | 38 | 37 | `exportCMFReport` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93775 | 93779 | 93777 | 5 | 3 | `printCMFReport` | fn | — | refs:0 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93780 | 93797 | 93788 | 18 | 9 | `openCMFStreetView` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 93798 | 93903 | 93808 | 106 | 11 | `backupAutoloadTimeout` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 93904 | 94431 | 93909 | 528 | 6 | `checkDataLoaded` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 94432 | 94444 | 94505 | 13 | 74 | `queryCMFForSafetyCategory` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 94445 | 94469 | 94445 | 25 | 1 | `keywordList` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 94470 | 94485 | 94470 | 16 | 1 | `matches` | const arrow | — | refs:156 | Unassigned | `app/modules/app/unassigned.js` |
-| 94486 | 94507 | 94486 | 22 | 1 | `matchCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 94508 | 94556 | 94554 | 49 | 47 | `generateCMFDescription` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 94557 | 94606 | 94562 | 50 | 6 | `getEffectivenessColor` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 94607 | 94624 | 94622 | 18 | 16 | `renderCuratedCountermeasures` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 94625 | 94725 | 94723 | 101 | 99 | `renderSafetyCountermeasures` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 94726 | 94736 | 94732 | 11 | 7 | `adjustColor` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 94737 | 94787 | 94815 | 51 | 79 | `enrichMissingCrashFields` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 94788 | 94817 | 94791 | 30 | 4 | `isTruck` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 94818 | 94894 | 94893 | 77 | 76 | `initSafetyFocus` | fn | — | refs:5 | Safety Focus | `app/modules/safety/safety-focus.js` |
-| 94895 | 94904 | 94917 | 10 | 23 | `populateSafetyYearFilters` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 94905 | 94918 | 94905 | 14 | 1 | `sortedYears` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 94919 | 94947 | 94946 | 29 | 28 | `applySafetyFilters` | fn | — | refs:11 | Unassigned | `app/modules/app/unassigned.js` |
-| 94948 | 94955 | 94954 | 8 | 7 | `clearSafetyDateFilter` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 94956 | 95075 | 95072 | 120 | 117 | `processSafetyData` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 95076 | 95122 | 95121 | 47 | 46 | `processSafetyDataForReport` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 95123 | 95267 | 95266 | 145 | 144 | `calculateCrossAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 95268 | 95285 | 95275 | 18 | 8 | `extractSeverity` | fn | — | refs:33 | Unassigned | `app/modules/app/unassigned.js` |
-| 95286 | 95321 | 95315 | 36 | 30 | `updateSafetyCards` | fn | — | refs:6 | Safety Focus | `app/modules/safety/safety-focus.js` |
-| 95322 | 95395 | 95384 | 74 | 63 | `_loadSafetyFromMatview` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 95396 | 95447 | 95446 | 52 | 51 | `_hydrateSafetyLocationsFromMatview` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 95448 | 95563 | 95562 | 116 | 115 | `selectSafetyCategory` | fn | — | refs:28 | Unassigned | `app/modules/app/unassigned.js` |
-| 95564 | 95568 | 95566 | 5 | 3 | `calculateEPDO` | fn | — | refs:24 | Core/EPDO | `app/modules/core/epdo-presets.js` |
-| 95569 | 95597 | 95596 | 29 | 28 | `updateSafetyGridVisibility` | fn | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
-| 95598 | 95622 | 95651 | 25 | 54 | `updateSafetyBreakdownChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 95623 | 95626 | 95626 | 4 | 4 | `labels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95627 | 95652 | 95627 | 26 | 1 | `values` | const arrow | — | refs:91 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95653 | 95682 | 95707 | 30 | 55 | `updateSafetyCollisionChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 95683 | 95683 | 95683 | 1 | 1 | `labels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95684 | 95708 | 95684 | 25 | 1 | `values` | const arrow | — | refs:91 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95709 | 95738 | 95764 | 30 | 56 | `updateSafetyRoadwayChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 95739 | 95739 | 95739 | 1 | 1 | `labels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95740 | 95765 | 95740 | 26 | 1 | `values` | const arrow | — | refs:91 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95766 | 95795 | 95821 | 30 | 56 | `updateSafetyHarmfulEventChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 95796 | 95796 | 95796 | 1 | 1 | `labels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95797 | 95822 | 95797 | 26 | 1 | `values` | const arrow | — | refs:91 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95823 | 95834 | 95931 | 12 | 109 | `updateSafetyYearChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 95835 | 95882 | 95863 | 48 | 29 | `extractCrashYear` | const arrow | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 95883 | 95892 | 95883 | 10 | 1 | `sorted` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95893 | 95893 | 95893 | 1 | 1 | `labels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95894 | 95932 | 95894 | 39 | 1 | `values` | const arrow | — | refs:91 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 95933 | 95949 | 95948 | 17 | 16 | `_safetyFocusHasCofactors` | async fn | — | refs:6 | Safety Focus | `app/modules/safety/safety-focus.js` |
-| 95950 | 95960 | 95959 | 11 | 10 | `_renderSafetySubKpiUnavailable` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 95961 | 96021 | 96020 | 61 | 60 | `updateSafetyFactorBadges` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 96022 | 96064 | 96107 | 43 | 86 | `updateSafetyLocationTable` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 96065 | 96108 | 96065 | 44 | 1 | `top` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 96109 | 96141 | 96139 | 33 | 31 | `renderSafetyLocationRows` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 96142 | 96152 | 96146 | 11 | 5 | `goToSafetyPage` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 96153 | 96177 | 96175 | 25 | 23 | `toggleSfSelection` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 96178 | 96192 | 96190 | 15 | 13 | `toggleAllSfSelection` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 96193 | 96215 | 96213 | 23 | 21 | `clearSfSelection` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 96216 | 96237 | 96235 | 22 | 20 | `updateSfSelectionCount` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 96238 | 96248 | 96246 | 11 | 9 | `syncSfCheckboxStates` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 96249 | 96253 | 96251 | 5 | 3 | `toggleAllSafetyLocations` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 96254 | 96258 | 96256 | 5 | 3 | `updateSafetyLocationSelection` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 96259 | 96266 | 96264 | 8 | 6 | `syncSafetySelectedLocations` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 96267 | 96284 | 96278 | 18 | 12 | `updateSafetySelectionUI` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 96285 | 96292 | 96290 | 8 | 6 | `setSfViewMode` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 96293 | 96331 | 96329 | 39 | 37 | `updateSfDetailPanel` | async fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 96332 | 96378 | 96565 | 47 | 234 | `aggregateSfDetailData` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 96379 | 96406 | 96382 | 28 | 4 | `_hasPerRow` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 96407 | 96567 | 96407 | 161 | 1 | `selected` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 96568 | 96610 | 96608 | 43 | 41 | `calculateSfCategoryBenchmarks` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 96611 | 96627 | 96625 | 17 | 15 | `renderSfDetailContent` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 96628 | 96843 | 96841 | 216 | 214 | `renderSfCombinedView` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 96844 | 96866 | 96864 | 23 | 21 | `renderSfFactorRow` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 96867 | 96878 | 96937 | 12 | 71 | `renderSfCompareView` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 96879 | 96881 | 96879 | 3 | 1 | `topCollision` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 96882 | 96939 | 96882 | 58 | 1 | `rank` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 96940 | 96944 | 96981 | 5 | 42 | `renderSfMonthlyHeatmap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 96945 | 96953 | 96945 | 9 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 96954 | 96983 | 96960 | 30 | 7 | `getHeatmapColor` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 96984 | 97001 | 96999 | 18 | 16 | `initSfDetailCharts` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 97002 | 97078 | 97159 | 77 | 158 | `initSfCombinedCharts` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 97079 | 97106 | 97079 | 28 | 1 | `collisions` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 97107 | 97120 | 97107 | 14 | 1 | `weather` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 97121 | 97134 | 97121 | 14 | 1 | `light` | const arrow | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
-| 97135 | 97148 | 97135 | 14 | 1 | `surface` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 97149 | 97161 | 97149 | 13 | 1 | `control` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 97162 | 97199 | 97197 | 38 | 36 | `initSfCompareCharts` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 97200 | 97247 | 97252 | 48 | 53 | `exportSfDetailCSV` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 97248 | 97253 | 97248 | 6 | 1 | `csv` | const arrow | — | refs:604 | Unassigned | `app/modules/app/unassigned.js` |
-| 97254 | 97300 | 98060 | 47 | 807 | `exportSfDetailPDF` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 97301 | 97312 | 97311 | 12 | 11 | `addFooter` | fn | — | refs:19 | Unassigned | `app/modules/app/unassigned.js` |
-| 97313 | 97324 | 97323 | 12 | 11 | `drawMiniHeader` | fn | — | refs:15 | Unassigned | `app/modules/app/unassigned.js` |
-| 97325 | 97337 | 97336 | 13 | 12 | `drawSectionHeader` | fn | — | refs:58 | Unassigned | `app/modules/app/unassigned.js` |
-| 97338 | 97356 | 97355 | 19 | 18 | `drawKPI` | fn | — | refs:80 | Unassigned | `app/modules/app/unassigned.js` |
-| 97357 | 97364 | 97363 | 8 | 7 | `addNewPage` | fn | — | refs:22 | Unassigned | `app/modules/app/unassigned.js` |
-| 97365 | 97504 | 97373 | 140 | 9 | `fitImageInBox` | fn | — | refs:14 | Unassigned | `app/modules/app/unassigned.js` |
-| 97505 | 97607 | 97509 | 103 | 5 | `sevTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 97608 | 97810 | 97617 | 203 | 10 | `yearTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 97811 | 97878 | 97815 | 68 | 5 | `factorTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 97879 | 97879 | 97879 | 1 | 1 | `darkCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 97880 | 97922 | 97880 | 43 | 1 | `adverseWeather` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 97923 | 97939 | 97923 | 17 | 1 | `topCollision` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 97940 | 98062 | 97940 | 123 | 1 | `topOverall` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 98063 | 98085 | 98080 | 23 | 18 | `exportSfDetailKML` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 98086 | 98098 | 98097 | 13 | 12 | `exportSafetyData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 98099 | 98108 | 98107 | 10 | 9 | `exportSafetyLocationData` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 98109 | 98141 | 98135 | 33 | 27 | `exportCrashesToCSV` | fn | — | refs:13 | Analysis | `app/modules/analysis/analysis.js` |
-| 98142 | 98164 | 98159 | 23 | 18 | `exportSfDetailKML` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 98165 | 98177 | 98176 | 13 | 12 | `exportSafetyData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 98178 | 98187 | 98186 | 10 | 9 | `exportSafetyLocationData` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 98188 | 98220 | 98214 | 33 | 27 | `exportCrashesToCSV` | fn | — | refs:13 | Analysis | `app/modules/analysis/analysis.js` |
-| 98221 | 98264 | 98998 | 44 | 778 | `exportSafetyCategoryPDF` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 98265 | 98276 | 98275 | 12 | 11 | `addFooter` | fn | — | refs:19 | Unassigned | `app/modules/app/unassigned.js` |
-| 98277 | 98288 | 98287 | 12 | 11 | `drawMiniHeader` | fn | — | refs:15 | Unassigned | `app/modules/app/unassigned.js` |
-| 98289 | 98301 | 98300 | 13 | 12 | `drawSectionHeader` | fn | — | refs:58 | Unassigned | `app/modules/app/unassigned.js` |
-| 98302 | 98320 | 98319 | 19 | 18 | `drawKPI` | fn | — | refs:80 | Unassigned | `app/modules/app/unassigned.js` |
-| 98321 | 98435 | 98327 | 115 | 7 | `addNewPage` | fn | — | refs:22 | Unassigned | `app/modules/app/unassigned.js` |
-| 98436 | 98534 | 98440 | 99 | 5 | `sevTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 98535 | 98578 | 98543 | 44 | 9 | `fitImageInBox` | fn | — | refs:14 | Unassigned | `app/modules/app/unassigned.js` |
-| 98579 | 98676 | 98626 | 98 | 48 | `drawNativeHBarChart` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 98677 | 98785 | 98688 | 109 | 12 | `locTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 98786 | 98861 | 98795 | 76 | 10 | `yearBreakdownData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 98862 | 98900 | 98865 | 39 | 4 | `monthData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 98901 | 98901 | 98932 | 1 | 32 | `profileData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 98902 | 98918 | 98905 | 17 | 4 | `routeEntry` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 98919 | 99000 | 98919 | 82 | 1 | `topColl` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 99001 | 99015 | 99009 | 15 | 9 | `hexToRgbArray` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 99016 | 99057 | 99672 | 42 | 657 | `exportSafetySelectedLocationsPDF` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 99058 | 99069 | 99068 | 12 | 11 | `addFooter` | fn | — | refs:19 | Unassigned | `app/modules/app/unassigned.js` |
-| 99070 | 99081 | 99080 | 12 | 11 | `drawMiniHeader` | fn | — | refs:15 | Unassigned | `app/modules/app/unassigned.js` |
-| 99082 | 99094 | 99093 | 13 | 12 | `drawSectionHeader` | fn | — | refs:58 | Unassigned | `app/modules/app/unassigned.js` |
-| 99095 | 99102 | 99101 | 8 | 7 | `addNewPage` | fn | — | refs:22 | Unassigned | `app/modules/app/unassigned.js` |
-| 99103 | 99298 | 99109 | 196 | 7 | `checkPageBreak` | fn | — | refs:39 | Unassigned | `app/modules/app/unassigned.js` |
-| 99299 | 99430 | 99308 | 132 | 10 | `contribData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 99431 | 99504 | 99434 | 74 | 4 | `sevTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 99505 | 99513 | 99505 | 9 | 1 | `topCollisions` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 99514 | 99573 | 99518 | 60 | 5 | `collisionData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 99574 | 99608 | 99577 | 35 | 4 | `yearRows` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 99609 | 99609 | 99609 | 1 | 1 | `topWeather` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 99610 | 99679 | 99610 | 70 | 1 | `topLight` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 99680 | 99709 | 99707 | 30 | 28 | `runSafetyDataCheck` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 99710 | 99718 | 99716 | 9 | 7 | `sfAddCheck` | fn | — | refs:28 | Unassigned | `app/modules/app/unassigned.js` |
-| 99719 | 99761 | 99759 | 43 | 41 | `sfCheckSeverityTotals` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 99762 | 99795 | 99793 | 34 | 32 | `sfCheckEPDOCalculations` | fn | — | refs:1 | Core/EPDO | `app/modules/core/epdo-presets.js` |
-| 99796 | 99840 | 99838 | 45 | 43 | `sfCheckCategorySums` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 99841 | 99873 | 99871 | 33 | 31 | `sfCheckLocationTableConsistency` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 99874 | 100004 | 100002 | 131 | 129 | `sfCheckCrossAnalysisConsistency` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 100005 | 100077 | 100075 | 73 | 71 | `sfCheckFilterConsistency` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 100078 | 100224 | 100232 | 147 | 155 | `sfCheckDetailPanelAccuracy` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 100225 | 100234 | 100225 | 10 | 1 | `yearTotal` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100235 | 100275 | 100273 | 41 | 39 | `sfCheckPercentageDenominators` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 100276 | 100288 | 100353 | 13 | 78 | `displaySafetyDataCheckResults` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 100289 | 100310 | 100289 | 22 | 1 | `statusIcon` | const arrow | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
-| 100311 | 100311 | 100311 | 1 | 1 | `catPassed` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100312 | 100312 | 100312 | 1 | 1 | `catFailed` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100313 | 100314 | 100313 | 2 | 1 | `catWarn` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100315 | 100355 | 100315 | 41 | 1 | `catName` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100356 | 100376 | 100372 | 21 | 17 | `exportSafetyDataCheckResults` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 100377 | 100394 | 100393 | 18 | 17 | `viewSafetyOnMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 100395 | 100412 | 100411 | 18 | 17 | `viewSafetyLocationOnMap` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 100413 | 100466 | 100465 | 54 | 53 | `filterMapForSafety` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 100467 | 100483 | 100482 | 17 | 16 | `showMapFilterBadge` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 100484 | 100490 | 100500 | 7 | 17 | `clearSafetyMapFilter` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 100491 | 100506 | 100491 | 16 | 1 | `hasQuickFilters` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100507 | 100558 | 100555 | 52 | 49 | `initCrashTreeTab` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 100559 | 100592 | 100736 | 34 | 178 | `initCrashTreeFromMatview` | async fn | — | refs:3 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 100593 | 100627 | 100593 | 35 | 1 | `idSafe` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 100628 | 100670 | 100642 | 43 | 15 | `buildNode` | const arrow | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 100671 | 100674 | 100694 | 4 | 24 | `propagateSeverity` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 100675 | 100675 | 100675 | 1 | 1 | `ck` | const arrow | — | refs:148 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100676 | 100676 | 100676 | 1 | 1 | `ca` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100677 | 100677 | 100677 | 1 | 1 | `cb` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100678 | 100678 | 100678 | 1 | 1 | `cc` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100679 | 100738 | 100679 | 60 | 1 | `co` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 100739 | 100801 | 100799 | 63 | 61 | `setCrashTreeType` | fn | — | refs:3 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 100802 | 100812 | 100810 | 11 | 9 | `toggleCrashTreeSeverity` | fn | — | refs:5 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 100813 | 100837 | 100835 | 25 | 23 | `updateCrashTreeSeverity` | fn | — | refs:2 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 100838 | 100872 | 100866 | 35 | 29 | `setTreeSeverityPreset` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 100873 | 100902 | 100900 | 30 | 28 | `applyCrashTreeDateFilter` | fn | — | refs:2 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 100903 | 100908 | 100937 | 6 | 35 | `setCrashTreeDatePreset` | fn | — | refs:3 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 100909 | 100939 | 100909 | 31 | 1 | `formatDate` | const arrow | — | refs:35 | Unassigned | `app/modules/app/unassigned.js` |
-| 100940 | 100968 | 100966 | 29 | 27 | `clearCrashTreeDateFilter` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 100969 | 100980 | 100993 | 12 | 25 | `updateCrashTreeDateFilterStatus` | fn | — | refs:4 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 100981 | 100995 | 100985 | 15 | 5 | `formatDisplay` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 100996 | 101034 | 101031 | 39 | 36 | `getCrashTreeFilteredCrashes` | fn | — | refs:2 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 101035 | 101066 | 101064 | 32 | 30 | `getCrashTreeDateOnlyFilteredCrashes` | fn | — | refs:6 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 101067 | 101088 | 101086 | 22 | 20 | `refreshCrashTreeAnalysis` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 101089 | 101119 | 101164 | 31 | 76 | `buildCrashTreeData` | fn | — | refs:10 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 101120 | 101167 | 101142 | 48 | 23 | `filteredCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101168 | 101175 | 101338 | 8 | 171 | `buildFacilityTree` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 101176 | 101185 | 101183 | 10 | 8 | `countSeverity` | const arrow | — | refs:34 | Unassigned | `app/modules/app/unassigned.js` |
-| 101186 | 101190 | 101188 | 5 | 3 | `getUnfilteredTotal` | const arrow | — | refs:30 | Unassigned | `app/modules/app/unassigned.js` |
-| 101191 | 101199 | 101197 | 9 | 7 | `getUnfilteredKA` | const arrow | — | refs:30 | Unassigned | `app/modules/app/unassigned.js` |
-| 101200 | 101200 | 101200 | 1 | 1 | `atIntersection` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101201 | 101203 | 101201 | 3 | 1 | `atSegment` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101204 | 101207 | 101207 | 4 | 4 | `signalFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101208 | 101211 | 101211 | 4 | 4 | `stopFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101212 | 101216 | 101215 | 5 | 4 | `uncontrolledFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101217 | 101220 | 101220 | 4 | 4 | `intSignalized` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101221 | 101224 | 101224 | 4 | 4 | `intStopControlled` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101225 | 101230 | 101228 | 6 | 4 | `intUncontrolled` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101231 | 101234 | 101234 | 4 | 4 | `arterialFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101235 | 101238 | 101238 | 4 | 4 | `collectorFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101239 | 101243 | 101242 | 5 | 4 | `localFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101244 | 101247 | 101247 | 4 | 4 | `segArterial` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101248 | 101251 | 101251 | 4 | 4 | `segCollector` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101252 | 101290 | 101255 | 39 | 4 | `segLocal` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101291 | 101291 | 101291 | 1 | 1 | `unfilteredIntTotal` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101292 | 101321 | 101292 | 30 | 1 | `unfilteredSegTotal` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101322 | 101341 | 101325 | 20 | 4 | `rootUnfilteredKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101342 | 101348 | 101439 | 7 | 98 | `buildCrashTypeTree` | fn | — | refs:3 | Analysis | `app/modules/analysis/analysis.js` |
-| 101349 | 101358 | 101356 | 10 | 8 | `countSeverity` | const arrow | — | refs:34 | Unassigned | `app/modules/app/unassigned.js` |
-| 101359 | 101424 | 101371 | 66 | 13 | `getCrashCategory` | const arrow | — | refs:2 | Analysis | `app/modules/analysis/analysis.js` |
-| 101425 | 101443 | 101428 | 19 | 4 | `rootUnfilteredKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101444 | 101452 | 101958 | 9 | 515 | `buildContributingFactorsTree` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 101453 | 101462 | 101460 | 10 | 8 | `countSeverity` | const arrow | — | refs:34 | Unassigned | `app/modules/app/unassigned.js` |
-| 101463 | 101467 | 101465 | 5 | 3 | `getUnfilteredTotal` | const arrow | — | refs:30 | Unassigned | `app/modules/app/unassigned.js` |
-| 101468 | 101481 | 101474 | 14 | 7 | `getUnfilteredKA` | const arrow | — | refs:30 | Unassigned | `app/modules/app/unassigned.js` |
-| 101482 | 101482 | 101482 | 1 | 1 | `impairedFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101483 | 101483 | 101483 | 1 | 1 | `alcoholFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101484 | 101484 | 101484 | 1 | 1 | `drugFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101485 | 101485 | 101485 | 1 | 1 | `combinedSubstanceFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101486 | 101486 | 101486 | 1 | 1 | `speedingFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101487 | 101487 | 101487 | 1 | 1 | `distractedFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101488 | 101538 | 101488 | 51 | 1 | `drowsyFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101539 | 101594 | 101541 | 56 | 3 | `driverBehaviorCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101595 | 101595 | 101595 | 1 | 1 | `youngDriverFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101596 | 101599 | 101596 | 4 | 1 | `seniorDriverFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101600 | 101629 | 101600 | 30 | 1 | `demographicsCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101630 | 101633 | 101630 | 4 | 1 | `unrestrainedFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101634 | 101634 | 101634 | 1 | 1 | `nightFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101635 | 101638 | 101638 | 4 | 4 | `lightedFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101639 | 101644 | 101643 | 6 | 5 | `unlightedFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101645 | 101648 | 101648 | 4 | 4 | `weatherFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101649 | 101652 | 101652 | 4 | 4 | `rainFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101653 | 101656 | 101656 | 4 | 4 | `snowIceFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101657 | 101661 | 101660 | 5 | 4 | `fogFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101662 | 101665 | 101665 | 4 | 4 | `surfaceFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101666 | 101669 | 101669 | 4 | 4 | `wetFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101670 | 101685 | 101673 | 16 | 4 | `icyFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101686 | 101824 | 101686 | 139 | 1 | `environmentalCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101825 | 101825 | 101825 | 1 | 1 | `hitRunFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101826 | 101826 | 101826 | 1 | 1 | `workZoneFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101827 | 101831 | 101827 | 5 | 1 | `schoolZoneFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101832 | 101960 | 101832 | 129 | 1 | `specialCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 101961 | 102004 | 101981 | 44 | 21 | `renderCrashTree` | fn | — | refs:18 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 102005 | 102022 | 102020 | 18 | 16 | `navigateFromCrashTree` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 102023 | 102048 | 102122 | 26 | 100 | `renderTreeNode` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 102049 | 102091 | 102070 | 43 | 22 | `buildSeverityBar` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 102092 | 102124 | 102094 | 33 | 3 | `childNodes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102125 | 102135 | 102133 | 11 | 9 | `toggleCrashTreeNode` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 102136 | 102136 | 102146 | 1 | 11 | `expandAllTreeNodes` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 102137 | 102148 | 102143 | 12 | 7 | `addAllIds` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 102149 | 102154 | 102152 | 6 | 4 | `collapseAllTreeNodes` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 102155 | 102162 | 102194 | 8 | 40 | `autoExpandDominantPath` | fn | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
-| 102163 | 102196 | 102165 | 34 | 3 | `dominant` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102197 | 102209 | 102207 | 13 | 11 | `findNodeById` | fn | — | refs:12 | Unassigned | `app/modules/app/unassigned.js` |
-| 102210 | 102238 | 102236 | 29 | 27 | `getTreeTypeLabel` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
-| 102239 | 102258 | 102297 | 20 | 59 | `updateCrashTreeSummary` | fn | — | refs:2 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 102259 | 102299 | 102262 | 41 | 4 | `pathNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102300 | 102371 | 102369 | 72 | 70 | `updateCrashTreeStats` | fn | — | refs:13 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 102372 | 102376 | 102410 | 5 | 39 | `updateCrashTreeDataTable` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 102377 | 102412 | 102406 | 36 | 30 | `addRows` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 102413 | 102422 | 102626 | 10 | 214 | `analyzeRiskFactors` | fn | — | refs:10 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 102423 | 102433 | 102426 | 11 | 4 | `kaCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102434 | 102434 | 102434 | 1 | 1 | `nightAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102435 | 102453 | 102435 | 19 | 1 | `nightKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102454 | 102454 | 102454 | 1 | 1 | `speedAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102455 | 102473 | 102455 | 19 | 1 | `speedKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102474 | 102474 | 102474 | 1 | 1 | `intAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102475 | 102493 | 102475 | 19 | 1 | `intKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102494 | 102517 | 102497 | 24 | 4 | `wetFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102518 | 102518 | 102518 | 1 | 1 | `pedAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102519 | 102537 | 102519 | 19 | 1 | `pedKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102538 | 102538 | 102538 | 1 | 1 | `bikeAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102539 | 102558 | 102539 | 20 | 1 | `bikeKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102559 | 102559 | 102559 | 1 | 1 | `youngAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102560 | 102579 | 102560 | 20 | 1 | `youngKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102580 | 102580 | 102580 | 1 | 1 | `overrepFactors` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102581 | 102628 | 102581 | 48 | 1 | `highSeverityFactors` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102629 | 102663 | 102741 | 35 | 113 | `buildSecondaryTreeAnalysis` | fn | — | refs:9 | Analysis | `app/modules/analysis/analysis.js` |
-| 102664 | 102690 | 102666 | 27 | 3 | `dominant` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102691 | 102700 | 102695 | 10 | 5 | `getTreeLabel` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 102701 | 102743 | 102704 | 43 | 4 | `pathNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102744 | 102770 | 102768 | 27 | 25 | `exportCrashTreeImage` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 102771 | 102796 | 104204 | 26 | 1434 | `generateCrashTreeReport` | async fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
-| 102797 | 102809 | 102800 | 13 | 4 | `focusPath` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102810 | 102810 | 102817 | 1 | 8 | `dateRange` | const arrow | — | refs:71 | Unassigned | `app/modules/app/unassigned.js` |
-| 102811 | 102859 | 102811 | 49 | 1 | `dates` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102860 | 102993 | 102877 | 134 | 18 | `hydrated` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 102994 | 102996 | 103036 | 3 | 43 | `buildTreeBreakdownHtml` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 102997 | 102998 | 103014 | 2 | 18 | `rows` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 102999 | 104206 | 103007 | 1208 | 9 | `subRows` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 104207 | 104251 | 104244 | 45 | 38 | `generateProfessionalTableRows` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 104252 | 104270 | 104267 | 19 | 16 | `_showFSLoadingSkeleton` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 104271 | 104301 | 104298 | 31 | 28 | `initFatalSpeedingTab` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 104302 | 104648 | 104639 | 347 | 338 | `initFatalSpeedingFromMatview` | async fn | — | refs:4 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 104649 | 104660 | 104711 | 12 | 63 | `_fatalSpeeding_fetchMatviews` | async fn | — | refs:2 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 104661 | 104670 | 104666 | 10 | 6 | `applyTier` | const arrow | — | refs:2 | Core/Tier | `app/modules/core/tier.js` |
-| 104671 | 104681 | 104681 | 11 | 11 | `applyMatrixTier` | const arrow | — | refs:1 | Core/Tier | `app/modules/core/tier.js` |
-| 104682 | 104686 | 104686 | 5 | 5 | `mk` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 104687 | 104717 | 104700 | 31 | 14 | `fetchSafe` | async const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 104718 | 104797 | 104788 | 80 | 71 | `_applyFatalSpeedingFallback` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 104798 | 104801 | 104878 | 4 | 81 | `_hydrateFSHotspotsFromMatview` | async fn | — | refs:1 | Hot Spots | `app/modules/hotspots/hotspots.js` |
-| 104802 | 104805 | 104802 | 4 | 1 | `_calcEpdo` | const arrow | — | refs:6 | Core/EPDO | `app/modules/core/epdo-presets.js` |
-| 104806 | 104879 | 104825 | 74 | 20 | `_stubCrashes` | const arrow | — | refs:2 | Analysis | `app/modules/analysis/analysis.js` |
-| 104880 | 104915 | 104914 | 36 | 35 | `applyFSFilters` | fn | — | refs:9 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 104916 | 104923 | 104922 | 8 | 7 | `clearFSDateFilter` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 104924 | 105222 | 105221 | 299 | 298 | `processFSData` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 105223 | 105264 | 105258 | 42 | 36 | `updateFSDisplay` | fn | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
-| 105265 | 105311 | 105304 | 47 | 40 | `_applyFSYoungSeniorGate` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 105312 | 105314 | 105326 | 3 | 15 | `paintFSFatalCollisionChart` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 105315 | 105327 | 105315 | 13 | 1 | `entries` | const arrow | — | refs:417 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105328 | 105330 | 105342 | 3 | 15 | `paintFSFatalYearChart` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 105331 | 105343 | 105331 | 13 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105344 | 105346 | 105358 | 3 | 15 | `paintFSSpeedCollisionChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 105347 | 105359 | 105347 | 13 | 1 | `entries` | const arrow | — | refs:417 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105360 | 105362 | 105374 | 3 | 15 | `paintFSSpeedYearChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 105363 | 105375 | 105363 | 13 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105376 | 105378 | 105390 | 3 | 15 | `paintFSSpeedSeverityChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 105379 | 105391 | 105379 | 13 | 1 | `data` | const arrow | — | refs:7077 | Unassigned | `app/modules/app/unassigned.js` |
-| 105392 | 105436 | 105448 | 45 | 57 | `paintFSNonSpeedSeverityChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 105437 | 105449 | 105437 | 13 | 1 | `data` | const arrow | — | refs:7077 | Unassigned | `app/modules/app/unassigned.js` |
-| 105450 | 105470 | 105469 | 21 | 20 | `paintFSCombinedYearChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 105471 | 105473 | 105485 | 3 | 15 | `paintFSCombinedHourChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 105474 | 105486 | 105474 | 13 | 1 | `hours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105487 | 105503 | 105502 | 17 | 16 | `updateFSFatalKPIs` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 105504 | 105527 | 105526 | 24 | 23 | `updateFSFatalFactorCards` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 105528 | 105541 | 105540 | 14 | 13 | `updateFSSpeedKPIs` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 105542 | 105563 | 105562 | 22 | 21 | `updateFSSpeedFactorCards` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 105564 | 105599 | 105598 | 36 | 35 | `updateFSCombinedView` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 105600 | 105630 | 105674 | 31 | 75 | `updateFSFatalHotspots` | fn | — | refs:2 | Hot Spots | `app/modules/hotspots/hotspots.js` |
-| 105631 | 105651 | 105631 | 21 | 1 | `top` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105652 | 105676 | 105652 | 25 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105677 | 105686 | 105709 | 10 | 33 | `goToFSFatalPage` | fn | — | refs:2 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 105687 | 105710 | 105687 | 24 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105711 | 105741 | 105781 | 31 | 71 | `updateFSSpeedHotspots` | fn | — | refs:2 | Hot Spots | `app/modules/hotspots/hotspots.js` |
-| 105742 | 105762 | 105742 | 21 | 1 | `top` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105763 | 105783 | 105763 | 21 | 1 | `aCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105784 | 105793 | 105812 | 10 | 29 | `goToFSSpeedPage` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 105794 | 105813 | 105794 | 20 | 1 | `aCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105814 | 105877 | 105875 | 64 | 62 | `updateFSCombinedHotspots` | fn | — | refs:2 | Hot Spots | `app/modules/hotspots/hotspots.js` |
-| 105878 | 105903 | 105902 | 26 | 25 | `goToFSCombinedPage` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 105904 | 105922 | 105945 | 19 | 42 | `updateFSFatalCrossAnalysis` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 105923 | 105923 | 105930 | 1 | 8 | `results` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105924 | 105946 | 105926 | 23 | 3 | `count` | const arrow | — | refs:3744 | Unassigned | `app/modules/app/unassigned.js` |
-| 105947 | 105994 | 106013 | 48 | 67 | `updateFSCombinedCrossAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 105995 | 105996 | 105999 | 2 | 5 | `results` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 105997 | 106014 | 105997 | 18 | 1 | `kCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 106015 | 106085 | 106083 | 71 | 69 | `renderFSSpeedComparison` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106086 | 106114 | 106109 | 29 | 24 | `switchFSMatrixTab` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 106115 | 106126 | 106124 | 12 | 10 | `_fsShouldHideBC` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106127 | 106138 | 106136 | 12 | 10 | `_fsRenderBCBanner` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106139 | 106147 | 106144 | 9 | 6 | `renderFSYearlyMatrices` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106148 | 106221 | 106219 | 74 | 72 | `renderFSFatalSeverityMatrix` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 106222 | 106280 | 106278 | 59 | 57 | `renderFSFatalFactorMatrix` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 106281 | 106383 | 106381 | 103 | 101 | `renderFSSpeedSeverityMatrix` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 106384 | 106441 | 106440 | 58 | 57 | `renderFSSpeedFactorMatrix` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106442 | 106482 | 106481 | 41 | 40 | `renderFSCombinedYearChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106483 | 106494 | 106547 | 12 | 65 | `renderFSCombinedHourChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106495 | 106495 | 106495 | 1 | 1 | `hours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 106496 | 106503 | 106501 | 8 | 6 | `hourLabels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 106504 | 106506 | 106504 | 3 | 1 | `combinedData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 106507 | 106548 | 106507 | 42 | 1 | `barColors` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 106549 | 106577 | 106576 | 29 | 28 | `setFSView` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 106578 | 106632 | 106631 | 55 | 54 | `selectFSFactor` | fn | — | refs:32 | Unassigned | `app/modules/app/unassigned.js` |
-| 106633 | 106642 | 106665 | 10 | 33 | `updateFSCofactorGrid` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106643 | 106666 | 106643 | 24 | 1 | `count` | const arrow | — | refs:3744 | Unassigned | `app/modules/app/unassigned.js` |
-| 106667 | 106683 | 106757 | 17 | 91 | `renderFSDetailCharts` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106684 | 106709 | 106684 | 26 | 1 | `sorted` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 106710 | 106735 | 106728 | 26 | 19 | `extractYear` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106736 | 106758 | 106736 | 23 | 1 | `sorted` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 106759 | 106776 | 106787 | 18 | 29 | `updateFSFactorLocationTable` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 106777 | 106788 | 106777 | 12 | 1 | `sorted` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 106789 | 106801 | 106800 | 13 | 12 | `closeFSDetailPanel` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 106802 | 106806 | 106840 | 5 | 39 | `getTopFactor` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 106807 | 106814 | 106807 | 8 | 1 | `sorted` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 106815 | 106817 | 106825 | 3 | 11 | `_matchHint` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 106818 | 106841 | 106820 | 24 | 3 | `matched` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 106842 | 106859 | 106858 | 18 | 17 | `viewFSOnMap` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 106860 | 106881 | 106880 | 22 | 21 | `viewFSLocationOnMap` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
-| 106882 | 106890 | 106889 | 9 | 8 | `jumpToCMFFromFS` | fn | — | refs:6 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 106891 | 106914 | 106913 | 24 | 23 | `exportFSData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 106915 | 106924 | 106923 | 10 | 9 | `exportFSFactorData` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 106925 | 106935 | 106934 | 11 | 10 | `getFSCMF` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 106936 | 107044 | 107799 | 109 | 864 | `exportFSToPDF` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 107045 | 107075 | 107052 | 31 | 8 | `hexToRgb` | const arrow | — | refs:28 | Unassigned | `app/modules/app/unassigned.js` |
-| 107076 | 107084 | 107082 | 9 | 7 | `cleanText` | const arrow | — | refs:18 | Unassigned | `app/modules/app/unassigned.js` |
-| 107085 | 107092 | 107090 | 8 | 6 | `getFactorName` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 107093 | 107109 | 107107 | 17 | 15 | `drawHeader` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 107110 | 107134 | 107132 | 25 | 23 | `drawFooter` | const arrow | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 107135 | 107145 | 107143 | 11 | 9 | `newPage` | const arrow | — | refs:42 | Unassigned | `app/modules/app/unassigned.js` |
-| 107146 | 107154 | 107152 | 9 | 7 | `checkPageBreak` | const arrow | — | refs:39 | Unassigned | `app/modules/app/unassigned.js` |
-| 107155 | 107175 | 107173 | 21 | 19 | `addText` | const arrow | — | refs:168 | Unassigned | `app/modules/app/unassigned.js` |
-| 107176 | 107191 | 107189 | 16 | 14 | `addSectionTitle` | const arrow | — | refs:24 | Unassigned | `app/modules/app/unassigned.js` |
-| 107192 | 107202 | 107200 | 11 | 9 | `addSubsectionTitle` | const arrow | — | refs:13 | Unassigned | `app/modules/app/unassigned.js` |
-| 107203 | 107256 | 107254 | 54 | 52 | `drawSeverityBar` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 107257 | 107279 | 107277 | 23 | 21 | `drawKPICard` | const arrow | — | refs:12 | Unassigned | `app/modules/app/unassigned.js` |
-| 107280 | 107540 | 107280 | 261 | 1 | `addSpacer` | const arrow | — | refs:109 | Unassigned | `app/modules/app/unassigned.js` |
-| 107541 | 107662 | 107546 | 122 | 6 | `crashYears` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 107663 | 107696 | 107667 | 34 | 5 | `yearData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 107697 | 107804 | 107702 | 108 | 6 | `formatHour` | const arrow | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
-| 107805 | 107836 | 107835 | 32 | 31 | `getSafetyCMF` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 107837 | 107857 | 107852 | 21 | 16 | `getSafetyLocationCMF` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 107858 | 107933 | 107931 | 76 | 74 | `showSafetyLocationDetails` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 107934 | 107940 | 107939 | 7 | 6 | `viewCurrentDetailOnMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 107941 | 107947 | 107946 | 7 | 6 | `getCurrentDetailCMF` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
-| 107948 | 107957 | 107955 | 10 | 8 | `exportCurrentDetail` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 107958 | 107975 | 107974 | 18 | 17 | `exportCurrentDetailToKML` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 107976 | 108006 | 108005 | 31 | 30 | `addCurrentDetailToReport` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 108007 | 108014 | 108009 | 8 | 3 | `closeSafetyModal` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
-| 108015 | 108027 | 108026 | 13 | 12 | `exportSafetyData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 108028 | 108037 | 108036 | 10 | 9 | `exportSafetyLocationData` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 108038 | 108069 | 108064 | 32 | 27 | `exportCrashesToCSV` | fn | — | refs:13 | Analysis | `app/modules/analysis/analysis.js` |
-| 108070 | 108309 | 108307 | 240 | 238 | `viewCrossAnalysis` | fn | — | refs:19 | Analysis | `app/modules/analysis/analysis.js` |
-| 108310 | 108324 | 108322 | 15 | 13 | `viewCrossOnMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 108325 | 108335 | 108333 | 11 | 9 | `exportCrossAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 108336 | 108351 | 108349 | 16 | 14 | `exportCrossToKML` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 108352 | 108383 | 108377 | 32 | 26 | `addCrossToReport` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 108384 | 108423 | 108421 | 40 | 38 | `populateCustomMatrixDropdowns` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 108424 | 108453 | 108491 | 30 | 68 | `updateCustomMatrixPreview` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 108454 | 108469 | 108457 | 16 | 4 | `factorLabels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 108470 | 108493 | 108473 | 24 | 4 | `matchesAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 108494 | 108508 | 108506 | 15 | 13 | `getSelectedCustomMatrixFactors` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 108509 | 108521 | 108519 | 13 | 11 | `clearCustomMatrixSelections` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 108522 | 108560 | 108700 | 39 | 179 | `runCustomMatrixAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 108561 | 108598 | 108564 | 38 | 4 | `factorLabels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 108599 | 108702 | 108602 | 104 | 4 | `matchesAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 108703 | 108717 | 108715 | 15 | 13 | `viewCustomMatrixOnMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 108718 | 108733 | 108727 | 16 | 10 | `exportCustomMatrixData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 108734 | 108757 | 108755 | 24 | 22 | `exportSafetyToKML` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 108758 | 108785 | 108783 | 28 | 26 | `addSafetyDataToReport` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 108786 | 108825 | 108813 | 40 | 28 | `generateSafetyCategoryReport` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 108826 | 108916 | 108836 | 91 | 11 | `safetyCheckInterval` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 108917 | 108953 | 108940 | 37 | 24 | `refreshActiveTabAfterDataLoad` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 108954 | 108956 | 108954 | 3 | 1 | `updateWarrantAPIKeyStatus` | window fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 108957 | 108960 | 108957 | 4 | 1 | `loadWarrantImagery` | window fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 108961 | 108990 | 109001 | 30 | 41 | `initWarrantsTab` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 108991 | 109004 | 108991 | 14 | 1 | `routeNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 109005 | 109021 | 109048 | 17 | 44 | `onWarrantsTabReentry` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 109022 | 109050 | 109022 | 29 | 1 | `routeNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 109051 | 109061 | 109059 | 11 | 9 | `populateWarrantLocations` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 109062 | 109113 | 109111 | 52 | 50 | `updateWarrantLocationDropdown` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 109114 | 109188 | 109186 | 75 | 73 | `showWarrantStudy` | fn | — | refs:22 | Warrants | `app/modules/warrants/warrants.js` |
-| 109189 | 109248 | 109246 | 60 | 58 | `filterWarrantLocations` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 109249 | 109255 | 109253 | 7 | 5 | `handleWarrantSearchKeypress` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 109256 | 109310 | 109304 | 55 | 49 | `triggerWarrantSearch` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 109311 | 109319 | 109344 | 9 | 34 | `applyWarrantDatePreset` | fn | — | refs:7 | Warrants | `app/modules/warrants/warrants.js` |
-| 109320 | 109346 | 109320 | 27 | 1 | `formatDate` | const arrow | — | refs:35 | Unassigned | `app/modules/app/unassigned.js` |
-| 109347 | 109363 | 109361 | 17 | 15 | `clearWarrantDateFilter` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 109364 | 109376 | 109407 | 13 | 44 | `autoSetWarrantDateByStudy` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 109377 | 109409 | 109377 | 33 | 1 | `formatDate` | const arrow | — | refs:35 | Unassigned | `app/modules/app/unassigned.js` |
-| 109410 | 109428 | 109426 | 19 | 17 | `updateWarrantPeriodBadge` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 109429 | 109469 | 109463 | 41 | 35 | `applyWarrantDateFilter` | fn | — | refs:5 | Warrants | `app/modules/warrants/warrants.js` |
-| 109470 | 109486 | 109516 | 17 | 47 | `setDefaultWarrant7Period` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 109487 | 109518 | 109487 | 32 | 1 | `formatDate` | const arrow | — | refs:35 | Unassigned | `app/modules/app/unassigned.js` |
-| 109519 | 109559 | 109557 | 41 | 39 | `filterWarrantCrashesByDate` | fn | — | refs:9 | Warrants | `app/modules/warrants/warrants.js` |
-| 109560 | 109585 | 109583 | 26 | 24 | `updateWarrantDateInfo` | fn | — | refs:7 | Warrants | `app/modules/warrants/warrants.js` |
-| 109586 | 109643 | 109641 | 58 | 56 | `checkWarrantPeriodCompliance` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 109644 | 109700 | 109698 | 57 | 55 | `updateWarrantCrashDisplay` | fn | — | refs:6 | Warrants | `app/modules/warrants/warrants.js` |
-| 109701 | 109715 | 109783 | 15 | 83 | `selectWarrantLocation` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 109716 | 109739 | 109726 | 24 | 11 | `poll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 109740 | 109758 | 109740 | 19 | 1 | `routeNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 109759 | 109766 | 109759 | 8 | 1 | `fallback` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 109767 | 109773 | 109767 | 7 | 1 | `crashes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
-| 109774 | 109785 | 109780 | 12 | 7 | `crashes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
-| 109786 | 109799 | 109896 | 14 | 111 | `loadLocationForWarrants` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 109800 | 109863 | 109812 | 64 | 13 | `poll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 109864 | 109872 | 109864 | 9 | 1 | `fallback` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 109873 | 109879 | 109873 | 7 | 1 | `crashes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
-| 109880 | 109904 | 109886 | 25 | 7 | `crashes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
-| 109905 | 109914 | 109967 | 10 | 63 | `_applyWarrantHotspotDetail` | fn | — | refs:1 | Hot Spots | `app/modules/hotspots/hotspots.js` |
-| 109915 | 109923 | 109918 | 9 | 4 | `num` | const arrow | — | refs:5 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 109924 | 109969 | 109927 | 46 | 4 | `setText` | const arrow | — | refs:13 | Unassigned | `app/modules/app/unassigned.js` |
-| 109970 | 110060 | 110058 | 91 | 89 | `loadLocationDataForWarrants` | fn | — | refs:13 | Warrants | `app/modules/warrants/warrants.js` |
-| 110061 | 110158 | 110156 | 98 | 96 | `buildWarrantCrashProfile` | fn | — | refs:7 | Warrants | `app/modules/warrants/warrants.js` |
-| 110159 | 110207 | 110218 | 49 | 60 | `extractWarrantRoadProperties` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 110208 | 110220 | 110208 | 13 | 1 | `topRoadDesc` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 110221 | 110475 | 110473 | 255 | 253 | `autoPopulateWarrantForm` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 110476 | 110481 | 110479 | 6 | 4 | `selectFromMapForWarrants` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 110482 | 110524 | 110535 | 43 | 54 | `analyzeWarrantsFromMap` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 110525 | 110540 | 110525 | 16 | 1 | `routeNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 110541 | 110612 | 110598 | 72 | 58 | `evaluatePedScreening` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 110613 | 110633 | 110631 | 21 | 19 | `getRequiredSSD` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 110634 | 110656 | 110654 | 23 | 21 | `updatePedSSDRequired` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 110657 | 110669 | 110667 | 13 | 11 | `updatePedContextSpacing` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 110670 | 110714 | 110712 | 45 | 43 | `updatePedStreetViewStatus` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 110715 | 110730 | 110728 | 16 | 14 | `openPedStreetView` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 110731 | 110750 | 110842 | 20 | 112 | `ped_loadCrashData` | fn | — | refs:2 | Analysis | `app/modules/analysis/analysis.js` |
-| 110751 | 110843 | 110753 | 93 | 3 | `pedCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 110844 | 110982 | 110892 | 139 | 49 | `evaluatePedCriteria` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
-| 110983 | 111020 | 111072 | 38 | 90 | `determinePedTier` | fn | — | refs:6 | Core/Tier | `app/modules/core/tier.js` |
-| 111021 | 111073 | 111024 | 53 | 4 | `cmDescriptions` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 111074 | 111104 | 111099 | 31 | 26 | `determinePedMarking` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 111105 | 111582 | 111578 | 478 | 474 | `ped_generatePDFReport` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 111583 | 111602 | 111593 | 20 | 11 | `ped_printReport` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 111603 | 111673 | 111669 | 71 | 67 | `stopsign_initForm` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 111674 | 111708 | 111704 | 35 | 31 | `stopsign_showTab` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 111709 | 111786 | 111782 | 78 | 74 | `stopsign_updateSpeedThreshold` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 111787 | 111798 | 111794 | 12 | 8 | `stopsign_updateConfig` | fn | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
-| 111799 | 111847 | 111843 | 49 | 45 | `stopsign_updateTMCGrid` | fn | — | refs:14 | Unassigned | `app/modules/app/unassigned.js` |
-| 111848 | 111899 | 111892 | 52 | 45 | `stopsign_generateTMCRows` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 111900 | 111917 | 111913 | 18 | 14 | `stopsign_updateRowTotal` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 111918 | 111927 | 111923 | 10 | 6 | `stopsign_markTotalManual` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 111928 | 111950 | 111944 | 23 | 17 | `stopsign_calculateApproachVolumes` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 111951 | 112037 | 112031 | 87 | 81 | `stopsign_computeHourlyAggregates` | fn | — | refs:2 | Spatial/Geo | `app/modules/spatial/spatial.js` |
-| 112038 | 112121 | 112117 | 84 | 80 | `stopsign_evaluateCriterionCFromAggregates` | fn | — | refs:1 | Spatial/Geo | `app/modules/spatial/spatial.js` |
-| 112122 | 112154 | 112254 | 33 | 133 | `stopsign_updateVolumeSummary` | fn | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
-| 112155 | 112155 | 112155 | 1 | 1 | `totalMajor` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 112156 | 112258 | 112156 | 103 | 1 | `totalMinor` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 112259 | 112297 | 112293 | 39 | 35 | `stopsign_setCountType` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
-| 112298 | 112328 | 112323 | 31 | 26 | `stopsign_clearTMCForm` | fn | — | refs:9 | Unassigned | `app/modules/app/unassigned.js` |
-| 112329 | 112336 | 112332 | 8 | 4 | `stopsign_generateVolumeTable` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 112337 | 112432 | 112428 | 96 | 92 | `stopsign_updateVolumeAnalysis` | fn | — | refs:4 | Analysis | `app/modules/analysis/analysis.js` |
-| 112433 | 112455 | 112475 | 23 | 43 | `stopsign_buildCrashProfile` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 112456 | 112479 | 112458 | 24 | 3 | `isSusceptible` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 112480 | 112512 | 112508 | 33 | 29 | `stopsign_autoPopulateCriterionB` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 112513 | 112541 | 112537 | 29 | 25 | `stopsign_evaluateCriterionA` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 112542 | 112571 | 112567 | 30 | 26 | `stopsign_evaluateCriterionB` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 112572 | 112584 | 112632 | 13 | 61 | `stopsign_evaluateCriterionC` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 112585 | 112601 | 112590 | 17 | 6 | `updateSubcriterion` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 112602 | 112637 | 112608 | 36 | 7 | `updateBadge` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 112638 | 112722 | 112718 | 85 | 81 | `stopsign_calculateLOS` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 112723 | 112733 | 112729 | 11 | 7 | `stopsign_toggleHCSConfig` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 112734 | 112777 | 112773 | 44 | 40 | `stopsign_evaluateCriterionD` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 112778 | 112826 | 112822 | 49 | 45 | `stopsign_evaluateAllCriteria` | fn | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
-| 112827 | 112896 | 112892 | 70 | 66 | `stopsign_updateResultsTab` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 112897 | 112907 | 112903 | 11 | 7 | `stopsign_updateResultCell` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 112908 | 112931 | 112927 | 24 | 20 | `stopsign_toggleAIPanel` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 112932 | 112952 | 112948 | 21 | 17 | `stopsign_toggleDisclaimer` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 112953 | 112963 | 112959 | 11 | 7 | `stopsign_handleDisclaimerCheckbox` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 112964 | 112982 | 112978 | 19 | 15 | `stopsign_toggleExportButtons` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 112983 | 113005 | 113001 | 23 | 19 | `stopsign_clearVolumeTable` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113006 | 113067 | 113063 | 62 | 58 | `stopsign_saveData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113068 | 113165 | 113161 | 98 | 94 | `stopsign_loadSavedData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 113166 | 113207 | 113203 | 42 | 38 | `stopsign_exportData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113208 | 113239 | 113235 | 32 | 28 | `stopsign_importData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113240 | 113248 | 113244 | 9 | 5 | `stopsign_toggleVirginiaMode` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113249 | 113260 | 113256 | 12 | 8 | `stopsign_toggleVirginiaInfo` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113261 | 113302 | 113298 | 42 | 38 | `stopsign_askAI` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 113303 | 113349 | 113345 | 47 | 43 | `stopsign_updateProgressIndicator` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113350 | 113419 | 113415 | 70 | 66 | `stopsign_clearAll` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 113420 | 113442 | 113438 | 23 | 19 | `stopsign_confirmExtractedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113443 | 113466 | 113462 | 24 | 20 | `stopsign_enterReviewMode` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113467 | 113493 | 113489 | 27 | 23 | `stopsign_loadNextReview` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 113494 | 113558 | 113552 | 65 | 59 | `stopsign_populateTMCFromExtraction` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 113559 | 113617 | 113613 | 59 | 55 | `stopsign_populateTMCFromDayData` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
-| 113618 | 113629 | 113625 | 12 | 8 | `stopsign_skipCurrentReview` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113630 | 113641 | 113637 | 12 | 8 | `stopsign_advanceReviewQueue` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113642 | 113659 | 113655 | 18 | 14 | `stopsign_exitReviewMode` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 113660 | 113671 | 113667 | 12 | 8 | `stopsign_discardExtractedData` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 113672 | 113694 | 113687 | 23 | 16 | `stopsign_clearAllDays` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113695 | 113759 | 113755 | 65 | 61 | `stopsign_onFilesSelected` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 113760 | 113781 | 113777 | 22 | 18 | `stopsign_updateDaySlots` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113782 | 113825 | 113820 | 44 | 39 | `stopsign_clearAIUploads` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 113826 | 113858 | 113854 | 33 | 29 | `stopsign_selectAveragingMethod` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
-| 113859 | 113866 | 113862 | 8 | 4 | `stopsign_handleFileSelect` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 113867 | 113876 | 113872 | 10 | 6 | `stopsign_handleFileDrop` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 113877 | 113917 | 113913 | 41 | 37 | `stopsign_processUploadedFiles` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113918 | 113948 | 113944 | 31 | 27 | `stopsign_removeFile` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 113949 | 113958 | 113954 | 10 | 6 | `stopsign_clearUploadedFiles` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 113959 | 114029 | 114025 | 71 | 67 | `stopsign_addCurrentDayToAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 114030 | 114101 | 114097 | 72 | 68 | `stopsign_updateDayCards` | fn | — | refs:13 | Unassigned | `app/modules/app/unassigned.js` |
-| 114102 | 114110 | 114106 | 9 | 5 | `stopsign_removeDayFromAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 114111 | 114188 | 114184 | 78 | 74 | `stopsign_editDay` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114189 | 114230 | 114226 | 42 | 38 | `stopsign_saveEditedDay` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114231 | 114241 | 114237 | 11 | 7 | `stopsign_cancelEdit` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114242 | 114280 | 114270 | 39 | 29 | `stopsign_collectCurrentTMCData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114281 | 114301 | 114297 | 21 | 17 | `stopsign_readFileContent` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114302 | 114310 | 114320 | 9 | 19 | `stopsign_extractPDFText` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114311 | 114324 | 114311 | 14 | 1 | `pageText` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 114325 | 114346 | 114342 | 22 | 18 | `stopsign_extractExcelText` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114347 | 114358 | 114354 | 12 | 8 | `stopsign_fileToBase64` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114359 | 114563 | 114559 | 205 | 201 | `stopsign_extractAllWithAI` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114564 | 114692 | 114724 | 129 | 161 | `stopsign_extractSingleFileWithDualAI` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114693 | 114728 | 114693 | 36 | 1 | `errorData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 114729 | 114819 | 114815 | 91 | 87 | `stopsign_validateExtractedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114820 | 114893 | 114883 | 74 | 64 | `stopsign_populateFromExtractedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 114894 | 115240 | 115236 | 347 | 343 | `stopsign_generatePDFReport` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 115241 | 115552 | 115548 | 312 | 308 | `stopsign_generateWordMemo` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 115553 | 115652 | 115647 | 100 | 95 | `stopsign_exportCSV` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 115653 | 115660 | 115655 | 8 | 3 | `evaluateStopWarrant` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 115661 | 115697 | 115688 | 37 | 28 | `evaluateSignalWarrants` | fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
-| 115698 | 115719 | 115715 | 22 | 18 | `calculateAnalysisPeriodYears` | fn | — | refs:3 | Analysis | `app/modules/analysis/analysis.js` |
-| 115720 | 115729 | 115725 | 10 | 6 | `syncRoundaboutField` | fn | — | refs:4 | Warrants | `app/modules/warrants/warrants.js` |
-| 115730 | 115740 | 115735 | 11 | 6 | `syncRoundaboutCheckbox` | fn | — | refs:5 | Warrants | `app/modules/warrants/warrants.js` |
-| 115741 | 115779 | 115775 | 39 | 35 | `syncMainFormToQuickPanel` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 115780 | 115852 | 115846 | 73 | 67 | `updateQuickPanelCrashSummary` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
-| 115853 | 115982 | 115978 | 130 | 126 | `roundabout_calculateSIDRAMetrics` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 115983 | 116025 | 116021 | 43 | 39 | `roundabout_updateSIDRADisplay` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 116026 | 116103 | 116079 | 78 | 54 | `roundabout_updateResultBanner` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 116104 | 116116 | 116112 | 13 | 9 | `roundabout_toggleAADTConverter` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 116117 | 116156 | 116151 | 40 | 35 | `roundabout_setAADTSource` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 116157 | 116192 | 116188 | 36 | 32 | `roundabout_setKFactor` | fn | — | refs:4 | Warrants | `app/modules/warrants/warrants.js` |
-| 116193 | 116216 | 116212 | 24 | 20 | `roundabout_toggleCustomKFactor` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 116217 | 116229 | 116224 | 13 | 8 | `roundabout_applyCustomKFactor` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 116230 | 116267 | 116262 | 38 | 33 | `roundabout_setDOWFactor` | fn | — | refs:8 | Warrants | `app/modules/warrants/warrants.js` |
-| 116268 | 116323 | 116318 | 56 | 51 | `roundabout_updateSeasonalFactor` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 116324 | 116377 | 116373 | 54 | 50 | `roundabout_calculateAADT` | fn | — | refs:7 | Warrants | `app/modules/warrants/warrants.js` |
-| 116378 | 116488 | 116420 | 111 | 43 | `roundabout_applyCalculatedAADT` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 116489 | 116507 | 116503 | 19 | 15 | `roundaboutQuick_toggleAADTConverter` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 116508 | 116564 | 116560 | 57 | 53 | `roundaboutQuick_updateLocationFactors` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 116565 | 116574 | 116568 | 10 | 4 | `toggleElement` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 116575 | 116682 | 116731 | 108 | 157 | `roundaboutQuick_calculateAADT` | fn | — | refs:8 | Warrants | `app/modules/warrants/warrants.js` |
-| 116683 | 116735 | 116683 | 53 | 1 | `setRef` | const arrow | — | refs:16 | Unassigned | `app/modules/app/unassigned.js` |
-| 116736 | 116765 | 116760 | 30 | 25 | `roundaboutQuick_applyAADT` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 116766 | 116853 | 116849 | 88 | 84 | `evaluateRoundaboutQuick` | fn | — | refs:9 | Warrants | `app/modules/warrants/warrants.js` |
-| 116854 | 116871 | 116866 | 18 | 13 | `scrollToFullRoundaboutForm` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 116872 | 116928 | 116927 | 57 | 56 | `roundabout_onTabShow` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 116929 | 117061 | 117041 | 133 | 113 | `evaluateRoundabout` | fn | — | refs:34 | Warrants | `app/modules/warrants/warrants.js` |
-| 117062 | 117110 | 117106 | 49 | 45 | `roundabout_updateSmartIndicators` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 117111 | 117165 | 117161 | 55 | 51 | `roundabout_updateIndicator1` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 117166 | 117220 | 117216 | 55 | 51 | `roundabout_updateIndicator2` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 117221 | 117356 | 117352 | 136 | 132 | `roundabout_updateRiskAssessment` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 117357 | 117388 | 117384 | 32 | 28 | `roundabout_resetIndicatorsToManual` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 117389 | 117397 | 117392 | 9 | 4 | `roundabout_toggleIndicatorOverride` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 117398 | 117531 | 117527 | 134 | 130 | `roundabout_autoPopulateCrashData` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
-| 117532 | 117535 | 117566 | 4 | 35 | `roundabout_updateCrashDisplay` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 117536 | 117540 | 117539 | 5 | 4 | `setVal` | const arrow | — | refs:32 | Unassigned | `app/modules/app/unassigned.js` |
-| 117541 | 117570 | 117544 | 30 | 4 | `setText` | const arrow | — | refs:13 | Unassigned | `app/modules/app/unassigned.js` |
-| 117571 | 117585 | 117581 | 15 | 11 | `roundabout_toggleApproachTable` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 117586 | 117604 | 117600 | 19 | 15 | `roundabout_updateTotalFromApproaches` | fn | — | refs:5 | Warrants | `app/modules/warrants/warrants.js` |
-| 117605 | 117611 | 117607 | 7 | 3 | `roundabout_uploadTrafficStudy` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 117612 | 117648 | 117644 | 37 | 33 | `roundabout_handleTrafficUpload` | async fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 117649 | 117718 | 117714 | 70 | 66 | `roundabout_extractTrafficData` | async fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 117719 | 117743 | 117767 | 25 | 49 | `roundabout_applyExtractedData` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 117744 | 117771 | 117750 | 28 | 7 | `setField` | const arrow | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
-| 117772 | 117877 | 117872 | 106 | 101 | `roundabout_calculateSafetyPrediction` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
-| 117878 | 118025 | 118021 | 148 | 144 | `roundabout_calculateICEScores` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 118026 | 118143 | 118139 | 118 | 114 | `roundabout_runEnhancedEvaluation` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
-| 118144 | 118160 | 118155 | 17 | 12 | `roundabout_refreshAnalysis` | fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
-| 118161 | 118550 | 118542 | 390 | 382 | `roundabout_generateWordMemo` | async fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
-| 118551 | 118571 | 118581 | 21 | 31 | `parsePDFContent` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 118572 | 118585 | 118572 | 14 | 1 | `pageText` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 118586 | 118618 | 118614 | 33 | 29 | `parseExcelContent` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 118619 | 118635 | 118621 | 17 | 3 | `parseCSVContent` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
-| 118636 | 118712 | 118708 | 77 | 73 | `geocodeIntersectionName` | async fn | — | refs:2 | Intersections | `app/modules/intersection/intersection.js` |
-| 118713 | 118746 | 118742 | 34 | 30 | `saveGeocodedLocation` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 118747 | 118796 | 118790 | 50 | 44 | `loadGeocodedLocation` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 118797 | 118868 | 118861 | 72 | 65 | `debouncedGeocode` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
-| 118869 | 118892 | 118888 | 24 | 20 | `updateGeocodeIndicator` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
-| 118893 | 118909 | 118905 | 17 | 13 | `getCurrentIntersectionName` | fn | — | refs:1 | Intersections | `app/modules/intersection/intersection.js` |
-| 118910 | 118938 | 118929 | 29 | 20 | `initWarrantGeocodeHandlers` | fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
-| 118939 | 119017 | 119012 | 79 | 74 | `openWarrantStreetView` | fn | — | refs:12 | Warrants | `app/modules/warrants/warrants.js` |
-| 119018 | 119034 | 119030 | 17 | 13 | `updateCurrentGeocodeIndicator` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
-| 119035 | 119274 | 119270 | 240 | 236 | `exportWarrantPDF` | async fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
-| 119275 | 119349 | 119449 | 75 | 175 | `exportPedestrianPDF` | fn | — | refs:1 | Ped/Bike | `app/modules/pedbike/pedbike.js` |
-| 119350 | 119350 | 119350 | 1 | 1 | `criteriaData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 119351 | 119453 | 119351 | 103 | 1 | `metCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 119454 | 119532 | 119578 | 79 | 125 | `exportStopSignPDF` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
-| 119533 | 119587 | 119533 | 55 | 1 | `criteriaData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 119588 | 119631 | 119627 | 44 | 40 | `signal_initState` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119632 | 119638 | 119634 | 7 | 3 | `signal_getLaneConfig` | fn | — | refs:10 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119639 | 119645 | 119641 | 7 | 3 | `signal_getReductionFactor` | fn | — | refs:8 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119646 | 119665 | 119661 | 20 | 16 | `signal_applyPagonesAdjustment` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119666 | 119691 | 119687 | 26 | 22 | `signal_applyRTAdjustment` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119692 | 119754 | 119748 | 63 | 57 | `signal_computeHourlyAggregates` | fn | — | refs:4 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119755 | 119780 | 119776 | 26 | 22 | `signal_computeHourlyAggregatesForDay` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119781 | 119787 | 119783 | 7 | 3 | `signal_calculateStreetVolumes` | fn | — | refs:9 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119788 | 119794 | 119790 | 7 | 3 | `signal_interpolateThreshold` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119795 | 119870 | 119866 | 76 | 72 | `signal_evaluateWarrant1` | fn | — | refs:3 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119871 | 119915 | 119911 | 45 | 41 | `signal_evaluateWarrant2` | fn | — | refs:3 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119916 | 119949 | 119968 | 34 | 53 | `signal_evaluateWarrant3` | fn | — | refs:3 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119950 | 119972 | 119950 | 23 | 1 | `peakResult` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
-| 119973 | 119988 | 120033 | 16 | 61 | `signal_evaluateWarrant4` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
-| 119989 | 120037 | 120000 | 49 | 12 | `getPedThreshold` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80007 | 80049 | 80047 | 43 | 41 | `calculateSfCategoryBenchmarks` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80050 | 80066 | 80064 | 17 | 15 | `renderSfDetailContent` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 80067 | 80282 | 80280 | 216 | 214 | `renderSfCombinedView` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80283 | 80305 | 80303 | 23 | 21 | `renderSfFactorRow` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 80306 | 80317 | 80376 | 12 | 71 | `renderSfCompareView` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80318 | 80320 | 80318 | 3 | 1 | `topCollision` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 80321 | 80378 | 80321 | 58 | 1 | `rank` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 80379 | 80383 | 80420 | 5 | 42 | `renderSfMonthlyHeatmap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80384 | 80392 | 80384 | 9 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 80393 | 80422 | 80399 | 30 | 7 | `getHeatmapColor` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80423 | 80440 | 80438 | 18 | 16 | `initSfDetailCharts` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80441 | 80517 | 80598 | 77 | 158 | `initSfCombinedCharts` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80518 | 80545 | 80518 | 28 | 1 | `collisions` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 80546 | 80559 | 80546 | 14 | 1 | `weather` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 80560 | 80573 | 80560 | 14 | 1 | `light` | const arrow | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
+| 80574 | 80587 | 80574 | 14 | 1 | `surface` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 80588 | 80600 | 80588 | 13 | 1 | `control` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 80601 | 80638 | 80636 | 38 | 36 | `initSfCompareCharts` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80639 | 80686 | 80691 | 48 | 53 | `exportSfDetailCSV` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80687 | 80692 | 80687 | 6 | 1 | `csv` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 80693 | 80739 | 81499 | 47 | 807 | `exportSfDetailPDF` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 80740 | 80751 | 80750 | 12 | 11 | `addFooter` | fn | — | refs:19 | Unassigned | `app/modules/app/unassigned.js` |
+| 80752 | 80763 | 80762 | 12 | 11 | `drawMiniHeader` | fn | — | refs:15 | Unassigned | `app/modules/app/unassigned.js` |
+| 80764 | 80776 | 80775 | 13 | 12 | `drawSectionHeader` | fn | — | refs:49 | Unassigned | `app/modules/app/unassigned.js` |
+| 80777 | 80795 | 80794 | 19 | 18 | `drawKPI` | fn | — | refs:65 | Unassigned | `app/modules/app/unassigned.js` |
+| 80796 | 80803 | 80802 | 8 | 7 | `addNewPage` | fn | — | refs:22 | Unassigned | `app/modules/app/unassigned.js` |
+| 80804 | 80943 | 80812 | 140 | 9 | `fitImageInBox` | fn | — | refs:14 | Unassigned | `app/modules/app/unassigned.js` |
+| 80944 | 81046 | 80948 | 103 | 5 | `sevTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 81047 | 81249 | 81056 | 203 | 10 | `yearTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 81250 | 81317 | 81254 | 68 | 5 | `factorTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 81318 | 81318 | 81318 | 1 | 1 | `darkCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 81319 | 81361 | 81319 | 43 | 1 | `adverseWeather` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 81362 | 81378 | 81362 | 17 | 1 | `topCollision` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 81379 | 81501 | 81379 | 123 | 1 | `topOverall` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 81502 | 81524 | 81519 | 23 | 18 | `exportSfDetailKML` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 81525 | 81537 | 81536 | 13 | 12 | `exportSafetyData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 81538 | 81547 | 81546 | 10 | 9 | `exportSafetyLocationData` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 81548 | 81580 | 81574 | 33 | 27 | `exportCrashesToCSV` | fn | — | refs:13 | Analysis | `app/modules/analysis/analysis.js` |
+| 81581 | 81603 | 81598 | 23 | 18 | `exportSfDetailKML` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 81604 | 81616 | 81615 | 13 | 12 | `exportSafetyData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 81617 | 81626 | 81625 | 10 | 9 | `exportSafetyLocationData` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 81627 | 81659 | 81653 | 33 | 27 | `exportCrashesToCSV` | fn | — | refs:13 | Analysis | `app/modules/analysis/analysis.js` |
+| 81660 | 81703 | 82437 | 44 | 778 | `exportSafetyCategoryPDF` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 81704 | 81715 | 81714 | 12 | 11 | `addFooter` | fn | — | refs:19 | Unassigned | `app/modules/app/unassigned.js` |
+| 81716 | 81727 | 81726 | 12 | 11 | `drawMiniHeader` | fn | — | refs:15 | Unassigned | `app/modules/app/unassigned.js` |
+| 81728 | 81740 | 81739 | 13 | 12 | `drawSectionHeader` | fn | — | refs:49 | Unassigned | `app/modules/app/unassigned.js` |
+| 81741 | 81759 | 81758 | 19 | 18 | `drawKPI` | fn | — | refs:65 | Unassigned | `app/modules/app/unassigned.js` |
+| 81760 | 81874 | 81766 | 115 | 7 | `addNewPage` | fn | — | refs:22 | Unassigned | `app/modules/app/unassigned.js` |
+| 81875 | 81973 | 81879 | 99 | 5 | `sevTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 81974 | 82017 | 81982 | 44 | 9 | `fitImageInBox` | fn | — | refs:14 | Unassigned | `app/modules/app/unassigned.js` |
+| 82018 | 82115 | 82065 | 98 | 48 | `drawNativeHBarChart` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 82116 | 82224 | 82127 | 109 | 12 | `locTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 82225 | 82300 | 82234 | 76 | 10 | `yearBreakdownData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 82301 | 82339 | 82304 | 39 | 4 | `monthData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 82340 | 82340 | 82371 | 1 | 32 | `profileData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 82341 | 82357 | 82344 | 17 | 4 | `routeEntry` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 82358 | 82439 | 82358 | 82 | 1 | `topColl` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 82440 | 82454 | 82448 | 15 | 9 | `hexToRgbArray` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 82455 | 82496 | 83111 | 42 | 657 | `exportSafetySelectedLocationsPDF` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 82497 | 82508 | 82507 | 12 | 11 | `addFooter` | fn | — | refs:19 | Unassigned | `app/modules/app/unassigned.js` |
+| 82509 | 82520 | 82519 | 12 | 11 | `drawMiniHeader` | fn | — | refs:15 | Unassigned | `app/modules/app/unassigned.js` |
+| 82521 | 82533 | 82532 | 13 | 12 | `drawSectionHeader` | fn | — | refs:49 | Unassigned | `app/modules/app/unassigned.js` |
+| 82534 | 82541 | 82540 | 8 | 7 | `addNewPage` | fn | — | refs:22 | Unassigned | `app/modules/app/unassigned.js` |
+| 82542 | 82737 | 82548 | 196 | 7 | `checkPageBreak` | fn | — | refs:29 | Unassigned | `app/modules/app/unassigned.js` |
+| 82738 | 82869 | 82747 | 132 | 10 | `contribData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 82870 | 82943 | 82873 | 74 | 4 | `sevTableData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 82944 | 82952 | 82944 | 9 | 1 | `topCollisions` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 82953 | 83012 | 82957 | 60 | 5 | `collisionData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 83013 | 83047 | 83016 | 35 | 4 | `yearRows` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 83048 | 83048 | 83048 | 1 | 1 | `topWeather` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 83049 | 83118 | 83049 | 70 | 1 | `topLight` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 83119 | 83148 | 83146 | 30 | 28 | `runSafetyDataCheck` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 83149 | 83157 | 83155 | 9 | 7 | `sfAddCheck` | fn | — | refs:28 | Unassigned | `app/modules/app/unassigned.js` |
+| 83158 | 83200 | 83198 | 43 | 41 | `sfCheckSeverityTotals` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 83201 | 83234 | 83232 | 34 | 32 | `sfCheckEPDOCalculations` | fn | — | refs:1 | Core/EPDO | `app/modules/core/epdo-presets.js` |
+| 83235 | 83279 | 83277 | 45 | 43 | `sfCheckCategorySums` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 83280 | 83312 | 83310 | 33 | 31 | `sfCheckLocationTableConsistency` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 83313 | 83443 | 83441 | 131 | 129 | `sfCheckCrossAnalysisConsistency` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 83444 | 83516 | 83514 | 73 | 71 | `sfCheckFilterConsistency` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 83517 | 83663 | 83671 | 147 | 155 | `sfCheckDetailPanelAccuracy` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 83664 | 83673 | 83664 | 10 | 1 | `yearTotal` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 83674 | 83714 | 83712 | 41 | 39 | `sfCheckPercentageDenominators` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 83715 | 83727 | 83792 | 13 | 78 | `displaySafetyDataCheckResults` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 83728 | 83749 | 83728 | 22 | 1 | `statusIcon` | const arrow | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
+| 83750 | 83750 | 83750 | 1 | 1 | `catPassed` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 83751 | 83751 | 83751 | 1 | 1 | `catFailed` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 83752 | 83753 | 83752 | 2 | 1 | `catWarn` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 83754 | 83794 | 83754 | 41 | 1 | `catName` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 83795 | 83815 | 83811 | 21 | 17 | `exportSafetyDataCheckResults` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 83816 | 83833 | 83832 | 18 | 17 | `viewSafetyOnMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 83834 | 83851 | 83850 | 18 | 17 | `viewSafetyLocationOnMap` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 83852 | 83905 | 83904 | 54 | 53 | `filterMapForSafety` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 83906 | 83922 | 83921 | 17 | 16 | `showMapFilterBadge` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 83923 | 83929 | 83939 | 7 | 17 | `clearSafetyMapFilter` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 83930 | 83945 | 83930 | 16 | 1 | `hasQuickFilters` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 83946 | 83997 | 83994 | 52 | 49 | `initCrashTreeTab` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 83998 | 84031 | 84175 | 34 | 178 | `initCrashTreeFromMatview` | async fn | — | refs:3 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84032 | 84066 | 84032 | 35 | 1 | `idSafe` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 84067 | 84109 | 84081 | 43 | 15 | `buildNode` | const arrow | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 84110 | 84113 | 84133 | 4 | 24 | `propagateSeverity` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 84114 | 84114 | 84114 | 1 | 1 | `ck` | const arrow | — | refs:148 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84115 | 84115 | 84115 | 1 | 1 | `ca` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84116 | 84116 | 84116 | 1 | 1 | `cb` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84117 | 84117 | 84117 | 1 | 1 | `cc` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84118 | 84177 | 84118 | 60 | 1 | `co` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84178 | 84240 | 84238 | 63 | 61 | `setCrashTreeType` | fn | — | refs:3 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84241 | 84251 | 84249 | 11 | 9 | `toggleCrashTreeSeverity` | fn | — | refs:5 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84252 | 84276 | 84274 | 25 | 23 | `updateCrashTreeSeverity` | fn | — | refs:2 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84277 | 84311 | 84305 | 35 | 29 | `setTreeSeverityPreset` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 84312 | 84341 | 84339 | 30 | 28 | `applyCrashTreeDateFilter` | fn | — | refs:2 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84342 | 84347 | 84376 | 6 | 35 | `setCrashTreeDatePreset` | fn | — | refs:3 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84348 | 84378 | 84348 | 31 | 1 | `formatDate` | const arrow | — | refs:31 | Unassigned | `app/modules/app/unassigned.js` |
+| 84379 | 84407 | 84405 | 29 | 27 | `clearCrashTreeDateFilter` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84408 | 84419 | 84432 | 12 | 25 | `updateCrashTreeDateFilterStatus` | fn | — | refs:4 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84420 | 84434 | 84424 | 15 | 5 | `formatDisplay` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 84435 | 84473 | 84470 | 39 | 36 | `getCrashTreeFilteredCrashes` | fn | — | refs:2 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84474 | 84505 | 84503 | 32 | 30 | `getCrashTreeDateOnlyFilteredCrashes` | fn | — | refs:6 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84506 | 84527 | 84525 | 22 | 20 | `refreshCrashTreeAnalysis` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84528 | 84558 | 84603 | 31 | 76 | `buildCrashTreeData` | fn | — | refs:10 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 84559 | 84606 | 84581 | 48 | 23 | `filteredCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84607 | 84614 | 84777 | 8 | 171 | `buildFacilityTree` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 84615 | 84624 | 84622 | 10 | 8 | `countSeverity` | const arrow | — | refs:34 | Unassigned | `app/modules/app/unassigned.js` |
+| 84625 | 84629 | 84627 | 5 | 3 | `getUnfilteredTotal` | const arrow | — | refs:30 | Unassigned | `app/modules/app/unassigned.js` |
+| 84630 | 84638 | 84636 | 9 | 7 | `getUnfilteredKA` | const arrow | — | refs:30 | Unassigned | `app/modules/app/unassigned.js` |
+| 84639 | 84639 | 84639 | 1 | 1 | `atIntersection` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84640 | 84642 | 84640 | 3 | 1 | `atSegment` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84643 | 84646 | 84646 | 4 | 4 | `signalFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84647 | 84650 | 84650 | 4 | 4 | `stopFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84651 | 84655 | 84654 | 5 | 4 | `uncontrolledFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84656 | 84659 | 84659 | 4 | 4 | `intSignalized` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84660 | 84663 | 84663 | 4 | 4 | `intStopControlled` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84664 | 84669 | 84667 | 6 | 4 | `intUncontrolled` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84670 | 84673 | 84673 | 4 | 4 | `arterialFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84674 | 84677 | 84677 | 4 | 4 | `collectorFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84678 | 84682 | 84681 | 5 | 4 | `localFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84683 | 84686 | 84686 | 4 | 4 | `segArterial` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84687 | 84690 | 84690 | 4 | 4 | `segCollector` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84691 | 84729 | 84694 | 39 | 4 | `segLocal` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84730 | 84730 | 84730 | 1 | 1 | `unfilteredIntTotal` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84731 | 84760 | 84731 | 30 | 1 | `unfilteredSegTotal` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84761 | 84780 | 84764 | 20 | 4 | `rootUnfilteredKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84781 | 84787 | 84878 | 7 | 98 | `buildCrashTypeTree` | fn | — | refs:3 | Analysis | `app/modules/analysis/analysis.js` |
+| 84788 | 84797 | 84795 | 10 | 8 | `countSeverity` | const arrow | — | refs:34 | Unassigned | `app/modules/app/unassigned.js` |
+| 84798 | 84863 | 84810 | 66 | 13 | `getCrashCategory` | const arrow | — | refs:2 | Analysis | `app/modules/analysis/analysis.js` |
+| 84864 | 84882 | 84867 | 19 | 4 | `rootUnfilteredKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84883 | 84891 | 85397 | 9 | 515 | `buildContributingFactorsTree` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 84892 | 84901 | 84899 | 10 | 8 | `countSeverity` | const arrow | — | refs:34 | Unassigned | `app/modules/app/unassigned.js` |
+| 84902 | 84906 | 84904 | 5 | 3 | `getUnfilteredTotal` | const arrow | — | refs:30 | Unassigned | `app/modules/app/unassigned.js` |
+| 84907 | 84920 | 84913 | 14 | 7 | `getUnfilteredKA` | const arrow | — | refs:30 | Unassigned | `app/modules/app/unassigned.js` |
+| 84921 | 84921 | 84921 | 1 | 1 | `impairedFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84922 | 84922 | 84922 | 1 | 1 | `alcoholFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84923 | 84923 | 84923 | 1 | 1 | `drugFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84924 | 84924 | 84924 | 1 | 1 | `combinedSubstanceFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84925 | 84925 | 84925 | 1 | 1 | `speedingFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84926 | 84926 | 84926 | 1 | 1 | `distractedFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84927 | 84977 | 84927 | 51 | 1 | `drowsyFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 84978 | 85033 | 84980 | 56 | 3 | `driverBehaviorCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85034 | 85034 | 85034 | 1 | 1 | `youngDriverFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85035 | 85038 | 85035 | 4 | 1 | `seniorDriverFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85039 | 85068 | 85039 | 30 | 1 | `demographicsCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85069 | 85072 | 85069 | 4 | 1 | `unrestrainedFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85073 | 85073 | 85073 | 1 | 1 | `nightFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85074 | 85077 | 85077 | 4 | 4 | `lightedFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85078 | 85083 | 85082 | 6 | 5 | `unlightedFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85084 | 85087 | 85087 | 4 | 4 | `weatherFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85088 | 85091 | 85091 | 4 | 4 | `rainFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85092 | 85095 | 85095 | 4 | 4 | `snowIceFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85096 | 85100 | 85099 | 5 | 4 | `fogFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85101 | 85104 | 85104 | 4 | 4 | `surfaceFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85105 | 85108 | 85108 | 4 | 4 | `wetFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85109 | 85124 | 85112 | 16 | 4 | `icyFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85125 | 85263 | 85125 | 139 | 1 | `environmentalCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85264 | 85264 | 85264 | 1 | 1 | `hitRunFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85265 | 85265 | 85265 | 1 | 1 | `workZoneFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85266 | 85270 | 85266 | 5 | 1 | `schoolZoneFilter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85271 | 85399 | 85271 | 129 | 1 | `specialCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85400 | 85443 | 85420 | 44 | 21 | `renderCrashTree` | fn | — | refs:18 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 85444 | 85461 | 85459 | 18 | 16 | `navigateFromCrashTree` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 85462 | 85487 | 85561 | 26 | 100 | `renderTreeNode` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 85488 | 85530 | 85509 | 43 | 22 | `buildSeverityBar` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 85531 | 85563 | 85533 | 33 | 3 | `childNodes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85564 | 85574 | 85572 | 11 | 9 | `toggleCrashTreeNode` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 85575 | 85575 | 85585 | 1 | 11 | `expandAllTreeNodes` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 85576 | 85587 | 85582 | 12 | 7 | `addAllIds` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 85588 | 85593 | 85591 | 6 | 4 | `collapseAllTreeNodes` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 85594 | 85601 | 85633 | 8 | 40 | `autoExpandDominantPath` | fn | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
+| 85602 | 85635 | 85604 | 34 | 3 | `dominant` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85636 | 85648 | 85646 | 13 | 11 | `findNodeById` | fn | — | refs:12 | Unassigned | `app/modules/app/unassigned.js` |
+| 85649 | 85677 | 85675 | 29 | 27 | `getTreeTypeLabel` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
+| 85678 | 85697 | 85736 | 20 | 59 | `updateCrashTreeSummary` | fn | — | refs:2 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 85698 | 85738 | 85701 | 41 | 4 | `pathNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85739 | 85810 | 85808 | 72 | 70 | `updateCrashTreeStats` | fn | — | refs:13 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 85811 | 85815 | 85849 | 5 | 39 | `updateCrashTreeDataTable` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 85816 | 85851 | 85845 | 36 | 30 | `addRows` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 85852 | 85861 | 86065 | 10 | 214 | `analyzeRiskFactors` | fn | — | refs:10 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 85862 | 85872 | 85865 | 11 | 4 | `kaCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85873 | 85873 | 85873 | 1 | 1 | `nightAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85874 | 85892 | 85874 | 19 | 1 | `nightKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85893 | 85893 | 85893 | 1 | 1 | `speedAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85894 | 85912 | 85894 | 19 | 1 | `speedKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85913 | 85913 | 85913 | 1 | 1 | `intAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85914 | 85932 | 85914 | 19 | 1 | `intKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85933 | 85956 | 85936 | 24 | 4 | `wetFilter` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85957 | 85957 | 85957 | 1 | 1 | `pedAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85958 | 85976 | 85958 | 19 | 1 | `pedKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85977 | 85977 | 85977 | 1 | 1 | `bikeAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85978 | 85997 | 85978 | 20 | 1 | `bikeKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85998 | 85998 | 85998 | 1 | 1 | `youngAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 85999 | 86018 | 85999 | 20 | 1 | `youngKA` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 86019 | 86019 | 86019 | 1 | 1 | `overrepFactors` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 86020 | 86067 | 86020 | 48 | 1 | `highSeverityFactors` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 86068 | 86102 | 86180 | 35 | 113 | `buildSecondaryTreeAnalysis` | fn | — | refs:9 | Analysis | `app/modules/analysis/analysis.js` |
+| 86103 | 86129 | 86105 | 27 | 3 | `dominant` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 86130 | 86139 | 86134 | 10 | 5 | `getTreeLabel` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 86140 | 86182 | 86143 | 43 | 4 | `pathNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 86183 | 86209 | 86207 | 27 | 25 | `exportCrashTreeImage` | fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 86210 | 86235 | 87643 | 26 | 1434 | `generateCrashTreeReport` | async fn | — | refs:1 | Crash Tree | `app/modules/crash-tree/crash-tree.js` |
+| 86236 | 86248 | 86239 | 13 | 4 | `focusPath` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 86249 | 86249 | 86256 | 1 | 8 | `dateRange` | const arrow | — | refs:71 | Unassigned | `app/modules/app/unassigned.js` |
+| 86250 | 86298 | 86250 | 49 | 1 | `dates` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 86299 | 86432 | 86316 | 134 | 18 | `hydrated` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 86433 | 86435 | 86475 | 3 | 43 | `buildTreeBreakdownHtml` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 86436 | 86437 | 86453 | 2 | 18 | `rows` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 86438 | 87645 | 86446 | 1208 | 9 | `subRows` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 87646 | 87690 | 87683 | 45 | 38 | `generateProfessionalTableRows` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 87691 | 87709 | 87706 | 19 | 16 | `_showFSLoadingSkeleton` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 87710 | 87740 | 87737 | 31 | 28 | `initFatalSpeedingTab` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 87741 | 88087 | 88078 | 347 | 338 | `initFatalSpeedingFromMatview` | async fn | — | refs:4 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 88088 | 88099 | 88150 | 12 | 63 | `_fatalSpeeding_fetchMatviews` | async fn | — | refs:2 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 88100 | 88109 | 88105 | 10 | 6 | `applyTier` | const arrow | — | refs:2 | Core/Tier | `app/modules/core/tier.js` |
+| 88110 | 88120 | 88120 | 11 | 11 | `applyMatrixTier` | const arrow | — | refs:1 | Core/Tier | `app/modules/core/tier.js` |
+| 88121 | 88125 | 88125 | 5 | 5 | `mk` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 88126 | 88156 | 88139 | 31 | 14 | `fetchSafe` | async const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 88157 | 88236 | 88227 | 80 | 71 | `_applyFatalSpeedingFallback` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 88237 | 88240 | 88317 | 4 | 81 | `_hydrateFSHotspotsFromMatview` | async fn | — | refs:1 | Hot Spots | `app/modules/hotspots/hotspots.js` |
+| 88241 | 88244 | 88241 | 4 | 1 | `_calcEpdo` | const arrow | — | refs:6 | Core/EPDO | `app/modules/core/epdo-presets.js` |
+| 88245 | 88318 | 88264 | 74 | 20 | `_stubCrashes` | const arrow | — | refs:2 | Analysis | `app/modules/analysis/analysis.js` |
+| 88319 | 88354 | 88353 | 36 | 35 | `applyFSFilters` | fn | — | refs:9 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 88355 | 88362 | 88361 | 8 | 7 | `clearFSDateFilter` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 88363 | 88661 | 88660 | 299 | 298 | `processFSData` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 88662 | 88703 | 88697 | 42 | 36 | `updateFSDisplay` | fn | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
+| 88704 | 88750 | 88743 | 47 | 40 | `_applyFSYoungSeniorGate` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 88751 | 88753 | 88765 | 3 | 15 | `paintFSFatalCollisionChart` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 88754 | 88766 | 88754 | 13 | 1 | `entries` | const arrow | — | refs:319 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 88767 | 88769 | 88781 | 3 | 15 | `paintFSFatalYearChart` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 88770 | 88782 | 88770 | 13 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 88783 | 88785 | 88797 | 3 | 15 | `paintFSSpeedCollisionChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 88786 | 88798 | 88786 | 13 | 1 | `entries` | const arrow | — | refs:319 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 88799 | 88801 | 88813 | 3 | 15 | `paintFSSpeedYearChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 88802 | 88814 | 88802 | 13 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 88815 | 88817 | 88829 | 3 | 15 | `paintFSSpeedSeverityChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 88818 | 88830 | 88818 | 13 | 1 | `data` | const arrow | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
+| 88831 | 88875 | 88887 | 45 | 57 | `paintFSNonSpeedSeverityChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 88876 | 88888 | 88876 | 13 | 1 | `data` | const arrow | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
+| 88889 | 88909 | 88908 | 21 | 20 | `paintFSCombinedYearChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 88910 | 88912 | 88924 | 3 | 15 | `paintFSCombinedHourChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 88913 | 88925 | 88913 | 13 | 1 | `hours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 88926 | 88942 | 88941 | 17 | 16 | `updateFSFatalKPIs` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 88943 | 88966 | 88965 | 24 | 23 | `updateFSFatalFactorCards` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 88967 | 88980 | 88979 | 14 | 13 | `updateFSSpeedKPIs` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 88981 | 89002 | 89001 | 22 | 21 | `updateFSSpeedFactorCards` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 89003 | 89038 | 89037 | 36 | 35 | `updateFSCombinedView` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 89039 | 89069 | 89113 | 31 | 75 | `updateFSFatalHotspots` | fn | — | refs:2 | Hot Spots | `app/modules/hotspots/hotspots.js` |
+| 89070 | 89090 | 89070 | 21 | 1 | `top` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89091 | 89115 | 89091 | 25 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89116 | 89125 | 89148 | 10 | 33 | `goToFSFatalPage` | fn | — | refs:2 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 89126 | 89149 | 89126 | 24 | 1 | `years` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89150 | 89180 | 89220 | 31 | 71 | `updateFSSpeedHotspots` | fn | — | refs:2 | Hot Spots | `app/modules/hotspots/hotspots.js` |
+| 89181 | 89201 | 89181 | 21 | 1 | `top` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89202 | 89222 | 89202 | 21 | 1 | `aCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89223 | 89232 | 89251 | 10 | 29 | `goToFSSpeedPage` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 89233 | 89252 | 89233 | 20 | 1 | `aCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89253 | 89316 | 89314 | 64 | 62 | `updateFSCombinedHotspots` | fn | — | refs:2 | Hot Spots | `app/modules/hotspots/hotspots.js` |
+| 89317 | 89342 | 89341 | 26 | 25 | `goToFSCombinedPage` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 89343 | 89361 | 89384 | 19 | 42 | `updateFSFatalCrossAnalysis` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 89362 | 89362 | 89369 | 1 | 8 | `results` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89363 | 89385 | 89365 | 23 | 3 | `count` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 89386 | 89433 | 89452 | 48 | 67 | `updateFSCombinedCrossAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 89434 | 89435 | 89438 | 2 | 5 | `results` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89436 | 89453 | 89436 | 18 | 1 | `kCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89454 | 89524 | 89522 | 71 | 69 | `renderFSSpeedComparison` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 89525 | 89553 | 89548 | 29 | 24 | `switchFSMatrixTab` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 89554 | 89565 | 89563 | 12 | 10 | `_fsShouldHideBC` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 89566 | 89577 | 89575 | 12 | 10 | `_fsRenderBCBanner` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 89578 | 89586 | 89583 | 9 | 6 | `renderFSYearlyMatrices` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 89587 | 89660 | 89658 | 74 | 72 | `renderFSFatalSeverityMatrix` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 89661 | 89719 | 89717 | 59 | 57 | `renderFSFatalFactorMatrix` | fn | — | refs:1 | Fatal & Speeding | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 89720 | 89822 | 89820 | 103 | 101 | `renderFSSpeedSeverityMatrix` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 89823 | 89880 | 89879 | 58 | 57 | `renderFSSpeedFactorMatrix` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 89881 | 89921 | 89920 | 41 | 40 | `renderFSCombinedYearChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 89922 | 89933 | 89986 | 12 | 65 | `renderFSCombinedHourChart` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 89934 | 89934 | 89934 | 1 | 1 | `hours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89935 | 89942 | 89940 | 8 | 6 | `hourLabels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89943 | 89945 | 89943 | 3 | 1 | `combinedData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89946 | 89987 | 89946 | 42 | 1 | `barColors` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 89988 | 90016 | 90015 | 29 | 28 | `setFSView` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 90017 | 90071 | 90070 | 55 | 54 | `selectFSFactor` | fn | — | refs:32 | Unassigned | `app/modules/app/unassigned.js` |
+| 90072 | 90081 | 90104 | 10 | 33 | `updateFSCofactorGrid` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 90082 | 90105 | 90082 | 24 | 1 | `count` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 90106 | 90122 | 90196 | 17 | 91 | `renderFSDetailCharts` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 90123 | 90148 | 90123 | 26 | 1 | `sorted` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 90149 | 90174 | 90167 | 26 | 19 | `extractYear` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 90175 | 90197 | 90175 | 23 | 1 | `sorted` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 90198 | 90215 | 90226 | 18 | 29 | `updateFSFactorLocationTable` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 90216 | 90227 | 90216 | 12 | 1 | `sorted` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 90228 | 90240 | 90239 | 13 | 12 | `closeFSDetailPanel` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 90241 | 90245 | 90279 | 5 | 39 | `getTopFactor` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 90246 | 90253 | 90246 | 8 | 1 | `sorted` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 90254 | 90256 | 90264 | 3 | 11 | `_matchHint` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 90257 | 90280 | 90259 | 24 | 3 | `matched` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 90281 | 90298 | 90297 | 18 | 17 | `viewFSOnMap` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 90299 | 90320 | 90319 | 22 | 21 | `viewFSLocationOnMap` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
+| 90321 | 90329 | 90328 | 9 | 8 | `jumpToCMFFromFS` | fn | — | refs:6 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
+| 90330 | 90353 | 90352 | 24 | 23 | `exportFSData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 90354 | 90363 | 90362 | 10 | 9 | `exportFSFactorData` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 90364 | 90374 | 90373 | 11 | 10 | `getFSCMF` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
+| 90375 | 90483 | 91238 | 109 | 864 | `exportFSToPDF` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 90484 | 90514 | 90491 | 31 | 8 | `hexToRgb` | const arrow | — | refs:20 | Unassigned | `app/modules/app/unassigned.js` |
+| 90515 | 90523 | 90521 | 9 | 7 | `cleanText` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 90524 | 90531 | 90529 | 8 | 6 | `getFactorName` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 90532 | 90548 | 90546 | 17 | 15 | `drawHeader` | const arrow | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 90549 | 90573 | 90571 | 25 | 23 | `drawFooter` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 90574 | 90584 | 90582 | 11 | 9 | `newPage` | const arrow | — | refs:24 | Unassigned | `app/modules/app/unassigned.js` |
+| 90585 | 90593 | 90591 | 9 | 7 | `checkPageBreak` | const arrow | — | refs:29 | Unassigned | `app/modules/app/unassigned.js` |
+| 90594 | 90614 | 90612 | 21 | 19 | `addText` | const arrow | — | refs:148 | Unassigned | `app/modules/app/unassigned.js` |
+| 90615 | 90630 | 90628 | 16 | 14 | `addSectionTitle` | const arrow | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
+| 90631 | 90641 | 90639 | 11 | 9 | `addSubsectionTitle` | const arrow | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
+| 90642 | 90695 | 90693 | 54 | 52 | `drawSeverityBar` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 90696 | 90718 | 90716 | 23 | 21 | `drawKPICard` | const arrow | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
+| 90719 | 90979 | 90719 | 261 | 1 | `addSpacer` | const arrow | — | refs:77 | Unassigned | `app/modules/app/unassigned.js` |
+| 90980 | 91101 | 90985 | 122 | 6 | `crashYears` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 91102 | 91135 | 91106 | 34 | 5 | `yearData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 91136 | 91243 | 91141 | 108 | 6 | `formatHour` | const arrow | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
+| 91244 | 91275 | 91274 | 32 | 31 | `getSafetyCMF` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
+| 91276 | 91296 | 91291 | 21 | 16 | `getSafetyLocationCMF` | fn | — | refs:2 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
+| 91297 | 91372 | 91370 | 76 | 74 | `showSafetyLocationDetails` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 91373 | 91379 | 91378 | 7 | 6 | `viewCurrentDetailOnMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 91380 | 91386 | 91385 | 7 | 6 | `getCurrentDetailCMF` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
+| 91387 | 91396 | 91394 | 10 | 8 | `exportCurrentDetail` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 91397 | 91414 | 91413 | 18 | 17 | `exportCurrentDetailToKML` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 91415 | 91445 | 91444 | 31 | 30 | `addCurrentDetailToReport` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 91446 | 91453 | 91448 | 8 | 3 | `closeSafetyModal` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
+| 91454 | 91466 | 91465 | 13 | 12 | `exportSafetyData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 91467 | 91476 | 91475 | 10 | 9 | `exportSafetyLocationData` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 91477 | 91508 | 91503 | 32 | 27 | `exportCrashesToCSV` | fn | — | refs:13 | Analysis | `app/modules/analysis/analysis.js` |
+| 91509 | 91748 | 91746 | 240 | 238 | `viewCrossAnalysis` | fn | — | refs:19 | Analysis | `app/modules/analysis/analysis.js` |
+| 91749 | 91763 | 91761 | 15 | 13 | `viewCrossOnMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 91764 | 91774 | 91772 | 11 | 9 | `exportCrossAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 91775 | 91790 | 91788 | 16 | 14 | `exportCrossToKML` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 91791 | 91822 | 91816 | 32 | 26 | `addCrossToReport` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 91823 | 91862 | 91860 | 40 | 38 | `populateCustomMatrixDropdowns` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 91863 | 91892 | 91930 | 30 | 68 | `updateCustomMatrixPreview` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 91893 | 91908 | 91896 | 16 | 4 | `factorLabels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 91909 | 91932 | 91912 | 24 | 4 | `matchesAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 91933 | 91947 | 91945 | 15 | 13 | `getSelectedCustomMatrixFactors` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 91948 | 91960 | 91958 | 13 | 11 | `clearCustomMatrixSelections` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 91961 | 91999 | 92139 | 39 | 179 | `runCustomMatrixAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 92000 | 92037 | 92003 | 38 | 4 | `factorLabels` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 92038 | 92141 | 92041 | 104 | 4 | `matchesAll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 92142 | 92156 | 92154 | 15 | 13 | `viewCustomMatrixOnMap` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 92157 | 92172 | 92166 | 16 | 10 | `exportCustomMatrixData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 92173 | 92196 | 92194 | 24 | 22 | `exportSafetyToKML` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 92197 | 92224 | 92222 | 28 | 26 | `addSafetyDataToReport` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 92225 | 92264 | 92252 | 40 | 28 | `generateSafetyCategoryReport` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 92265 | 92355 | 92275 | 91 | 11 | `safetyCheckInterval` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 92356 | 92392 | 92379 | 37 | 24 | `refreshActiveTabAfterDataLoad` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 92393 | 92395 | 92393 | 3 | 1 | `updateWarrantAPIKeyStatus` | window fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
+| 92396 | 92399 | 92396 | 4 | 1 | `loadWarrantImagery` | window fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
+| 92400 | 92429 | 92440 | 30 | 41 | `initWarrantsTab` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
+| 92430 | 92443 | 92430 | 14 | 1 | `routeNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 92444 | 92460 | 92487 | 17 | 44 | `onWarrantsTabReentry` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 92461 | 92489 | 92461 | 29 | 1 | `routeNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 92490 | 92500 | 92498 | 11 | 9 | `populateWarrantLocations` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 92501 | 92552 | 92550 | 52 | 50 | `updateWarrantLocationDropdown` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 92553 | 92627 | 92625 | 75 | 73 | `showWarrantStudy` | fn | — | refs:22 | Warrants | `app/modules/warrants/warrants.js` |
+| 92628 | 92687 | 92685 | 60 | 58 | `filterWarrantLocations` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 92688 | 92694 | 92692 | 7 | 5 | `handleWarrantSearchKeypress` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 92695 | 92749 | 92743 | 55 | 49 | `triggerWarrantSearch` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 92750 | 92758 | 92783 | 9 | 34 | `applyWarrantDatePreset` | fn | — | refs:7 | Warrants | `app/modules/warrants/warrants.js` |
+| 92759 | 92785 | 92759 | 27 | 1 | `formatDate` | const arrow | — | refs:31 | Unassigned | `app/modules/app/unassigned.js` |
+| 92786 | 92802 | 92800 | 17 | 15 | `clearWarrantDateFilter` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 92803 | 92815 | 92846 | 13 | 44 | `autoSetWarrantDateByStudy` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 92816 | 92848 | 92816 | 33 | 1 | `formatDate` | const arrow | — | refs:31 | Unassigned | `app/modules/app/unassigned.js` |
+| 92849 | 92867 | 92865 | 19 | 17 | `updateWarrantPeriodBadge` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 92868 | 92908 | 92902 | 41 | 35 | `applyWarrantDateFilter` | fn | — | refs:5 | Warrants | `app/modules/warrants/warrants.js` |
+| 92909 | 92925 | 92955 | 17 | 47 | `setDefaultWarrant7Period` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 92926 | 92957 | 92926 | 32 | 1 | `formatDate` | const arrow | — | refs:31 | Unassigned | `app/modules/app/unassigned.js` |
+| 92958 | 92998 | 92996 | 41 | 39 | `filterWarrantCrashesByDate` | fn | — | refs:9 | Warrants | `app/modules/warrants/warrants.js` |
+| 92999 | 93024 | 93022 | 26 | 24 | `updateWarrantDateInfo` | fn | — | refs:7 | Warrants | `app/modules/warrants/warrants.js` |
+| 93025 | 93082 | 93080 | 58 | 56 | `checkWarrantPeriodCompliance` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 93083 | 93139 | 93137 | 57 | 55 | `updateWarrantCrashDisplay` | fn | — | refs:6 | Warrants | `app/modules/warrants/warrants.js` |
+| 93140 | 93154 | 93222 | 15 | 83 | `selectWarrantLocation` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
+| 93155 | 93178 | 93165 | 24 | 11 | `poll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 93179 | 93197 | 93179 | 19 | 1 | `routeNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 93198 | 93205 | 93198 | 8 | 1 | `fallback` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 93206 | 93212 | 93206 | 7 | 1 | `crashes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
+| 93213 | 93224 | 93219 | 12 | 7 | `crashes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
+| 93225 | 93238 | 93335 | 14 | 111 | `loadLocationForWarrants` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
+| 93239 | 93302 | 93251 | 64 | 13 | `poll` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 93303 | 93311 | 93303 | 9 | 1 | `fallback` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 93312 | 93318 | 93312 | 7 | 1 | `crashes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
+| 93319 | 93343 | 93325 | 25 | 7 | `crashes` | const arrow | — | refs:0 | Analysis | `app/modules/analysis/analysis.js` |
+| 93344 | 93353 | 93406 | 10 | 63 | `_applyWarrantHotspotDetail` | fn | — | refs:1 | Hot Spots | `app/modules/hotspots/hotspots.js` |
+| 93354 | 93362 | 93357 | 9 | 4 | `num` | const arrow | — | refs:5 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 93363 | 93408 | 93366 | 46 | 4 | `setText` | const arrow | — | refs:13 | Unassigned | `app/modules/app/unassigned.js` |
+| 93409 | 93499 | 93497 | 91 | 89 | `loadLocationDataForWarrants` | fn | — | refs:13 | Warrants | `app/modules/warrants/warrants.js` |
+| 93500 | 93597 | 93595 | 98 | 96 | `buildWarrantCrashProfile` | fn | — | refs:7 | Warrants | `app/modules/warrants/warrants.js` |
+| 93598 | 93646 | 93657 | 49 | 60 | `extractWarrantRoadProperties` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 93647 | 93659 | 93647 | 13 | 1 | `topRoadDesc` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 93660 | 93914 | 93912 | 255 | 253 | `autoPopulateWarrantForm` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 93915 | 93920 | 93918 | 6 | 4 | `selectFromMapForWarrants` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 93921 | 93963 | 93974 | 43 | 54 | `analyzeWarrantsFromMap` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 93964 | 93979 | 93964 | 16 | 1 | `routeNames` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 93980 | 94051 | 94037 | 72 | 58 | `evaluatePedScreening` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 94052 | 94072 | 94070 | 21 | 19 | `getRequiredSSD` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 94073 | 94095 | 94093 | 23 | 21 | `updatePedSSDRequired` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 94096 | 94108 | 94106 | 13 | 11 | `updatePedContextSpacing` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 94109 | 94153 | 94151 | 45 | 43 | `updatePedStreetViewStatus` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 94154 | 94169 | 94167 | 16 | 14 | `openPedStreetView` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 94170 | 94189 | 94281 | 20 | 112 | `ped_loadCrashData` | fn | — | refs:2 | Analysis | `app/modules/analysis/analysis.js` |
+| 94190 | 94282 | 94192 | 93 | 3 | `pedCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 94283 | 94421 | 94331 | 139 | 49 | `evaluatePedCriteria` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
+| 94422 | 94459 | 94511 | 38 | 90 | `determinePedTier` | fn | — | refs:6 | Core/Tier | `app/modules/core/tier.js` |
+| 94460 | 94512 | 94463 | 53 | 4 | `cmDescriptions` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 94513 | 94543 | 94538 | 31 | 26 | `determinePedMarking` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 94544 | 95021 | 95017 | 478 | 474 | `ped_generatePDFReport` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 95022 | 95041 | 95032 | 20 | 11 | `ped_printReport` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 95042 | 95112 | 95108 | 71 | 67 | `stopsign_initForm` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 95113 | 95147 | 95143 | 35 | 31 | `stopsign_showTab` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 95148 | 95225 | 95221 | 78 | 74 | `stopsign_updateSpeedThreshold` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 95226 | 95237 | 95233 | 12 | 8 | `stopsign_updateConfig` | fn | — | refs:10 | Unassigned | `app/modules/app/unassigned.js` |
+| 95238 | 95286 | 95282 | 49 | 45 | `stopsign_updateTMCGrid` | fn | — | refs:14 | Unassigned | `app/modules/app/unassigned.js` |
+| 95287 | 95338 | 95331 | 52 | 45 | `stopsign_generateTMCRows` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 95339 | 95356 | 95352 | 18 | 14 | `stopsign_updateRowTotal` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 95357 | 95366 | 95362 | 10 | 6 | `stopsign_markTotalManual` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 95367 | 95389 | 95383 | 23 | 17 | `stopsign_calculateApproachVolumes` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 95390 | 95476 | 95470 | 87 | 81 | `stopsign_computeHourlyAggregates` | fn | — | refs:2 | Spatial/Geo | `app/modules/spatial/spatial.js` |
+| 95477 | 95560 | 95556 | 84 | 80 | `stopsign_evaluateCriterionCFromAggregates` | fn | — | refs:1 | Spatial/Geo | `app/modules/spatial/spatial.js` |
+| 95561 | 95593 | 95693 | 33 | 133 | `stopsign_updateVolumeSummary` | fn | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
+| 95594 | 95594 | 95594 | 1 | 1 | `totalMajor` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 95595 | 95697 | 95595 | 103 | 1 | `totalMinor` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 95698 | 95736 | 95732 | 39 | 35 | `stopsign_setCountType` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
+| 95737 | 95767 | 95762 | 31 | 26 | `stopsign_clearTMCForm` | fn | — | refs:9 | Unassigned | `app/modules/app/unassigned.js` |
+| 95768 | 95775 | 95771 | 8 | 4 | `stopsign_generateVolumeTable` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 95776 | 95871 | 95867 | 96 | 92 | `stopsign_updateVolumeAnalysis` | fn | — | refs:4 | Analysis | `app/modules/analysis/analysis.js` |
+| 95872 | 95894 | 95914 | 23 | 43 | `stopsign_buildCrashProfile` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 95895 | 95918 | 95897 | 24 | 3 | `isSusceptible` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 95919 | 95951 | 95947 | 33 | 29 | `stopsign_autoPopulateCriterionB` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 95952 | 95980 | 95976 | 29 | 25 | `stopsign_evaluateCriterionA` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 95981 | 96010 | 96006 | 30 | 26 | `stopsign_evaluateCriterionB` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 96011 | 96023 | 96071 | 13 | 61 | `stopsign_evaluateCriterionC` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 96024 | 96040 | 96029 | 17 | 6 | `updateSubcriterion` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 96041 | 96076 | 96047 | 36 | 7 | `updateBadge` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 96077 | 96161 | 96157 | 85 | 81 | `stopsign_calculateLOS` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 96162 | 96172 | 96168 | 11 | 7 | `stopsign_toggleHCSConfig` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96173 | 96216 | 96212 | 44 | 40 | `stopsign_evaluateCriterionD` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96217 | 96265 | 96261 | 49 | 45 | `stopsign_evaluateAllCriteria` | fn | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
+| 96266 | 96335 | 96331 | 70 | 66 | `stopsign_updateResultsTab` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 96336 | 96346 | 96342 | 11 | 7 | `stopsign_updateResultCell` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 96347 | 96370 | 96366 | 24 | 20 | `stopsign_toggleAIPanel` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96371 | 96391 | 96387 | 21 | 17 | `stopsign_toggleDisclaimer` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96392 | 96402 | 96398 | 11 | 7 | `stopsign_handleDisclaimerCheckbox` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96403 | 96421 | 96417 | 19 | 15 | `stopsign_toggleExportButtons` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96422 | 96444 | 96440 | 23 | 19 | `stopsign_clearVolumeTable` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96445 | 96506 | 96502 | 62 | 58 | `stopsign_saveData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96507 | 96604 | 96600 | 98 | 94 | `stopsign_loadSavedData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 96605 | 96646 | 96642 | 42 | 38 | `stopsign_exportData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96647 | 96678 | 96674 | 32 | 28 | `stopsign_importData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96679 | 96687 | 96683 | 9 | 5 | `stopsign_toggleVirginiaMode` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96688 | 96699 | 96695 | 12 | 8 | `stopsign_toggleVirginiaInfo` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96700 | 96741 | 96737 | 42 | 38 | `stopsign_askAI` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 96742 | 96788 | 96784 | 47 | 43 | `stopsign_updateProgressIndicator` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96789 | 96858 | 96854 | 70 | 66 | `stopsign_clearAll` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 96859 | 96881 | 96877 | 23 | 19 | `stopsign_confirmExtractedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96882 | 96905 | 96901 | 24 | 20 | `stopsign_enterReviewMode` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 96906 | 96932 | 96928 | 27 | 23 | `stopsign_loadNextReview` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 96933 | 96997 | 96991 | 65 | 59 | `stopsign_populateTMCFromExtraction` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 96998 | 97056 | 97052 | 59 | 55 | `stopsign_populateTMCFromDayData` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 97057 | 97068 | 97064 | 12 | 8 | `stopsign_skipCurrentReview` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97069 | 97080 | 97076 | 12 | 8 | `stopsign_advanceReviewQueue` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97081 | 97098 | 97094 | 18 | 14 | `stopsign_exitReviewMode` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 97099 | 97110 | 97106 | 12 | 8 | `stopsign_discardExtractedData` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 97111 | 97133 | 97126 | 23 | 16 | `stopsign_clearAllDays` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97134 | 97198 | 97194 | 65 | 61 | `stopsign_onFilesSelected` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 97199 | 97220 | 97216 | 22 | 18 | `stopsign_updateDaySlots` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97221 | 97264 | 97259 | 44 | 39 | `stopsign_clearAIUploads` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 97265 | 97297 | 97293 | 33 | 29 | `stopsign_selectAveragingMethod` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 97298 | 97305 | 97301 | 8 | 4 | `stopsign_handleFileSelect` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 97306 | 97315 | 97311 | 10 | 6 | `stopsign_handleFileDrop` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 97316 | 97356 | 97352 | 41 | 37 | `stopsign_processUploadedFiles` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97357 | 97387 | 97383 | 31 | 27 | `stopsign_removeFile` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 97388 | 97397 | 97393 | 10 | 6 | `stopsign_clearUploadedFiles` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97398 | 97468 | 97464 | 71 | 67 | `stopsign_addCurrentDayToAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 97469 | 97540 | 97536 | 72 | 68 | `stopsign_updateDayCards` | fn | — | refs:13 | Unassigned | `app/modules/app/unassigned.js` |
+| 97541 | 97549 | 97545 | 9 | 5 | `stopsign_removeDayFromAnalysis` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 97550 | 97627 | 97623 | 78 | 74 | `stopsign_editDay` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97628 | 97669 | 97665 | 42 | 38 | `stopsign_saveEditedDay` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97670 | 97680 | 97676 | 11 | 7 | `stopsign_cancelEdit` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97681 | 97719 | 97709 | 39 | 29 | `stopsign_collectCurrentTMCData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97720 | 97740 | 97736 | 21 | 17 | `stopsign_readFileContent` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97741 | 97749 | 97759 | 9 | 19 | `stopsign_extractPDFText` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97750 | 97763 | 97750 | 14 | 1 | `pageText` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 97764 | 97785 | 97781 | 22 | 18 | `stopsign_extractExcelText` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97786 | 97797 | 97793 | 12 | 8 | `stopsign_fileToBase64` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 97798 | 98002 | 97998 | 205 | 201 | `stopsign_extractAllWithAI` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 98003 | 98131 | 98163 | 129 | 161 | `stopsign_extractSingleFileWithDualAI` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 98132 | 98167 | 98132 | 36 | 1 | `errorData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 98168 | 98258 | 98254 | 91 | 87 | `stopsign_validateExtractedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 98259 | 98332 | 98322 | 74 | 64 | `stopsign_populateFromExtractedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 98333 | 98679 | 98675 | 347 | 343 | `stopsign_generatePDFReport` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 98680 | 98991 | 98987 | 312 | 308 | `stopsign_generateWordMemo` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 98992 | 99091 | 99086 | 100 | 95 | `stopsign_exportCSV` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 99092 | 99099 | 99094 | 8 | 3 | `evaluateStopWarrant` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 99100 | 99136 | 99127 | 37 | 28 | `evaluateSignalWarrants` | fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
+| 99137 | 99158 | 99154 | 22 | 18 | `calculateAnalysisPeriodYears` | fn | — | refs:3 | Analysis | `app/modules/analysis/analysis.js` |
+| 99159 | 99168 | 99164 | 10 | 6 | `syncRoundaboutField` | fn | — | refs:4 | Warrants | `app/modules/warrants/warrants.js` |
+| 99169 | 99179 | 99174 | 11 | 6 | `syncRoundaboutCheckbox` | fn | — | refs:5 | Warrants | `app/modules/warrants/warrants.js` |
+| 99180 | 99218 | 99214 | 39 | 35 | `syncMainFormToQuickPanel` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 99219 | 99291 | 99285 | 73 | 67 | `updateQuickPanelCrashSummary` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 99292 | 99421 | 99417 | 130 | 126 | `roundabout_calculateSIDRAMetrics` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 99422 | 99464 | 99460 | 43 | 39 | `roundabout_updateSIDRADisplay` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 99465 | 99542 | 99518 | 78 | 54 | `roundabout_updateResultBanner` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 99543 | 99555 | 99551 | 13 | 9 | `roundabout_toggleAADTConverter` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 99556 | 99595 | 99590 | 40 | 35 | `roundabout_setAADTSource` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
+| 99596 | 99631 | 99627 | 36 | 32 | `roundabout_setKFactor` | fn | — | refs:4 | Warrants | `app/modules/warrants/warrants.js` |
+| 99632 | 99655 | 99651 | 24 | 20 | `roundabout_toggleCustomKFactor` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 99656 | 99668 | 99663 | 13 | 8 | `roundabout_applyCustomKFactor` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 99669 | 99706 | 99701 | 38 | 33 | `roundabout_setDOWFactor` | fn | — | refs:8 | Warrants | `app/modules/warrants/warrants.js` |
+| 99707 | 99762 | 99757 | 56 | 51 | `roundabout_updateSeasonalFactor` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 99763 | 99816 | 99812 | 54 | 50 | `roundabout_calculateAADT` | fn | — | refs:7 | Warrants | `app/modules/warrants/warrants.js` |
+| 99817 | 99927 | 99859 | 111 | 43 | `roundabout_applyCalculatedAADT` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 99928 | 99946 | 99942 | 19 | 15 | `roundaboutQuick_toggleAADTConverter` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
+| 99947 | 100003 | 99999 | 57 | 53 | `roundaboutQuick_updateLocationFactors` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 100004 | 100013 | 100007 | 10 | 4 | `toggleElement` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 100014 | 100121 | 100170 | 108 | 157 | `roundaboutQuick_calculateAADT` | fn | — | refs:8 | Warrants | `app/modules/warrants/warrants.js` |
+| 100122 | 100174 | 100122 | 53 | 1 | `setRef` | const arrow | — | refs:16 | Unassigned | `app/modules/app/unassigned.js` |
+| 100175 | 100204 | 100199 | 30 | 25 | `roundaboutQuick_applyAADT` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 100205 | 100292 | 100288 | 88 | 84 | `evaluateRoundaboutQuick` | fn | — | refs:9 | Warrants | `app/modules/warrants/warrants.js` |
+| 100293 | 100310 | 100305 | 18 | 13 | `scrollToFullRoundaboutForm` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 100311 | 100367 | 100366 | 57 | 56 | `roundabout_onTabShow` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 100368 | 100500 | 100480 | 133 | 113 | `evaluateRoundabout` | fn | — | refs:34 | Warrants | `app/modules/warrants/warrants.js` |
+| 100501 | 100549 | 100545 | 49 | 45 | `roundabout_updateSmartIndicators` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 100550 | 100604 | 100600 | 55 | 51 | `roundabout_updateIndicator1` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 100605 | 100659 | 100655 | 55 | 51 | `roundabout_updateIndicator2` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 100660 | 100795 | 100791 | 136 | 132 | `roundabout_updateRiskAssessment` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 100796 | 100827 | 100823 | 32 | 28 | `roundabout_resetIndicatorsToManual` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 100828 | 100836 | 100831 | 9 | 4 | `roundabout_toggleIndicatorOverride` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 100837 | 100970 | 100966 | 134 | 130 | `roundabout_autoPopulateCrashData` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
+| 100971 | 100974 | 101005 | 4 | 35 | `roundabout_updateCrashDisplay` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 100975 | 100979 | 100978 | 5 | 4 | `setVal` | const arrow | — | refs:32 | Unassigned | `app/modules/app/unassigned.js` |
+| 100980 | 101009 | 100983 | 30 | 4 | `setText` | const arrow | — | refs:13 | Unassigned | `app/modules/app/unassigned.js` |
+| 101010 | 101024 | 101020 | 15 | 11 | `roundabout_toggleApproachTable` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 101025 | 101043 | 101039 | 19 | 15 | `roundabout_updateTotalFromApproaches` | fn | — | refs:5 | Warrants | `app/modules/warrants/warrants.js` |
+| 101044 | 101050 | 101046 | 7 | 3 | `roundabout_uploadTrafficStudy` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 101051 | 101087 | 101083 | 37 | 33 | `roundabout_handleTrafficUpload` | async fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 101088 | 101157 | 101153 | 70 | 66 | `roundabout_extractTrafficData` | async fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 101158 | 101182 | 101206 | 25 | 49 | `roundabout_applyExtractedData` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 101183 | 101210 | 101189 | 28 | 7 | `setField` | const arrow | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 101211 | 101316 | 101311 | 106 | 101 | `roundabout_calculateSafetyPrediction` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 101317 | 101464 | 101460 | 148 | 144 | `roundabout_calculateICEScores` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 101465 | 101582 | 101578 | 118 | 114 | `roundabout_runEnhancedEvaluation` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 101583 | 101599 | 101594 | 17 | 12 | `roundabout_refreshAnalysis` | fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
+| 101600 | 101989 | 101981 | 390 | 382 | `roundabout_generateWordMemo` | async fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
+| 101990 | 102010 | 102020 | 21 | 31 | `parsePDFContent` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 102011 | 102024 | 102011 | 14 | 1 | `pageText` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 102025 | 102057 | 102053 | 33 | 29 | `parseExcelContent` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 102058 | 102074 | 102060 | 17 | 3 | `parseCSVContent` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 102075 | 102151 | 102147 | 77 | 73 | `geocodeIntersectionName` | async fn | — | refs:2 | Intersections | `app/modules/intersection/intersection.js` |
+| 102152 | 102185 | 102181 | 34 | 30 | `saveGeocodedLocation` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 102186 | 102235 | 102229 | 50 | 44 | `loadGeocodedLocation` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 102236 | 102307 | 102300 | 72 | 65 | `debouncedGeocode` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
+| 102308 | 102331 | 102327 | 24 | 20 | `updateGeocodeIndicator` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
+| 102332 | 102348 | 102344 | 17 | 13 | `getCurrentIntersectionName` | fn | — | refs:1 | Intersections | `app/modules/intersection/intersection.js` |
+| 102349 | 102377 | 102368 | 29 | 20 | `initWarrantGeocodeHandlers` | fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
+| 102378 | 102456 | 102451 | 79 | 74 | `openWarrantStreetView` | fn | — | refs:12 | Warrants | `app/modules/warrants/warrants.js` |
+| 102457 | 102473 | 102469 | 17 | 13 | `updateCurrentGeocodeIndicator` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 102474 | 102713 | 102709 | 240 | 236 | `exportWarrantPDF` | async fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
+| 102714 | 102788 | 102888 | 75 | 175 | `exportPedestrianPDF` | fn | — | refs:1 | Ped/Bike | `app/modules/pedbike/pedbike.js` |
+| 102789 | 102789 | 102789 | 1 | 1 | `criteriaData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 102790 | 102892 | 102790 | 103 | 1 | `metCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 102893 | 102971 | 103017 | 79 | 125 | `exportStopSignPDF` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 102972 | 103026 | 102972 | 55 | 1 | `criteriaData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 103027 | 103070 | 103066 | 44 | 40 | `signal_initState` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103071 | 103077 | 103073 | 7 | 3 | `signal_getLaneConfig` | fn | — | refs:10 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103078 | 103084 | 103080 | 7 | 3 | `signal_getReductionFactor` | fn | — | refs:8 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103085 | 103104 | 103100 | 20 | 16 | `signal_applyPagonesAdjustment` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103105 | 103130 | 103126 | 26 | 22 | `signal_applyRTAdjustment` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103131 | 103193 | 103187 | 63 | 57 | `signal_computeHourlyAggregates` | fn | — | refs:4 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103194 | 103219 | 103215 | 26 | 22 | `signal_computeHourlyAggregatesForDay` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103220 | 103226 | 103222 | 7 | 3 | `signal_calculateStreetVolumes` | fn | — | refs:9 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103227 | 103233 | 103229 | 7 | 3 | `signal_interpolateThreshold` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103234 | 103309 | 103305 | 76 | 72 | `signal_evaluateWarrant1` | fn | — | refs:3 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103310 | 103354 | 103350 | 45 | 41 | `signal_evaluateWarrant2` | fn | — | refs:3 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103355 | 103388 | 103407 | 34 | 53 | `signal_evaluateWarrant3` | fn | — | refs:3 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103389 | 103411 | 103389 | 23 | 1 | `peakResult` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 103412 | 103427 | 103472 | 16 | 61 | `signal_evaluateWarrant4` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103428 | 103476 | 103439 | 49 | 12 | `getPedThreshold` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 103477 | 103513 | 103509 | 37 | 33 | `signal_evaluateWarrant5` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103514 | 103580 | 103575 | 67 | 62 | `signal_evaluateWarrant7` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103581 | 103719 | 103772 | 139 | 192 | `signal_autoPopulateWarrant7` | fn | — | refs:6 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103720 | 103725 | 103723 | 6 | 4 | `angleCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 103726 | 103730 | 103733 | 5 | 8 | `pedCrashes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 103731 | 103735 | 103731 | 5 | 1 | `isPedByType` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 103736 | 103776 | 103739 | 41 | 4 | `countInjury` | const arrow | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 103777 | 103789 | 103783 | 13 | 7 | `signal_detectWarrant7Period` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103790 | 103825 | 103820 | 36 | 31 | `signal_updateWarrant7Display` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103826 | 103838 | 103872 | 13 | 47 | `signal_refreshWarrant7` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 103839 | 103876 | 103839 | 38 | 1 | `formatDate` | const arrow | — | refs:31 | Unassigned | `app/modules/app/unassigned.js` |
+| 103877 | 104125 | 104121 | 249 | 245 | `signal_runAnalysis` | fn | — | refs:4 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104126 | 104181 | 104177 | 56 | 52 | `signal_buildDayResults` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104182 | 104301 | 104297 | 120 | 116 | `signal_updateResultsDisplay` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104302 | 104381 | 104377 | 80 | 76 | `signal_buildDetailedResultsHTML` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104382 | 104397 | 104393 | 16 | 12 | `signal_switchDetailTab` | fn | — | refs:9 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104398 | 104447 | 104443 | 50 | 46 | `signal_buildDayBreakdownTable` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104448 | 104497 | 104493 | 50 | 46 | `signal_buildSummaryTab` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104498 | 104508 | 104583 | 11 | 86 | `signal_buildWarrant1Tab` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104509 | 104587 | 104509 | 79 | 1 | `sortedHours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 104588 | 104593 | 104638 | 6 | 51 | `signal_buildWarrant2Tab` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104594 | 104642 | 104594 | 49 | 1 | `sortedHours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 104643 | 104675 | 104671 | 33 | 29 | `signal_buildWarrant3Tab` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104676 | 104725 | 104721 | 50 | 46 | `signal_buildWarrant4Tab` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104726 | 104762 | 104758 | 37 | 33 | `signal_buildWarrant5Tab` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104763 | 104810 | 104806 | 48 | 44 | `signal_buildWarrant7Tab` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104811 | 104853 | 104849 | 43 | 39 | `signal_buildHourlyTab` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104854 | 104899 | 104895 | 46 | 42 | `signal_buildRTTab` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104900 | 104914 | 104910 | 15 | 11 | `signal_switchResultTab` | fn | — | refs:0 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 104915 | 105005 | 105001 | 91 | 87 | `signal_renderMultiDayTable` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105006 | 105066 | 105062 | 61 | 57 | `signal_renderHourlyTMC` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105067 | 105141 | 105137 | 75 | 71 | `signal_renderRTAdjustment` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105142 | 105156 | 105142 | 15 | 1 | `signal_addDay` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105157 | 105165 | 105161 | 9 | 5 | `signal_removeDay` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105166 | 105185 | 105181 | 20 | 16 | `signal_clearAllDays` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105186 | 105203 | 105199 | 18 | 14 | `signal_calculateDayTotal` | fn | — | refs:0 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105204 | 105220 | 105216 | 17 | 13 | `signal_editDay` | fn | — | refs:0 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105221 | 105315 | 105311 | 95 | 91 | `signal_renderTMCGrid` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105316 | 105338 | 105334 | 23 | 19 | `signal_onTMCInput` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105339 | 105359 | 105355 | 21 | 17 | `signal_updateModalRowTotal` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105360 | 105368 | 105364 | 9 | 5 | `signal_saveTMCModal` | fn | — | refs:0 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105369 | 105375 | 105371 | 7 | 3 | `signal_closeTMCModal` | fn | — | refs:0 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105376 | 105408 | 105404 | 33 | 29 | `signal_updateConfigFromUI` | fn | — | refs:24 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105409 | 105411 | 105442 | 3 | 34 | `signal_populateUIFromConfig` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105412 | 105412 | 105412 | 1 | 1 | `setVal` | const arrow | — | refs:32 | Unassigned | `app/modules/app/unassigned.js` |
+| 105413 | 105446 | 105413 | 34 | 1 | `setChecked` | const arrow | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 105447 | 105485 | 105481 | 39 | 35 | `signal_onTabShow` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105486 | 105685 | 105938 | 200 | 453 | `signal_generatePDFReport` | async fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105686 | 105800 | 105692 | 115 | 7 | `w4Body` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 105801 | 105942 | 105801 | 142 | 1 | `w1` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 105943 | 105983 | 106058 | 41 | 116 | `signal_exportCSV` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 105984 | 106041 | 105984 | 58 | 1 | `w1` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 106042 | 106062 | 106042 | 21 | 1 | `totalVol` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 106063 | 106364 | 106345 | 302 | 283 | `signal_generateWordMemo` | async fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 106365 | 106409 | 106405 | 45 | 41 | `signal_readFileContent` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 106410 | 106544 | 106727 | 135 | 318 | `signal_extractSingleFileWithDualAI` | async fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 106545 | 106731 | 106545 | 187 | 1 | `errorData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 106732 | 106746 | 106742 | 15 | 11 | `signal_calculateExtractedTotal` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 106747 | 106807 | 106802 | 61 | 56 | `signal_autoFillFromExtraction` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 106808 | 106997 | 107224 | 190 | 417 | `signal_handleBulkFileUpload` | async fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 106998 | 107034 | 107003 | 37 | 6 | `hourCounts` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107035 | 107035 | 107035 | 1 | 1 | `volumes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107036 | 107108 | 107036 | 73 | 1 | `mean` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107109 | 107122 | 107109 | 14 | 1 | `issueIdx` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107123 | 107125 | 107125 | 3 | 3 | `finalHourCounts` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107126 | 107147 | 107126 | 22 | 1 | `allSameHours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107148 | 107148 | 107148 | 1 | 1 | `successCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107149 | 107149 | 107149 | 1 | 1 | `correctedCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107150 | 107150 | 107150 | 1 | 1 | `warningCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107151 | 107164 | 107151 | 14 | 1 | `errorCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107165 | 107165 | 107165 | 1 | 1 | `unresolvedIssues` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107166 | 107228 | 107166 | 63 | 1 | `resolvedIssues` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107229 | 107242 | 107236 | 14 | 8 | `signal_extractAllWithAI` | async fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107243 | 107291 | 107287 | 49 | 45 | `signal_onFilesSelected` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107292 | 107350 | 107339 | 59 | 48 | `signal_showAPIKeyWarning` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107351 | 107457 | 107453 | 107 | 103 | `signal_agent3ReExtract` | async fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107458 | 107472 | 107566 | 15 | 109 | `signal_generateDataPreview` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107473 | 107510 | 107473 | 38 | 1 | `maxHoursInBatch` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107511 | 107529 | 107511 | 19 | 1 | `unresolvedIssues` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107530 | 107570 | 107530 | 41 | 1 | `allHours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107571 | 107585 | 107581 | 15 | 11 | `signal_togglePreviewRows` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107586 | 107603 | 107599 | 18 | 14 | `signal_confirmExtractedData` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107604 | 107634 | 107630 | 31 | 27 | `signal_enterReviewMode` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107635 | 107659 | 107655 | 25 | 21 | `signal_exitReviewMode` | fn | — | refs:6 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107660 | 107680 | 107676 | 21 | 17 | `signal_updateReviewQueueIndicator` | fn | — | refs:2 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107681 | 107731 | 107727 | 51 | 47 | `signal_loadCurrentReviewData` | fn | — | refs:3 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107732 | 107736 | 107787 | 5 | 56 | `signal_populateTMCGridFromExtraction` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107737 | 107737 | 107737 | 1 | 1 | `extractedHours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107738 | 107738 | 107738 | 1 | 1 | `hasEarlyHours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107739 | 107749 | 107739 | 11 | 1 | `hasLateHours` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107750 | 107791 | 107750 | 42 | 1 | `allWithin12hr` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 107792 | 107838 | 107832 | 47 | 41 | `signal_doPopulateTMCValues` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107839 | 107915 | 107911 | 77 | 73 | `signal_populateTMCFromDayData` | fn | — | refs:4 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107916 | 107937 | 107933 | 22 | 18 | `signal_skipCurrentReview` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107938 | 107961 | 107957 | 24 | 20 | `signal_advanceReviewQueue` | fn | — | refs:1 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107962 | 107984 | 107967 | 23 | 6 | `signal_rejectExtractedData` | fn | — | refs:0 | Warrants (Signal) | `app/modules/warrants/signal-tmc.js` |
+| 107985 | 108020 | 108016 | 36 | 32 | `speedstudy_onTabShow` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 108021 | 108048 | 108044 | 28 | 24 | `speedstudy_generateTableRows` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 108049 | 108082 | 108078 | 34 | 30 | `speedstudy_updateTotals` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 108083 | 108135 | 108131 | 53 | 49 | `speedstudy_setCountType` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 108136 | 108154 | 108150 | 19 | 15 | `speedstudy_updateConfigFromUI` | fn | — | refs:12 | Unassigned | `app/modules/app/unassigned.js` |
+| 108155 | 108174 | 108169 | 20 | 15 | `speedstudy_clearForm` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 108175 | 108193 | 108189 | 19 | 15 | `speedstudy_initTable` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 108194 | 108253 | 108249 | 60 | 56 | `speedstudy_addCurrentDay` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 108254 | 108299 | 108295 | 46 | 42 | `speedstudy_renderDayCards` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 108300 | 108309 | 108305 | 10 | 6 | `speedstudy_removeDay` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 108310 | 108320 | 108316 | 11 | 7 | `speedstudy_updateDayCount` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 108321 | 108336 | 108332 | 16 | 12 | `speedstudy_selectAveragingMethod` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 108337 | 108363 | 108359 | 27 | 23 | `speedstudy_runAnalysis` | fn | — | refs:3 | Analysis | `app/modules/analysis/analysis.js` |
+| 108364 | 108479 | 108475 | 116 | 112 | `speedstudy_runAnalysisInternal` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 108480 | 108493 | 108489 | 14 | 10 | `speedstudy_getRecommendationReason` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 108494 | 108588 | 108584 | 95 | 91 | `speedstudy_displayResults` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 108589 | 108630 | 108625 | 42 | 37 | `speedstudy_generateHistogram` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 108631 | 108725 | 108804 | 95 | 174 | `speedstudy_loadCrashData` | fn | — | refs:6 | Analysis | `app/modules/analysis/analysis.js` |
+| 108726 | 108726 | 108726 | 1 | 1 | `locWords` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 108727 | 108729 | 108727 | 3 | 1 | `routeWords` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 108730 | 108808 | 108732 | 79 | 3 | `allWordsMatch` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 108809 | 108836 | 108844 | 28 | 36 | `findMatchingRoute` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 108837 | 108848 | 108839 | 12 | 3 | `hasMatch` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 108849 | 108877 | 108872 | 29 | 24 | `speedstudy_calculateCrashRate` | fn | — | refs:3 | Analysis | `app/modules/analysis/analysis.js` |
+| 108878 | 108919 | 108915 | 42 | 38 | `speedstudy_updateLocationSourceIndicator` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 108920 | 108957 | 108952 | 38 | 33 | `speedstudy_clearLocationBinding` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 108958 | 109046 | 109042 | 89 | 85 | `speedstudy_autoPopulateFromRoadProps` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109047 | 109065 | 109061 | 19 | 15 | `speedstudy_toggleAIPanel` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109066 | 109074 | 109070 | 9 | 5 | `speedstudy_handleDisclaimerCheckbox` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109075 | 109090 | 109086 | 16 | 12 | `speedstudy_toggleDisclaimer` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109091 | 109130 | 109123 | 40 | 33 | `speedstudy_clearAIUploads` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109131 | 109153 | 109149 | 23 | 19 | `speedstudy_onFilesSelected` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109154 | 109209 | 109205 | 56 | 52 | `speedstudy_readFileContent` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109210 | 109326 | 109468 | 117 | 259 | `speedstudy_extractSingleFileWithDualAI` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109327 | 109472 | 109327 | 146 | 1 | `errorData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 109473 | 109473 | 109657 | 1 | 185 | `speedstudy_extractAllWithAI` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109474 | 109661 | 109474 | 188 | 1 | `files` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 109662 | 109701 | 109697 | 40 | 36 | `speedstudy_populateGridFromExtraction` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109702 | 109713 | 109709 | 12 | 8 | `speedstudy_updateDaySlots` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109714 | 109722 | 109718 | 9 | 5 | `speedstudy_toggleStudyType` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109723 | 109735 | 109731 | 13 | 9 | `speedstudy_importFromTMC` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 109736 | 109874 | 109870 | 139 | 135 | `speedstudy_newStudy` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 109875 | 110112 | 110336 | 238 | 462 | `speedstudy_generatePDFReport` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 110113 | 110115 | 110128 | 3 | 16 | `dayRows` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 110116 | 110116 | 110116 | 1 | 1 | `totalN` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 110117 | 110117 | 110117 | 1 | 1 | `speeds` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 110118 | 110148 | 110118 | 31 | 1 | `avgP85` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 110149 | 110340 | 110157 | 192 | 9 | `hourlyRows` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 110341 | 110417 | 110480 | 77 | 140 | `speedstudy_exportCSV` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 110418 | 110484 | 110418 | 67 | 1 | `totalN` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 110485 | 110493 | 110489 | 9 | 5 | `speedstudy_linkToCMF` | fn | — | refs:1 | CMF/Countermeasures | `app/modules/cmf/cmf.js` |
+| 110494 | 110528 | 110524 | 35 | 31 | `speedstudy_saveData` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 110529 | 110580 | 110575 | 52 | 47 | `speedstudy_loadSavedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 110581 | 110593 | 110588 | 13 | 8 | `speedstudy_scheduleAutoSave` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
+| 110594 | 110633 | 110691 | 40 | 98 | `speedstudy_confirmExtractedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 110634 | 110703 | 110634 | 70 | 1 | `totalN` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 110704 | 110714 | 110710 | 11 | 7 | `streetlight_onTabShow` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 110715 | 110777 | 110773 | 63 | 59 | `streetlight_loadCrashData` | fn | — | refs:2 | Analysis | `app/modules/analysis/analysis.js` |
+| 110778 | 110825 | 110821 | 48 | 44 | `streetlight_analyzeCrashesByLight` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 110826 | 110856 | 110852 | 31 | 27 | `streetlight_calculateMetrics` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 110857 | 110886 | 110944 | 30 | 88 | `streetlight_updateUI` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 110887 | 110887 | 110894 | 1 | 8 | `conditions` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 110888 | 110888 | 110888 | 1 | 1 | `aIdx` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 110889 | 110948 | 110889 | 60 | 1 | `bIdx` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 110949 | 110989 | 110985 | 41 | 37 | `streetlight_evaluateWarrant` | fn | — | refs:3 | Warrants | `app/modules/warrants/warrants.js` |
+| 110990 | 111020 | 111047 | 31 | 58 | `streetlight_updateWarrantUI` | fn | — | refs:2 | Warrants | `app/modules/warrants/warrants.js` |
+| 111021 | 111048 | 111039 | 28 | 19 | `updateCriterion` | const arrow | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 111049 | 111060 | 111059 | 12 | 11 | `streetlight_toggleAdditionalFactors` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 111061 | 111071 | 111070 | 11 | 10 | `streetlight_updateAdditionalFactors` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 111072 | 111083 | 111082 | 12 | 11 | `streetlight_toggleExportButtons` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 111084 | 111107 | 111106 | 24 | 23 | `streetlight_newStudy` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 111108 | 111288 | 111287 | 181 | 180 | `streetlight_generatePDFReport` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 111289 | 111349 | 111348 | 61 | 60 | `streetlight_generateWordMemo` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 111350 | 111392 | 111391 | 43 | 42 | `streetlight_exportCSV` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 111393 | 111413 | 111412 | 21 | 20 | `streetlight_exportData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 111414 | 111465 | 111457 | 52 | 44 | `streetlight_importData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 111466 | 111545 | 111580 | 80 | 115 | `exportSignalPDF` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 111546 | 111546 | 111546 | 1 | 1 | `warrantData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 111547 | 111584 | 111547 | 38 | 1 | `metWarrants` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 111585 | 111668 | 111866 | 84 | 282 | `exportRoundaboutPDF` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 111669 | 111669 | 111669 | 1 | 1 | `safetyData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 111670 | 111799 | 111670 | 130 | 1 | `safetyCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 111800 | 111800 | 111800 | 1 | 1 | `constraintData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 111801 | 111867 | 111801 | 67 | 1 | `constraintCount` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 111868 | 111890 | 111889 | 23 | 22 | `saveWarrantProgress` | fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
+| 111891 | 111930 | 111921 | 40 | 31 | `clearWarrantForm` | fn | — | refs:0 | Warrants | `app/modules/warrants/warrants.js` |
+| 111931 | 111975 | 111971 | 45 | 41 | `trafficdata_onTabShow` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 111976 | 111998 | 111994 | 23 | 19 | `trafficdata_updateConfig` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 111999 | 112038 | 112034 | 40 | 36 | `trafficdata_syncFromWarrantSelection` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 112039 | 112057 | 112053 | 19 | 15 | `trafficdata_toggleAIPanel` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112058 | 112067 | 112063 | 10 | 6 | `trafficdata_toggleDisclaimer` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112068 | 112076 | 112072 | 9 | 5 | `trafficdata_handleDisclaimerCheckbox` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112077 | 112084 | 112080 | 8 | 4 | `trafficdata_setCountType` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112085 | 112099 | 112095 | 15 | 11 | `trafficdata_updateDaySlots` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112100 | 112129 | 112125 | 30 | 26 | `trafficdata_toggleSection` | fn | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
+| 112130 | 112202 | 112198 | 73 | 69 | `trafficdata_renderTmcTable` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 112203 | 112219 | 112215 | 17 | 13 | `trafficdata_updateTmcTotals` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 112220 | 112248 | 112244 | 29 | 25 | `trafficdata_setTmcCountType` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 112249 | 112263 | 112258 | 15 | 10 | `trafficdata_updateTmcDate` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112264 | 112329 | 112325 | 66 | 62 | `trafficdata_addTmcDay` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112330 | 112351 | 112347 | 22 | 18 | `trafficdata_clearTmcForm` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 112352 | 112388 | 112384 | 37 | 33 | `trafficdata_showDaysSummary` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 112389 | 112403 | 112399 | 15 | 11 | `calculateDayTotalVolume` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112404 | 112417 | 112413 | 14 | 10 | `trafficdata_deleteDay` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112418 | 112438 | 112434 | 21 | 17 | `trafficdata_updateDayCounts` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 112439 | 112446 | 112442 | 8 | 4 | `trafficdata_updatePedCounts` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 112447 | 112479 | 112475 | 33 | 29 | `trafficdata_addPedDay` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112480 | 112505 | 112501 | 26 | 22 | `trafficdata_saveSpeedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112506 | 112588 | 112584 | 83 | 79 | `trafficdata_updateReadiness` | fn | — | refs:11 | Unassigned | `app/modules/app/unassigned.js` |
+| 112589 | 112610 | 112606 | 22 | 18 | `updateReadinessBar` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
+| 112611 | 112657 | 112653 | 47 | 43 | `trafficdata_convertTmcToTotals` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112658 | 112691 | 112687 | 34 | 30 | `trafficdata_convertPeakToAADT` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112692 | 112715 | 112711 | 24 | 20 | `trafficdata_calcRoundaboutVolumes` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 112716 | 112773 | 112769 | 58 | 54 | `trafficdata_refreshCrashData` | fn | — | refs:4 | Analysis | `app/modules/analysis/analysis.js` |
+| 112774 | 112806 | 112802 | 33 | 29 | `trafficdata_newStudy` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112807 | 112833 | 112829 | 27 | 23 | `trafficdata_saveStudy` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112834 | 112849 | 112845 | 16 | 12 | `trafficdata_exportStudy` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112850 | 112856 | 112852 | 7 | 3 | `trafficdata_loadStudy` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112857 | 112874 | 112860 | 18 | 4 | `trafficdata_loadSavedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112875 | 112912 | 112908 | 38 | 34 | `trafficdata_onFilesSelected` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 112913 | 112948 | 112944 | 36 | 32 | `trafficdata_showAPIKeyWarning` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 112949 | 113070 | 113098 | 122 | 150 | `trafficdata_extractAllWithAI` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113071 | 113071 | 113071 | 1 | 1 | `docTypes` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 113072 | 113102 | 113074 | 31 | 3 | `dominantType` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 113103 | 113190 | 113212 | 88 | 110 | `trafficdata_extractSingleFile` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113191 | 113216 | 113191 | 26 | 1 | `errorData` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 113217 | 113235 | 113231 | 19 | 15 | `trafficdata_readFileContent` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113236 | 113256 | 113252 | 21 | 17 | `trafficdata_clearAIUploads` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113257 | 113277 | 113273 | 21 | 17 | `trafficdata_confirmExtractedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113278 | 113313 | 113309 | 36 | 32 | `trafficdata_enterReviewMode` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113314 | 113342 | 113338 | 29 | 25 | `trafficdata_exitReviewMode` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 113343 | 113358 | 113354 | 16 | 12 | `trafficdata_updateReviewQueueIndicator` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 113359 | 113414 | 113409 | 56 | 51 | `trafficdata_loadCurrentReviewData` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 113415 | 113455 | 113451 | 41 | 37 | `trafficdata_loadHourlyDataIntoGrid` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 113456 | 113463 | 113459 | 8 | 4 | `trafficdata_skipCurrentReview` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113464 | 113474 | 113470 | 11 | 7 | `trafficdata_updateRtAdjustment` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113475 | 113518 | 113508 | 44 | 34 | `trafficdata_editDay` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113519 | 113631 | 113626 | 113 | 108 | `trafficdata_pushToSignal` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113632 | 113736 | 113731 | 105 | 100 | `trafficdata_pushToStopSign` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113737 | 113840 | 113835 | 104 | 99 | `trafficdata_pushToRoundabout` | fn | — | refs:1 | Warrants | `app/modules/warrants/warrants.js` |
+| 113841 | 113918 | 113913 | 78 | 73 | `trafficdata_pushToPedCrossing` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 113919 | 114111 | 113999 | 193 | 81 | `trafficdata_pushToSpeedStudy` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 114112 | 114260 | 114240 | 149 | 129 | `initAuthProtection` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 114261 | 114269 | 114394 | 9 | 134 | `populateUserMenu` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 114270 | 114396 | 114270 | 127 | 1 | `initials` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 114397 | 114413 | 114402 | 17 | 6 | `toggleUserMenu` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 114414 | 114420 | 114418 | 7 | 5 | `showApiKeysTab` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 114421 | 114431 | 114429 | 11 | 9 | `handleSignOut` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 114432 | 114450 | 114445 | 19 | 14 | `openBillingPortal` | async fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 114451 | 114464 | 114463 | 14 | 13 | `showAccountModal` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 114465 | 114470 | 114469 | 6 | 5 | `closeAccountModal` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 114471 | 114481 | 114480 | 11 | 10 | `switchAccountTab` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 114482 | 114688 | 114687 | 207 | 206 | `populateAccountModal` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 114689 | 114740 | 114739 | 52 | 51 | `populateApiKeyTab` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 114741 | 114801 | 114800 | 61 | 60 | `generateMCPApiKey` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 114802 | 114846 | 114845 | 45 | 44 | `revokeMCPApiKey` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 114847 | 114860 | 114859 | 14 | 13 | `copyMCPApiKey` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 114861 | 114874 | 114873 | 14 | 13 | `copyMCPConfig` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 114875 | 114915 | 114914 | 41 | 40 | `populateAccountStateDropdown` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 114916 | 114944 | 114943 | 29 | 28 | `onAccountStateChange` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 114945 | 115020 | 114993 | 76 | 49 | `saveAccountProfile` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 115021 | 115034 | 115033 | 14 | 13 | `checkProfileCompletion` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 115035 | 115041 | 115040 | 7 | 6 | `showProfileCompletionModal` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 115042 | 115084 | 115083 | 43 | 42 | `populateProfileStateDropdown` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 115085 | 115089 | 115088 | 5 | 4 | `_fipsToAbbr` | fn | — | refs:6 | Spatial/Geo | `app/modules/spatial/spatial.js` |
+| 115090 | 115118 | 115117 | 29 | 28 | `onProfileStateChange` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 115119 | 115151 | 115150 | 33 | 32 | `submitProfileCompletion` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 115152 | 115254 | 115154 | 103 | 3 | `skipProfileCompletion` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 115255 | 115501 | 115266 | 247 | 12 | `getAssetIconInfo` | fn | — | refs:9 | Unassigned | `app/modules/app/unassigned.js` |
+| 115502 | 115590 | 115502 | 89 | 1 | `condLabel` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 115591 | 115618 | 115639 | 28 | 49 | `btsFetchLayerData` | async fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
+| 115619 | 115647 | 115619 | 29 | 1 | `timer` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 115648 | 115684 | 115674 | 37 | 27 | `ensureJurisdictionBoundaryLoaded` | async fn | — | refs:3 | Spatial/Geo | `app/modules/spatial/spatial.js` |
+| 115685 | 115718 | 115713 | 34 | 29 | `clipBTSFeaturesToBoundary` | fn | — | refs:2 | Spatial/Geo | `app/modules/spatial/spatial.js` |
+| 115719 | 115743 | 115737 | 25 | 19 | `btsGetJurisdictionBounds` | fn | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
+| 115744 | 115775 | 115770 | 32 | 27 | `toggleBTSLayer` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 115776 | 115844 | 115840 | 69 | 65 | `addBTSLayer` | async fn | — | refs:9 | Unassigned | `app/modules/app/unassigned.js` |
+| 115845 | 115896 | 115892 | 52 | 48 | `displayBTSLayer` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
+| 115897 | 115911 | 115907 | 15 | 11 | `removeBTSLayer` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 115912 | 115929 | 115925 | 18 | 14 | `clearBTSLayerCaches` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 115930 | 115947 | 115941 | 18 | 12 | `saveBTSLayerVisibility` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
+| 115948 | 116033 | 115982 | 86 | 35 | `restoreBTSLayers` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 116034 | 116038 | 116104 | 5 | 71 | `overtureResolveLatestRelease` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 116039 | 116056 | 116039 | 18 | 1 | `timer` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 116057 | 116074 | 116057 | 18 | 1 | `declaredLatest` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 116075 | 116109 | 116075 | 35 | 1 | `headTimer` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 116110 | 116421 | 116124 | 312 | 15 | `overtureGetPMTiles` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 116422 | 116470 | 116422 | 49 | 1 | `icon` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 116471 | 116548 | 116471 | 78 | 1 | `icon` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 116549 | 116630 | 116626 | 82 | 78 | `overtureFetchLayerData` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 116631 | 116695 | 116691 | 65 | 61 | `overtureFetchTile` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 116696 | 116712 | 116708 | 17 | 13 | `overtureBboxToTiles` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 116713 | 116743 | 116738 | 31 | 26 | `toggleOvertureLayer` | fn | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 116744 | 116810 | 116806 | 67 | 63 | `addOvertureLayer` | async fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 116811 | 116861 | 116857 | 51 | 47 | `displayOvertureLayer` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 116862 | 116876 | 116872 | 15 | 11 | `removeOvertureLayer` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 116877 | 116893 | 116889 | 17 | 13 | `clearOvertureLayerCaches` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 116894 | 116909 | 116905 | 16 | 12 | `saveOvertureLayerVisibility` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 116910 | 117090 | 116944 | 181 | 35 | `restoreOvertureLayers` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 117091 | 117102 | 117100 | 12 | 10 | `createTISpeedIcon` | fn | — | refs:7 | Unassigned | `app/modules/app/unassigned.js` |
+| 117103 | 117616 | 117112 | 514 | 10 | `createTISchoolSpeedIcon` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 117617 | 117778 | 117772 | 162 | 156 | `getTIMarkerSVG` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 117779 | 117828 | 117824 | 50 | 46 | `resetTrafficInventoryForJurisdictionChange` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 117829 | 117936 | 117929 | 108 | 101 | `loadTrafficInventoryForMap` | async fn | — | refs:9 | Unassigned | `app/modules/app/unassigned.js` |
+| 117937 | 117981 | 117976 | 45 | 40 | `getTIParentCategory` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 117982 | 118096 | 118090 | 115 | 109 | `getTIChildCategory` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118097 | 118159 | 118153 | 63 | 57 | `classifyTIItems` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118160 | 118260 | 118256 | 101 | 97 | `consolidateTISignals` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118261 | 118358 | 118354 | 98 | 94 | `addTIMapLayer` | fn | — | refs:4 | Map | `app/modules/map/map.js` |
+| 118359 | 118369 | 118365 | 11 | 7 | `removeTIMapLayer` | fn | — | refs:4 | Map | `app/modules/map/map.js` |
+| 118370 | 118427 | 118423 | 58 | 54 | `addTISpeedLayer` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
+| 118428 | 118438 | 118434 | 11 | 7 | `removeTISpeedLayer` | fn | — | refs:5 | Unassigned | `app/modules/app/unassigned.js` |
+| 118439 | 118481 | 118477 | 43 | 39 | `toggleTICategory` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 118482 | 118516 | 118512 | 35 | 31 | `toggleTISpeedLayer` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 118517 | 118528 | 118524 | 12 | 8 | `toggleTIExpand` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118529 | 118537 | 118533 | 9 | 5 | `toggleTISpeedExpand` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118538 | 118575 | 118571 | 38 | 34 | `toggleTIParent` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 118576 | 118590 | 118586 | 15 | 11 | `toggleTIParentExpand` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118591 | 118611 | 118607 | 21 | 17 | `getTIParentCheckState` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 118612 | 118624 | 118620 | 13 | 9 | `getTIParentCount` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118625 | 118637 | 118633 | 13 | 9 | `updateTIParentCheckboxes` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118638 | 118667 | 118663 | 30 | 26 | `saveTILayerVisibility` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 118668 | 118688 | 118684 | 21 | 17 | `loadTILayerVisibility` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118689 | 118695 | 118691 | 7 | 3 | `migrateTILegacyKey` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118696 | 118746 | 118742 | 51 | 47 | `restoreTILayers` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 118747 | 118780 | 118776 | 34 | 30 | `showAllTILayers` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118781 | 118800 | 118795 | 20 | 15 | `hideAllTILayers` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118801 | 118926 | 118921 | 126 | 121 | `buildTIAssetPanelHTML` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 118927 | 118990 | 118986 | 64 | 60 | `updateTIMapLegend` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 118991 | 119002 | 118997 | 12 | 7 | `toggleTILegendCollapse` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119003 | 119032 | 119031 | 30 | 29 | `assetDbOpen` | async fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 119033 | 119043 | 119042 | 11 | 10 | `assetDbSave` | async fn | — | refs:8 | Unassigned | `app/modules/app/unassigned.js` |
+| 119044 | 119054 | 119053 | 11 | 10 | `assetDbLoadAll` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119055 | 119065 | 119064 | 11 | 10 | `assetDbDelete` | async fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 119066 | 119076 | 119075 | 11 | 10 | `assetDbClearAll` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119077 | 119084 | 119083 | 8 | 7 | `assetSaveSettings` | fn | — | refs:14 | Unassigned | `app/modules/app/unassigned.js` |
+| 119085 | 119101 | 119096 | 17 | 12 | `assetLoadSettings` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119102 | 119104 | 119133 | 3 | 32 | `assetDetectCoordinateColumns` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119105 | 119134 | 119111 | 30 | 7 | `matchesPattern` | const arrow | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 119135 | 119151 | 119150 | 17 | 16 | `assetDetectCoordinateFormat` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 119152 | 119177 | 119176 | 26 | 25 | `assetConvertDmsToDecimal` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 119178 | 119200 | 119199 | 23 | 22 | `assetConvertDdmToDecimal` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119201 | 119218 | 119217 | 18 | 17 | `assetConvertToDecimal` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 119219 | 119229 | 119224 | 11 | 6 | `assetValidateVirginiaBounds` | fn | — | refs:4 | Unassigned | `app/modules/app/unassigned.js` |
+| 119230 | 119241 | 119240 | 12 | 11 | `assetDistanceFeet` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119242 | 119261 | 119260 | 20 | 19 | `assetBuildSpatialGrid` | fn | — | refs:1 | Spatial/Geo | `app/modules/spatial/spatial.js` |
+| 119262 | 119296 | 119291 | 35 | 30 | `assetGetNearbyCrashes` | fn | — | refs:1 | Analysis | `app/modules/analysis/analysis.js` |
+| 119297 | 119313 | 119312 | 17 | 16 | `assetHandleFileSelect` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 119314 | 119369 | 119368 | 56 | 55 | `assetSetupDragDrop` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119370 | 119421 | 119420 | 52 | 51 | `assetParseFile` | async fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 119422 | 119472 | 119491 | 51 | 70 | `assetParseCsv` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 119473 | 119492 | 119475 | 20 | 3 | `rows` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 119493 | 119510 | 119526 | 18 | 34 | `assetParseExcel` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119511 | 119527 | 119511 | 17 | 1 | `rows` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js` |
+| 119528 | 119554 | 119553 | 27 | 26 | `assetProcessParsedData` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119555 | 119563 | 119598 | 9 | 44 | `assetShowColumnModal` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119564 | 119599 | 119567 | 36 | 4 | `options` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 119600 | 119603 | 119613 | 4 | 14 | `assetRenderColumnPreview` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119604 | 119606 | 119606 | 3 | 3 | `headerHtml` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 119607 | 119614 | 119611 | 8 | 5 | `bodyHtml` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 119615 | 119634 | 119633 | 20 | 19 | `assetUpdatePreviewHighlight` | fn | — | refs:6 | Unassigned | `app/modules/app/unassigned.js` |
+| 119635 | 119640 | 119663 | 6 | 29 | `assetAddAdditionalColumnRow` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119641 | 119664 | 119643 | 24 | 3 | `options` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 119665 | 119678 | 119677 | 14 | 13 | `assetOnAdditionalColumnChange` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119679 | 119685 | 119684 | 7 | 6 | `assetUpdateAdditionalColsEmptyState` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 119686 | 119690 | 119689 | 5 | 4 | `assetCloseCoordModal` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 119691 | 119745 | 119744 | 55 | 54 | `assetConfirmColumns` | fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119746 | 119804 | 119803 | 59 | 58 | `assetFinalizeUpload` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119805 | 119831 | 119830 | 27 | 26 | `assetShowBoundsWarning` | fn | — | refs:3 | Unassigned | `app/modules/app/unassigned.js` |
+| 119832 | 119837 | 119836 | 6 | 5 | `assetCloseBoundsModal` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 119838 | 119843 | 119848 | 6 | 11 | `assetProceedWithValid` | async fn | — | refs:1 | Unassigned | `app/modules/app/unassigned.js` |
+| 119844 | 119849 | 119844 | 6 | 1 | `validLocations` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 119850 | 119898 | 119893 | 49 | 44 | `assetSaveNewAsset` | async fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
+| 119899 | 119899 | 120038 | 1 | 140 | `assetRunAnalysis` | async fn | — | refs:17 | Analysis | `app/modules/analysis/analysis.js` |
+| 119900 | 119949 | 119900 | 50 | 1 | `activeAssets` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
+| 119950 | 120046 | 119950 | 97 | 1 | `totalLocations` | const arrow | — | refs:0 | Unassigned | `app/modules/app/unassigned.js (new)` |
