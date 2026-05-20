@@ -853,6 +853,22 @@ risk register.
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
 - **Round X extracted (Session U autonomous, off-limits):**
+  `reports/report-ba-run` (prompt 42c1(b) Part 1 — 252-line verbatim
+  block (pre-extract L61480-L61731 / current file post-shift): 6 fns
+  `runBeforeAfterAnalysis`, `filterCrashesByPeriod`, `normalCDF`,
+  `displayBAResults`, `displayBAKPIComparison`, `displayBAStatisticalResults`.
+  All 6 dual-mirrored `window`/`CL.reports`. Reads shared inline globals via
+  classic-script global lexical env (NOT mirrored): `baState`, `COL`,
+  `calcEPDO`, `computeStatsFromMapPoints`, `showLoading`, `hideLoading`,
+  `checkBAMonitoringOnDataLoad`. Part 1's `displayBAResults` calls 4 Part 2
+  fns (`createBACharts`, `displayBADetailedTable`, `displayBAFindings`,
+  `displayBAConclusions`) which stay INLINE — resolved via global lexical env.
+  HTML onclick at L10598 (`runBeforeAfterAnalysis`) resolves via window
+  mirror. EARLY cluster right after `modules/reports/reports-memo.js`.
+  **Part 2 (charts/findings/conclusions, L61732 onward, ~274 LOC)
+  deferred — would push combined file to 526 LOC (over 500 ceiling); prompt
+  explicitly authorizes a split at `createBACharts` boundary.**
+- **Round X extracted (Session U autonomous, off-limits):**
   `reports/reports-memo` (prompt 42d(b) — 290-line verbatim block
   L60397-L60686 in pre-extract file: leading doc comment + 6 fns
   `buildMemoHeader`, `buildMemoStatsTable`, `buildMemoFindings`,
