@@ -447,5 +447,47 @@ function showHotspotInfoBanner() {
   window._renderHotspotsTableFromMatview = _renderHotspotsTableFromMatview; CL.hotspots._renderHotspotsTableFromMatview = _renderHotspotsTableFromMatview; CL.hotspots.tab._renderHotspotsTableFromMatview = _renderHotspotsTableFromMatview;
   window.autoSelectTopHotspot = autoSelectTopHotspot; CL.hotspots.autoSelectTopHotspot = autoSelectTopHotspot; CL.hotspots.tab.autoSelectTopHotspot = autoSelectTopHotspot;
   window.showHotspotInfoBanner = showHotspotInfoBanner; CL.hotspots.showHotspotInfoBanner = showHotspotInfoBanner; CL.hotspots.tab.showHotspotInfoBanner = showHotspotInfoBanner;
+
+  // Audit 2026-05-20 fix — re-rank Hot Spots when the road-type radio changes.
+  // tab-dispatcher only auto-runs analyzeHotspots() while crashState.hotspots
+  // is empty, so once the table was built a road-type change never re-ranked
+  // it. Clearing crashState.hotspots lets the county-tier crashDataLoaded →
+  // refreshActiveTabAfterDataLoad → showTab('hotspots') path rebuild with the
+  // new road-type's data; aggregate tiers don't reload R2, so re-run
+  // analyzeHotspots() directly (it reads the road-type-aware mv_hotspots).
+  function bindHotspotsRoadTypeChange() {
+    var radios = document.querySelectorAll('input[name="roadTypeFilter"]');
+    if (!radios.length) return;
+    radios.forEach(function (radio) {
+      if (radio._hsRoadTypeBound) return;
+      radio._hsRoadTypeBound = true;
+      radio.addEventListener('change', function () {
+        try {
+          if (typeof crashState !== 'undefined' && crashState
+              && Array.isArray(crashState.hotspots)) {
+            crashState.hotspots.length = 0;
+          }
+          var tier = (typeof jurisdictionContext !== 'undefined'
+            && jurisdictionContext.viewTier) || 'county';
+          var aggregate = ['federal', 'state', 'region', 'mpo', 'planning_district']
+            .indexOf(tier) !== -1;
+          var panel = document.getElementById('tab-hotspots');
+          var onHotspots = !!(panel && panel.classList.contains('active'));
+          if (onHotspots && aggregate && typeof analyzeHotspots === 'function') {
+            setTimeout(analyzeHotspots, 250);
+          }
+        } catch (e) {
+          console.warn('[Hotspots] road-type re-rank failed:', e && e.message);
+        }
+      });
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindHotspotsRoadTypeChange);
+  } else {
+    bindHotspotsRoadTypeChange();
+  }
+  window.bindHotspotsRoadTypeChange = CL.hotspots.bindHotspotsRoadTypeChange = bindHotspotsRoadTypeChange; CL.hotspots.tab.bindHotspotsRoadTypeChange = bindHotspotsRoadTypeChange;
+
   CL._registerModule('hotspots/hotspots-tab-core');
 })();

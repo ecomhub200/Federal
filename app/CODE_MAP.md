@@ -1369,6 +1369,7 @@ Before any code edit:
 | autoSelectTopHotspot | modules/hotspots/hotspots-tab-core.js | window+CL | hotspots |
 | autoSelectTopIntersection | modules/intersection/intersection-tab-table.js | window+CL | intersection |
 | autoSetWarrantDateByStudy | inline @ L92803 | inline | warrants |
+| bindHotspotsRoadTypeChange | modules/hotspots/hotspots-tab-core.js | window+CL | hotspots |
 | btsFetchLayerData | inline @ L115591 | inline | shared |
 | btsGetJurisdictionBounds | inline @ L115719 | inline | shared |
 | buildAIContext | modules/reports/reports-standard-core.js | window+CL | reports |
@@ -3746,7 +3747,7 @@ Before any code edit:
 | modules/grants/grants-rank-score.js | 836 | grants | (0 — internal) | grants |
 | modules/grants/grants-ui.js | 2268 | grants | runFullAnalysis, scrollToGrantSearch, scrollToWritingAssistant, populateGrantProgramDropdown, buildGrantWritingContext … (36 fns) | grants |
 | modules/grants/ranking.js | 148 | grants | (0 — internal) | grants |
-| modules/hotspots/hotspots-tab-core.js | 452 | hotspots | analyzeHotspots, _loadHotspotsFromMatview, _hotspots_fetchMatview, _renderHotspotsTableFromMatview, autoSelectTopHotspot … (6 fns) | hotspots |
+| modules/hotspots/hotspots-tab-core.js | 493 | hotspots | analyzeHotspots, _loadHotspotsFromMatview, _hotspots_fetchMatview, _renderHotspotsTableFromMatview, autoSelectTopHotspot, bindHotspotsRoadTypeChange … (7 fns) | hotspots |
 | modules/hotspots/hotspots-tab-modal.js | 342 | hotspots | showLocationModal, zoomToLocation, filterMapForLocation, exportHotspotsCSV, exportHotspotsPDF (5 fns) | hotspots |
 | modules/hotspots/hotspots-tab-render.js | 330 | hotspots | getFilteredHotspotAggregates, updateHotspotFilterSummary, renderHotspots, goToHotspotPage, askMUTCDForHotspot … (6 fns) | hotspots |
 | modules/intersection/intersection-tab-charts.js | 427 | intersection | initIntDetailCharts, initIntCombinedCharts, renderIntMonthlyHeatmap, initIntCompareCharts, exportIntDetailCSV … (7 fns) | intersection |
