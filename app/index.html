@@ -86066,10 +86066,26 @@ function analyzeRiskFactors() {
 
 // Build and display secondary tree analysis (shows both Facility and Crash Type)
 function buildSecondaryTreeAnalysis() {
+    // The #crashTreeSecondaryAnalysis panel ships a "Building secondary
+    // analysis..." spinner in its initial markup. This function is synchronous,
+    // so the spinner only persists if we bail early or a tree helper throws —
+    // guarantee the panel is rewritten on every exit path so it never sticks.
+    const _secondaryEl = document.getElementById('crashTreeSecondaryAnalysis');
+    const _setSecondaryMsg = (msg) => {
+        if (_secondaryEl) {
+            _secondaryEl.innerHTML =
+                '<div style="text-align:center;padding:.75rem;color:var(--gray);font-size:.8rem;">'
+                + msg + '</div>';
+        }
+    };
+  try {
     // Use date-filtered crashes (already filtered by severity and date)
     const filteredCrashes = getCrashTreeFilteredCrashes();
 
-    if (filteredCrashes.length === 0) return;
+    if (filteredCrashes.length === 0) {
+        _setSecondaryMsg('No crashes match the current filters.');
+        return;
+    }
 
     // Determine secondary tree type based on current primary type
     // Facility → show Crash Type, Crash Type → show Facility, Contributing Factors → show Crash Type
@@ -86094,7 +86110,10 @@ function buildSecondaryTreeAnalysis() {
         secondaryTree = buildContributingFactorsTree(filteredCrashes, dateOnlyFiltered);
     }
 
-    if (!secondaryTree) return;
+    if (!secondaryTree) {
+        _setSecondaryMsg('Secondary analysis unavailable for this selection.');
+        return;
+    }
 
     // Find dominant path in secondary tree
     const secondaryPath = ['root'];
@@ -86177,6 +86196,11 @@ function buildSecondaryTreeAnalysis() {
     }
 
     console.log('[CrashTree] Both analyses complete - Facility:', crashTreeState.focusFacility, ', Crash Type:', crashTreeState.focusCrashType);
+  } catch (e) {
+    console.warn('[CrashTree] Secondary analysis failed:', e && e.message);
+    _setSecondaryMsg('Secondary analysis unavailable: '
+        + (e && e.message ? e.message : 'unexpected error'));
+  }
 }
 
 // Export tree as image
