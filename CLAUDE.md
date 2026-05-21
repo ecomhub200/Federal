@@ -625,6 +625,52 @@ See `memory/AGENTS.md` for the complete schema, article templates, hook internal
 
 ---
 
+## Code Map (REQUIRED — read first on every session)
+
+**The map at `app/CODE_MAP.md` is your primary navigation aid.** It indexes every tab, top-level function, extracted module, and shared global with exact line numbers and module paths. Without it you'll waste context searching the 134K-line `app/index.html`.
+
+### Mandatory policies for every CC session
+
+**Policy 1 — Read the map first.**
+Before any `grep`/`Read`/`Edit` on `app/index.html` or a module file, read `app/CODE_MAP.md` and identify the affected sections. Then read ONLY those specific sections (the module file, OR a narrow line range in `app/index.html`). Do NOT scan the whole `app/index.html` looking for code — the map tells you where to look.
+
+**Policy 2 — Extract-on-touch.**
+When you modify code in `app/index.html`:
+- If you're editing an existing function in-place (small change): leave it inline, update the map's location row if line numbers shifted.
+- If the function you're touching is >100 LOC AND has a tight cohesive cluster of neighbors AND extracting it cleanly is feasible in the same diff: **extract it to a module in the same commit.** This avoids a separate "refactor pass" later.
+- If extraction would balloon the diff or risk other code: defer extraction. In the map, tag the function with `extract-candidate: true` so a future session knows to revisit.
+
+The goal: the inline `app/index.html` shrinks naturally as features are touched. No separate modular refactor effort needed.
+
+**Policy 3 — Update the map after EVERY code change.**
+Your PR diff MUST include `app/CODE_MAP.md` changes if you:
+- Added a new function
+- Moved a function (inline → module, or module → module)
+- Renamed a function
+- Deleted a function
+- Changed the tab a function serves
+- Changed line numbers (any non-trivial edit shifts numbers — re-grep affected entries)
+
+A PR that touches code without updating the map will be rejected at review.
+
+**Policy 4 — Map drift is a bug.**
+If you find the map says a function is at L###, but it's actually at L###+50, fix the map in the same PR. Don't leave drift. The map is the source of truth for navigation; if it lies, future CC sessions waste context.
+
+**Policy 5 — Living document.**
+The map is rewritten constantly. Never treat its line numbers as eternal — always re-grep to verify before editing. But always trust its STRUCTURE (which tab, which module, what cluster). Structure changes slowly; line numbers change every PR.
+
+### See also
+- `docs/CODE_MAP_DESIGN.md` — full rationale, format spec, maintenance strategy
+- `app/CODE_MAP.md` — the map itself
+
+### What if the map seems wrong?
+- Re-grep to confirm. If grep matches the map: edit normally.
+- If grep contradicts the map: edit the code AND fix the map in the same PR.
+- If the function the map references doesn't exist anymore: someone deleted it without updating the map. Find the actual location (or confirm it's gone), fix the map.
+- If a whole tab seems to be missing from the map: this is a regression — the map was incompletely regenerated. Run the auto-regen script (or queue a `regenerate-code-map.md` prompt) to fix.
+
+---
+
 ## Modular Extraction Refactor (Round X+)
 
 ### Current refactor task
