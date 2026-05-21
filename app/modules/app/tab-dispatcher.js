@@ -271,6 +271,14 @@ function showTab(tabId) {
             populateCMFLocations();
         }
     }
+    if (tabId === 'reports' && typeof initReportLocationDropdown === 'function') {
+        // Audit 2026-05-20 fix — rebuild the Reports Location dropdown each
+        // time the tab is opened. initReportLocationDropdown() otherwise only
+        // runs from initDropdowns() at data-load time, so opening Reports
+        // before that — or after a tier change — left the dropdown showing
+        // just "-- Select Location --". Same pattern as the CMF Bug 7 fix.
+        initReportLocationDropdown();
+    }
     if (tabId === 'grants' && !grantState.loaded) initGrantModule();
     if (tabId === 'grants') initDistrictStatisticsOnGrantsTab();  // Initialize district stats section
     if (tabId === 'warrants') {
