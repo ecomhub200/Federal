@@ -39987,6 +39987,29 @@ function updateDataFreshnessIndicators() {
     });
 }
 
+// Audit 2026-05-20 fix — the "📊 Data Range" banner ships a static
+// "Loading..." placeholder. updateDataFreshnessIndicators() (its only updater)
+// runs solely from showUploadSummary() and bails early when no date metadata
+// is available (e.g. matview-only aggregate tiers), which can leave the
+// placeholder showing indefinitely. Re-run the updater on crashDataLoaded,
+// and after a 10s watchdog resolve any lingering "Loading..." to a graceful
+// fallback so the banner can never stay stuck.
+document.addEventListener('crashDataLoaded', function () {
+    try { updateDataFreshnessIndicators(); } catch (e) { /* non-fatal */ }
+});
+setTimeout(function () {
+    const _banner = document.getElementById('dataFreshnessBanner');
+    if (!_banner) return;
+    let _datesEl = _banner.querySelector('.freshness-dates');
+    if (!_datesEl || !/loading/i.test(_datesEl.textContent || '')) return;
+    try { updateDataFreshnessIndicators(); } catch (e) { /* non-fatal */ }
+    _datesEl = _banner.querySelector('.freshness-dates');
+    if (_datesEl && /loading/i.test(_datesEl.textContent || '')) {
+        _datesEl.textContent = 'not available';
+        console.warn('[Dashboard] Data range metadata unavailable — banner placeholder resolved to fallback.');
+    }
+}, 10000);
+
 // Apply date preset to a pair of date inputs
 // years: 1, 3, or 5
 // startInputId: ID of start date input
