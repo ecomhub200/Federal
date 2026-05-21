@@ -16,7 +16,15 @@ async function initGrantModule() {
     await mergeGrantProgramsFromSupabase();
 
     loadCrashCosts();
-    loadApplications();
+    // loadApplications lives in the separately-loaded grants-ui.js module and
+    // is reachable here only via window. Guard the cross-module call so a
+    // script-order regression can't throw a ReferenceError that aborts the
+    // rest of grant init (audit 2026-05-20, P0).
+    if (typeof loadApplications === 'function') {
+        loadApplications();
+    } else {
+        console.warn('[Grants] loadApplications unavailable — grants-ui.js not loaded yet');
+    }
     loadGrantAISettings();
     grantState._lastStateFips = jurisdictionContext.stateFips || '08';
     displayStateGrants();
