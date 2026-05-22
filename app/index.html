@@ -40114,9 +40114,13 @@ async function updateDashboardFromMatview(spec) {
     };
     const tierCol = tierColMap[t.tier];
     const params = new URLSearchParams({
-        state: 'eq.' + String(dc.state || '').toLowerCase(),
         select: 'crash_count,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,night_crashes,alcohol_crashes,animal_crashes,crash_severity'
     });
+    // Federal tier aggregates across all states — omit the state filter so the
+    // KPI re-paint matches the bridge path (_tierFilter() does the same).
+    if (t.tier !== 'federal') {
+        params.set('state', 'eq.' + String(dc.state || '').toLowerCase());
+    }
     if (tierCol && t.value) params.set(tierCol, 'eq.' + t.value);
     if (spec && spec.yearStart != null) params.append('crash_year', 'gte.' + spec.yearStart);
     if (spec && spec.yearEnd != null)   params.append('crash_year', 'lte.' + spec.yearEnd);
@@ -42323,6 +42327,23 @@ document.addEventListener('tierChanged', () => {
     if (typeof _hydrateMapPointsFromMatview === 'function') {
         _hydrateMapPointsFromMatview('tierChanged');
     }
+});
+// Dashboard tier KPI cascade — handleTierChange() only re-fetches the
+// dashboard for the federal/state tiers; region/mpo/planning_district/
+// county/city rely on this listener so the KPI tiles update on every tier
+// change instead of staying stuck at the previous tier's value.
+document.addEventListener('tierChanged', function (e) {
+    const tier = e && e.detail && e.detail.tier;
+    // federal/state are already re-fetched synchronously inside
+    // handleTierChange before tierChanged is dispatched — skip to avoid a
+    // redundant fetch.
+    if (tier === 'federal' || tier === 'state') return;
+    try {
+        if (window.CL && CL.data && CL.data.supabaseBridge
+            && typeof CL.data.supabaseBridge.injectFastDashboard === 'function') {
+            CL.data.supabaseBridge.injectFastDashboard({ force: true });
+        }
+    } catch (err) { /* non-fatal */ }
 });
 document.addEventListener('jurisdictionChanged', () => {
     // Round 26 v3.1 — flag-match cache + matchSets are keyed by jurisdiction;
