@@ -4888,7 +4888,7 @@ textarea:focus-visible {
 <label for="stateSelect" style="font-weight:600;color:#0369a1;display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem">
 <span aria-hidden="true">🏛️</span> Select State
 </label>
-<select id="stateSelect" onchange="handleStateSelection()" style="width:100%;padding:.6rem .75rem;border-radius:var(--radius);border:2px solid #0ea5e9;background:white;font-size:.9rem;cursor:pointer">
+<select id="stateSelect" onchange="if(window.CL&&CL.upload&&CL.upload.handleUploadStateChange)CL.upload.handleUploadStateChange();handleStateSelection()" style="width:100%;padding:.6rem .75rem;border-radius:var(--radius);border:2px solid #0ea5e9;background:white;font-size:.9rem;cursor:pointer">
 <option value="">Loading states...</option>
 </select>
 <p id="stateStatusText" style="font-size:.7rem;color:#64748b;margin-top:.35rem">State auto-detected from data</p>

@@ -17,6 +17,11 @@ CL.upload = CL.upload || {};
 (function() {
     'use strict';
 
+    // F2/F3 — localStorage key for the user's last-selected state (FIPS).
+    // This key is intentionally state-independent: it is NOT purged on a
+    // state switch so the app reopens on the state the user last used.
+    var SAVED_STATE_KEY = 'crashlens.lastSelectedState';
+
     // ============================================================
     // R2 DATA PATH UTILITIES
     // ============================================================
@@ -473,8 +478,14 @@ CL.upload = CL.upload || {};
 
         var stateSelect = document.getElementById('stateSelect');
         if (stateSelect) {
-            var virginiaOpt = stateSelect.querySelector('option[value="51"]');
-            stateSelect.value = virginiaOpt ? '51' : (stateSelect.options[0] ? stateSelect.options[0].value : '');
+            // F2 — default to the user's last-saved state (or the first
+            // available option), never a hardcoded FIPS literal.
+            var savedState = null;
+            try { savedState = localStorage.getItem(SAVED_STATE_KEY); } catch (e) {}
+            var savedOpt = savedState ? stateSelect.querySelector('option[value="' + savedState + '"]') : null;
+            stateSelect.value = savedOpt
+                ? savedState
+                : (stateSelect.options[0] ? stateSelect.options[0].value : '');
         }
 
         var jurisdictionSelect = document.getElementById('jurisdictionSelect');
@@ -759,6 +770,34 @@ CL.upload = CL.upload || {};
         return 'Data available for ' + stateList.length + ' state(s): ' + stateList.join(', ');
     }
 
+    /**
+     * F3 — purge state-scoped localStorage when the user switches states, so a
+     * jurisdiction from a previous state (e.g. a Colorado county) cannot leak
+     * into a new state's session. Also performs the F2 save of the newly
+     * selected state. Wired into #stateSelect's onchange ahead of the
+     * downstream handleStateSelection() fetch.
+     */
+    function handleUploadStateChange() {
+        var stateSelect = document.getElementById('stateSelect');
+        var newState = stateSelect ? stateSelect.value : '';
+        var prevState = null;
+        try { prevState = localStorage.getItem(SAVED_STATE_KEY); } catch (e) {}
+
+        if (prevState && newState && prevState !== newState) {
+            // State-scoped keys — purged on every state switch. Deliberately
+            // excludes SAVED_STATE_KEY, selectedStateFips, auth tokens, and
+            // appearance/theme keys.
+            ['selectedJurisdiction', 'jurisdictionContext'].forEach(function(k) {
+                try { localStorage.removeItem(k); } catch (e) {}
+            });
+        }
+
+        // F2 — remember the new selection so the app reopens on this state.
+        try {
+            if (newState) localStorage.setItem(SAVED_STATE_KEY, newState);
+        } catch (e) {}
+    }
+
     // ============================================================
     // PUBLIC API
     // ============================================================
@@ -780,6 +819,7 @@ CL.upload = CL.upload || {};
         saveFilterProfile: saveFilterProfile,
         saveUserPreferences: saveUserPreferences,
         clearUserPreferences: clearUserPreferences,
+        handleUploadStateChange: handleUploadStateChange,
         forceRefreshAllData: forceRefreshAllData,
 
         // UI Helpers
