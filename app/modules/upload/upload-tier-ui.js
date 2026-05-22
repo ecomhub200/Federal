@@ -595,26 +595,47 @@
         planning_district: 'tierPlanningDistrictSelect'
     };
 
-    function autoSelectFirstSubJurisdiction(tier) {
+    // The dropdown is not always populated on the synchronous frame the
+    // `tierChanged` event fires — handleTierChange may still be mid-render,
+    // and the selection handler's own follow-up `tierChanged` lands while a
+    // re-render is in flight. A single synchronous attempt therefore loses
+    // the race (the picker stays on its placeholder). So this retries on
+    // successive animation frames: each attempt re-checks, the `if (dd.value)`
+    // guard makes it idempotent, and the attempt cap stops it from looping
+    // forever if the dropdown genuinely never populates.
+    function autoSelectFirstSubJurisdiction(tier, _attempt) {
         var dropdownId = TIER_SUBJURISDICTION_DROPDOWN[tier];
         if (!dropdownId) return;
         var dd = $(dropdownId);
-        if (!dd || !dd.options || dd.options.length === 0) return;
+        if (!dd) return;
+        _attempt = _attempt || 0;
         // Already has a scope picked (user re-clicked the tier, or the
         // selection handler re-fired tierChanged) — leave it alone.
         if (dd.value) return;
         var firstRealIdx = -1;
-        for (var i = 0; i < dd.options.length; i++) {
+        for (var i = 0; i < (dd.options ? dd.options.length : 0); i++) {
             if (dd.options[i].value) { firstRealIdx = i; break; }
         }
-        if (firstRealIdx < 0) return;
+        if (firstRealIdx < 0) {
+            // Dropdown not populated yet (or only the placeholder) — wait a
+            // frame for handleTierChange to finish populating it, then retry.
+            if (_attempt < 8) {
+                requestAnimationFrame(function () {
+                    autoSelectFirstSubJurisdiction(tier, _attempt + 1);
+                });
+            }
+            return;
+        }
         dd.selectedIndex = firstRealIdx;
         dd.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     document.addEventListener('tierChanged', function (evt) {
         var tier = evt && evt.detail && evt.detail.tier;
-        if (tier) autoSelectFirstSubJurisdiction(tier);
+        if (!tier || !TIER_SUBJURISDICTION_DROPDOWN[tier]) return;
+        // Defer off the synchronous dispatch so core/tier.js finishes any
+        // synchronous dropdown population / re-render before we auto-select.
+        Promise.resolve().then(function () { autoSelectFirstSubJurisdiction(tier); });
     });
 
     CL.upload.tierUI = {
