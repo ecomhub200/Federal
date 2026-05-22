@@ -76,7 +76,7 @@ Before any code edit:
   - `app/modules/dashboard/dashboard-tab-matview.js` — CL dashboard.tab (matview) — extracted (name-anchored) 2026-05-17. see modular-prompts/15-v2-dashboard-tab.md + MODULAR_PLAN_PROMPT_15-v2_VERIFY.md. Verbatim ex
 - **Inline functions remaining (13):**
   - `openEmailNotificationModal()` @ L31395 — Open Email Notification Modal - Redesigned with Brevo + Coolify + Report Integration
-  - `updateDashboardFromMatview()` @ L40081 [window] — writes. State-agnostic — keys on resolveTier() + crashLensClient.state.
+  - `updateDashboardFromMatview()` @ L40104 [window] — writes. State-agnostic — keys on resolveTier() + crashLensClient.state. Federal tier omits the state filter.
   - `setDashboardLoadingState()` @ L40395 — ============================================================
   - `initDashboardSearch()` @ L40456 — 
   - `_renderIntersectionKpisFromMatview()` @ L53034 — if (!Array.isArray(rows) || rows.length === 0) return false;
@@ -384,7 +384,7 @@ Before any code edit:
   - `openEmailNotificationModal()` @ L31395 — Open Email Notification Modal - Redesigned with Brevo + Coolify + Report Integration
   - `updateEmailLocationVisibility()` @ L32142 — Show/hide location selector based on report type
   - `exportAppWord()` @ L35681 — alert('Word export requires additional library. PDF export is recommended.');
-  - `_refetchFSMatviewsWithDate()` @ L40177 [window] — State-agnostic — keys on resolveTier() + crashLensClient.state.
+  - `_refetchFSMatviewsWithDate()` @ L40204 [window] — State-agnostic — keys on resolveTier() + crashLensClient.state.
   - `resetFilterUI()` @ L40356 — Reset filter UI elements without triggering dashboard update (used after data load)
   - `_hideDistrictWidgetIfUnsupported()` @ L41748 [window] — State-agnostic — keys on the capability flag, not on any state literal.
   - `updateMultiLocationSelection()` @ L42488 — Update UI and map for multi-location selection
@@ -1110,7 +1110,7 @@ Before any code edit:
 | _rankColor | modules/scorecard/scorecard.js | window+CL | scorecard |
 | _readClient | modules/data/prewarm.js | module-private | shared |
 | _readMapPointsCache | modules/map/map-points-hydrate.js | module-private | map |
-| _refetchFSMatviewsWithDate | inline @ L40177 | window+inline | intersection |
+| _refetchFSMatviewsWithDate | inline @ L40204 | window+inline | intersection |
 | _refreshActiveScopeCard | modules/data/dashboard-filter-bindings.js | module-private | shared |
 | _removeTabLoadingOverlay | modules/data/lazy-loader.js | module-private | shared |
 | _renderChoropleth | modules/scorecard/scorecard.js | window+CL | scorecard |
@@ -1233,7 +1233,7 @@ Before any code edit:
 | applyDKDateFilterInternal | modules/ai/ai-domain-knowledge-location.js | window+CL | ai, domain-knowledge |
 | applyDKDatePreset | modules/ai/ai-domain-knowledge-location.js | window+CL | ai, domain-knowledge |
 | applyDynamicStateConfig | inline @ L20796 | inline | shared |
-| applyFilters | inline @ L40301 | inline | shared |
+| applyFilters | inline @ L40328 | inline | shared |
 | applyFSFilters | inline @ L88319 | inline | shared |
 | applyGrantDateFilter | modules/grants/grants-rank-init.js | module-private | grants |
 | applyGrantFilters | inline @ L29971 | inline | grants |
@@ -3505,7 +3505,7 @@ Before any code edit:
 | updateCurrentSelectionDisplay | modules/upload/upload-tab.js | module-private | upload |
 | updateCustomMatrixPreview | inline @ L91863 | inline | shared |
 | updateDashboard | modules/dashboard/dashboard-tab-kpi.js | window+CL | dashboard |
-| updateDashboardFromMatview | inline @ L40081 | window+inline | dashboard |
+| updateDashboardFromMatview | inline @ L40104 | window+inline | dashboard |
 | updateDashboardTierSections | modules/dashboard/dashboard-tab-matview.js | window+CL | dashboard |
 | updateDataConnectionStatus | inline @ L22303 | inline | shared |
 | updateDataFreshnessIndicators | inline @ L39956 | inline | shared |
