@@ -583,6 +583,40 @@
         });
     });
 
+    // ── F1: auto-select first sub-jurisdiction on Region / PD / MPO tier ──
+    // handleTierChange (core/tier.js, read-only) populates the per-tier
+    // dropdowns and then dispatches `tierChanged` at the very end. By that
+    // point the options exist, so this is the safe moment to default the
+    // picker to its first real entry and fire its change handler — giving
+    // Region/PD/MPO the same auto-load behavior County already has.
+    var TIER_SUBJURISDICTION_DROPDOWN = {
+        region: 'tierRegionSelect',
+        mpo: 'tierMPOSelect',
+        planning_district: 'tierPlanningDistrictSelect'
+    };
+
+    function autoSelectFirstSubJurisdiction(tier) {
+        var dropdownId = TIER_SUBJURISDICTION_DROPDOWN[tier];
+        if (!dropdownId) return;
+        var dd = $(dropdownId);
+        if (!dd || !dd.options || dd.options.length === 0) return;
+        // Already has a scope picked (user re-clicked the tier, or the
+        // selection handler re-fired tierChanged) — leave it alone.
+        if (dd.value) return;
+        var firstRealIdx = -1;
+        for (var i = 0; i < dd.options.length; i++) {
+            if (dd.options[i].value) { firstRealIdx = i; break; }
+        }
+        if (firstRealIdx < 0) return;
+        dd.selectedIndex = firstRealIdx;
+        dd.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    document.addEventListener('tierChanged', function (evt) {
+        var tier = evt && evt.detail && evt.detail.tier;
+        if (tier) autoSelectFirstSubJurisdiction(tier);
+    });
+
     CL.upload.tierUI = {
         applyUploadTierUI: applyUploadTierUI,
         paintUploadCard: paintUploadCard,
