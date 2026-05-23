@@ -388,10 +388,40 @@ async function loadScorecardData() {
       return;
     }
 
+    // SC3: build 5-yr sparkline from per-year matview rows. The
+    // scorecard_rankings matview is partitioned by (jurisdiction × crash_year);
+    // a parallel fetch of year-4 → year gives us the trend without a matview
+    // migration. Graceful: on failure the L560 flat fallback still renders.
+    let sparkByJuris = {};
+    try {
+      const histOpts = Object.assign({}, opts, { yearEnd: year });
+      const history = await client.getScorecard(stateKey, year - 4, histOpts);
+      const grouped = {};
+      (history || []).forEach(h => {
+        const k = h.jurisdiction;
+        if (!grouped[k]) grouped[k] = [];
+        grouped[k].push(h);
+      });
+      Object.keys(grouped).forEach(k => {
+        const sorted = grouped[k].sort((a, b) => (Number(a.crash_year) || 0) - (Number(b.crash_year) || 0));
+        sparkByJuris[k] = sorted.slice(-5).map(r => Number(r.total_crashes) || 0);
+      });
+      _scorecardData.forEach(r => {
+        const arr = sparkByJuris[r.jurisdiction];
+        if (arr && arr.length >= 2) r.spark_5yr = arr;
+      });
+    } catch (histErr) {
+      console.warn('[Scorecard] 5-yr history fetch failed (sparkline will be flat):', histErr.message);
+    }
+
     if (mode === 'compare') {
       const compareYear = parseInt(document.getElementById('scorecard-compare-year').value, 10);
       const opts2 = Object.assign({}, opts);
       const compareData = await client.getScorecard(stateKey, compareYear, opts2);
+      (compareData || []).forEach(r => {
+        const arr = sparkByJuris[r.jurisdiction];
+        if (arr && arr.length >= 2) r.spark_5yr = arr;
+      });
       renderComparisonTable(_scorecardData, compareData || [], year, compareYear);
     } else {
       renderScorecardTable(_scorecardData);
