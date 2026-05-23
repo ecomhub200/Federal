@@ -16117,7 +16117,7 @@ Enter TMC data to calculate entry and circulating volumes for roundabout analysi
 <!-- Virginia MUTCD Panel -->
 <div class="signal-virginia-panel">
 <div class="signal-virginia-header">
-<input type="checkbox" id="signalVirginiaMode" checked onchange="signal_updateConfigFromUI();signal_toggleVirginiaInfo()">
+<input type="checkbox" id="signalVirginiaMode" onchange="signal_updateConfigFromUI();signal_toggleVirginiaInfo()">
 <label for="signalVirginiaMode" style="font-weight:600;cursor:pointer">Apply Virginia MUTCD 11.0 Requirements</label>
 <span class="signal-virginia-badge">VA-Specific</span>
 </div>
@@ -22952,8 +22952,8 @@ const warrantsState = {
             pagonesConfig: 'sharedLane'  // 'sharedLane', 'exclusiveRTLane', 'channelizedRT'
         },
 
-        // Virginia MUTCD mode - DEFAULT TRUE per user request
-        virginiaMode: true,
+        // Virginia MUTCD mode - default ON only when active state is Virginia
+        virginiaMode: (typeof _getActiveStateKey === 'function' && _getActiveStateKey() === 'virginia'),
 
         // Optional warrant inputs
         warrant4: {                 // Pedestrian Volume
@@ -96589,7 +96589,7 @@ function signal_initState() {
             fixedPercent: 30,
             pagonesConfig: 'sharedLane'
         },
-        virginiaMode: true,
+        virginiaMode: (typeof _getActiveStateKey === 'function' && _getActiveStateKey() === 'virginia'),
         warrant4: { enabled: false, analysisType: '4hour', pedCrossingSpeed: 'normal', hourlyPedCounts: [0,0,0,0], hourlyMajorVolumes: [0,0,0,0] },
         warrant5: { enabled: false, childrenCount: 0, crossingMinutes: 60, adequateGaps: 0, gapStudyDone: false },
         warrant7: { enabled: false, period: '1year', angleCrashesTotal: 0, angleCrashesInjury: 0, pedCrashesTotal: 0, pedCrashesInjury: 0, alternativesTried: false, autoPopulated: true, sourceData: null },
@@ -98936,7 +98936,8 @@ function signal_updateConfigFromUI() {
     warrantsState.signal.rtAdjustment.pagonesConfig = document.getElementById('signalPagonesConfig')?.value || 'sharedLane';
 
     // Virginia mode
-    warrantsState.signal.virginiaMode = document.getElementById('signalVirginiaMode')?.checked ?? true;
+    warrantsState.signal.virginiaMode = document.getElementById('signalVirginiaMode')?.checked
+        ?? (typeof _getActiveStateKey === 'function' && _getActiveStateKey() === 'virginia');
 
     // Averaging method
     warrantsState.signal.averagingMethod = document.getElementById('signalAveragingMethod')?.value || 'tue-wed-thu';
