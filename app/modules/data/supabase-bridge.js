@@ -518,6 +518,17 @@ CL.data.supabaseBridge = (function () {
         setText('kpiSpeed',     agg.safety.speed.toLocaleString());
         setText('kpiNighttime', agg.safety.night.toLocaleString());
 
+        // CC-207 D1 — Paint "Serious Injuries (A)" from matview's
+        // serious_injuries column. (The matview's total_injured column is
+        // misnamed upstream — it actually equals serious_injuries; until
+        // the pipeline is widened, this card reports A-severity only.)
+        var siCard = document.getElementById('kpiPersonsInjuredCard');
+        if (siCard) siCard.style.display = '';
+        var seriousInjured = agg.safety.seriousInjured || 0;
+        setText('kpiPersonsInjured', seriousInjured.toLocaleString());
+        setText('kpiPersonsInjuredSub',
+            'Avg per crash: ' + (total > 0 ? (seriousInjured / total).toFixed(2) : '0'));
+
         setText('kpiYearRange',      yearRange);
         setText('kpiFatalPct',       pct(sev.K, total) + '%');
         setText('kpiAPct',           pct(sev.A, total) + '%');
