@@ -29,6 +29,7 @@ CL.hotspots = CL.hotspots || {};
 CL.ui = CL.ui || {};
 CL.dashboard = CL.dashboard || {};
 CL.intersection = CL.intersection || {};
+CL.crashTree = CL.crashTree || {};
 CL.pedbike = CL.pedbike || {};
 CL.notifications = CL.notifications || {};
 

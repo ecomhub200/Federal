@@ -268,40 +268,20 @@ Before any code edit:
 ### Crash Tree
 - **Tab ID:** `crashtree`
 - **Content div:** `#tab-crashtree`
-- **Status:** ⬜ Inline only
+- **Status:** ✅ Fully modularized (CC 200 Pass B, 2026-05-23)
 - **HTML template:** inline L6381-L6796
-- **Modules (0):**
-  - none
-- **Inline functions remaining (27):**
-  - `openEmailNotificationModal()` @ L31395 — Open Email Notification Modal - Redesigned with Brevo + Coolify + Report Integration
-  - `generateCrashTreeSystemicReport()` @ L59586 — const stats = computeStats(crashes);
-  - `showCrashTreeFilterUnavailableToast()` @ L71219 — const now = Date.now();
-  - `initCrashTreeTab()` @ L83946 — Initialize Crash Tree tab
-  - `initCrashTreeFromMatview()` @ L83998 — Used when sampleRows is unavailable (state/region/MPO/planning_district).
-  - `setCrashTreeType()` @ L84178 — Set tree type (facility or crashType)
-  - `toggleCrashTreeSeverity()` @ L84241 — Toggle severity button in segmented control
-  - `updateCrashTreeSeverity()` @ L84252 — Update severity filter
-  - `applyCrashTreeDateFilter()` @ L84312 — Apply date filter and rebuild crash tree
-  - `setCrashTreeDatePreset()` @ L84342 — Set date preset (1, 3, or 5 years)
-  - `clearCrashTreeDateFilter()` @ L84379 — Clear date filter (show all data)
-  - `updateCrashTreeDateFilterStatus()` @ L84408 — Update date filter status display
-  - `getCrashTreeFilteredCrashes()` @ L84435 — Helper: Get crashes filtered by current severity AND date filters
-  - `getCrashTreeDateOnlyFilteredCrashes()` @ L84474 — Used for FHWA overrepresentation analysis which requires ALL crashes as baseline
-  - `refreshCrashTreeAnalysis()` @ L84506 — Refresh crash tree analysis
-  - `buildCrashTreeData()` @ L84528 — Build tree data from crash records
-  - `renderCrashTree()` @ L85400 — Render crash tree visualization
-  - `navigateFromCrashTree()` @ L85444 — Navigate from Crash Tree branch to destination tab
-  - `renderTreeNode()` @ L85462 — Render a single tree node - MODERNIZED UI
-  - `toggleCrashTreeNode()` @ L85564 — Toggle tree node expand/collapse
-  - `expandAllTreeNodes()` @ L85575 — Expand all tree nodes
-  - `collapseAllTreeNodes()` @ L85588 — Collapse all tree nodes
-  - `updateCrashTreeSummary()` @ L85678 — Update summary panel
-  - `updateCrashTreeStats()` @ L85739 — Update statistics panel
-  - `updateCrashTreeDataTable()` @ L85811 — Update data table
-  - `exportCrashTreeImage()` @ L86183 — Export tree as image
-  - `generateCrashTreeReport()` @ L86210 — Generate crash tree report - Professional HSIP-ready PDF
-- **Shared globals:** `crashTreeState` (inline @ L22185)
-- **Dependencies:** core, data
+- **Modules (5):** (extracted from inline L83989-L87751, ~3,763 lines, 34 fns)
+  - `app/modules/crash-tree/crash-tree-loader.js` — init, severity/date filter wiring, filtered-rows helpers, refresh (13 fns)
+  - `app/modules/crash-tree/crash-tree-build.js` — buildCrashTreeData + 3 tree-shape builders (4 fns; size exception ~872 LOC)
+  - `app/modules/crash-tree/crash-tree-render.js` — tree visualization, nav-map, expand/collapse, summary/stats panels (11 fns)
+  - `app/modules/crash-tree/crash-tree-analysis.js` — data-table renderer, FHWA risk-factor analysis, secondary tree (3 fns)
+  - `app/modules/crash-tree/crash-tree-export.js` — PNG image export + HSIP-ready printable report (3 fns; size exception ~1,502 LOC for indivisible single-fn `generateCrashTreeReport`)
+- **Inline functions remaining (3):** (intentionally inline — outside contiguous block)
+  - `openEmailNotificationModal()` — cross-tab modal (dashboard/crashtree/safety/intersection/reports/grants)
+  - `generateCrashTreeSystemicReport()` — outlier @ pre-extraction L59630, not in contiguous block
+  - `showCrashTreeFilterUnavailableToast()` — outlier @ pre-extraction L71263, not in contiguous block
+- **Shared globals:** `crashTreeState` (inline @ L22185, classic-script global lexical env)
+- **Dependencies:** core, data (loads after `modules/data/dashboard-filter-bindings.js` in LATE cluster)
 
 ### Scorecard
 - **Tab ID:** `scorecard`
@@ -1207,7 +1187,7 @@ Before any code edit:
 | analyzeHotspots | modules/hotspots/hotspots-tab-core.js | window+CL | hotspots |
 | analyzeLocation | inline @ L33929 | inline | analysis |
 | analyzeOverRepSegments | inline @ L48703 | inline | analysis |
-| analyzeRiskFactors | inline @ L85852 | inline | analysis |
+| analyzeRiskFactors | modules/crash-tree/crash-tree-analysis.js | window+CL | analysis |
 | analyzeSelectedSegment | inline @ L49393 | inline | analysis |
 | analyzeSignalWarrant | inline @ L66124 | inline | warrants, analysis |
 | analyzeWarrantsFromMap | inline @ L93921 | inline | map, warrants, analysis |
@@ -1216,7 +1196,7 @@ Before any code edit:
 | applyBikeFilters | modules/pedbike/pedbike-tab-bike-core.js | window+CL | pedestrian |
 | applyCMFDateFilter | inline @ L70468 | inline | cmf |
 | applyCMFDatePreset | inline @ L70426 | inline | cmf |
-| applyCrashTreeDateFilter | inline @ L84312 | inline | crashtree |
+| applyCrashTreeDateFilter | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
 | applyDatePreset | inline @ L39995 | inline | shared |
 | applyDefaultRoadType | modules/upload/road-defaults.js | module-private | upload |
 | applyDKDateFilter | modules/ai/ai-domain-knowledge-location.js | window+CL | ai, domain-knowledge |
@@ -1351,7 +1331,7 @@ Before any code edit:
 | attemptDataReconnection | inline @ L22483 | inline | shared |
 | autoDetectJurisdictionFromCoordinates | inline @ L21532 | inline | shared |
 | autoDetectJurisdictionFromData | inline @ L21477 | inline | shared |
-| autoExpandDominantPath | inline @ L85594 | inline | shared |
+| autoExpandDominantPath | modules/crash-tree/crash-tree-render.js | window+CL | shared |
 | autoLoadCrashData | inline @ L28092 | inline | shared |
 | autoMapFields | modules/upload/api-connector.js | module-private | upload |
 | autoPopulateWarrantForm | inline @ L93660 | inline | warrants |
@@ -1372,12 +1352,12 @@ Before any code edit:
 | buildComparisonSparkline | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | buildComparisonTrend | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | buildConsensusResult | inline @ L69377 | inline | shared |
-| buildContributingFactorsTree | inline @ L84883 | inline | shared |
+| buildContributingFactorsTree | modules/crash-tree/crash-tree-build.js | window+CL | shared |
 | buildCountyFilterDropdown | modules/dashboard/dashboard-tab-matview.js | window+CL | dashboard |
 | buildCountyWideCrashProfile | inline @ L65944 | inline | shared |
 | buildCrashDataContext | inline @ L64422 | inline | shared |
-| buildCrashTreeData | inline @ L84528 | inline | crashtree |
-| buildCrashTypeTree | inline @ L84781 | inline | pedestrian |
+| buildCrashTreeData | modules/crash-tree/crash-tree-build.js | window+CL | crashtree |
+| buildCrashTypeTree | modules/crash-tree/crash-tree-build.js | window+CL | pedestrian |
 | buildCustomLegend | modules/dashboard/dashboard-tab-kpi.js | window+CL | dashboard |
 | buildDataSourceIndicators | inline @ L72358 | inline | shared |
 | buildDetailedLocationProfile | inline @ L44158 | inline | shared |
@@ -1389,7 +1369,7 @@ Before any code edit:
 | buildEnrichedGrantContext | inline @ L33741 | inline | grants |
 | buildExecutiveSummary | modules/reports/reports-standard-types.js | window+CL | reports |
 | buildExistingDedupKeys | inline @ L27767 | inline | shared |
-| buildFacilityTree | inline @ L84607 | inline | intersection |
+| buildFacilityTree | modules/crash-tree/crash-tree-build.js | window+CL | intersection |
 | buildGrantAgent1Input | modules/grants/grants-ui.js | window+CL | grants |
 | buildGrantProgramRequirements | modules/grants/grants-ui.js | window+CL | grants |
 | buildGrantWritingContext | modules/grants/grants-ui.js | window+CL | grants |
@@ -1416,7 +1396,7 @@ Before any code edit:
 | buildRAGQueries | inline @ L65506 | inline | shared |
 | buildRegionComparison | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | buildReverseLookup | modules/upload/road-defaults.js | module-private | upload |
-| buildSecondaryTreeAnalysis | inline @ L86068 | inline | analysis |
+| buildSecondaryTreeAnalysis | modules/crash-tree/crash-tree-analysis.js | window+CL | analysis |
 | buildSevereCrashPatterns | inline @ L61202 | inline | shared |
 | buildSystemPrompt | inline @ L66265 | inline | shared |
 | buildTIAssetPanelHTML | inline @ L118801 | inline | shared |
@@ -1520,7 +1500,7 @@ Before any code edit:
 | clearCMFDateFilter | inline @ L70452 | inline | cmf |
 | clearCMFPopoverApiKey | inline @ L72155 | inline | cmf |
 | clearCMFShortlist | inline @ L76856 | inline | cmf |
-| clearCrashTreeDateFilter | inline @ L84379 | inline | crashtree |
+| clearCrashTreeDateFilter | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
 | clearCustomMatrixSelections | inline @ L91948 | inline | shared |
 | clearDateFilter | inline @ L27014 | inline | shared |
 | clearDatePreset | inline @ L40041 | inline | shared |
@@ -1591,7 +1571,7 @@ Before any code edit:
 | closeSidebarSettings | inline @ L27343 | inline | shared |
 | cmfAIAsk | inline @ L37743 | inline | cmf |
 | collapseAllSections | inline @ L27370 | inline | shared |
-| collapseAllTreeNodes | inline @ L85588 | inline | crashtree |
+| collapseAllTreeNodes | modules/crash-tree/crash-tree-render.js | window+CL | crashtree |
 | computeCollisionBreakdown | inline @ L57157 | inline | shared |
 | computeContributingFactors | inline @ L56268 | inline | shared |
 | computeDayHourMatrix | inline @ L57311 | inline | shared |
@@ -1746,7 +1726,7 @@ Before any code edit:
 | executeCMFSearch | inline @ L35879 | inline | cmf |
 | executeSegmentOverpassQuery | inline @ L48281 | inline | shared |
 | expandAllSections | inline @ L27362 | inline | shared |
-| expandAllTreeNodes | inline @ L85575 | inline | crashtree |
+| expandAllTreeNodes | modules/crash-tree/crash-tree-render.js | window+CL | crashtree |
 | expandBundle | inline @ L76731 | inline | shared |
 | exportADCSV | inline @ L69916 | inline | analysis |
 | exportADJSON | inline @ L69889 | inline | shared |
@@ -1768,7 +1748,7 @@ Before any code edit:
 | exportCrashesToCSV | inline @ L81548 | inline | shared |
 | exportCrashesToCSV | inline @ L81627 | inline | shared |
 | exportCrashesToCSV | inline @ L91477 | inline | shared |
-| exportCrashTreeImage | inline @ L86183 | inline | crashtree |
+| exportCrashTreeImage | modules/crash-tree/crash-tree-export.js | window+CL | crashtree |
 | exportCrossAnalysis | inline @ L91764 | inline | analysis |
 | exportCrossToKML | inline @ L91775 | inline | shared |
 | exportCurrentDetail | inline @ L91387 | inline | shared |
@@ -1866,7 +1846,7 @@ Before any code edit:
 | findGrantById | inline @ L29880 | inline | grants |
 | findMatchingCrashTypes | inline @ L73257 | inline | pedestrian |
 | findMatchingRoute | inline @ L108809 | inline | shared |
-| findNodeById | inline @ L85636 | inline | shared |
+| findNodeById | modules/crash-tree/crash-tree-render.js | window+CL | shared |
 | finishCircleDrawing | inline @ L44569 | inline | shared |
 | finishDrawing | inline @ L44809 | inline | map |
 | finishMeasureDrawing | inline @ L44731 | inline | shared |
@@ -1897,7 +1877,7 @@ Before any code edit:
 | generateCountermeasureBundles | inline @ L76266 | inline | intersection, pedestrian |
 | generateCountermeasuresReport | inline @ L59159 | inline | reports |
 | generateCrashSelectionPDF | inline @ L46705 | inline | shared |
-| generateCrashTreeReport | inline @ L86210 | inline | crashtree, reports |
+| generateCrashTreeReport | modules/crash-tree/crash-tree-export.js | window+CL | crashtree, reports |
 | generateCrashTreeSystemicReport | inline @ L59586 | inline | crashtree, reports |
 | generateDashboardReport | inline @ L59426 | inline | dashboard, reports |
 | generateDataInsight | inline @ L57458 | inline | shared |
@@ -1928,7 +1908,7 @@ Before any code edit:
 | generatePedBikeReport | modules/reports/reports-standard-types.js | window+CL | reports |
 | generatePedBikeWordMemo | inline @ L60965 | inline | pedestrian |
 | generatePedBikeYearlySection | modules/reports/reports-standard-types2.js | window+CL | reports |
-| generateProfessionalTableRows | inline @ L87646 | inline | shared |
+| generateProfessionalTableRows | modules/crash-tree/crash-tree-export.js | window+CL | shared |
 | generateQdrantId | modules/ai/ai-domain-knowledge-rag.js | window+CL | ai, domain-knowledge |
 | generateRecommendations | modules/reports/reports-standard-types2.js | window+CL | reports |
 | generateRelevanceReasons | inline @ L73349 | inline | intersection, pedestrian |
@@ -1989,8 +1969,8 @@ Before any code edit:
 | getCountyMemberships | modules/spatial/hierarchy-registry.js | module-private | shared |
 | getCountyName | modules/spatial/hierarchy-registry.js | module-private | shared |
 | getCrashCacheKey | inline @ L23595 | inline | shared |
-| getCrashTreeDateOnlyFilteredCrashes | inline @ L84474 | inline | crashtree |
-| getCrashTreeFilteredCrashes | inline @ L84435 | inline | crashtree |
+| getCrashTreeDateOnlyFilteredCrashes | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
+| getCrashTreeFilteredCrashes | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
 | getCurrentDetailCMF | inline @ L91380 | inline | cmf |
 | getCurrentIntersectionName | inline @ L102332 | inline | intersection |
 | getCurrentStateFips | inline @ L19226 | inline | shared |
@@ -2097,7 +2077,7 @@ Before any code edit:
 | getTopLocation | modules/reports/reports-standard-core2.js | window+CL | reports |
 | getTPRs | modules/spatial/hierarchy-registry.js | module-private | shared |
 | getTPRTypeLabel | modules/spatial/hierarchy-registry.js | module-private | shared |
-| getTreeTypeLabel | inline @ L85649 | inline | shared |
+| getTreeTypeLabel | modules/crash-tree/crash-tree-render.js | window+CL | shared |
 | getViewportTotal | modules/data/supabase-map-bridge.js | module-private | shared |
 | globalQuickLocationFilter | inline @ L55731 | inline | intersection |
 | goToCountermeasuresGlobal | inline @ L55926 | inline | intersection, cmf |
@@ -2186,8 +2166,8 @@ Before any code edit:
 | initCMFLocationDropdown | modules/cmf/cmf-search.js | window+CL | cmf |
 | initCombinedCharts | inline @ L50608 | inline | shared |
 | initCompareCharts | inline @ L50791 | inline | shared |
-| initCrashTreeFromMatview | inline @ L83998 | inline | crashtree |
-| initCrashTreeTab | inline @ L83946 | inline | crashtree |
+| initCrashTreeFromMatview | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
+| initCrashTreeTab | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
 | initDashboardSearch | inline @ L40456 | inline | dashboard |
 | initDistrictStatisticsOnGrantsTab | inline @ L126417 | inline | grants |
 | initDomainKnowledge | modules/ai/ai-domain-knowledge-core.js | window+CL | ai, domain-knowledge |
@@ -2346,7 +2326,7 @@ Before any code edit:
 | migrateTILegacyKey | inline @ L118689 | inline | shared |
 | monitorCrashStateChanges | inline @ L22604 | inline | shared |
 | navigateBreadcrumbTier | modules/dashboard/dashboard-tab-drill.js | window+CL | dashboard |
-| navigateFromCrashTree | inline @ L85444 | inline | crashtree |
+| navigateFromCrashTree | modules/crash-tree/crash-tree-render.js | window+CL | crashtree |
 | navigateTo | modules/app/tab-dispatcher.js | window+CL | shared |
 | newPage | modules/batch-ba/batch-ba-export-pdf.js | module-private | analysis |
 | normalCDF | inline @ L62132 | inline | shared |
@@ -2496,7 +2476,7 @@ Before any code edit:
 | refreshActiveTabAfterDataLoad | inline @ L92356 | inline | dashboard |
 | refreshBAMonitorSubscriberChips | inline @ L64029 | inline | shared |
 | refreshCMFResults | inline @ L71984 | inline | cmf |
-| refreshCrashTreeAnalysis | inline @ L84506 | inline | crashtree, analysis |
+| refreshCrashTreeAnalysis | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree, analysis |
 | refreshDataConnection | inline @ L22452 | inline | shared |
 | refreshDistrictPopups | inline @ L123892 | inline | shared |
 | refreshDistrictStatisticsOnDataLoad | inline @ L123136 | inline | shared |
@@ -2552,7 +2532,7 @@ Before any code edit:
 | renderComprehensivePreview | inline @ L57607 | inline | shared |
 | renderComprehensiveTOC | inline @ L58142 | inline | shared |
 | renderCountyComparisonTable | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
-| renderCrashTree | inline @ L85400 | inline | crashtree |
+| renderCrashTree | modules/crash-tree/crash-tree-render.js | window+CL | crashtree |
 | renderCuratedCountermeasures | inline @ L78046 | inline | shared |
 | renderDataSourceIndicatorsHTML | inline @ L72411 | inline | shared |
 | renderDistrictMatrixCharts | inline @ L124799 | inline | shared |
@@ -2600,7 +2580,7 @@ Before any code edit:
 | renderSignFilterItems | inline @ L126980 | inline | shared |
 | renderTierLoadingCard | modules/upload/upload-tier-ui.js | module-private | upload |
 | renderTierScopeCard | modules/upload/upload-tier-ui.js | module-private | upload |
-| renderTreeNode | inline @ L85462 | inline | crashtree |
+| renderTreeNode | modules/crash-tree/crash-tree-render.js | window+CL | crashtree |
 | reset | modules/data/lazy-loader.js | module-private | shared |
 | resetBAStudy | inline @ L61977 | inline | shared |
 | resetBikeFilters | modules/pedbike/pedbike-tab-bike-detail-charts.js | window+CL | pedestrian |
@@ -2806,8 +2786,8 @@ Before any code edit:
 | setBikeViewMode | inline @ L53837 | inline | shared |
 | setCMFMode | inline @ L71872 | inline | cmf |
 | setColor | modules/batch-ba/batch-ba-export-pdf.js | module-private | analysis |
-| setCrashTreeDatePreset | inline @ L84342 | inline | crashtree |
-| setCrashTreeType | inline @ L84178 | inline | crashtree |
+| setCrashTreeDatePreset | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
+| setCrashTreeType | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
 | setDashboardLoadingState | inline @ L40395 | inline | dashboard |
 | setDefaultWarrant7Period | inline @ L92909 | inline | warrants |
 | setEmailPrimary | modules/notifications/email-chips.js | window+CL | shared |
@@ -2830,7 +2810,7 @@ Before any code edit:
 | setSelectionMode | inline @ L42215 | inline | shared |
 | setSfViewMode | inline @ L79724 | inline | shared |
 | setText | modules/data/supabase-bridge.js | module-private | shared |
-| setTreeSeverityPreset | inline @ L84277 | inline | shared |
+| setTreeSeverityPreset | modules/crash-tree/crash-tree-loader.js | window+CL | shared |
 | setUploadZoneCompact | modules/upload/upload-tier-ui.js | module-private | upload |
 | setViewTier | modules/core/tier.js | window+CL | shared |
 | setWidth | modules/data/supabase-bridge.js | module-private | shared |
@@ -3284,8 +3264,8 @@ Before any code edit:
 | toggleCollapsibleCard | inline @ L22419 | inline | shared |
 | toggleConceptCard | modules/grants/grants-ui.js | window+CL | grants |
 | toggleCountyHeatmap | modules/dashboard/dashboard-tab-matview.js | window+CL | dashboard |
-| toggleCrashTreeNode | inline @ L85564 | inline | crashtree |
-| toggleCrashTreeSeverity | inline @ L84241 | inline | crashtree |
+| toggleCrashTreeNode | modules/crash-tree/crash-tree-render.js | window+CL | crashtree |
+| toggleCrashTreeSeverity | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
 | toggleCrossingEvalSection | inline @ L66101 | inline | shared |
 | toggleDetailedCrashPanel | inline @ L71605 | inline | shared |
 | toggleDigestOptions | inline @ L32162 | inline | shared |
@@ -3485,11 +3465,11 @@ Before any code edit:
 | updateCombinedEffectCalculator | inline @ L76872 | inline | intersection |
 | updateConnectedCount | modules/upload/api-connector.js | module-private | upload |
 | updateCrashAIKeyHelper | inline @ L37484 | inline | shared |
-| updateCrashTreeDataTable | inline @ L85811 | inline | crashtree |
-| updateCrashTreeDateFilterStatus | inline @ L84408 | inline | crashtree |
-| updateCrashTreeSeverity | inline @ L84252 | inline | crashtree |
-| updateCrashTreeStats | inline @ L85739 | inline | crashtree |
-| updateCrashTreeSummary | inline @ L85678 | inline | crashtree |
+| updateCrashTreeDataTable | modules/crash-tree/crash-tree-analysis.js | window+CL | crashtree |
+| updateCrashTreeDateFilterStatus | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
+| updateCrashTreeSeverity | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
+| updateCrashTreeStats | modules/crash-tree/crash-tree-render.js | window+CL | crashtree |
+| updateCrashTreeSummary | modules/crash-tree/crash-tree-render.js | window+CL | crashtree |
 | updateCurrentGeocodeIndicator | inline @ L102457 | inline | map |
 | updateCurrentSelectionDisplay | inline @ L22108 | inline | shared |
 | updateCurrentSelectionDisplay | modules/upload/upload-tab.js | module-private | upload |
