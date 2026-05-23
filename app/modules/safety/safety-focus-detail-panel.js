@@ -179,6 +179,15 @@ async function aggregateSfDetailData() {
                     console.log('[SafetyDetail] matview fallback hydrated', rows.length,
                         'rows for', category, '→ total:', data.total,
                         'K:', data.severity.K, 'A:', data.severity.A, 'EPDO:', data.epdo);
+                    // CC 208 — flag matview-only aggregates so renderers can
+                    // surface gap state on sub-KPIs that the matview cannot
+                    // populate (factors.alcohol/speed/distracted/drowsy/drug/
+                    // hitrun, demographics.senior/young/unrestrained, byMonth,
+                    // byDOW, byHour, byCollision, byWeather, bySurface,
+                    // byTrafficControl). Nighttime + intersection breakdowns
+                    // are already populated via byLight['Dark'] and
+                    // byIntType['At Intersection'].
+                    data._matviewMode = true;
                     sfDetailState.aggregatedData = data;
                     return;   // skip the per-row loop below
                 }
