@@ -100,7 +100,12 @@ CL.upload = CL.upload || {};
         }
 
         // County tier (default)
-        var jurisdiction = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : 'douglas';
+        var jurisdiction = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : null;
+        if (!jurisdiction) {
+            var stateCfg = (appConfig && appConfig.states && stateKey) ? appConfig.states[stateKey] : null;
+            jurisdiction = (stateCfg && stateCfg.defaultJurisdiction) || 'unknown';
+            console.warn('[Upload] No active jurisdiction; falling back to', jurisdiction, 'for state', stateKey);
+        }
         var r2Jurisdiction = jurisdiction;
         var stateAbbr = appConfig && appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].abbreviation;
         if (stateAbbr) stateAbbr = stateAbbr.toLowerCase();
@@ -158,7 +163,12 @@ CL.upload = CL.upload || {};
         }
 
         // County tier (default)
-        var jurisdiction = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : 'douglas';
+        var jurisdiction = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : null;
+        if (!jurisdiction) {
+            var stateCfg = (appConfig && appConfig.states && stateKey) ? appConfig.states[stateKey] : null;
+            jurisdiction = (stateCfg && stateCfg.defaultJurisdiction) || 'unknown';
+            console.warn('[Upload] No active jurisdiction; falling back to', jurisdiction, 'for state', stateKey);
+        }
         var r2Jurisdiction = jurisdiction;
         var stateAbbr = appConfig && appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].abbreviation;
         if (stateAbbr) stateAbbr = stateAbbr.toLowerCase();
