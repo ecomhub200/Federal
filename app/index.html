@@ -5654,15 +5654,15 @@ Your data stays private. All processing happens in your browser.
 <div class="kpi-label">Nighttime</div>
 <div class="kpi-sub"><span id="kpiNighttimePct">0%</span> <span id="kpiNighttimeTrend" class="trend-indicator"></span></div>
 </div>
-<div class="kpi-card" id="kpiPersonsInjuredCard" style="display:none;background:linear-gradient(135deg,#7c3aed,#8b5cf6)" title="Total number of people injured across all crashes">
+<div class="kpi-card" id="kpiPersonsInjuredCard" style="display:none;background:linear-gradient(135deg,#7c3aed,#8b5cf6)" title="Persons with A-severity (serious) injuries. The matview's total_injured column tracks serious injuries only — B/C injury person counts are not aggregated at the dashboard-summary level.">
 <div class="kpi-value" id="kpiPersonsInjured">0</div>
-<div class="kpi-label">Persons Injured</div>
+<div class="kpi-label">Serious Injuries (A)</div>
 <div class="kpi-sub" id="kpiPersonsInjuredSub">Avg per crash: 0</div>
 </div>
-<div class="kpi-card" id="kpiVehicleCountCard" style="display:none;background:linear-gradient(135deg,#0369a1,#0ea5e9)" title="Average number of vehicles per crash">
-<div class="kpi-value" id="kpiAvgVehicles">0</div>
+<div class="kpi-card" id="kpiVehicleCountCard" style="background:linear-gradient(135deg,#0369a1,#0ea5e9)" title="Source-data gap: the Delaware crash pipeline does not populate vehicle_count. This KPI will activate once the pipeline ingests per-row vehicle counts.">
+<div class="kpi-value" id="kpiAvgVehicles">—</div>
 <div class="kpi-label">Avg Vehicles/Crash</div>
-<div class="kpi-sub" id="kpiVehicleCountSub">Total vehicles: 0</div>
+<div class="kpi-sub" id="kpiVehicleCountSub">Source-data gap</div>
 </div>
 </div>
 
@@ -41701,16 +41701,26 @@ async function applyInjuryBCCapabilityGate() {
     }
 }
 
-// Round 22 §3b — Vehicle count column not in dashboard_summary today.
-// Hide the tile until backend adds it. State-agnostic — keys on the
-// absence of the matview column, not on any state literal. When the
-// backend adds dashboard_summary.avg_vehicles_per_crash (or per-row
-// vehicle_count), this gate can flip to caps-driven (similar to
-// applyInjuryBCCapabilityGate).
+// CC-207 D2 — Vehicle count column not populated in current pipeline.
+// Surface as an explicit "Source-data gap" placeholder (em-dash + badge +
+// tooltip) instead of silently hiding the card, so users understand the
+// missing column rather than wondering why a KPI is absent. Mirrors the
+// applyInjuryBCCapabilityGate pattern. State-agnostic.
 function applyAvgVehiclesCapabilityGate() {
     const card = document.getElementById('kpiVehicleCountCard');
     if (!card) return;
-    card.style.display = 'none';
+    card.style.display = '';
+    const valEl = document.getElementById('kpiAvgVehicles');
+    if (valEl) valEl.textContent = '—';
+    const sub = document.getElementById('kpiVehicleCountSub');
+    if (sub && !sub.querySelector('.kpi-gap-badge')) {
+        sub.textContent = '';
+        const badge = document.createElement('span');
+        badge.className = 'kpi-gap-badge';
+        badge.textContent = 'Source-data gap';
+        badge.style.cssText = 'display:inline-block;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.18);font-size:0.7rem;font-weight:600;';
+        sub.appendChild(badge);
+    }
 }
 window.applyAvgVehiclesCapabilityGate = applyAvgVehiclesCapabilityGate;
 document.addEventListener('jurisdictionChanged', () => applyAvgVehiclesCapabilityGate());

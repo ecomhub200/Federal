@@ -125,18 +125,17 @@ function updateDashboard() {
     document.getElementById('kpiNighttime').textContent = nighttimeTotal.toLocaleString();
     document.getElementById('kpiNighttimePct').textContent = pct(nighttimeTotal, total) + '%';
 
-    // Persons Injured KPI (show only if data available)
-    if (agg.personsInjured > 0) {
-        const piCard = document.getElementById('kpiPersonsInjuredCard');
-        if (piCard) {
-            piCard.style.display = '';
-            document.getElementById('kpiPersonsInjured').textContent = agg.personsInjured.toLocaleString();
-            const avgPI = total > 0 ? (agg.personsInjured / total).toFixed(2) : '0';
-            document.getElementById('kpiPersonsInjuredSub').textContent = `Avg per crash: ${avgPI}`;
-        }
-    }
+    // CC-207 D1 — In CSV mode, agg.personsInjured counts all-severity injured
+    // persons (superset of A). The relabeled "Serious Injuries (A)" card is
+    // matview-only until the CSV worker exposes a serious-injured aggregate
+    // separately. Hide here so the two paths never report different numbers
+    // under the same label.
+    const piCard = document.getElementById('kpiPersonsInjuredCard');
+    if (piCard) piCard.style.display = 'none';
 
-    // Avg Vehicles/Crash KPI (show only if data available)
+    // CC-207 D2 — Avg Vehicles/Crash: render normal value if the CSV worker
+    // populated vehicle_count; otherwise fall through to the "Source-data gap"
+    // placeholder (em-dash + badge) maintained by applyAvgVehiclesCapabilityGate.
     if (agg.vehicleCount?.total > 0) {
         const vcCard = document.getElementById('kpiVehicleCountCard');
         if (vcCard) {
@@ -145,6 +144,8 @@ function updateDashboard() {
             document.getElementById('kpiAvgVehicles').textContent = avgVehicles;
             document.getElementById('kpiVehicleCountSub').textContent = `Total vehicles: ${agg.vehicleCount.sum.toLocaleString()}`;
         }
+    } else if (typeof applyAvgVehiclesCapabilityGate === 'function') {
+        applyAvgVehiclesCapabilityGate();
     }
 
     // Calculate YoY trends with PERIOD-MATCHED comparison

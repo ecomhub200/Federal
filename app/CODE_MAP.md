@@ -113,10 +113,10 @@ Before any code edit:
   - `toggleMapFilter()` @ L41501 — const filter = el.dataset.filter;
   - `toggleMapFiltersPanel()` @ L41514 — Round 24 — open/close the consolidated map filters panel.
   - `updateMapFiltersBadge()` @ L41528 — Update the badge on the Filters button so users see at-a-glance how many filters are activ
-  - `renderMapFactorChips()` @ L41809 — const container = document.getElementById('mapFactorChips');
-  - `toggleMapFactor()` @ L41874 — `.active` class follows that boolean.
-  - `toggleMapFullscreen()` @ L41923 — const container = document.querySelector('.map-container');
-  - `setMapBaseLayer()` @ L41953 — if (!crashMap) return;
+  - `renderMapFactorChips()` @ L41825 — const container = document.getElementById('mapFactorChips');
+  - `toggleMapFactor()` @ L41890 — `.active` class follows that boolean.
+  - `toggleMapFullscreen()` @ L41939 — const container = document.querySelector('.map-container');
+  - `setMapBaseLayer()` @ L41969 — if (!crashMap) return;
   - `mapSnap_simplify()` @ L42012 — if (points.length <= maxPts) return points;
   - `mapSnap_sortRoutePoints()` @ L42064 — if (points.length < 2) return points.slice();
   - `mapSnap_fetchRoadGeometry()` @ L42076 — var token = appConfig?.apis?.mapbox?.accessToken;
@@ -356,7 +356,7 @@ Before any code edit:
   - `exportAppWord()` @ L35681 — alert('Word export requires additional library. PDF export is recommended.');
   - `_refetchFSMatviewsWithDate()` @ L40204 [window] — State-agnostic — keys on resolveTier() + crashLensClient.state.
   - `resetFilterUI()` @ L40356 — Reset filter UI elements without triggering dashboard update (used after data load)
-  - `_hideDistrictWidgetIfUnsupported()` @ L41748 [window] — State-agnostic — keys on the capability flag, not on any state literal.
+  - `_hideDistrictWidgetIfUnsupported()` @ L41764 [window] — State-agnostic — keys on the capability flag, not on any state literal.
   - `updateMultiLocationSelection()` @ L42488 — Update UI and map for multi-location selection
   - `locationJumpToMUTCD()` @ L43745 — Jump to MUTCD tab with selected location
   - `exportMultiLocationToKML()` @ L44137 — Export multiple locations to KML
@@ -430,7 +430,7 @@ Before any code edit:
   - `app/modules/pedbike/pedbike-tab-ped-detail.js` — CL pedbike.tab18b-1 — extracted (name-anchored) 2026-05-17. see modular-prompts/18-v2-pedbike-tab.md. No behavior change. Responsibility: Pedestrian detail-pane
 - **Inline functions remaining (35):**
   - `warrantDbCollectPedestrianData()` @ L24954 — 
-  - `_hideDistrictWidgetIfUnsupported()` @ L41748 [window] — State-agnostic — keys on the capability flag, not on any state literal.
+  - `_hideDistrictWidgetIfUnsupported()` @ L41764 [window] — State-agnostic — keys on the capability flag, not on any state literal.
   - `locationExport()` @ L44069 — Export crash data for selected location
   - `exportDrawingSelection()` @ L46306 — if (selectedCrashesFromDrawing.length === 0) {
   - `jumpToCMFFromPedBike()` @ L54503 — Jump to CMF from Ped/Bike tab
@@ -1022,7 +1022,7 @@ Before any code edit:
 | _hasClient | modules/data/tab-loaders.js | module-private | shared |
 | _hasCMFLocationSelected | modules/data/dashboard-filter-bindings.js | module-private | shared |
 | _heatColor | modules/scorecard/scorecard.js | window+CL | scorecard |
-| _hideDistrictWidgetIfUnsupported | inline @ L41748 | window+inline | intersection, pedestrian |
+| _hideDistrictWidgetIfUnsupported | inline @ L41764 | window+inline | intersection, pedestrian |
 | _hintOverlay | modules/data/road-type-mapping.js | module-private | shared |
 | _hotspots_fetchMatview | modules/hotspots/hotspots-tab-core.js | window+CL | hotspots |
 | _hydrateFSHotspotsFromMatview | inline @ L88237 | inline | hotspots |
@@ -1092,7 +1092,7 @@ Before any code edit:
 | _renderIntersectionRows | modules/intersection/intersection-tab-table.js | window+CL | intersection |
 | _renderResults | modules/data/supabase-map-bridge.js | module-private | shared |
 | _renderSafetySubKpiUnavailable | inline @ L79389 | inline | dashboard |
-| _renderStateCoverageBanner | inline @ L41717 | inline | shared |
+| _renderStateCoverageBanner | inline @ L41733 | inline | shared |
 | _renderTierPills | modules/scorecard/scorecard.js | window+CL | scorecard |
 | _rerank | modules/scorecard/scorecard.js | window+CL | scorecard |
 | _resetRoadTypeForTierChange | inline @ L21902 | inline | shared |
@@ -1192,7 +1192,7 @@ Before any code edit:
 | analyzeSignalWarrant | inline @ L66124 | inline | warrants, analysis |
 | analyzeWarrantsFromMap | inline @ L93921 | inline | map, warrants, analysis |
 | applyAutoDetectedJurisdiction | inline @ L21614 | inline | shared |
-| applyAvgVehiclesCapabilityGate | inline @ L41704 | window+inline | shared |
+| applyAvgVehiclesCapabilityGate | inline @ L41709 | window+inline | shared |
 | applyBikeFilters | modules/pedbike/pedbike-tab-bike-core.js | window+CL | pedestrian |
 | applyCMFDateFilter | inline @ L70468 | inline | cmf |
 | applyCMFDatePreset | inline @ L70426 | inline | cmf |
@@ -2558,7 +2558,7 @@ Before any code edit:
 | renderIntFactorRow | modules/intersection/intersection-tab-detail.js | window+CL | intersection |
 | renderIntMonthlyHeatmap | modules/intersection/intersection-tab-charts.js | window+CL | intersection |
 | renderMagisterialDistricts | inline @ L124035 | inline | shared |
-| renderMapFactorChips | inline @ L41809 | inline | map |
+| renderMapFactorChips | inline @ L41825 | inline | map |
 | renderMonthlyHeatmap | inline @ L50744 | inline | map |
 | renderMPOComparisonTable | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | renderMUTCDCitationCard | inline @ L67012 | inline | shared |
@@ -2800,7 +2800,7 @@ Before any code edit:
 | setIntViewMode | modules/intersection/intersection-tab-selection.js | window+CL | intersection |
 | setLoadIndeterminate | inline @ L29476 | inline | shared |
 | setLoadProgress | inline @ L29454 | inline | shared |
-| setMapBaseLayer | inline @ L41953 | inline | map |
+| setMapBaseLayer | inline @ L41969 | inline | map |
 | setMapMode | inline @ L41409 | inline | map |
 | setMappingMode | modules/upload/api-connector.js | module-private | upload |
 | setPaginationData | inline @ L26972 | inline | shared |
@@ -3286,10 +3286,10 @@ Before any code edit:
 | toggleLocationSelection | inline @ L33603 | inline | shared |
 | toggleMagisterialDistrictsLayer | inline @ L122464 | inline | shared |
 | toggleMapAssetLayer | inline @ L121430 | inline | map |
-| toggleMapFactor | inline @ L41874 | inline | map |
+| toggleMapFactor | inline @ L41890 | inline | map |
 | toggleMapFilter | inline @ L41501 | inline | map |
 | toggleMapFiltersPanel | inline @ L41514 | inline | map |
-| toggleMapFullscreen | inline @ L41923 | inline | map |
+| toggleMapFullscreen | inline @ L41939 | inline | map |
 | toggleMapillaryLayer | inline @ L126516 | inline | map |
 | toggleMapillaryMapFeaturesLayer | inline @ L127111 | inline | map |
 | toggleMapillaryTrafficSignsLayer | inline @ L126955 | inline | map |
