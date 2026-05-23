@@ -113,6 +113,123 @@
           </div>`;
   };
 
+  // CT2 helper: render the FHWA risk-factor panel from a results array.
+  // Single source of truth for both the row-level (analyzeRiskFactors) path
+  // and the matview-hydrated (analyzeRiskFactors matview branch +
+  // generateCrashTreeReport pre-render) path.
+  const _renderRiskFactorsPanel = (el, results, riskScore) => {
+      if (!el) return;
+      const overrepFactors = results.filter(r => r.overrep);
+      const scoreLevel = riskScore > 70 ? 'ct-critical' : riskScore > 50 ? 'ct-high' : riskScore > 30 ? 'ct-medium' : 'ct-low';
+      el.innerHTML = `
+          <div class="ct-risk-score">
+              <div class="ct-risk-score-bar">
+                  <div class="ct-risk-score-fill ${scoreLevel}" style="width:${riskScore}%;"></div>
+                  <div class="ct-risk-score-markers">
+                      <div class="ct-risk-score-marker"></div>
+                      <div class="ct-risk-score-marker"></div>
+                      <div class="ct-risk-score-marker"></div>
+                      <div class="ct-risk-score-marker"></div>
+                  </div>
+              </div>
+              <div class="ct-risk-score-value ct-stat-value">${riskScore}</div>
+          </div>
+          <div style="font-size:.65rem;color:#6b7280;text-align:center;margin-bottom:.5rem;">${overrepFactors.length} overrepresented factor${overrepFactors.length !== 1 ? 's' : ''} detected</div>
+          ${results.slice(0, 6).map(r => {
+              const barWidth = Math.min(100, parseFloat(r.ratio) * 40);
+              const ratioClass = r.severity === 'high' ? 'ct-high' : r.severity === 'medium' ? 'ct-medium' : 'ct-low';
+              const barClass = r.overrep ? 'ct-overrep' : 'ct-normal';
+              return `
+              <div class="ct-risk-item">
+                  <div class="ct-risk-item-icon">${r.icon}</div>
+                  <div class="ct-risk-item-content">
+                      <div class="ct-risk-item-name">${r.name}</div>
+                      <div class="ct-risk-item-bar">
+                          <div class="ct-risk-item-bar-fill ${barClass}" style="width:${barWidth}%;"></div>
+                      </div>
+                  </div>
+                  <div class="ct-risk-item-ratio ${ratioClass}">${r.ratio}x</div>
+              </div>`;
+          }).join('')}
+          <div style="margin-top:.5rem;padding:.3rem;background:#f8fafc;border-radius:4px;font-size:.6rem;color:#6b7280;text-align:center;">
+              <span style="color:#dc2626;">●</span> &gt;1.2x = Overrepresented (FHWA methodology)
+          </div>
+      `;
+  };
+
+  // CT2 helper: hydrate risk-factor results from matviews when row-level
+  // crash data isn't loaded (county tier / matview-only mode). Returns the
+  // results array (sorted, ready to feed _renderRiskFactorsPanel) or null
+  // if hydration isn't possible (no client, no tier, no crash totals).
+  // Used by analyzeRiskFactors() matview branch and by
+  // generateCrashTreeReport() in crash-tree-export.js as a fallback before
+  // PDF generation.
+  const _hydrateRiskFactorsFromMatviews = async () => {
+      if (!(window.crashLensClient && window.CL?.data?.supabaseBridge?.resolveTier
+          && window.CL?.data?.cachedMatview)) return null;
+      const t = window.CL.data.supabaseBridge.resolveTier();
+      const [sumRows, cats] = await Promise.all([
+          CL.data.cachedMatview('dashboard_summary', t.tier, t.value,
+              () => window.crashLensClient.getSummary(t.tier, t.value, {})),
+          CL.data.cachedMatview('mv_safety_categories', t.tier, t.value,
+              () => window.crashLensClient.getSafetyCategories(t.tier, t.value, {})),
+      ]);
+      let scopeTotal = 0, scopeKA = 0;
+      (sumRows || []).forEach(r => {
+          scopeTotal += r.crash_count || 0;
+          scopeKA    += (r.fatals || 0) + (r.serious_injuries || 0);
+      });
+      if (!cats || scopeTotal === 0) return null;
+      // Category keys / display names / FHWA baselines mirror the row-level
+      // path in analyzeRiskFactors() so the ratio is computed against the
+      // same expected values regardless of data source.
+      const catMap = [
+          { key: 'nighttime',    name: 'Nighttime',    icon: '🌙', baseline: 25 },
+          { key: 'speed',        name: 'Speed-Related',icon: '⚡', baseline: 15 },
+          { key: 'intersection', name: 'Intersection', icon: '🚦', baseline: 42 },
+          { key: 'weather',      name: 'Weather',      icon: '🌧', baseline: 18 },
+          { key: 'pedestrian',   name: 'Pedestrian',   icon: '🚶', baseline: 3  },
+          { key: 'bicycle',      name: 'Bicycle',      icon: '🚴', baseline: 1  },
+          { key: 'motorcycle',   name: 'Motorcycle',   icon: '🏍', baseline: 4  },
+          { key: 'impaired',     name: 'Alcohol/Impaired', icon: '🍺', baseline: 6 },
+      ];
+      const hydrated = catMap.map(c => {
+          const cat = cats[c.key] || { total: 0, K: 0, A: 0 };
+          const allCount = cat.total || 0;
+          const kaCount  = (cat.K || 0) + (cat.A || 0);
+          const allPct   = (allCount / scopeTotal * 100);
+          const kaPct    = scopeKA > 0 ? (kaCount / scopeKA * 100) : 0;
+          const ratio    = allPct > 0 ? (kaPct / allPct) : 0;
+          return {
+              name: c.name, icon: c.icon,
+              allCount, kaCount,
+              allPct: allPct.toFixed(1),
+              kaPct: kaPct.toFixed(1),
+              ratio: ratio.toFixed(2),
+              overrep: ratio > 1.2,
+              severity: ratio > 1.5 ? 'high' : ratio > 1.2 ? 'medium' : 'low',
+              baseline: c.baseline,
+          };
+      }).filter(r => r.allCount > 0);
+      if (hydrated.length === 0) return null;
+      hydrated.sort((a, b) => parseFloat(b.ratio) - parseFloat(a.ratio));
+      return hydrated;
+  };
+
+  // CT2 helper: compute the FHWA risk score from a results array (same
+  // formula as the inline analyzeRiskFactors row-level path).
+  const _computeRiskScore = (results) => {
+      const overrepFactors = results.filter(r => r.overrep);
+      const highSeverityFactors = results.filter(r => r.severity === 'high');
+      return Math.min(100, overrepFactors.length * 15 + highSeverityFactors.length * 10);
+  };
+
+  // Expose helpers so crash-tree-export.js can share the hydration path.
+  window.CL = window.CL || {};
+  window.CL.crashTree = window.CL.crashTree || {};
+  window.CL.crashTree._hydrateRiskFactorsFromMatviews = _hydrateRiskFactorsFromMatviews;
+  window.CL.crashTree._computeRiskScore = _computeRiskScore;
+
   // ─── EXTRACTED CODE START (verbatim from index.html L85854-L86248) ───
 // Update data table
 function updateCrashTreeDataTable() {
@@ -161,17 +278,38 @@ function analyzeRiskFactors() {
     if (!el || !crashState.loaded) return;
 
     // Matview-only mode: row-level fields (NIGHT, SPEED, WEATHER, PED,
-    // BIKE) are unavailable, so FHWA overrepresentation cannot be
-    // computed. Render an honest placeholder instead of zeros.
+    // BIKE) are unavailable. CC 212: hydrate from mv_safety_categories +
+    // dashboard_summary so the FHWA overrepresentation panel renders real
+    // ratios. Render a loading state synchronously, then overwrite with
+    // the real panel (success) or fall back to the unavailable placeholder
+    // (no client / no data / no overrepresented categories).
     if (_isSupabaseMode()) {
         el.innerHTML = `
             <div class="ct-risk-empty" style="text-align:center;padding:.75rem;color:var(--gray);font-size:.75rem;line-height:1.4;">
-              <div style="font-size:1.25rem;margin-bottom:.25rem;">📊</div>
-              <div style="font-weight:600;color:#374151;margin-bottom:.2rem;">Risk-factor analysis unavailable at this scope</div>
-              <div>FHWA-style overrepresentation requires row-level crash data, which isn't loaded for jurisdictions of this size. Drill into a smaller area (city, intersection, or corridor) to see risk-factor ratios.</div>
+              <div style="font-size:1.25rem;margin-bottom:.25rem;">⏳</div>
+              <div>Loading risk-factor analysis from matviews…</div>
             </div>`;
         crashTreeState.riskFactors.analyzed = [];
         crashTreeState.riskFactors.score = 0;
+        const _placeholderHtml = `
+            <div class="ct-risk-empty" style="text-align:center;padding:.75rem;color:var(--gray);font-size:.75rem;line-height:1.4;">
+              <div style="font-size:1.25rem;margin-bottom:.25rem;">📊</div>
+              <div style="font-weight:600;color:#374151;margin-bottom:.2rem;">Risk-factor analysis unavailable at this scope</div>
+              <div>Drill into a smaller area (city, intersection, or corridor) to see row-level risk-factor ratios.</div>
+            </div>`;
+        _hydrateRiskFactorsFromMatviews().then(hydrated => {
+            if (!hydrated || hydrated.length === 0) {
+                el.innerHTML = _placeholderHtml;
+                return;
+            }
+            const riskScore = _computeRiskScore(hydrated);
+            crashTreeState.riskFactors.analyzed = hydrated;
+            crashTreeState.riskFactors.score = riskScore;
+            _renderRiskFactorsPanel(el, hydrated, riskScore);
+        }).catch(e => {
+            console.warn('[CrashTree] risk factor matview hydration failed:', e && e.message);
+            el.innerHTML = _placeholderHtml;
+        });
         return;
     }
 
@@ -413,7 +551,15 @@ function buildSecondaryTreeAnalysis() {
     const filteredCrashes = getCrashTreeFilteredCrashes();
 
     if (filteredCrashes.length === 0) {
-        _setSecondaryMsg('No crashes match the current filters.');
+        // CC 212: row-level filtering excluded everything (or sampleRows
+        // is a partial subset). If the primary tree has already been built
+        // (from matview or earlier full data), surface its top categories
+        // instead of an unhelpful "no matches" panel.
+        if (crashTreeState.treeData) {
+            _renderSecondaryFromPrimary();
+        } else {
+            _setSecondaryMsg('No crashes match the current filters.');
+        }
         return;
     }
 

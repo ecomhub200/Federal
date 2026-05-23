@@ -76,4 +76,4 @@ Supabase is genuinely out of sync.
 - ILIKE result filtered to drop false positives (`DE 180`, `DE 181`)
   while keeping real matches (`DE 18`, `DE-18`)
 
-See also: [[concepts/r2-parquet-policy]], [[concepts/phase4-server-paginated-tables]] (TBD).
+See also: [[concepts/r2-parquet-policy]], [[concepts/phase4-server-paginated-tables]], [[concepts/supabase-ilike-performance]].

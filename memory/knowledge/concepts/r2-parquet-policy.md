@@ -76,4 +76,4 @@ bucket has `.parquet` files (not `.csv`), so the fallback 404'd whenever
 Supabase errored — which happened when a test query exceeded the Supabase
 statement timeout.
 
-See also: [[concepts/phase4-server-paginated-tables]] (TBD).
+See also: [[concepts/phase4-server-paginated-tables]], [[concepts/supabase-ilike-performance]], [[connections/supabase-timeout-triggers-r2-fallback]].
