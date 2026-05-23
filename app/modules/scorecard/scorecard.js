@@ -324,8 +324,8 @@ async function loadScorecardData() {
         renderScorecardTable(_scorecardData);
       }
       updateScorecardChart();
-      const banner = (_scorecardData.length === 1 && _scorecardData[0].state === 'delaware')
-        ? ' (today: 1 of 51 states ingested — auto-grows as backend ingests more)'
+      const banner = (_scorecardData.length === 1)
+        ? ' (1 of 51 states ingested — auto-grows as backend ingests more)'
         : '';
       if (statusEl) statusEl.textContent = `${_scorecardData.length} state${_scorecardData.length===1?'':'s'} · ${mode === 'rolling' ? (year-2)+'–'+year : year}${banner}`;
     } catch (e) {
@@ -372,16 +372,17 @@ async function loadScorecardData() {
 
     _scorecardData = data || [];
 
-    // Empty-state UI — only Delaware is currently populated; tell the user
-    // the front-end is ready and the backend pipeline is the gate.
+    // Empty-state UI — current state has no rows in the scorecard_rankings
+    // matview yet; tell the user the front-end is ready and the backend
+    // pipeline is the gate.
     if (_scorecardData.length === 0) {
       const tbody = document.getElementById('scorecardBody');
       const thead = document.getElementById('scorecardHead');
       if (thead) thead.innerHTML = '<tr><th colspan="99" style="text-align:left;padding:1rem;color:#475569">No scorecard data available for ' + stateKey + ' (' + year + ').</th></tr>';
       if (tbody) tbody.innerHTML = '<tr><td colspan="99" style="text-align:center;padding:2rem;color:#94a3b8">' +
         '<strong>State not yet populated.</strong><br>' +
-        'Currently only Delaware data is in the <code>scorecard_rankings</code> matview. ' +
-        'When the backend pipeline adds <strong>' + stateKey + '</strong>, this view will work automatically — no frontend change needed.' +
+        'No scorecard data for <strong>' + stateKey + '</strong> in the <code>scorecard_rankings</code> matview yet. ' +
+        'When the backend pipeline ingests it, this view will work automatically — no frontend change needed.' +
         '</td></tr>';
       if (statusEl) statusEl.textContent = '0 jurisdictions · ' + stateKey + ' (' + year + ')';
       return;
