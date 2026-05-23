@@ -106,16 +106,20 @@ async function aggregateSfDetailData() {
         const dc = window.crashLensClient;
         const t = CL.data.supabaseBridge.resolveTier();
         if (t && t.tier && t.value) {
+            // Mirrors data-client.js TIER_COLUMNS_BY_MATVIEW.default so the
+            // aggregate query matches the same rows that _hydrateSafetyLocations-
+            // FromMatview pulled. county was previously mapped to
+            // planning_district, which caused zero matches at county tier.
             const tierColMap = {
                 federal: null, state: null, region: 'dot_district', mpo: 'mpo_name',
-                planning_district: 'planning_district', county: 'planning_district',
+                planning_district: 'planning_district', county: 'physical_juris_name',
                 city: 'physical_juris_name', city_town: 'physical_juris_name'
             };
             const tierCol = tierColMap[t.tier];
             const params = new URLSearchParams({
                 state: 'eq.' + String(dc.state || '').toLowerCase(),
                 category: 'eq.' + category,
-                select: 'location_name,physical_juris_name,total,k,a,b,c,o,first_year,last_year'
+                select: 'location_name,physical_juris_name,total,k,a,b,c,o,first_year,last_year,at_intersection,night_count'
             });
             if (tierCol && t.value) params.set(tierCol, 'eq.' + t.value);
             try {
@@ -152,11 +156,26 @@ async function aggregateSfDetailData() {
                                 data.byYear[y].total += perYear;
                             }
                         }
+                        // The matview exposes two crosstab counts per location:
+                        // night_count (Dark Condition Crashes card) and
+                        // at_intersection (Intersection-type breakdown chart).
+                        // Other co-factor cards (alcohol/speed/distracted/...)
+                        // require per-row data and stay at zero in matview mode.
+                        const nightVal = Number(r.night_count) || 0;
+                        const intxnVal = Number(r.at_intersection) || 0;
+                        if (nightVal) data.byLight['Dark'] = (data.byLight['Dark'] || 0) + nightVal;
+                        if (intxnVal) data.byIntType['At Intersection'] = (data.byIntType['At Intersection'] || 0) + intxnVal;
                     });
                     data.epdo = (typeof calcEPDO === 'function')
                         ? calcEPDO(data.severity)
                         : (data.severity.K * 462 + data.severity.A * 62
                             + data.severity.B * 12 + data.severity.C * 5 + data.severity.O);
+                    if (data.total === 0) {
+                        console.warn('[SafetyDetail] matview fallback matched 0 of',
+                            sfDetailState.selectedLocations.length,
+                            'selected locations — hydrate/aggregate tier-column mismatch?',
+                            sfDetailState.selectedLocations);
+                    }
                     console.log('[SafetyDetail] matview fallback hydrated', rows.length,
                         'rows for', category, '→ total:', data.total,
                         'K:', data.severity.K, 'A:', data.severity.A, 'EPDO:', data.epdo);
@@ -308,7 +327,7 @@ function renderSfMonthlyHeatmap(data) {
     const years = [...new Set(Object.keys(data.byMonth).map(k => k.split('-')[0]))].sort();
 
     if (years.length === 0) {
-        container.innerHTML = '<div style="text-align:center;color:#64748b;font-size:.8rem">No monthly data available</div>';
+        container.innerHTML = '<div style="text-align:center;color:#64748b;font-size:.8rem">Monthly breakdown unavailable in matview mode — load location detail for per-row data</div>';
         return;
     }
 
