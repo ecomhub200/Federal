@@ -246,7 +246,11 @@ function selectSafetyCategory(category) {
     document.getElementById('safetyDetailEPDO').textContent = `EPDO: ${epdo.toLocaleString()}`;
     
     // Update severity bar
-    const total = catData.crashes.length;
+    // Matview mode (aggregate tiers) leaves crashes[] empty; fall back to
+    // the matview-supplied total so the Total stat reflects real data.
+    const total = (catData.crashes && catData.crashes.length)
+                || catData.total
+                || 0;
     const { K, A, B, C, O } = catData.severity;
     
     document.getElementById('safetyBarK').style.flex = K;
