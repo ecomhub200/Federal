@@ -396,15 +396,23 @@ async function loadScorecardData() {
     try {
       const histOpts = Object.assign({}, opts, { yearEnd: year });
       const history = await client.getScorecard(stateKey, year - 4, histOpts);
-      const grouped = {};
+      // scorecard_rankings returns multiple rows per (jurisdiction, year)
+      // (sub-aggregations by road_type/area_type). Sum total_crashes per
+      // (jurisdiction, year), then take the last 5 distinct years.
+      const totalsByJurisYear = {};
+      const yearsByJuris = {};
       (history || []).forEach(h => {
-        const k = h.jurisdiction;
-        if (!grouped[k]) grouped[k] = [];
-        grouped[k].push(h);
+        const juris = h.jurisdiction;
+        const yr = Number(h.crash_year);
+        if (!juris || !Number.isFinite(yr)) return;
+        const key = juris + '|' + yr;
+        totalsByJurisYear[key] = (totalsByJurisYear[key] || 0) + (Number(h.total_crashes) || 0);
+        if (!yearsByJuris[juris]) yearsByJuris[juris] = new Set();
+        yearsByJuris[juris].add(yr);
       });
-      Object.keys(grouped).forEach(k => {
-        const sorted = grouped[k].sort((a, b) => (Number(a.crash_year) || 0) - (Number(b.crash_year) || 0));
-        sparkByJuris[k] = sorted.slice(-5).map(r => Number(r.total_crashes) || 0);
+      Object.keys(yearsByJuris).forEach(juris => {
+        const last5 = Array.from(yearsByJuris[juris]).sort((a, b) => a - b).slice(-5);
+        sparkByJuris[juris] = last5.map(y => totalsByJurisYear[juris + '|' + y] || 0);
       });
       _scorecardData.forEach(r => {
         const arr = sparkByJuris[r.jurisdiction];

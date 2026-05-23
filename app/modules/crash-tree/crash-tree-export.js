@@ -108,70 +108,29 @@ async function generateCrashTreeReport() {
         return `${startDate.toLocaleDateString('en-US', {month: 'short', year: 'numeric'})} - ${endDate.toLocaleDateString('en-US', {month: 'short', year: 'numeric'})}`;
     })() : 'All available data';
 
-    // Round 7 (2026-05-09): in Supabase-only mode analyzeRiskFactors() runs
-    // against an empty rows[] and produces analyzed[] with every row's
-    // observed % stuck at 0.0% (numerator + denominator both 0). Hydrate
-    // from mv_safety_categories so the FHWA overrepresentation table shows
-    // real numbers. Total crash count comes from dashboard_summary;
-    // category counts come from mv_safety_categories.
+    // CC 212: In matview-only mode the risk-factor panel is now hydrated
+    // asynchronously by analyzeRiskFactors() (crash-tree-analysis.js). If
+    // the user opens the report before that async work completes, or if
+    // the row-level path produced all-zero ratios, fall back to the same
+    // shared helper here so the PDF table is populated.
     try {
         const _treeRows = (typeof getCrashTreeDateOnlyFilteredCrashes === 'function')
             ? getCrashTreeDateOnlyFilteredCrashes() : [];
-        const _allObservedZero = Array.isArray(crashTreeState.riskFactors?.analyzed)
-            && crashTreeState.riskFactors.analyzed.length > 0
-            && crashTreeState.riskFactors.analyzed.every(r => parseFloat(r.allPct) === 0);
-        if (!_treeRows.length && _allObservedZero
-            && window.crashLensClient
-            && window.CL?.data?.supabaseBridge?.resolveTier) {
-            const t = window.CL.data.supabaseBridge.resolveTier();
-            const [_sumRows, _cats] = await Promise.all([
-                CL.data.cachedMatview('dashboard_summary', t.tier, t.value,
-                    () => window.crashLensClient.getSummary(t.tier, t.value, {})),
-                CL.data.cachedMatview('mv_safety_categories', t.tier, t.value,
-                    () => window.crashLensClient.getSafetyCategories(t.tier, t.value, {})),
-            ]);
-            let _scopeTotal = 0, _scopeKA = 0;
-            (_sumRows || []).forEach(r => {
-                _scopeTotal += r.crash_count || 0;
-                _scopeKA    += (r.fatals || 0) + (r.serious_injuries || 0);
-            });
-            if (_cats && _scopeTotal > 0) {
-                // Map matview category keys → display name + baseline. Baselines
-                // mirror analyzeRiskFactors() above so the FHWA ratio is
-                // computed against the same expected values.
-                const catMap = [
-                    { key: 'nighttime',    name: 'Nighttime',    icon: '🌙', baseline: 25 },
-                    { key: 'speed',        name: 'Speed-Related',icon: '⚡', baseline: 15 },
-                    { key: 'intersection', name: 'Intersection', icon: '🚦', baseline: 42 },
-                    { key: 'weather',      name: 'Weather',      icon: '🌧', baseline: 18 },
-                    { key: 'pedestrian',   name: 'Pedestrian',   icon: '🚶', baseline: 3  },
-                    { key: 'bicycle',      name: 'Bicycle',      icon: '🚴', baseline: 1  },
-                    { key: 'motorcycle',   name: 'Motorcycle',   icon: '🏍', baseline: 4  },
-                    { key: 'impaired',     name: 'Alcohol/Impaired', icon: '🍺', baseline: 6 },
-                ];
-                const hydrated = catMap.map(c => {
-                    const cat = _cats[c.key] || { total: 0, K: 0, A: 0 };
-                    const allCount = cat.total || 0;
-                    const kaCount  = (cat.K || 0) + (cat.A || 0);
-                    const allPct   = (allCount / _scopeTotal * 100);
-                    const kaPct    = _scopeKA > 0 ? (kaCount / _scopeKA * 100) : 0;
-                    const ratio    = allPct > 0 ? (kaPct / allPct) : 0;
-                    return {
-                        name: c.name, icon: c.icon,
-                        allCount, kaCount,
-                        allPct: allPct.toFixed(1),
-                        kaPct: kaPct.toFixed(1),
-                        ratio: ratio.toFixed(2),
-                        overrep: ratio > 1.2,
-                        severity: ratio > 1.5 ? 'high' : ratio > 1.2 ? 'medium' : 'low',
-                        baseline: c.baseline,
-                    };
-                }).filter(r => r.allCount > 0);
-                if (hydrated.length > 0) {
-                    crashTreeState.riskFactors.analyzed = hydrated;
-                    console.log('[CrashTree Report] Risk factors hydrated from mv_safety_categories ('
-                        + hydrated.length + ' factors).');
+        const _analyzed = Array.isArray(crashTreeState.riskFactors?.analyzed)
+            ? crashTreeState.riskFactors.analyzed : [];
+        const _allObservedZero = _analyzed.length > 0
+            && _analyzed.every(r => parseFloat(r.allPct) === 0);
+        const _shouldHydrate = !_treeRows.length
+            && (_allObservedZero || _analyzed.length === 0);
+        if (_shouldHydrate && window.CL?.crashTree?._hydrateRiskFactorsFromMatviews) {
+            const hydrated = await window.CL.crashTree._hydrateRiskFactorsFromMatviews();
+            if (hydrated && hydrated.length > 0) {
+                crashTreeState.riskFactors.analyzed = hydrated;
+                if (typeof window.CL.crashTree._computeRiskScore === 'function') {
+                    crashTreeState.riskFactors.score = window.CL.crashTree._computeRiskScore(hydrated);
                 }
+                console.log('[CrashTree Report] Risk factors hydrated from mv_safety_categories ('
+                    + hydrated.length + ' factors).');
             }
         }
     } catch (e) {
