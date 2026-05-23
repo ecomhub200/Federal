@@ -58,8 +58,9 @@ async function searchMapboxAddresses(query) {
 
     const endpoint = appConfig?.apis?.mapbox?.geocodingEndpoint || 'https://api.mapbox.com/geocoding/v5/mapbox.places';
 
-    // Use current map bounds as bounding box for geocoding (dynamically adapts to any state)
-    let searchBbox = '-83.675,36.54,-75.24,39.47'; // Default fallback (Virginia)
+    // Use current map bounds as bounding box for geocoding (dynamically adapts to any state).
+    // Default is the world; crashMap.getBounds() supersedes it once the map is initialized.
+    let searchBbox = '-180,-90,180,90';
     const mapInstance = (typeof crashMap !== 'undefined' && crashMap) ? crashMap : null;
     if (mapInstance && typeof mapInstance.getBounds === 'function') {
         try {
@@ -69,6 +70,9 @@ async function searchMapboxAddresses(query) {
             searchBbox = `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
         } catch(e) { /* use default */ }
     }
+    if (searchBbox === '-180,-90,180,90') {
+        console.warn('[Map] No map bounds available, using world fallback bbox');
+    }
 
     // Use current MAP_CENTER as proximity for better local results
     let proximityCenter = '-77.5,37.55'; // Default fallback
@@ -77,7 +81,9 @@ async function searchMapboxAddresses(query) {
     }
 
     // Automatically add state context if not already present in the query
-    const stateName = appConfig?.stateName || 'Virginia';
+    const stateName = appConfig?.stateName
+        || (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.stateName)
+        || 'the active state';
     let searchQuery = query.trim();
     const lowerQuery = searchQuery.toLowerCase();
     const lowerStateName = stateName.toLowerCase();
