@@ -174,7 +174,7 @@ Before any code edit:
   - `openStreetViewForLocation()` @ L51965 — 
   - `openStreetViewForCrashType()` @ L52015 — const crashes = crashState.sampleRows.filter(row => {
   - `exportMapToKML()` @ L52255 — let filtered = getFilteredMapPoints();
-  - `filterMapForPedBike()` @ L54548 — 
+  - `filterMapForPedBike()` — extracted to `app/modules/pedbike/pedbike-tab-jumpers.js`
   - `computeHeatmapData()` @ L56442 — const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   - `loadBALocation()` @ L61690 — Load location for BA study
   - `getMatchedCrashesFromMapSelection()` @ L61738 — Get matched crashes from map selection (uses mapPoints for accuracy)
@@ -370,8 +370,8 @@ Before any code edit:
   - `_intersections_fetchMatview()` @ L52998 — try {
   - `_renderIntersectionKpisFromMatview()` @ L53034 — if (!Array.isArray(rows) || rows.length === 0) return false;
   - `getFilteredIntersectionData()` @ L53059 — const hasFilters = intFilters.startDate || intFilters.endDate || intFilters.traf
-  - `exportPedDetailCSV()` @ L53210 — const selected = pedAnalysisState.selectedLocations;
-  - `exportBikeDetailCSV()` @ L53844 — const selected = bikeAnalysisState.selectedLocations;
+  - `exportPedDetailCSV()` — extracted to `app/modules/pedbike/pedbike-tab-ped-export.js`
+  - `exportBikeDetailCSV()` — extracted to `app/modules/pedbike/pedbike-tab-bike-export.js`
   - `globalQuickLocationFilter()` @ L55731 — const resultsDiv = document.getElementById('globalQuickResults');
   - `selectGlobalLocation()` @ L55818 — 
   - `showGlobalLocationPreview()` @ L55858 — const previewDiv = document.getElementById('globalLocationPreview');
@@ -421,25 +421,30 @@ Before any code edit:
 - **Content div:** `#tab-pedestrian`
 - **Status:** 🟡 Partially modularized
 - **HTML template:** inline L9181-L9602
-- **Modules (6):**
+- **Modules (11):**
   - `app/modules/pedbike/pedbike-tab-bike-core.js` — CL pedbike.tab18c — extracted (name-anchored) 2026-05-17. see modular-prompts/18-v2-pedbike-tab.md. No behavior change. Bicycle-side core (filters/location tabl
   - `app/modules/pedbike/pedbike-tab-bike-detail-charts.js` — CL pedbike.tab — 18d extracted (name-anchored) 2026-05-19. see modular-prompts/18-v2-pedbike-tab.md. No behavior change. Reads bikeAnalysisState (declared inlin
   - `app/modules/pedbike/pedbike-tab-bike-detail.js` — CL pedbike.tab — 18d extracted (name-anchored) 2026-05-19. see modular-prompts/18-v2-pedbike-tab.md. No behavior change. Reads bikeAnalysisState (declared inlin
+  - `app/modules/pedbike/pedbike-tab-bike-export.js` — CL pedbike.bikeExport — extracted (name-anchored) 2026-05-23. see queue/203-passb-pedbike.md. Bike KML/CSV/PDF exports, setBikeViewMode, updateBikeLocationTypeChart (8 fns).
+  - `app/modules/pedbike/pedbike-tab-jumpers.js` — CL pedbike.jumpers — extracted (name-anchored) 2026-05-23. see queue/203-passb-pedbike.md. Legacy wrapper stubs + jumpToCMFFromPedBike/zoomToPedBikeLocation/filterMapForPedBike (7 fns).
+  - `app/modules/pedbike/pedbike-tab-memo.js` — CL pedbike.memo — extracted (name-anchored) 2026-05-23. see queue/203-passb-pedbike.md. generatePedBikeWordMemo (1 async fn).
   - `app/modules/pedbike/pedbike-tab-ped-core.js` — CL pedbike.tab18a — extracted (name-anchored) 2026-05-17. see modular-prompts/18-v2-pedbike-tab.md. No behavior change. Reads inline shared pedAnalysisState / b
   - `app/modules/pedbike/pedbike-tab-ped-detail-charts.js` — CL pedbike.tab18b-2 — extracted (name-anchored) 2026-05-17. see modular-prompts/18-v2-pedbike-tab.md. No behavior change. Responsibility: Pedestrian detail-pane
   - `app/modules/pedbike/pedbike-tab-ped-detail.js` — CL pedbike.tab18b-1 — extracted (name-anchored) 2026-05-17. see modular-prompts/18-v2-pedbike-tab.md. No behavior change. Responsibility: Pedestrian detail-pane
-- **Inline functions remaining (35):**
+  - `app/modules/pedbike/pedbike-tab-ped-export.js` — CL pedbike.pedExport — extracted (name-anchored) 2026-05-23. see queue/203-passb-pedbike.md. Ped KML/CSV/PDF exports + setPedViewMode (7 fns).
+  - `app/modules/pedbike/pedbike-tab-render.js` — CL pedbike.render — extracted (name-anchored) 2026-05-23. see queue/203-passb-pedbike.md. Matview hydration (renderPedBikeLocationsFromMatview async + renderPedBikeComparisonTableFromCats).
+- **Inline functions remaining (28; line numbers may shift after extraction — re-grep):**
   - `warrantDbCollectPedestrianData()` @ L24954 — 
   - `_hideDistrictWidgetIfUnsupported()` @ L41748 [window] — State-agnostic — keys on the capability flag, not on any state literal.
   - `locationExport()` @ L44069 — Export crash data for selected location
   - `exportDrawingSelection()` @ L46306 — if (selectedCrashesFromDrawing.length === 0) {
-  - `jumpToCMFFromPedBike()` @ L54503 — Jump to CMF from Ped/Bike tab
-  - `zoomToPedBikeLocation()` @ L54514 — 
-  - `filterMapForPedBike()` @ L54548 — 
-  - `renderPedBikeLocationsFromMatview()` @ L55201 — ────────────────────────────────────────────────────────────────────────
-  - `renderPedBikeComparisonTableFromCats()` @ L55328 — ────────────────────────────────────────────────────────────────────────
+  - `jumpToCMFFromPedBike()` — extracted to `app/modules/pedbike/pedbike-tab-jumpers.js`
+  - `zoomToPedBikeLocation()` — extracted to `app/modules/pedbike/pedbike-tab-jumpers.js`
+  - `filterMapForPedBike()` — extracted to `app/modules/pedbike/pedbike-tab-jumpers.js`
+  - `renderPedBikeLocationsFromMatview()` — extracted to `app/modules/pedbike/pedbike-tab-render.js`
+  - `renderPedBikeComparisonTableFromCats()` — extracted to `app/modules/pedbike/pedbike-tab-render.js`
   - `generateInfographic()` @ L55983 — 
-  - `generatePedBikeWordMemo()` @ L60965 — const { Document, Paragraph, TextRun, HeadingLevel } = docx;
+  - `generatePedBikeWordMemo()` — extracted to `app/modules/pedbike/pedbike-tab-memo.js`
   - `copyMUTCDCitation()` @ L67037 — Copy MUTCD citation to clipboard
   - `getGPT4VPrompt()` @ L69019 — return `ROLE: Expert traffic engineer analyzing 5 satellite images (500ft×500ft 
   - `getClaudeConsensusPrompt()` @ L69090 — const crashSummary = contextData.crashes?.data?.length > 0
@@ -565,7 +570,7 @@ Before any code edit:
   - `locationJumpToCMF()` @ L43684 — Jump to CMF tab with selected location
   - `jumpToCMFWithSelection()` @ L45486 — if (selectedCrashesFromDrawing.length === 0) {
   - `exportCMFLocationToKML()` @ L52557 — if (!cmfState.selectedLocation || !cmfState.filteredCrashes || cmfState.filtered
-  - `jumpToCMFFromPedBike()` @ L54503 — Jump to CMF from Ped/Bike tab
+  - `jumpToCMFFromPedBike()` — extracted to `app/modules/pedbike/pedbike-tab-jumpers.js`
   - `viewLocationCMF()` @ L55628 — if (!routeCode) {
   - `goToCountermeasuresGlobal()` @ L55926 — if (!globalSelectedLocation) {
   - `downloadBAPDF()` @ L62549 — Download BA Report as PDF - Professional native PDF generation
@@ -1489,7 +1494,7 @@ Before any code edit:
 | clearAllMapLocationSelections | inline @ L42651 | inline | map |
 | clearAllSelections | inline @ L33633 | inline | shared |
 | clearApiKey | inline @ L64360 | inline | shared |
-| clearBikeDateFilter | inline @ L54500 | inline | shared |
+| clearBikeDateFilter | modules/pedbike/pedbike-tab-jumpers.js | modules/pedbike/pedbike-tab-jumpers.js | shared |
 | clearBikeSelection | modules/pedbike/pedbike-tab-bike-core.js | window+CL | pedestrian |
 | clearBTSLayerCaches | inline @ L115912 | inline | shared |
 | clearCache | modules/data/tab-loaders.js | module-private | shared |
@@ -1532,7 +1537,7 @@ Before any code edit:
 | clearOrgSettings | inline @ L27317 | inline | shared |
 | clearOSMCache | inline @ L48449 | inline | shared |
 | clearOvertureLayerCaches | inline @ L116877 | inline | shared |
-| clearPedDateFilter | inline @ L54499 | inline | shared |
+| clearPedDateFilter | modules/pedbike/pedbike-tab-jumpers.js | modules/pedbike/pedbike-tab-jumpers.js | shared |
 | clearPedSelection | modules/pedbike/pedbike-tab-ped-core.js | window+CL | pedestrian |
 | clearQuickFilters | inline @ L41582 | inline | shared |
 | clearRouteHighlights | inline @ L43606 | inline | shared |
@@ -1736,12 +1741,12 @@ Before any code edit:
 | exportAppPDF | inline @ L35455 | inline | shared |
 | exportAppWord | inline @ L35681 | inline | intersection |
 | exportBAData | inline @ L62907 | inline | shared |
-| exportBikeCrashesToKML | inline @ L52523 | inline | shared |
-| exportBikeDetailCSV | inline @ L53844 | inline | intersection |
-| exportBikeDetailKML | inline @ L54203 | inline | shared |
-| exportBikeDetailPDF | inline @ L53891 | inline | shared |
-| exportBikeLocationsCSV | inline @ L54216 | inline | shared |
-| exportBikeLocationsPDF | inline @ L54244 | inline | shared |
+| exportBikeCrashesToKML | modules/pedbike/pedbike-tab-bike-export.js | modules/pedbike/pedbike-tab-bike-export.js | shared |
+| exportBikeDetailCSV | modules/pedbike/pedbike-tab-bike-export.js | modules/pedbike/pedbike-tab-bike-export.js | intersection |
+| exportBikeDetailKML | modules/pedbike/pedbike-tab-bike-export.js | modules/pedbike/pedbike-tab-bike-export.js | shared |
+| exportBikeDetailPDF | modules/pedbike/pedbike-tab-bike-export.js | modules/pedbike/pedbike-tab-bike-export.js | shared |
+| exportBikeLocationsCSV | modules/pedbike/pedbike-tab-bike-export.js | modules/pedbike/pedbike-tab-bike-export.js | shared |
+| exportBikeLocationsPDF | modules/pedbike/pedbike-tab-bike-export.js | modules/pedbike/pedbike-tab-bike-export.js | shared |
 | exportCMFLocationToKML | inline @ L52557 | inline | cmf |
 | exportCMFReport | inline @ L77176 | inline | reports, cmf |
 | exportComparisonCSV | modules/dashboard/dashboard-tab-drill.js | window+CL | dashboard |
@@ -1780,13 +1785,13 @@ Before any code edit:
 | exportMultiLocationToKML | inline @ L44137 | inline | intersection |
 | exportOverRepSegmentsCSV | inline @ L49600 | inline | shared |
 | exportOverRepSegmentsPDF | inline @ L49637 | inline | shared |
-| exportPedCrashesToKML | inline @ L52505 | inline | shared |
-| exportPedDetailCSV | inline @ L53210 | inline | intersection |
-| exportPedDetailKML | inline @ L53569 | inline | shared |
-| exportPedDetailPDF | inline @ L53257 | inline | shared |
+| exportPedCrashesToKML | modules/pedbike/pedbike-tab-ped-export.js | modules/pedbike/pedbike-tab-ped-export.js | shared |
+| exportPedDetailCSV | modules/pedbike/pedbike-tab-ped-export.js | modules/pedbike/pedbike-tab-ped-export.js | intersection |
+| exportPedDetailKML | modules/pedbike/pedbike-tab-ped-export.js | modules/pedbike/pedbike-tab-ped-export.js | shared |
+| exportPedDetailPDF | modules/pedbike/pedbike-tab-ped-export.js | modules/pedbike/pedbike-tab-ped-export.js | shared |
 | exportPedestrianPDF | inline @ L102714 | inline | pedestrian |
-| exportPedLocationsCSV | inline @ L53582 | inline | shared |
-| exportPedLocationsPDF | inline @ L53610 | inline | shared |
+| exportPedLocationsCSV | modules/pedbike/pedbike-tab-ped-export.js | modules/pedbike/pedbike-tab-ped-export.js | shared |
+| exportPedLocationsPDF | modules/pedbike/pedbike-tab-ped-export.js | modules/pedbike/pedbike-tab-ped-export.js | shared |
 | exportRoundaboutPDF | inline @ L111585 | inline | shared |
 | exportSafetyCategoryPDF | inline @ L81660 | inline | safety |
 | exportSafetyData | inline @ L81525 | inline | shared |
@@ -1831,7 +1836,7 @@ Before any code edit:
 | filterDKLocations | modules/ai/ai-domain-knowledge-location.js | window+CL | ai, domain-knowledge |
 | filterInventoryToLocation | inline @ L68270 | inline | shared |
 | filterMapForLocation | modules/hotspots/hotspots-tab-modal.js | window+CL | hotspots |
-| filterMapForPedBike | inline @ L54548 | inline | map, pedestrian |
+| filterMapForPedBike | modules/pedbike/pedbike-tab-jumpers.js | modules/pedbike/pedbike-tab-jumpers.js | map, pedestrian |
 | filterMapForSafety | inline @ L83852 | inline | map |
 | filterMapList | inline @ L42393 | inline | map |
 | filterWarrantCrashesByDate | inline @ L92958 | inline | warrants |
@@ -1906,7 +1911,7 @@ Before any code edit:
 | generatePedBikeLocationTable | modules/reports/reports-standard-types2.js | window+CL | reports |
 | generatePedBikeRecommendations | modules/reports/reports-standard-types2.js | window+CL | reports |
 | generatePedBikeReport | modules/reports/reports-standard-types.js | window+CL | reports |
-| generatePedBikeWordMemo | inline @ L60965 | inline | pedestrian |
+| generatePedBikeWordMemo | modules/pedbike/pedbike-tab-memo.js | modules/pedbike/pedbike-tab-memo.js | pedestrian |
 | generatePedBikeYearlySection | modules/reports/reports-standard-types2.js | window+CL | reports |
 | generateProfessionalTableRows | modules/crash-tree/crash-tree-export.js | window+CL | shared |
 | generateQdrantId | modules/ai/ai-domain-knowledge-rag.js | window+CL | ai, domain-knowledge |
@@ -2221,7 +2226,7 @@ Before any code edit:
 | isVaSchoolsCacheValid | inline @ L128157 | inline | shared |
 | isYes | modules/worker/csv-worker.js | module-private | shared |
 | jumpToCMFFromFS | inline @ L90321 | inline | cmf |
-| jumpToCMFFromPedBike | inline @ L54503 | inline | pedestrian, cmf |
+| jumpToCMFFromPedBike | modules/pedbike/pedbike-tab-jumpers.js | modules/pedbike/pedbike-tab-jumpers.js | pedestrian, cmf |
 | jumpToCMFWithSelection | inline @ L45486 | inline | cmf |
 | jumpToGrantsWithSelection | inline @ L45857 | inline | grants |
 | jumpToHotspotFromSegment | inline @ L49361 | inline | hotspots |
@@ -2563,8 +2568,8 @@ Before any code edit:
 | renderMPOComparisonTable | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | renderMUTCDCitationCard | inline @ L67012 | inline | shared |
 | renderPaginationControls | inline @ L26890 | inline | shared |
-| renderPedBikeComparisonTableFromCats | inline @ L55328 | inline | pedestrian |
-| renderPedBikeLocationsFromMatview | inline @ L55201 | inline | pedestrian |
+| renderPedBikeComparisonTableFromCats | modules/pedbike/pedbike-tab-render.js | modules/pedbike/pedbike-tab-render.js | pedestrian |
+| renderPedBikeLocationsFromMatview | modules/pedbike/pedbike-tab-render.js | modules/pedbike/pedbike-tab-render.js | pedestrian |
 | renderPedLocationTable | modules/pedbike/pedbike-tab-ped-core.js | window+CL | pedestrian |
 | renderPedMonthlyHeatmap | modules/pedbike/pedbike-tab-ped-detail-charts.js | window+CL | pedestrian |
 | renderRegionComparisonTable | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
@@ -2783,7 +2788,7 @@ Before any code edit:
 | sendInventoryToAssetDeficiency | inline @ L51635 | inline | shared |
 | setBAStudyPeriod | inline @ L61878 | inline | shared |
 | setBatchBAAnalysisType | inline @ L61474 | inline | analysis |
-| setBikeViewMode | inline @ L53837 | inline | shared |
+| setBikeViewMode | modules/pedbike/pedbike-tab-bike-export.js | modules/pedbike/pedbike-tab-bike-export.js | shared |
 | setCMFMode | inline @ L71872 | inline | cmf |
 | setColor | modules/batch-ba/batch-ba-export-pdf.js | module-private | analysis |
 | setCrashTreeDatePreset | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
@@ -2804,7 +2809,7 @@ Before any code edit:
 | setMapMode | inline @ L41409 | inline | map |
 | setMappingMode | modules/upload/api-connector.js | module-private | upload |
 | setPaginationData | inline @ L26972 | inline | shared |
-| setPedViewMode | inline @ L53203 | inline | shared |
+| setPedViewMode | modules/pedbike/pedbike-tab-ped-export.js | modules/pedbike/pedbike-tab-ped-export.js | shared |
 | setScorecardTier | modules/scorecard/scorecard.js | window+CL | scorecard |
 | setSelectedLocationType | inline @ L71001 | inline | shared |
 | setSelectionMode | inline @ L42215 | inline | shared |
@@ -3449,8 +3454,8 @@ Before any code edit:
 | updateBAMonitoringLocationDisplay | inline @ L63497 | inline | shared |
 | updateBAPeriodDisplay | inline @ L61931 | inline | shared |
 | updateBikeDetailPanel | modules/pedbike/pedbike-tab-bike-detail.js | window+CL | pedestrian |
-| updateBikeLocations | inline @ L54498 | inline | shared |
-| updateBikeLocationTypeChart | inline @ L54467 | inline | shared |
+| updateBikeLocations | modules/pedbike/pedbike-tab-jumpers.js | modules/pedbike/pedbike-tab-jumpers.js | shared |
+| updateBikeLocationTypeChart | modules/pedbike/pedbike-tab-bike-export.js | modules/pedbike/pedbike-tab-bike-export.js | shared |
 | updateBikeSelectionUI | modules/pedbike/pedbike-tab-bike-core.js | window+CL | pedestrian |
 | updateCacheStatusUI | inline @ L23841 | inline | shared |
 | updateCharts | modules/dashboard/dashboard-tab-kpi.js | window+CL | dashboard |
@@ -3546,7 +3551,7 @@ Before any code edit:
 | updatePedBikeTab | modules/pedbike/pedbike-tab-ped-core.js | window+CL | pedestrian |
 | updatePedContextSpacing | inline @ L94096 | inline | shared |
 | updatePedDetailPanel | modules/pedbike/pedbike-tab-ped-detail.js | window+CL | pedestrian |
-| updatePedLocations | inline @ L54497 | inline | shared |
+| updatePedLocations | modules/pedbike/pedbike-tab-jumpers.js | modules/pedbike/pedbike-tab-jumpers.js | shared |
 | updatePedLocationTypeChart | modules/pedbike/pedbike-tab-ped-detail-charts.js | window+CL | pedestrian |
 | updatePedSelectionUI | modules/pedbike/pedbike-tab-ped-core.js | window+CL | pedestrian |
 | updatePedSSDRequired | inline @ L94073 | inline | shared |
@@ -3660,7 +3665,7 @@ Before any code edit:
 | wrapCharts | modules/ui/skeletons.js | module-private | shared |
 | yieldToUI | modules/grants/grants-rank-score.js | module-private | grants |
 | zoomToLocation | modules/hotspots/hotspots-tab-modal.js | window+CL | hotspots |
-| zoomToPedBikeLocation | inline @ L54514 | inline | pedestrian |
+| zoomToPedBikeLocation | modules/pedbike/pedbike-tab-jumpers.js | modules/pedbike/pedbike-tab-jumpers.js | pedestrian |
 | zoomToSearchedLocation | inline @ L43436 | inline | shared |
 
 ## Module index
