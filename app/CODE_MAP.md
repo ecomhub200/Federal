@@ -903,8 +903,8 @@ Before any code edit:
   - `analyzeOverRepSegments()` @ L48703 — if (segmentAnalysisState.isLoading) {
   - `renderSegmentAnalysisResults()` @ L49031 — 
   - `analyzeSelectedSegment()` @ L49393 — const select = document.getElementById('measureRouteSelect');
-  - `updateAnalysis()` @ L51314 — ============================================================
-  - `switchAnalysisSubtab()` @ L51344 — Sub-tab Navigation
+  - `updateAnalysis()` → `app/modules/analysis/analysis-tab-orchestrator.js` (CC 204 Pass B; window-mirrored)
+  - `switchAnalysisSubtab()` → `app/modules/analysis/analysis-tab-orchestrator.js` (CC 204 Pass B; window-mirrored)
   - `updatePeopleAnalysis()` @ L55378 — if (!crashState.loaded) return;
   - `computeDayOfWeekAnalysis()` @ L57189 — const days = { Sunday: {count: 0, K: 0, A: 0}, Monday: {count: 0, K: 0, A: 0}, T
   - `computeVulnerableUserAnalysis()` @ L57260 — const ped = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, locations: {}, byHour: Arr
@@ -3193,7 +3193,7 @@ Before any code edit:
 | suffixFor | modules/data/road-type-mapping.js | module-private | shared |
 | svgToDataUri | inline @ L126929 | inline | shared |
 | switchAccountTab | inline @ L114471 | inline | shared |
-| switchAnalysisSubtab | inline @ L51344 | inline | analysis |
+| switchAnalysisSubtab | modules/analysis/analysis-tab-orchestrator.js | window+CL | analysis |
 | switchBAMode | inline @ L61452 | inline | shared |
 | switchCMFSubtab | inline @ L67350 | inline | cmf |
 | switchDKStreetView | modules/ai/ai-domain-knowledge-chat-ui.js | window+CL | ai, domain-knowledge |
@@ -3434,7 +3434,7 @@ Before any code edit:
 | updateAIContextIndicator | inline @ L66528 | inline | ai |
 | updateAILoadingStep | inline @ L72976 | inline | shared |
 | updateAllAIStatusIndicators | modules/ai/ai-mode-toggle.js | window+CL | ai, domain-knowledge |
-| updateAnalysis | inline @ L51314 | inline | analysis |
+| updateAnalysis | modules/analysis/analysis-tab-orchestrator.js | window+CL | analysis |
 | updateApiKeyHelper | inline @ L34220 | inline | shared |
 | updateAppBuilderFromSelection | inline @ L33906 | inline | shared |
 | updateAppStatus | modules/grants/grants-ui.js | window+CL | grants |
