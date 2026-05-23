@@ -630,12 +630,19 @@
         dd.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    var _tierChangedTimer = null;
     document.addEventListener('tierChanged', function (evt) {
         var tier = evt && evt.detail && evt.detail.tier;
         if (!tier || !TIER_SUBJURISDICTION_DROPDOWN[tier]) return;
-        // Defer off the synchronous dispatch so core/tier.js finishes any
-        // synchronous dropdown population / re-render before we auto-select.
-        Promise.resolve().then(function () { autoSelectFirstSubJurisdiction(tier); });
+        // Debounce the cascade: a single tier-button click fires 4-7
+        // tierChanged events. Collapse to one auto-select per click burst,
+        // preserving the post-dispatch defer that lets core/tier.js finish
+        // any synchronous dropdown population first.
+        if (_tierChangedTimer) clearTimeout(_tierChangedTimer);
+        _tierChangedTimer = setTimeout(function () {
+            _tierChangedTimer = null;
+            autoSelectFirstSubJurisdiction(tier);
+        }, 200);
     });
 
     CL.upload.tierUI = {
