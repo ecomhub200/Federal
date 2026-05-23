@@ -21,6 +21,98 @@
  */
 (function(){
   'use strict';
+
+  // Matview-only ("Supabase") mode predicate. Mirrors the same guard
+  // crash-tree-build.js:34-36 uses inside buildCrashTreeData(): when
+  // crashState.sampleRows is empty (large jurisdictions like Sussex
+  // County, ~134K crashes), row-level analysis is impossible — the
+  // primary tree is built from mv_crash_tree directly.
+  const _isSupabaseMode = () =>
+      crashTreeState.source === 'supabase' ||
+      !(crashState.sampleRows && crashState.sampleRows.length > 0);
+
+  // CT1 fallback: render the Secondary Analysis panel from the already-
+  // built primary tree (crashTreeState.treeData) when we have no row data
+  // to build a true secondary tree. Surfaces real, honest data — the
+  // top-3 children of the deepest drilled node — instead of a misleading
+  // "No crashes match" message.
+  const _renderSecondaryFromPrimary = () => {
+      const el = document.getElementById('crashTreeSecondaryAnalysis');
+      if (!el) return;
+
+      const tree = crashTreeState.treeData;
+      if (!tree) {
+          el.innerHTML =
+              '<div style="text-align:center;padding:.75rem;color:var(--gray);font-size:.8rem;">'
+              + 'Secondary analysis unavailable — primary tree not yet built.'
+              + '</div>';
+          return;
+      }
+
+      // Find the deepest node along the user's drill path; fall back to root.
+      const path = Array.isArray(crashTreeState.dominantPath) ? crashTreeState.dominantPath : [];
+      let node = tree;
+      if (path.length > 0 && typeof findNodeById === 'function') {
+          const lastId = path[path.length - 1];
+          const resolved = findNodeById(tree, lastId);
+          if (resolved) node = resolved;
+      }
+
+      const footnote =
+          '<div style="margin-top:.35rem;font-size:.6rem;color:#6b7280;font-style:italic;">'
+          + 'Row-level secondary tree unavailable at this scope — showing top categories from the primary tree.'
+          + '</div>';
+
+      const kids = (node.children || []);
+      if (kids.length === 0) {
+          el.innerHTML = `
+              <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:var(--radius);padding:.6rem;">
+                  <div style="font-weight:600;color:#0369a1;font-size:.75rem;margin-bottom:.3rem;">
+                      🌳 Primary Tree Leaf
+                  </div>
+                  <div style="font-size:.85rem;color:#0c4a6e;font-weight:600;margin-bottom:.25rem;">
+                      ${node.name || 'Selected node'}
+                  </div>
+                  <div style="font-size:.65rem;color:#0369a1;margin-bottom:.4rem;">
+                      ${(node.total || 0).toLocaleString()} crashes • ${((node.K || 0) + (node.A || 0)).toLocaleString()} KA injuries
+                  </div>
+                  ${footnote}
+              </div>`;
+          return;
+      }
+
+      const sortedKids = kids.slice().sort((a, b) => (b.total || 0) - (a.total || 0));
+      const topCategories = sortedKids.slice(0, 3).map(c => {
+          const pct = typeof c.pct === 'number' ? c.pct.toFixed(0) : '0';
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem 0;border-bottom:1px solid #e5e7eb;">
+              <span style="font-size:.75rem;color:#374151;">${c.name}</span>
+              <span style="font-size:.75rem;font-weight:600;color:#0369a1;">${(c.total || 0).toLocaleString()} <span style="color:#6b7280;font-weight:400;">(${pct}%)</span></span>
+          </div>`;
+      }).join('');
+
+      const nodeKA = node.unfilteredKA !== undefined
+          ? node.unfilteredKA
+          : ((node.K || 0) + (node.A || 0));
+
+      el.innerHTML = `
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:var(--radius);padding:.6rem;">
+              <div style="font-weight:600;color:#0369a1;font-size:.75rem;margin-bottom:.3rem;">
+                  🌳 Top Categories Within Primary Scope:
+              </div>
+              <div style="font-size:.85rem;color:#0c4a6e;font-weight:600;margin-bottom:.25rem;">
+                  ${node.name || 'All Crashes'}
+              </div>
+              <div style="font-size:.65rem;color:#0369a1;margin-bottom:.4rem;">
+                  ${(node.total || 0).toLocaleString()} crashes • ${nodeKA.toLocaleString()} KA injuries
+              </div>
+              <div style="margin-top:.35rem;border-top:1px solid #bae6fd;padding-top:.35rem;">
+                  <div style="font-size:.65rem;color:#6b7280;margin-bottom:.25rem;font-weight:600;">Top Categories:</div>
+                  ${topCategories}
+              </div>
+              ${footnote}
+          </div>`;
+  };
+
   // ─── EXTRACTED CODE START (verbatim from index.html L85854-L86248) ───
 // Update data table
 function updateCrashTreeDataTable() {
@@ -67,6 +159,21 @@ function updateCrashTreeDataTable() {
 function analyzeRiskFactors() {
     const el = document.getElementById('crashTreeRiskFactors');
     if (!el || !crashState.loaded) return;
+
+    // Matview-only mode: row-level fields (NIGHT, SPEED, WEATHER, PED,
+    // BIKE) are unavailable, so FHWA overrepresentation cannot be
+    // computed. Render an honest placeholder instead of zeros.
+    if (_isSupabaseMode()) {
+        el.innerHTML = `
+            <div class="ct-risk-empty" style="text-align:center;padding:.75rem;color:var(--gray);font-size:.75rem;line-height:1.4;">
+              <div style="font-size:1.25rem;margin-bottom:.25rem;">📊</div>
+              <div style="font-weight:600;color:#374151;margin-bottom:.2rem;">Risk-factor analysis unavailable at this scope</div>
+              <div>FHWA-style overrepresentation requires row-level crash data, which isn't loaded for jurisdictions of this size. Drill into a smaller area (city, intersection, or corridor) to see risk-factor ratios.</div>
+            </div>`;
+        crashTreeState.riskFactors.analyzed = [];
+        crashTreeState.riskFactors.score = 0;
+        return;
+    }
 
     // FHWA overrepresentation requires ALL crashes (not severity-filtered) as baseline
     // Use date-filtered only to ensure proper comparison between KA and all severities
@@ -294,6 +401,14 @@ function buildSecondaryTreeAnalysis() {
         }
     };
   try {
+    // Matview-only mode: sampleRows is empty, so row-level secondary tree
+    // cannot be built. Surface real data from the already-built primary
+    // tree (top-3 children of the deepest drill-path node, or root).
+    if (_isSupabaseMode()) {
+        _renderSecondaryFromPrimary();
+        return;
+    }
+
     // Use date-filtered crashes (already filtered by severity and date)
     const filteredCrashes = getCrashTreeFilteredCrashes();
 
