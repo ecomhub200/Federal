@@ -318,38 +318,28 @@ Before any code edit:
 ### Safety Focus
 - **Tab ID:** `safety`
 - **Content div:** `#tab-safety`
-- **Status:** ⬜ Inline only
+- **Status:** 🟡 Partially modularized (CC 201 Pass B, 2026-05-23)
 - **HTML template:** inline L12737-L13319
-- **Modules (0):**
-  - none
-- **Inline functions remaining (25):**
-  - `logConnectionDiagnostics()` @ L22692 — Export diagnostics to console for debugging
-  - `openEmailNotificationModal()` @ L31395 — Open Email Notification Modal - Redesigned with Brevo + Coolify + Report Integration
-  - `updateEmailLocationVisibility()` @ L32142 — Show/hide location selector based on report type
-  - `applySafetyFocusCapabilityGates()` @ L41640 — when the active state's capability for that flag is explicitly false.
-  - `askMUTCDGuidance()` @ L65950 — Open AI tab with contextual MUTCD question
-  - `askMUTCDForSafetyCategory()` @ L66004 — Open AI tab with safety category context
-  - `queryCMFForSafetyCategory()` @ L77871 — Query CMF database for countermeasures matching a safety category
-  - `initSafetyFocus()` @ L78257 — Initialize Safety Focus module
-  - `selectSafetyCategory()` @ L78887 — 
-  - `_safetyFocusHasCofactors()` @ L79372 — if (typeof _safetyFocusHasCofactors._cache !== 'undefined') return _safetyFocusH
-  - `updateSafetyLocationTable()` @ L79461 — const tbody = document.getElementById('safetyLocationBody');
-  - `renderSafetyLocationRows()` @ L79548 — const tbody = document.getElementById('safetyLocationBody');
-  - `goToSafetyPage()` @ L79581 — Page navigation for safety location table
-  - `updateSfDetailPanel()` @ L79732 — Main orchestrator for the detail panel
-  - `aggregateSfDetailData()` @ L79771 — Aggregate crash data from selected locations within the active category
-  - `renderSfDetailContent()` @ L80050 — Render detail panel content
-  - `initSfDetailCharts()` @ L80423 — Initialize all charts for the safety focus detail panel
-  - `exportSfDetailCSV()` @ L80639 — Export safety focus detail data to CSV
-  - `exportSfDetailPDF()` @ L80693 — const data = sfDetailState.aggregatedData;
-  - `exportSfDetailKML()` @ L81502 — Export safety focus detail data to KML
-  - `exportSfDetailKML()` @ L81581 — const data = sfDetailState.aggregatedData;
-  - `exportSafetyCategoryPDF()` @ L81660 — const category = safetyState.activeCategory;
-  - `exportCurrentDetailToKML()` @ L91397 — Export current detail location crashes to KML
-  - `generateSafetyCategoryReport()` @ L92225 — Generate report for current safety category
-  - `initSchoolSafetyTab()` @ L132254 — if (schoolTabState.initialized) {
-- **Shared globals:** `sfDetailState` (inline @ L77422)
-- **Dependencies:** core, data
+- **Modules (4):**
+  - `app/modules/safety/safety-focus-cards.js` — CL safety.cards — 10 fns covering tab init, category select, location table, capability gates, date filters, report data prep. Dual-exposed `window.*` + `CL.safety.cards.*`.
+  - `app/modules/safety/safety-focus-detail-panel.js` — CL safety.detailPanel — 4 fns covering the per-location detail panel (open/aggregate/render incl. monthly heatmap).
+  - `app/modules/safety/safety-focus-charts.js` — CL safety.charts — `initSfDetailCharts` (instantiates 15 Chart.js canvases for the detail panel).
+  - `app/modules/safety/safety-focus-export.js` — CL safety.export — ~16 unique fns covering CSV/PDF/KML exports, CMF lookup, map-view jumps, and the Reports-tab hand-off. KNOWN DUPS preserved verbatim pending follow-up dedupe PR: `exportSfDetailKML` ×2, `exportSafetyData` ×3, `exportSafetyLocationData` ×3 (last-defined wins via hoisting — original behavior preserved).
+- **Inline functions remaining (NOT extracted in Pass B — candidates for Pass C):**
+  - Category data: `processSafetyData()`, `calculateCrossAnalysis()`, `extractSeverity()`, `populateSafetyYearFilters()`, `updateSafetyCards()`, `_loadSafetyFromMatview()`, `_hydrateSafetyLocationsFromMatview()`
+  - Charts (main panel, distinct from detail panel): `updateSafetyGridVisibility()`, `updateSafetyBreakdownChart()`, `updateSafetyCollisionChart()`, `updateSafetyRoadwayChart()`, `updateSafetyHarmfulEventChart()`, `updateSafetyYearChart()`, `_renderSafetySubKpiUnavailable()`, `updateSafetyFactorBadges()`, `initSfCombinedCharts()`, `initSfCompareCharts()`
+  - Detail-panel render helpers: `renderSfCombinedView()`, `renderSfFactorRow()`, `renderSfCompareView()`, `calculateSfCategoryBenchmarks()`
+  - Selection helpers: `toggleSfSelection()`, `toggleAllSfSelection()`, `clearSfSelection()`, `updateSfSelectionCount()`, `syncSfCheckboxStates()`, `toggleAllSafetyLocations()`, `updateSafetyLocationSelection()`, `syncSafetySelectedLocations()`, `updateSafetySelectionUI()`, `setSfViewMode()`
+  - Self-tests: `runSafetyDataCheck()`, `sfAddCheck()`, `sfCheckSeverityTotals()`, `sfCheckEPDOCalculations()`, `sfCheckCategorySums()`, `sfCheckLocationTableConsistency()`, `sfCheckCrossAnalysisConsistency()`, `sfCheckFilterConsistency()`, `sfCheckDetailPanelAccuracy()`, `sfCheckPercentageDenominators()`, `displaySafetyDataCheckResults()`, `exportSafetyDataCheckResults()`
+  - Misc: `exportSafetySelectedLocationsPDF()`, `getSafetyLocationCMF()`, `showSafetyLocationDetails()`, `viewCurrentDetailOnMap()`, `exportCurrentDetail()`, `closeSafetyModal()`, `addSafetyDataToReport()`, `exportSafetyToKML()` (note: extracted as part of Pass B export module — the entry here in earlier maps was stale)
+  - Cross-analysis: `viewCrossAnalysis()`, `viewCrossOnMap()`, `exportCrossAnalysis()`, `exportCrossToKML()`, `addCrossToReport()`
+  - Custom matrix: `populateCustomMatrixDropdowns()`, `updateCustomMatrixPreview()`, `getSelectedCustomMatrixFactors()`, `clearCustomMatrixSelections()`, `runCustomMatrixAnalysis()`, `viewCustomMatrixOnMap()`, `exportCustomMatrixData()`
+  - Filter/map: `filterMapForSafety()`, `showMapFilterBadge()`, `clearSafetyMapFilter()`
+  - Auto-init: `safetyInitAttempts` + `safetyCheckInterval` (DOMContentLoaded gate)
+  - Shared utility (NOT safety-specific): `exportCrashesToCSV()` ×3 dupes (also called from non-Safety code)
+- **Shared globals:** `safetyState` (inline @ L77420, mirrored to `window.safetyState`), `sfDetailState` (inline @ L77434, mirrored to `window.sfDetailState`)
+- **Dependencies:** core, data, analysis (via global `cmfState`, `crashState`, `safetyCategories`, `safetyCategoryToCMFQuery`)
+- **External callers of `window.safetyState`:** `app/modules/app/tab-dispatcher.js`, `app/modules/core/epdo-presets.js`, `app/modules/data/dashboard-filter-bindings.js`, `app/modules/reports/reports-standard-types2.js`
 
 ### Fatal & Speeding
 - **Tab ID:** `fatalspeeding`
