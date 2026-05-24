@@ -2,11 +2,23 @@
  * CrashLens Crash Profile Builders
  * Extracted from app/index.html — four profile builder functions
  * These are pure data-in, object-out functions.
+ *
+ * Stage A v3 Phase 2.2 — converted from CL-namespace assignment to ESM:
+ *   - Module body is now a top-level `const crashProfile = {...}` binding
+ *   - Named export `crashProfile` (unused by other modules in Phase 2; for future-phase imports)
+ *   - Back-compat dual exposure preserves `window.CL.analysis.crashProfile` for every
+ *     classic-loaded caller (inline app/index.html + every other still-classic module)
+ *   - No ESM imports — cross-module dependencies stay routed through window.CL.X / window.X
+ *   - Body untouched: bare `COL` (48 refs), `EPDO_WEIGHTS` (3), `calcEPDO` (1) inside
+ *     method bodies resolve to window.X via globalThis lookup, because those bindings
+ *     were exposed as window properties by the Phase 2-prep let/const → var commit
+ *     (commit f86e36fd, merged via PR #203).
+ *   - The 2 `crashState` and 1 `cmfState` raw-grep hits in this file are inside JSDoc
+ *     `*` block comments — non-functional, no rewrite needed.
  */
-window.CL = window.CL || {};
-CL.analysis = CL.analysis || {};
+'use strict';
 
-CL.analysis.crashProfile = {
+const crashProfile = {
 
     /**
      * Build county-wide crash profile from aggregates.
@@ -375,4 +387,16 @@ CL.analysis.crashProfile = {
     }
 };
 
-CL._registerModule('analysis/crash-profile');
+export { crashProfile };
+
+// === Back-compat dual exposure (classic-loaded callers still read CL.analysis.crashProfile) ===
+if (typeof window !== 'undefined') {
+  window.CL = window.CL || {};
+  window.CL.analysis = window.CL.analysis || {};
+  window.CL.analysis.crashProfile = crashProfile;
+}
+
+// === Module registration (load tracker) — routed via window.CL in ESM scope ===
+if (typeof window !== 'undefined' && window.CL && window.CL._registerModule) {
+  window.CL._registerModule('analysis/crash-profile');
+}
