@@ -78,3 +78,4 @@ import './modules/batch-ba/batch-ba-export-pdf-details.js';
 
 // --- L3: singleton-slot / inline consumers ----------------------------------
 import './modules/app/tab-dispatcher.js';
+import './modules/map/map-points-hydrate.js';
