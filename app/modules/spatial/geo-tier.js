@@ -16,9 +16,11 @@
  *
  * Depends on (must load before this file): `core/tier`, `spatial/hierarchy-registry`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+
+import * as tierUI from '../upload/upload-tier-ui.js';
+
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 // ============================================================
 // GEOGRAPHY-BASED TIER HELPERS (City, Town, Planning District)
@@ -489,8 +491,8 @@ function handleCountySelection() {
         if (typeof saveJurisdictionSelection === 'function') {
             saveJurisdictionSelection();
         }
-        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.renderTierScopeCard) {
-            CL.upload.tierUI.renderTierScopeCard('county');
+        if (tierUI && tierUI.renderTierScopeCard) {
+            tierUI.renderTierScopeCard('county');
         }
     } catch (e) {
         console.error('[Tier] handleCountySelection failed:', e);
@@ -576,8 +578,8 @@ async function handleCitySelection() {
         }
 
         if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI('city');
-        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.renderTierScopeCard) {
-            CL.upload.tierUI.renderTierScopeCard('city');
+        if (tierUI && tierUI.renderTierScopeCard) {
+            tierUI.renderTierScopeCard('city');
         }
         if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
         // Page subtitle (".jurisdiction-subtitle"), map stats scope label and
@@ -716,7 +718,7 @@ async function loadStatewideCSVForTier(stateKey) {
 
     const loadingTitle = document.getElementById('loadingTitle');
     const loadingSubtitle = document.getElementById('loadingSubtitle');
-    if (CL.upload?.tierUI?.setUploadZoneCompact) CL.upload.tierUI.setUploadZoneCompact(false);
+    if (tierUI?.setUploadZoneCompact) tierUI.setUploadZoneCompact(false);
     if (loadingTitle) loadingTitle.textContent = `Loading Statewide Data...`;
     if (loadingSubtitle) loadingSubtitle.textContent = `Parsing ${stateKey} statewide crash records...`;
 
@@ -1382,43 +1384,53 @@ async function ensureTierBoundaryDisplayed() {
 
   // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
   window.CL = window.CL || {};
-  CL.spatial = CL.spatial || {};
-  CL.spatial.geoTier = CL.spatial.geoTier || {};
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.spatial = CL.spatial || {};
+CL.spatial.geoTier = CL.spatial.geoTier || {};
 
-  // Restore prior global surface: every declaration above was a top-level
-  // (global) function before extraction; mirror all to window so remaining
-  // inline code in index.html keeps working unchanged.
-  window.loadGeoData = loadGeoData;
-  window._getCurrentStateFips = _getCurrentStateFips;
-  window._getCurrentStateAbbr = _getCurrentStateAbbr;
-  window._extractPlaceType = _extractPlaceType;
-  window._placeSlugFor = _placeSlugFor;
-  window.lookupCountyKeyByFips = lookupCountyKeyByFips;
-  window._resolvePlaceParentCountyFips = _resolvePlaceParentCountyFips;
-  window.populateGeoTierDropdown = populateGeoTierDropdown;
-  window.populatePlanningDistrictDropdown = populatePlanningDistrictDropdown;
-  window.handlePlanningDistrictSelection = handlePlanningDistrictSelection;
-  window.handleCountySelection = handleCountySelection;
-  window.handleCitySelection = handleCitySelection;
-  window.loadStatewideCSVForTier = loadStatewideCSVForTier;
-  window.populateRegionDropdown = populateRegionDropdown;
-  window.populateMPODropdown = populateMPODropdown;
-  window.handleRegionSelection = handleRegionSelection;
-  window.handleMPOSelection = handleMPOSelection;
-  window.getCountyFIPSListForTier = getCountyFIPSListForTier;
-  window.getBoundsForTier = getBoundsForTier;
-  window.getTierScopeKey = getTierScopeKey;
-  window.getTierScopeName = getTierScopeName;
-  window._estimateBoundsFromCenter = _estimateBoundsFromCenter;
-  window._computeMultiCountyBounds = _computeMultiCountyBounds;
-  window.ensureTierBoundaryDisplayed = ensureTierBoundaryDisplayed;
+// Restore prior global surface: every declaration above was a top-level
+// (global) function before extraction; mirror all to window so remaining
+// inline code in index.html keeps working unchanged.
+window.loadGeoData = loadGeoData;
+window._getCurrentStateFips = _getCurrentStateFips;
+window._getCurrentStateAbbr = _getCurrentStateAbbr;
+window._extractPlaceType = _extractPlaceType;
+window._placeSlugFor = _placeSlugFor;
+window.lookupCountyKeyByFips = lookupCountyKeyByFips;
+window._resolvePlaceParentCountyFips = _resolvePlaceParentCountyFips;
+window.populateGeoTierDropdown = populateGeoTierDropdown;
+window.populatePlanningDistrictDropdown = populatePlanningDistrictDropdown;
+window.handlePlanningDistrictSelection = handlePlanningDistrictSelection;
+window.handleCountySelection = handleCountySelection;
+window.handleCitySelection = handleCitySelection;
+window.loadStatewideCSVForTier = loadStatewideCSVForTier;
+window.populateRegionDropdown = populateRegionDropdown;
+window.populateMPODropdown = populateMPODropdown;
+window.handleRegionSelection = handleRegionSelection;
+window.handleMPOSelection = handleMPOSelection;
+window.getCountyFIPSListForTier = getCountyFIPSListForTier;
+window.getBoundsForTier = getBoundsForTier;
+window.getTierScopeKey = getTierScopeKey;
+window.getTierScopeName = getTierScopeName;
+window._estimateBoundsFromCenter = _estimateBoundsFromCenter;
+window._computeMultiCountyBounds = _computeMultiCountyBounds;
+window.ensureTierBoundaryDisplayed = ensureTierBoundaryDisplayed;
 
-  // Prompt 25 §2 — CL.spatial + CL.spatial.geoTier exposure for the anchors
-  CL.spatial.loadGeoData = CL.spatial.geoTier.loadGeoData = loadGeoData;
-  CL.spatial.populateGeoTierDropdown = CL.spatial.geoTier.populateGeoTierDropdown = populateGeoTierDropdown;
-  CL.spatial.handleCountySelection = CL.spatial.geoTier.handleCountySelection = handleCountySelection;
-  CL.spatial.getBoundsForTier = CL.spatial.geoTier.getBoundsForTier = getBoundsForTier;
-  CL.spatial.getCountyFIPSListForTier = CL.spatial.geoTier.getCountyFIPSListForTier = getCountyFIPSListForTier;
+// Prompt 25 §2 — CL.spatial + CL.spatial.geoTier exposure for the anchors
+CL.spatial.loadGeoData = CL.spatial.geoTier.loadGeoData = loadGeoData;
+CL.spatial.populateGeoTierDropdown = CL.spatial.geoTier.populateGeoTierDropdown = populateGeoTierDropdown;
+CL.spatial.handleCountySelection = CL.spatial.geoTier.handleCountySelection = handleCountySelection;
+CL.spatial.getBoundsForTier = CL.spatial.geoTier.getBoundsForTier = getBoundsForTier;
+CL.spatial.getCountyFIPSListForTier = CL.spatial.geoTier.getCountyFIPSListForTier = getCountyFIPSListForTier;
 
-  CL._registerModule('spatial/geo-tier');
-})();
+export {
+    loadGeoData, populateGeoTierDropdown, handleCountySelection, getBoundsForTier,
+    getCountyFIPSListForTier, populatePlanningDistrictDropdown,
+    handlePlanningDistrictSelection, handleCitySelection, loadStatewideCSVForTier,
+    populateRegionDropdown, populateMPODropdown, handleRegionSelection,
+    handleMPOSelection, getTierScopeKey, getTierScopeName,
+    ensureTierBoundaryDisplayed
+};
+
+CL._registerModule('spatial/geo-tier');

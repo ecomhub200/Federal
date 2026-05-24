@@ -4,8 +4,8 @@
  * Depends: core/epdo-presets, analysis/crash-profile (via window/CL mirrors).
  * Public API (dual exposure): window.<fn> ↔ CL.reports.standardCore.<fn>
  */
-(function(){ 'use strict';
-  // ─── EXTRACTED CODE START (verbatim) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim) ───
 function showReportSubTab(tabName) {
     // Update tab buttons
     document.querySelectorAll('#tab-reports .grant-tabs .grant-tab').forEach(btn => {
@@ -800,5 +800,4 @@ function computeSystemwideCategoryData(crashes) {
   window.generateSystemwideReport = generateSystemwideReport; CL.reports.standardCore.generateSystemwideReport = generateSystemwideReport;
   window._legacySystemwideReport = _legacySystemwideReport; CL.reports.standardCore._legacySystemwideReport = _legacySystemwideReport;
   window.computeSystemwideCategoryData = computeSystemwideCategoryData; CL.reports.standardCore.computeSystemwideCategoryData = computeSystemwideCategoryData;
-  CL._registerModule('reports/reports-standard-core');
-})();
+CL._registerModule('reports/reports-standard-core');

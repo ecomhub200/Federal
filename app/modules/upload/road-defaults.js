@@ -15,8 +15,7 @@
  * User manual overrides are respected: if the user explicitly clicks a
  * different road type, the module won't override it on page reload.
  */
-(function () {
-    'use strict';
+'use strict';
 
     // ============================================================
     // STATE — loaded patterns and cache
@@ -254,13 +253,15 @@
     // PUBLIC API — attach to CL.upload.roadDefaults
     // ============================================================
 
-    CL.upload = CL.upload || {};
-    CL.upload.roadDefaults = {
-        getDefaultRoadType: getDefaultRoadType,
-        applyDefaultRoadType: applyDefaultRoadType,
-        isLoaded: isLoaded
-    };
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.upload = CL.upload || {};
+CL.upload.roadDefaults = {
+    getDefaultRoadType: getDefaultRoadType,
+    applyDefaultRoadType: applyDefaultRoadType,
+    isLoaded: isLoaded
+};
 
-    CL._registerModule('upload/road-defaults');
+export { getDefaultRoadType, applyDefaultRoadType, isLoaded };
 
-})();
+CL._registerModule('upload/road-defaults');

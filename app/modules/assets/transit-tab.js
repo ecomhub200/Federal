@@ -18,9 +18,8 @@
  *
  * Depends on (must load before this file): `assets/school-tab`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 /**
  * Initialize the Transit Safety tab.
@@ -998,31 +997,82 @@ function softActivateTransitLayer() {
     }
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.assets = CL.assets || {};
-  window.initTransitSafetyTab = initTransitSafetyTab; CL.assets.initTransitSafetyTab = initTransitSafetyTab;
-  window.transitTabSyncFromContext = transitTabSyncFromContext; CL.assets.transitTabSyncFromContext = transitTabSyncFromContext;
-  window.transitTabCountyChange = transitTabCountyChange; CL.assets.transitTabCountyChange = transitTabCountyChange;
-  window.transitTabQuickSelect = transitTabQuickSelect; CL.assets.transitTabQuickSelect = transitTabQuickSelect;
-  window.transitTabLoadStops = transitTabLoadStops; CL.assets.transitTabLoadStops = transitTabLoadStops;
-  window.transitTabLoadStopsFromBTS = transitTabLoadStopsFromBTS; CL.assets.transitTabLoadStopsFromBTS = transitTabLoadStopsFromBTS;
-  window.transitLoadStopsForTier = transitLoadStopsForTier; CL.assets.transitLoadStopsForTier = transitLoadStopsForTier;
-  window._updateTransitTierScopeNotice = _updateTransitTierScopeNotice; CL.assets._updateTransitTierScopeNotice = _updateTransitTierScopeNotice;
-  window.updateTransitTabUI = updateTransitTabUI; CL.assets.updateTransitTabUI = updateTransitTabUI;
-  window.updateTransitTabMetrics = updateTransitTabMetrics; CL.assets.updateTransitTabMetrics = updateTransitTabMetrics;
-  window.updateTransitTabTable = updateTransitTabTable; CL.assets.updateTransitTabTable = updateTransitTabTable;
-  window.transitTabClearStops = transitTabClearStops; CL.assets.transitTabClearStops = transitTabClearStops;
-  window.transitTabClearAllStops = transitTabClearAllStops; CL.assets.transitTabClearAllStops = transitTabClearAllStops;
-  window.transitTabRadiusChange = transitTabRadiusChange; CL.assets.transitTabRadiusChange = transitTabRadiusChange;
-  window.transitTabSetRadius = transitTabSetRadius; CL.assets.transitTabSetRadius = transitTabSetRadius;
-  window.transitTabViewOnMap = transitTabViewOnMap; CL.assets.transitTabViewOnMap = transitTabViewOnMap;
-  window.transitTabViewOnMapSingle = transitTabViewOnMapSingle; CL.assets.transitTabViewOnMapSingle = transitTabViewOnMapSingle;
-  window.transitTabFocusView = transitTabFocusView; CL.assets.transitTabFocusView = transitTabFocusView;
-  window.transitTabExportData = transitTabExportData; CL.assets.transitTabExportData = transitTabExportData;
-  window.transitTabExportKML = transitTabExportKML; CL.assets.transitTabExportKML = transitTabExportKML;
-  window.softActivateTransitLayer = softActivateTransitLayer; CL.assets.softActivateTransitLayer = softActivateTransitLayer;
-  CL._registerModule('assets/transit-tab');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.assets = CL.assets || {};
+CL.assets.initTransitSafetyTab = initTransitSafetyTab;
+CL.assets.transitTabSyncFromContext = transitTabSyncFromContext;
+CL.assets.transitTabCountyChange = transitTabCountyChange;
+CL.assets.transitTabQuickSelect = transitTabQuickSelect;
+CL.assets.transitTabLoadStops = transitTabLoadStops;
+CL.assets.transitTabLoadStopsFromBTS = transitTabLoadStopsFromBTS;
+CL.assets.transitLoadStopsForTier = transitLoadStopsForTier;
+CL.assets._updateTransitTierScopeNotice = _updateTransitTierScopeNotice;
+CL.assets.updateTransitTabUI = updateTransitTabUI;
+CL.assets.updateTransitTabMetrics = updateTransitTabMetrics;
+CL.assets.updateTransitTabTable = updateTransitTabTable;
+CL.assets.transitTabClearStops = transitTabClearStops;
+CL.assets.transitTabClearAllStops = transitTabClearAllStops;
+CL.assets.transitTabRadiusChange = transitTabRadiusChange;
+CL.assets.transitTabSetRadius = transitTabSetRadius;
+CL.assets.transitTabViewOnMap = transitTabViewOnMap;
+CL.assets.transitTabViewOnMapSingle = transitTabViewOnMapSingle;
+CL.assets.transitTabFocusView = transitTabFocusView;
+CL.assets.transitTabExportData = transitTabExportData;
+CL.assets.transitTabExportKML = transitTabExportKML;
+CL.assets.softActivateTransitLayer = softActivateTransitLayer;
+
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
+// All 21 retained per the module's own pre-Stage-A docstring (HTML onclick=
+// + dynamically-generated row handlers). Extends the survivor floor (which
+// only captured transitLoadStopsForTier, transitTabClearStops,
+// transitTabLoadStops, transitTabViewOnMapSingle).
+window.initTransitSafetyTab = initTransitSafetyTab;
+window.transitTabSyncFromContext = transitTabSyncFromContext;
+window.transitTabCountyChange = transitTabCountyChange;
+window.transitTabQuickSelect = transitTabQuickSelect;
+window.transitTabLoadStops = transitTabLoadStops;
+window.transitTabLoadStopsFromBTS = transitTabLoadStopsFromBTS;
+window.transitLoadStopsForTier = transitLoadStopsForTier;
+window._updateTransitTierScopeNotice = _updateTransitTierScopeNotice;
+window.updateTransitTabUI = updateTransitTabUI;
+window.updateTransitTabMetrics = updateTransitTabMetrics;
+window.updateTransitTabTable = updateTransitTabTable;
+window.transitTabClearStops = transitTabClearStops;
+window.transitTabClearAllStops = transitTabClearAllStops;
+window.transitTabRadiusChange = transitTabRadiusChange;
+window.transitTabSetRadius = transitTabSetRadius;
+window.transitTabViewOnMap = transitTabViewOnMap;
+window.transitTabViewOnMapSingle = transitTabViewOnMapSingle;
+window.transitTabFocusView = transitTabFocusView;
+window.transitTabExportData = transitTabExportData;
+window.transitTabExportKML = transitTabExportKML;
+window.softActivateTransitLayer = softActivateTransitLayer;
+
+export {
+    initTransitSafetyTab,
+    transitTabSyncFromContext,
+    transitTabCountyChange,
+    transitTabQuickSelect,
+    transitTabLoadStops,
+    transitTabLoadStopsFromBTS,
+    transitLoadStopsForTier,
+    _updateTransitTierScopeNotice,
+    updateTransitTabUI,
+    updateTransitTabMetrics,
+    updateTransitTabTable,
+    transitTabClearStops,
+    transitTabClearAllStops,
+    transitTabRadiusChange,
+    transitTabSetRadius,
+    transitTabViewOnMap,
+    transitTabViewOnMapSingle,
+    transitTabFocusView,
+    transitTabExportData,
+    transitTabExportKML,
+    softActivateTransitLayer
+};
+
+CL._registerModule('assets/transit-tab');

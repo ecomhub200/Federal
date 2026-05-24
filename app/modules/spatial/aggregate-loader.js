@@ -13,9 +13,8 @@
  *
  * Depends on (must load before this file): `spatial/spatial-clip`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 const AggregateLoader = (() => {
     'use strict';
@@ -197,11 +196,13 @@ const AggregateLoader = (() => {
     };
 })();
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.spatial = CL.spatial || {};
-  window.AggregateLoader = AggregateLoader; CL.spatial.AggregateLoader = AggregateLoader;
-  CL._registerModule('spatial/aggregate-loader');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.spatial = CL.spatial || {};
+CL.spatial.AggregateLoader = AggregateLoader;
+
+export { AggregateLoader };
+
+CL._registerModule('spatial/aggregate-loader');

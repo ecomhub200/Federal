@@ -15,9 +15,8 @@
  *
  * Depends on (must load before this file): `data/matview-cache`, `map/map-render`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 // Round 25 §2 — at aggregate tiers, R2 is skipped (parquet is wrong shape
 // for rollups). Instead, lazy-fetch per-marker rows from mv_map_points so
@@ -144,11 +143,13 @@ async function _hydrateMapPointsFromMatview(reason) {
     finally { _mapPointsInFlight.delete(dedupeKey); }
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.map = CL.map || {};
-  window._hydrateMapPointsFromMatview = _hydrateMapPointsFromMatview; CL.map._hydrateMapPointsFromMatview = _hydrateMapPointsFromMatview;
-  CL._registerModule('map/map-points-hydrate');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.map = CL.map || {};
+CL.map._hydrateMapPointsFromMatview = _hydrateMapPointsFromMatview;
+
+export { _hydrateMapPointsFromMatview };
+
+CL._registerModule('map/map-points-hydrate');

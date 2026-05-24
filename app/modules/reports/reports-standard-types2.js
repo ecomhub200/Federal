@@ -5,8 +5,8 @@
  * Depends: core/epdo-presets, analysis/crash-profile (via window/CL mirrors).
  * Public API (dual exposure): window.<fn> ↔ CL.reports.standardTypes2.<fn>
  */
-(function(){ 'use strict';
-  // ─── EXTRACTED CODE START (verbatim) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim) ───
 // Safety Focus Report Generator
 function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
     // Check if there's data from Safety Focus tab
@@ -433,5 +433,4 @@ function generatePedBikeLocationTable(pedCrashes, bikeCrashes) {
   window.generatePedBikeRecommendations = generatePedBikeRecommendations; CL.reports.standardTypes2.generatePedBikeRecommendations = generatePedBikeRecommendations;
   window.generatePedBikeYearlySection = generatePedBikeYearlySection; CL.reports.standardTypes2.generatePedBikeYearlySection = generatePedBikeYearlySection;
   window.generatePedBikeLocationTable = generatePedBikeLocationTable; CL.reports.standardTypes2.generatePedBikeLocationTable = generatePedBikeLocationTable;
-  CL._registerModule('reports/reports-standard-types2');
-})();
+CL._registerModule('reports/reports-standard-types2');

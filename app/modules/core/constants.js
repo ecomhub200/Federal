@@ -2,10 +2,9 @@
  * CrashLens Core Constants
  * Extracted from app/index.html — COL, EPDO_WEIGHTS, EPDO_PRESETS, STATE_EPDO_WEIGHTS
  */
-window.CL = window.CL || {};
-CL.core = CL.core || {};
+'use strict';
 
-CL.core.constants = {
+export const constants = {
     COL: {
         ID: 'Document Nbr', YEAR: 'Crash Year', DATE: 'Crash Date', TIME: 'Crash Military Time',
         SEVERITY: 'Crash Severity', K: 'K_People', A: 'A_People', B: 'B_People', C: 'C_People',
@@ -145,5 +144,10 @@ CL.core.constants = {
                       source: 'FHWA-SA-25-021 (Oct 2025) crash costs in 2024 dollars' }
     }
 };
+
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.core = CL.core || {};
+CL.core.constants = constants;
 
 CL._registerModule('core/constants');

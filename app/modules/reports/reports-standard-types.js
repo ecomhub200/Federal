@@ -5,8 +5,8 @@
  * Public API (dual exposure): window.<fn> ↔ CL.reports.standardTypes.<fn>
  * Module-private: reportSequence (only read by generateReportId in this file).
  */
-(function(){ 'use strict';
-  // ─── EXTRACTED CODE START (verbatim) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim) ───
 function generateCorridorReport(crashes, route, title, author) {
     const stats = computeStats(crashes);
     // Prefer the Reports tab's user-selected timeline (reportStartDate /
@@ -944,5 +944,4 @@ function generateFindings(stats, crashes) {
   window.getDateRange = getDateRange; CL.reports.standardTypes.getDateRange = getDateRange;
   window.resolveReportPeriod = resolveReportPeriod; CL.reports.standardTypes.resolveReportPeriod = resolveReportPeriod;
   window.generateFindings = generateFindings; CL.reports.standardTypes.generateFindings = generateFindings;
-  CL._registerModule('reports/reports-standard-types');
-})();
+CL._registerModule('reports/reports-standard-types');

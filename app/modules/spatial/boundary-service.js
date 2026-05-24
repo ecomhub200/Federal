@@ -13,9 +13,8 @@
  *
  * Depends on (must load before this file): `spatial/hierarchy-registry`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 const BoundaryService = (() => {
     'use strict';
@@ -469,11 +468,13 @@ const BoundaryService = (() => {
     };
 })();
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.spatial = CL.spatial || {};
-  window.BoundaryService = BoundaryService; CL.spatial.BoundaryService = BoundaryService;
-  CL._registerModule('spatial/boundary-service');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.spatial = CL.spatial || {};
+CL.spatial.BoundaryService = BoundaryService;
+
+export { BoundaryService };
+
+CL._registerModule('spatial/boundary-service');

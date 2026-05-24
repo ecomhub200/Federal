@@ -21,103 +21,101 @@
  *   CL.data.chunkIsLoaded('map') → boolean
  *   CL.data.TAB_TO_CHUNK         → { tabId: chunkName, ... }
  */
+'use strict';
+
+// Map showTab(tabId) to its chunk file. When a tab isn't listed
+// here the showTab wrapper passes through with no chunk load.
+export const TAB_TO_CHUNK = {
+    // Populate as chunks are extracted. Examples (commented until
+    // the chunk files actually exist):
+    // 'map':           'map',
+    // 'crashtree':     'map',
+    // 'reports':       'reports',
+    // 'warrants':      'warrants',
+    // 'prediction':    'prediction'
+};
+
+var _loaded = new Set();
+var _inflight = new Map();   // chunkName → Promise
+
+export function loadChunkOnce(name) {
+    if (!name) return Promise.resolve();
+    if (_loaded.has(name)) return Promise.resolve();
+    if (_inflight.has(name)) return _inflight.get(name);
+
+    var promise = new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = 'chunks/' + name + '.js';
+        s.async = false;   // preserve execution order across siblings
+        s.onload = function () {
+            _loaded.add(name);
+            _inflight.delete(name);
+            console.log('[chunk] loaded:', name);
+            resolve();
+        };
+        s.onerror = function (e) {
+            _inflight.delete(name);
+            console.warn('[chunk] failed to load (likely not yet extracted):', name);
+            // Resolve (not reject) — lets the rest of the app keep
+            // working even if a chunk is missing. The tab that needed
+            // it will simply behave as before (still served from the
+            // monolithic index.html during the transition).
+            resolve();
+        };
+        document.head.appendChild(s);
+    });
+    _inflight.set(name, promise);
+    return promise;
+}
+
+export function chunkIsLoaded(name) {
+    return _loaded.has(name);
+}
+
+/**
+ * Wraps the global showTab() with chunk pre-loading. Safe to call
+ * multiple times — subsequent invocations replace the prior wrapper
+ * cleanly.
+ */
+export function installShowTabHook() {
+    if (typeof window.showTab !== 'function') return false;
+    if (window.showTab.__chunkWrapped) return true;
+    var orig = window.showTab;
+    var wrapped = async function (tabId) {
+        try {
+            var chunk = TAB_TO_CHUNK[tabId];
+            if (chunk) await loadChunkOnce(chunk);
+        } catch (e) {
+            console.warn('[chunk] hook error for', tabId, e && e.message);
+        }
+        return orig.apply(this, arguments);
+    };
+    wrapped.__chunkWrapped = true;
+    window.showTab = wrapped;
+    return true;
+}
+
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
 window.CL = window.CL || {};
 CL.data = CL.data || {};
+CL.data.loadChunkOnce = loadChunkOnce;
+CL.data.chunkIsLoaded = chunkIsLoaded;
+CL.data.TAB_TO_CHUNK = TAB_TO_CHUNK;
+CL.data.installShowTabHook = installShowTabHook;
 
-(function () {
-    'use strict';
-
-    // Map showTab(tabId) to its chunk file. When a tab isn't listed
-    // here the showTab wrapper passes through with no chunk load.
-    var TAB_TO_CHUNK = {
-        // Populate as chunks are extracted. Examples (commented until
-        // the chunk files actually exist):
-        // 'map':           'map',
-        // 'crashtree':     'map',
-        // 'reports':       'reports',
-        // 'warrants':      'warrants',
-        // 'prediction':    'prediction'
-    };
-
-    var _loaded = new Set();
-    var _inflight = new Map();   // chunkName → Promise
-
-    function loadChunkOnce(name) {
-        if (!name) return Promise.resolve();
-        if (_loaded.has(name)) return Promise.resolve();
-        if (_inflight.has(name)) return _inflight.get(name);
-
-        var promise = new Promise(function (resolve, reject) {
-            var s = document.createElement('script');
-            s.src = 'chunks/' + name + '.js';
-            s.async = false;   // preserve execution order across siblings
-            s.onload = function () {
-                _loaded.add(name);
-                _inflight.delete(name);
-                console.log('[chunk] loaded:', name);
-                resolve();
-            };
-            s.onerror = function (e) {
-                _inflight.delete(name);
-                console.warn('[chunk] failed to load (likely not yet extracted):', name);
-                // Resolve (not reject) — lets the rest of the app keep
-                // working even if a chunk is missing. The tab that needed
-                // it will simply behave as before (still served from the
-                // monolithic index.html during the transition).
-                resolve();
-            };
-            document.head.appendChild(s);
-        });
-        _inflight.set(name, promise);
-        return promise;
+// Try to install the hook now; if showTab isn't defined yet, retry
+// on DOMContentLoaded.
+if (!installShowTabHook()) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', installShowTabHook, { once: true });
+    } else {
+        // showTab is defined inline in index.html, so by the time this
+        // module evaluates it should already exist. Defer-retry once
+        // anyway via microtask.
+        Promise.resolve().then(installShowTabHook);
     }
+}
 
-    function chunkIsLoaded(name) {
-        return _loaded.has(name);
-    }
-
-    /**
-     * Wraps the global showTab() with chunk pre-loading. Safe to call
-     * multiple times — subsequent invocations replace the prior wrapper
-     * cleanly.
-     */
-    function installShowTabHook() {
-        if (typeof window.showTab !== 'function') return false;
-        if (window.showTab.__chunkWrapped) return true;
-        var orig = window.showTab;
-        var wrapped = async function (tabId) {
-            try {
-                var chunk = TAB_TO_CHUNK[tabId];
-                if (chunk) await loadChunkOnce(chunk);
-            } catch (e) {
-                console.warn('[chunk] hook error for', tabId, e && e.message);
-            }
-            return orig.apply(this, arguments);
-        };
-        wrapped.__chunkWrapped = true;
-        window.showTab = wrapped;
-        return true;
-    }
-
-    CL.data.loadChunkOnce = loadChunkOnce;
-    CL.data.chunkIsLoaded = chunkIsLoaded;
-    CL.data.TAB_TO_CHUNK = TAB_TO_CHUNK;
-    CL.data.installShowTabHook = installShowTabHook;
-
-    // Try to install the hook now; if showTab isn't defined yet, retry
-    // on DOMContentLoaded.
-    if (!installShowTabHook()) {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', installShowTabHook, { once: true });
-        } else {
-            // showTab is defined inline in index.html, so by the time this
-            // module evaluates it should already exist. Defer-retry once
-            // anyway via microtask.
-            Promise.resolve().then(installShowTabHook);
-        }
-    }
-
-    if (typeof CL._registerModule === 'function') {
-        CL._registerModule('data/chunk-loader');
-    }
-})();
+if (typeof CL._registerModule === 'function') {
+    CL._registerModule('data/chunk-loader');
+}

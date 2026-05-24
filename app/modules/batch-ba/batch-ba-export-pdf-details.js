@@ -4,6 +4,8 @@
  * How to Read This Report guide, Methodology Appendix, TOC page fill, footers, and save.
  * Called from batch-ba-export-pdf.js via shared context CL.batchBA._pdfCtx.
  */
+'use strict';
+
 window.CL = window.CL || {};
 CL.batchBA = CL.batchBA || {};
 

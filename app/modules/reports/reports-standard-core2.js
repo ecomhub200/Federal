@@ -4,8 +4,8 @@
  * Depends: core/epdo-presets, analysis/crash-profile (via window/CL mirrors).
  * Public API (dual exposure): window.<fn> ↔ CL.reports.standardCore2.<fn>
  */
-(function(){ 'use strict';
-  // ─── EXTRACTED CODE START (verbatim) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim) ───
 /**
  * Generate exploration dashboard with visual tiles for key safety categories
  */
@@ -335,5 +335,4 @@ function generateEnhancedRecommendations(stats, crashes, categoryData) {
   window.generateCategoryTopLocations = generateCategoryTopLocations; CL.reports.standardCore2.generateCategoryTopLocations = generateCategoryTopLocations;
   window.generateEnhancedFindings = generateEnhancedFindings; CL.reports.standardCore2.generateEnhancedFindings = generateEnhancedFindings;
   window.generateEnhancedRecommendations = generateEnhancedRecommendations; CL.reports.standardCore2.generateEnhancedRecommendations = generateEnhancedRecommendations;
-  CL._registerModule('reports/reports-standard-core2');
-})();
+CL._registerModule('reports/reports-standard-core2');

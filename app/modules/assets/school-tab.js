@@ -17,9 +17,8 @@
  *
  * Depends on (must load before this file): `core/constants`, `map/map-layers`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 /**
  * Update school results table with enriched data (matching Infrastructure tab)
@@ -488,22 +487,55 @@ function softActivateSchoolLayer() {
     }
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.assets = CL.assets || {};
-  window.updateSchoolTabTable = updateSchoolTabTable; CL.assets.updateSchoolTabTable = updateSchoolTabTable;
-  window.schoolTabClearSchools = schoolTabClearSchools; CL.assets.schoolTabClearSchools = schoolTabClearSchools;
-  window.schoolTabClearAllSchools = schoolTabClearAllSchools; CL.assets.schoolTabClearAllSchools = schoolTabClearAllSchools;
-  window.schoolTabRadiusChange = schoolTabRadiusChange; CL.assets.schoolTabRadiusChange = schoolTabRadiusChange;
-  window.schoolTabSetRadius = schoolTabSetRadius; CL.assets.schoolTabSetRadius = schoolTabSetRadius;
-  window.schoolTabViewOnMap = schoolTabViewOnMap; CL.assets.schoolTabViewOnMap = schoolTabViewOnMap;
-  window.schoolTabViewOnMapSingle = schoolTabViewOnMapSingle; CL.assets.schoolTabViewOnMapSingle = schoolTabViewOnMapSingle;
-  window.schoolTabFocusView = schoolTabFocusView; CL.assets.schoolTabFocusView = schoolTabFocusView;
-  window.schoolTabExportData = schoolTabExportData; CL.assets.schoolTabExportData = schoolTabExportData;
-  window.schoolTabExportKML = schoolTabExportKML; CL.assets.schoolTabExportKML = schoolTabExportKML;
-  window.escapeXML = escapeXML; CL.assets.escapeXML = escapeXML;
-  window.softActivateSchoolLayer = softActivateSchoolLayer; CL.assets.softActivateSchoolLayer = softActivateSchoolLayer;
-  CL._registerModule('assets/school-tab');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.assets = CL.assets || {};
+CL.assets.updateSchoolTabTable = updateSchoolTabTable;
+CL.assets.schoolTabClearSchools = schoolTabClearSchools;
+CL.assets.schoolTabClearAllSchools = schoolTabClearAllSchools;
+CL.assets.schoolTabRadiusChange = schoolTabRadiusChange;
+CL.assets.schoolTabSetRadius = schoolTabSetRadius;
+CL.assets.schoolTabViewOnMap = schoolTabViewOnMap;
+CL.assets.schoolTabViewOnMapSingle = schoolTabViewOnMapSingle;
+CL.assets.schoolTabFocusView = schoolTabFocusView;
+CL.assets.schoolTabExportData = schoolTabExportData;
+CL.assets.schoolTabExportKML = schoolTabExportKML;
+CL.assets.escapeXML = escapeXML;
+CL.assets.softActivateSchoolLayer = softActivateSchoolLayer;
+
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
+// All 12 retained per the module's own pre-Stage-A docstring (HTML onclick=
+// + dynamically-generated row handlers); survivor scan in ONCLICK_API.md only
+// captured 2 (schoolTabClearSchools, schoolTabViewOnMapSingle) — extending
+// per "lists are FLOOR — extend, never shrink" + dynamic-row caveat.
+window.updateSchoolTabTable = updateSchoolTabTable;
+window.schoolTabClearSchools = schoolTabClearSchools;
+window.schoolTabClearAllSchools = schoolTabClearAllSchools;
+window.schoolTabRadiusChange = schoolTabRadiusChange;
+window.schoolTabSetRadius = schoolTabSetRadius;
+window.schoolTabViewOnMap = schoolTabViewOnMap;
+window.schoolTabViewOnMapSingle = schoolTabViewOnMapSingle;
+window.schoolTabFocusView = schoolTabFocusView;
+window.schoolTabExportData = schoolTabExportData;
+window.schoolTabExportKML = schoolTabExportKML;
+window.escapeXML = escapeXML;
+window.softActivateSchoolLayer = softActivateSchoolLayer;
+
+export {
+    updateSchoolTabTable,
+    schoolTabClearSchools,
+    schoolTabClearAllSchools,
+    schoolTabRadiusChange,
+    schoolTabSetRadius,
+    schoolTabViewOnMap,
+    schoolTabViewOnMapSingle,
+    schoolTabFocusView,
+    schoolTabExportData,
+    schoolTabExportKML,
+    escapeXML,
+    softActivateSchoolLayer
+};
+
+CL._registerModule('assets/school-tab');

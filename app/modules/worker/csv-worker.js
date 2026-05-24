@@ -14,6 +14,12 @@
  *
  * MapPoints are sent in chunks of 50k to avoid main-thread freeze from
  * deserializing 1M+ objects in a single structured clone.
+ *
+ * Stage A note (STAGE_A_53): this worker has no shared-helper imports — only
+ * `importScripts('papaparse.min.js')` from CDN — so per the Stage A prompt's
+ * "Convert to ESM ONLY if it imports a shared helper; else it MAY stay
+ * classic" clause, it remains a classic worker and the `new Worker(...)`
+ * call site in app/index.html stays unchanged (no `{ type: 'module' }`).
  */
 
 /* global importScripts, Papa */
