@@ -94,7 +94,8 @@ const SCORECARD_COLUMNS = {
 };
 
 let _scorecardChart = null;   // Chart.js instance
-let window._scorecardData  = [];     // latest fetched rows
+let _scorecardData  = [];     // latest fetched rows
+window._scorecardData = _scorecardData;
 let _scorecardSortCol  = 'rank_total_crashes';
 let _scorecardSortAsc  = true;
 let _scorecardInited   = false;
@@ -157,7 +158,7 @@ function setScorecardTier(tier) {
   _scorecardTierFilter = tier;
   _scorecardActivePill = tier;
   _renderTierPills(_scorecardActiveTier);
-  renderScorecardTable(window._scorecardData);
+  renderScorecardTable(_scorecardData);
   updateScorecardChart();
 }
 
@@ -187,7 +188,7 @@ function _renderTierPills(activeTier) {
     _scorecardActivePill = b.dataset.pill;
     _scorecardTierFilter = b.dataset.pill;
     wrap.querySelectorAll('.sc-pill').forEach(x => x.classList.toggle('active', x === b));
-    renderScorecardTable(window._scorecardData);
+    renderScorecardTable(_scorecardData);
     updateScorecardChart();
   }));
 }
@@ -200,7 +201,8 @@ function _renderTierPills(activeTier) {
   let _scorecardReloadTimer = null;
   let _scorecardLastReloadAt = 0;
   function _invalidateScorecard(reason) {
-    window._scorecardData = [];
+    _scorecardData = [];
+    window._scorecardData = _scorecardData;
     const activePanel = document.querySelector('.tab-content.active');
     if (activePanel && activePanel.id === 'tab-scorecard') {
       // Round 24 §5 — debounce reload. Three events fire on every state switch:
@@ -312,9 +314,10 @@ async function loadScorecardData() {
       } else {
         data = await client.getFederalSummary(year, year);
       }
-      window._scorecardData = data || [];
-      _renderFederalKpis(window._scorecardData, year);
-      _renderChoropleth(window._scorecardData);
+      _scorecardData = data || [];
+      window._scorecardData = _scorecardData;
+      _renderFederalKpis(_scorecardData, year);
+      _renderChoropleth(_scorecardData);
       const kpiEl = document.getElementById('scorecard-federal-kpis');
       const choroEl = document.getElementById('scorecard-choropleth-wrap');
       if (kpiEl) kpiEl.style.display = 'grid';
@@ -323,12 +326,12 @@ async function loadScorecardData() {
       if (mode === 'compare') {
         const compareYear = parseInt(document.getElementById('scorecard-compare-year').value, 10);
         const compareData = await client.getFederalSummary(compareYear, compareYear);
-        renderComparisonTable(window._scorecardData, compareData || [], year, compareYear);
+        renderComparisonTable(_scorecardData, compareData || [], year, compareYear);
       } else {
-        renderScorecardTable(window._scorecardData);
+        renderScorecardTable(_scorecardData);
       }
       updateScorecardChart();
-      const banner = (window._scorecardData.length === 1)
+      const banner = (_scorecardData.length === 1)
         ? ' (1 of 51 states ingested — auto-grows as backend ingests more)'
         : '';
       if (statusEl) statusEl.textContent = `${_scorecardData.length} state${_scorecardData.length===1?'':'s'} · ${mode === 'rolling' ? (year-2)+'–'+year : year}${banner}`;
@@ -374,12 +377,13 @@ async function loadScorecardData() {
       data = await client.getScorecard(stateKey, year, opts);
     }
 
-    window._scorecardData = data || [];
+    _scorecardData = data || [];
+    window._scorecardData = _scorecardData;
 
     // Empty-state UI — current state has no rows in the scorecard_rankings
     // matview yet; tell the user the front-end is ready and the backend
     // pipeline is the gate.
-    if (window._scorecardData.length === 0) {
+    if (_scorecardData.length === 0) {
       const tbody = document.getElementById('scorecardBody');
       const thead = document.getElementById('scorecardHead');
       if (thead) thead.innerHTML = '<tr><th colspan="99" style="text-align:left;padding:1rem;color:#475569">No scorecard data available for ' + stateKey + ' (' + year + ').</th></tr>';
@@ -418,7 +422,7 @@ async function loadScorecardData() {
         const last5 = Array.from(yearsByJuris[juris]).sort((a, b) => a - b).slice(-5);
         sparkByJuris[juris] = last5.map(y => totalsByJurisYear[juris + '|' + y] || 0);
       });
-      window._scorecardData.forEach(r => {
+      _scorecardData.forEach(r => {
         const arr = sparkByJuris[r.jurisdiction];
         if (arr && arr.length >= 2) r.spark_5yr = arr;
       });
@@ -434,9 +438,9 @@ async function loadScorecardData() {
         const arr = sparkByJuris[r.jurisdiction];
         if (arr && arr.length >= 2) r.spark_5yr = arr;
       });
-      renderComparisonTable(window._scorecardData, compareData || [], year, compareYear);
+      renderComparisonTable(_scorecardData, compareData || [], year, compareYear);
     } else {
-      renderScorecardTable(window._scorecardData);
+      renderScorecardTable(_scorecardData);
     }
 
     updateScorecardChart();
