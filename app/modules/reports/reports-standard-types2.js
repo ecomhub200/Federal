@@ -5,8 +5,8 @@
  * Depends: core/epdo-presets, analysis/crash-profile (via window/CL mirrors).
  * Public API (dual exposure): window.<fn> ↔ CL.reports.standardTypes2.<fn>
  */
-(function(){ 'use strict';
-  // ─── EXTRACTED CODE START (verbatim) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim) ───
 // Safety Focus Report Generator
 function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
     // Check if there's data from Safety Focus tab
@@ -43,7 +43,7 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
     } else if (safetyState.filters.dateStart && safetyState.filters.dateEnd) {
         dateRange = `${new Date(safetyState.filters.dateStart).toLocaleDateString()} - ${new Date(safetyState.filters.dateEnd).toLocaleDateString()}`;
     } else {
-        dateRange = getDateRange(crashState.sampleRows);
+        dateRange = getDateRange(window.crashState.sampleRows);
     }
 
     document.getElementById('rptTitle').textContent = reportData.type === 'summary' ? 'Safety Focus Analysis Report' : title;
@@ -433,5 +433,4 @@ function generatePedBikeLocationTable(pedCrashes, bikeCrashes) {
   window.generatePedBikeRecommendations = generatePedBikeRecommendations; CL.reports.standardTypes2.generatePedBikeRecommendations = generatePedBikeRecommendations;
   window.generatePedBikeYearlySection = generatePedBikeYearlySection; CL.reports.standardTypes2.generatePedBikeYearlySection = generatePedBikeYearlySection;
   window.generatePedBikeLocationTable = generatePedBikeLocationTable; CL.reports.standardTypes2.generatePedBikeLocationTable = generatePedBikeLocationTable;
-  CL._registerModule('reports/reports-standard-types2');
-})();
+CL._registerModule('reports/reports-standard-types2');
