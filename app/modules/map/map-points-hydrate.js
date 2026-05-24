@@ -107,6 +107,8 @@ async function _hydrateMapPointsFromMatview(reason) {
             if (t.tier === 'county' || t.tier === 'city') opts.jurisdiction = t.value;
             // 'state' / 'federal' → no tier filter; the state= eq filter alone scopes it.
         }
+        // Pass tier through so getMapPoints can apply CL.core.POINT_CAPS.
+        opts.tier = tier;
     } catch (e) { /* fall through to state-only scope */ }
 
     const stateKey = (dc.state || '').toLowerCase();

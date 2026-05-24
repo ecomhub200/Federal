@@ -3334,14 +3334,24 @@ class CrashLensDataClient {
       return [];
     }
     if (totalCount === 0) return [];
+    // Tier cap — at federal/state zoom individual markers aren't legible,
+    // mv_hotspots heatmap carries the visual. Keys on tier, not state.
+    const tier = opts && opts.tier;
+    const POINT_CAPS = (typeof window !== 'undefined' && window.CL && window.CL.core && window.CL.core.POINT_CAPS) || {};
+    const cap = POINT_CAPS[tier] || 200000;
+    const effective = Math.min(totalCount, cap);
+    if (effective < totalCount) {
+      console.log(`[getMapPoints] capped at ${effective} for ${tier} tier (full: ${totalCount})`);
+    }
     // Step 2: parallel page fetch (1M per page = current PostgREST cap)
     const PAGE_SIZE = 1000000;
-    const pageCount = Math.ceil(totalCount / PAGE_SIZE);
+    const pageCount = Math.ceil(effective / PAGE_SIZE);
     const t0 = Date.now();
     const pages = [];
     for (let i = 0; i < pageCount; i++) {
       const p = new URLSearchParams(baseParams);
-      p.set('limit', String(PAGE_SIZE));
+      const remaining = effective - i * PAGE_SIZE;
+      p.set('limit', String(Math.min(PAGE_SIZE, remaining)));
       p.set('offset', String(i * PAGE_SIZE));
       pages.push(fetch(`${this.supabaseUrl}/mv_map_points?${p}`, { headers })
         .then(r => r.ok ? r.json() : []));
@@ -3356,7 +3366,7 @@ class CrashLensDataClient {
     }
     const wallMs = Date.now() - t0;
     const sizeMB = +(JSON.stringify(raw).length / 1024 / 1024).toFixed(1);
-    console.log(`[getMapPoints] ULTRA-SLIM+pb ${raw.length}/${totalCount} rows, ${sizeMB}MB, ${pageCount} page(s), ${wallMs}ms`);
+    console.log(`[getMapPoints] ULTRA-SLIM+pb ${raw.length}/${effective} rows (full: ${totalCount}), ${sizeMB}MB, ${pageCount} page(s), ${wallMs}ms`);
     // Each row gets a sequential index for use as a "match set ID" by lazy flag fetches
     return raw.map((r, idx) => ({
       _idx: idx,
