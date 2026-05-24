@@ -55,3 +55,4 @@ import './modules/core/epdo-presets.js';
 import './modules/assets/asset-export.js';
 import './modules/assets/school-tab.js';
 import './modules/assets/transit-tab.js';
+import './modules/worker/sample-rows-loader.js';
