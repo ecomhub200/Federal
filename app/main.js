@@ -85,3 +85,4 @@ import './modules/map/map-layers.js';
 import './modules/grants/grants-ui.js';
 import './modules/reports/reports-standard-types.js';
 import './modules/reports/reports-standard-types2.js';
+import './modules/reports/reports-standard-core.js';
