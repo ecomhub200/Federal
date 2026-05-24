@@ -3202,6 +3202,83 @@ class CrashLensDataClient {
   }
 
   /**
+   * mv_dashboard_tier_kpi — pre-aggregated dashboard KPI rollup.
+   *
+   * Source: mv_dashboard_tier_kpi matview, keyed on
+   * (state, tier, jurisdiction_id, crash_year). ~1.6k rows / ~50 KB per
+   * state vs ~50k rows / ~1.3 MB from the row-level dashboard_summary path.
+   *
+   * Additive — does NOT replace getSummary(). Reports / drill / crash-tree
+   * still need the row-level shape (functional_class / collision_type /
+   * road_type dimensions this rollup drops).
+   *
+   * State-agnostic: keys on tier, never on state name.
+   *
+   * @param {string} tier - 'state' | 'dot_district' | 'mpo' |
+   *                        'planning_district' | 'jurisdiction'
+   * @param {string} jurisdictionId - jurisdiction key matching the matview
+   *                                  (state code, district name, etc.).
+   *                                  Required for non-state tiers.
+   * @param {object} opts - { yearFrom, yearTo, signal }
+   * @returns {Promise<Array|null>} matview rows, or null if Supabase
+   *                                unavailable; [] if the matview isn't
+   *                                deployed yet or no rows match.
+   */
+  async getDashboardTierKpi(tier, jurisdictionId, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return null;
+    const stateKey = (this.state || '').toLowerCase();
+    const params = new URLSearchParams({
+      state: 'eq.' + stateKey,
+      tier: 'eq.' + tier,
+      select: 'crash_year,crashes,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,alcohol_crashes,night_crashes,animal_crashes,jurisdiction_id,jurisdiction_name',
+      order: 'crash_year.asc',
+    });
+    if (jurisdictionId) {
+      params.set('jurisdiction_id', 'eq.' + jurisdictionId);
+    }
+    if (opts.yearFrom && opts.yearTo) {
+      params.delete('crash_year');
+      params.set('and', '(crash_year.gte.' + opts.yearFrom + ',crash_year.lte.' + opts.yearTo + ')');
+    } else if (opts.yearFrom) {
+      params.set('crash_year', 'gte.' + opts.yearFrom);
+    } else if (opts.yearTo) {
+      params.set('crash_year', 'lte.' + opts.yearTo);
+    }
+    const url = `${this.supabaseUrl}/mv_dashboard_tier_kpi?${params.toString()}`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    const signal = opts.signal
+      ? (function () {
+          // Compose caller signal + timeout controller — abort either.
+          opts.signal.addEventListener('abort', () => controller.abort(), { once: true });
+          return controller.signal;
+        })()
+      : controller.signal;
+    try {
+      const resp = await fetch(url, { headers, signal });
+      clearTimeout(timer);
+      if (!resp.ok) {
+        // 404 = matview not deployed yet → graceful empty
+        if (resp.status === 404) return [];
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      this._source = 'supabase';
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      clearTimeout(timer);
+      if (e.name === 'AbortError') return null;
+      console.warn('[DataClient] getDashboardTierKpi failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
    * Warm the dashboard_summary cache for an upcoming tier so the next
    * injectFastDashboard() call paints from cache. Fire-and-forget — never
    * throws (errors are swallowed). The bridge wires this in on tier change.

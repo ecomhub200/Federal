@@ -96,6 +96,20 @@ CL.data = CL.data || {};
                 return client.getSummary(tier, value, withSignal(callOpts));
             });
         }
+        // CC 305 §2 — additive tier-rollup matview for KPI tiles.
+        // Returns ~50 KB vs dashboard_summary's ~1.3 MB. Graceful empty if
+        // the matview isn't deployed yet (404 → []). State-agnostic.
+        if (typeof client.getDashboardTierKpi === 'function') {
+            // Map the bridge's tier vocabulary to the matview's:
+            //   bridge → matview
+            //   'county' / 'city' → 'jurisdiction'  (matview union'd on
+            //                                          physical_juris_name)
+            //   everything else passes through verbatim.
+            var mvTier = (tier === 'county' || tier === 'city') ? 'jurisdiction' : tier;
+            push('mv_dashboard_tier_kpi', function (callOpts) {
+                return client.getDashboardTierKpi(mvTier, value, withSignal(callOpts));
+            });
+        }
         // Safety Focus (Safety Categories)
         if (typeof client.getSafetyCategories === 'function') {
             push('mv_safety_categories', function (callOpts) {
