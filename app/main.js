@@ -30,3 +30,4 @@ import './modules/data/road-type-mapping.js';
 import './modules/data/prewarm.js';
 import './modules/data/matview-cache.js';
 import './modules/data/tab-loaders.js';
+import './modules/data/lazy-loader.js';
