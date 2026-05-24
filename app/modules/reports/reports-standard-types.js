@@ -5,8 +5,8 @@
  * Public API (dual exposure): window.<fn> ↔ CL.reports.standardTypes.<fn>
  * Module-private: reportSequence (only read by generateReportId in this file).
  */
-(function(){ 'use strict';
-  // ─── EXTRACTED CODE START (verbatim) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim) ───
 function generateCorridorReport(crashes, route, title, author) {
     const stats = computeStats(crashes);
     // Prefer the Reports tab's user-selected timeline (reportStartDate /
@@ -286,8 +286,8 @@ function generatePedBikeReport(crashes, title, author) {
     const vruYoung = allVRU.filter(r => isYes(r[COL.YOUNG])).length;
 
     // People injury counts from aggregates if available
-    const pedKilled = crashState.aggregates?.pedCasualties?.killed || pedStats.K;
-    const pedInjured = crashState.aggregates?.pedCasualties?.injured || (pedStats.A + pedStats.B + pedStats.C);
+    const pedKilled = window.crashState.aggregates?.pedCasualties?.killed || pedStats.K;
+    const pedInjured = window.crashState.aggregates?.pedCasualties?.injured || (pedStats.A + pedStats.B + pedStats.C);
 
     const factorsTable = `
         <div style="margin-top:1.5rem">
@@ -325,7 +325,7 @@ function generatePedBikeReport(crashes, title, author) {
 }
 
 function createEnhancedPedBikeCharts(pedCrashes, bikeCrashes) {
-    const years = crashState.years;
+    const years = window.crashState.years;
     
     // Ped by year
     const pedByYear = {};
@@ -896,8 +896,8 @@ function resolveReportPeriod(startInputId, endInputId) {
 
     // Full available data range fallback
     try {
-        if (typeof crashState !== 'undefined' && Array.isArray(crashState.years) && crashState.years.length > 0) {
-            const yrs = crashState.years.slice().sort();
+        if (typeof window.crashState !== 'undefined' && Array.isArray(window.crashState.years) && window.crashState.years.length > 0) {
+            const yrs = window.crashState.years.slice().sort();
             return `${yrs[0]} - ${yrs[yrs.length - 1]}`;
         }
     } catch (_) { /* crashState not ready yet */ }
@@ -944,5 +944,4 @@ function generateFindings(stats, crashes) {
   window.getDateRange = getDateRange; CL.reports.standardTypes.getDateRange = getDateRange;
   window.resolveReportPeriod = resolveReportPeriod; CL.reports.standardTypes.resolveReportPeriod = resolveReportPeriod;
   window.generateFindings = generateFindings; CL.reports.standardTypes.generateFindings = generateFindings;
-  CL._registerModule('reports/reports-standard-types');
-})();
+CL._registerModule('reports/reports-standard-types');
