@@ -44,3 +44,4 @@ import './modules/warrants/signal-thresholds.js';
 import './modules/spatial/hierarchy-registry.js';
 import './modules/spatial/boundary-service.js';
 import './modules/spatial/federal-boundaries.js';
+import './modules/spatial/spatial-clip.js';

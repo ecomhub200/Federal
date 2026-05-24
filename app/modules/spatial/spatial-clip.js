@@ -14,9 +14,8 @@
  *
  * Depends on (must load before this file): `spatial/federal-boundaries`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 const SpatialClipService = (() => {
     'use strict';
@@ -105,11 +104,13 @@ const SpatialClipService = (() => {
     return { clipPoints, clipLines, clipPolygons, getJurisdictionPolygon };
 })();
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.spatial = CL.spatial || {};
-  window.SpatialClipService = SpatialClipService; CL.spatial.SpatialClipService = SpatialClipService;
-  CL._registerModule('spatial/spatial-clip');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.spatial = CL.spatial || {};
+CL.spatial.SpatialClipService = SpatialClipService;
+
+export { SpatialClipService };
+
+CL._registerModule('spatial/spatial-clip');
