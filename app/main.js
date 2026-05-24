@@ -25,3 +25,4 @@ import './modules/loader.js';
 import './modules/core/constants.js';
 import './modules/core/epdo.js';
 import './modules/utils/date-utils.js';
+import './modules/ui/skeletons.js';
