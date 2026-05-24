@@ -28,3 +28,4 @@ import './modules/utils/date-utils.js';
 import './modules/ui/skeletons.js';
 import './modules/data/road-type-mapping.js';
 import './modules/data/prewarm.js';
+import './modules/data/matview-cache.js';
