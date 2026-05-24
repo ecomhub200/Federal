@@ -11,13 +11,12 @@
  *
  * Depends on (must load before this file): `(every feature tab module — all must load before this)`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 function showTab(tabId) {
     console.log('[CrashLens] Tab switched to:', tabId,
-                'data loaded:', !!(typeof crashState !== 'undefined' && crashState.loaded));
+                'data loaded:', !!(typeof window.crashState !== 'undefined' && window.crashState.loaded));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.getElementById('tab-' + tabId).classList.add('active');
 
@@ -59,7 +58,7 @@ function showTab(tabId) {
         return; // Don't run tab init yet — data not ready
     }
 
-    if (tabId === 'map' && (crashState.loaded || _supabaseTabReady('getViewportCrashes'))) {
+    if (tabId === 'map' && (window.crashState.loaded || _supabaseTabReady('getViewportCrashes'))) {
         // Mirror the canonical road-type radio (Upload tab) into the Map
         // tab's mirror radios so the user sees the right selection.
         const _activeRoadType = document.querySelector('input[name="roadTypeFilter"]:checked');
@@ -90,7 +89,7 @@ function showTab(tabId) {
             }
 
             // ── Restore boundary layers based on active view tier ──
-            const activeTier = jurisdictionContext?.viewTier || 'county';
+            const activeTier = window.jurisdictionContext?.viewTier || 'county';
 
             if (activeTier === 'county' || !activeTier) {
                 // County tier: restore TIGERweb jurisdiction boundary (idempotent — handles missing, detached, or already-showing layers)
@@ -122,19 +121,19 @@ function showTab(tabId) {
                 }
             } else if (activeTier === 'region') {
                 // Region tier: restore region boundary if selected but layer not displayed
-                if (jurisdictionContext.tierRegion && crashMap &&
+                if (window.jurisdictionContext.tierRegion && crashMap &&
                     !builtInLayersState?.regionBoundary?.layer &&
                     typeof displayRegionBoundary === 'function') {
                     console.log('[Boundary] Map tab shown - restoring region boundary');
-                    displayRegionBoundary(jurisdictionContext.tierRegion, jurisdictionContext.tierRegion.id);
+                    displayRegionBoundary(window.jurisdictionContext.tierRegion, window.jurisdictionContext.tierRegion.id);
                 }
             } else if (activeTier === 'mpo') {
                 // MPO tier: restore MPO boundary if selected but layer not displayed
-                if (jurisdictionContext.tierMpo && crashMap &&
+                if (window.jurisdictionContext.tierMpo && crashMap &&
                     !builtInLayersState?.mpoBoundary?.layer &&
                     typeof displayMPOBoundary === 'function') {
                     console.log('[Boundary] Map tab shown - restoring MPO boundary');
-                    const mpo = jurisdictionContext.tierMpo;
+                    const mpo = window.jurisdictionContext.tierMpo;
                     const tryRestore = async () => {
                         // First try cached boundary from handleMPOSelection
                         if (mpo._cachedBoundary?.features?.length > 0) {
@@ -203,11 +202,11 @@ function showTab(tabId) {
         return !!(dc && typeof dc[method] === 'function');
     }
 
-    if (tabId === 'dashboard' && crashState.loaded) {
+    if (tabId === 'dashboard' && window.crashState.loaded) {
         updateDashboard();
         // Auto-load magisterial district statistics when visiting Dashboard tab
         const jurisdictionId = localStorage.getItem('selectedJurisdiction');
-        const jurisdiction = appConfig?.jurisdictions[jurisdictionId];
+        const jurisdiction = window.appConfig?.jurisdictions[jurisdictionId];
         if (jurisdiction?.type === 'county') {
             const districtStatus = builtInLayersState?.magisterialDistricts?.status;
             // Detect stuck loading state (>45 seconds with no result)
@@ -224,11 +223,11 @@ function showTab(tabId) {
             }
         }
     }
-    if (tabId === 'crashtree' && (crashState.loaded || _supabaseTabReady('getCrashTree'))) {
-        var _ctCurrentTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
-        if (!crashTreeState.loaded || crashTreeState._lastTier !== _ctCurrentTier) {
-            crashTreeState._lastTier = _ctCurrentTier;
-            crashTreeState.loaded = false;
+    if (tabId === 'crashtree' && (window.crashState.loaded || _supabaseTabReady('getCrashTree'))) {
+        var _ctCurrentTier = (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext?.viewTier) || 'county';
+        if (!window.crashTreeState.loaded || window.crashTreeState._lastTier !== _ctCurrentTier) {
+            window.crashTreeState._lastTier = _ctCurrentTier;
+            window.crashTreeState.loaded = false;
             initCrashTreeTab();
         } else {
             // Bug fix (2026-05-08): in Supabase-only mode, crashTreeState.treeData
@@ -237,8 +236,8 @@ function showTab(tabId) {
             // Supabase mode and would null out treeData. Repaint from existing
             // state instead of re-running the row pipeline.
             var _ctSupabaseMode =
-                crashTreeState.source === 'supabase' ||
-                !(crashState.sampleRows && crashState.sampleRows.length > 0);
+                window.crashTreeState.source === 'supabase' ||
+                !(window.crashState.sampleRows && window.crashState.sampleRows.length > 0);
             if (_ctSupabaseMode) {
                 if (typeof renderCrashTree === 'function') renderCrashTree();
                 if (typeof updateCrashTreeStats === 'function') updateCrashTreeStats();
@@ -247,10 +246,10 @@ function showTab(tabId) {
             }
         }
     }
-    if (tabId === 'analysis' && (crashState.loaded || _supabaseTabReady('getAnalysisBreakdown'))) updateAnalysis();
-    if (tabId === 'intersection' && (crashState.loaded || _supabaseTabReady('getHotspots'))) updateIntersectionTab();
-    if (tabId === 'pedestrian' && crashState.loaded) updatePedBikeTab();
-    if (tabId === 'hotspots' && (crashState.loaded || _supabaseTabReady('getHotspots')) && !crashState.hotspots.length) analyzeHotspots();
+    if (tabId === 'analysis' && (window.crashState.loaded || _supabaseTabReady('getAnalysisBreakdown'))) updateAnalysis();
+    if (tabId === 'intersection' && (window.crashState.loaded || _supabaseTabReady('getHotspots'))) updateIntersectionTab();
+    if (tabId === 'pedestrian' && window.crashState.loaded) updatePedBikeTab();
+    if (tabId === 'hotspots' && (window.crashState.loaded || _supabaseTabReady('getHotspots')) && !window.crashState.hotspots.length) analyzeHotspots();
     if (tabId === 'hotspots') {
         window.dispatchEvent(new CustomEvent('crashtab:hotspots:shown'));
     }
@@ -261,7 +260,7 @@ function showTab(tabId) {
         window.dispatchEvent(new CustomEvent('crashtab:' + tabId + ':shown'));
     }
     if (tabId === 'cmf') {
-        if (!cmfState.loaded) {
+        if (!window.cmfState.loaded) {
             loadCMFDatabase();
         } else if (typeof populateCMFLocations === 'function') {
             // Bug 7 fix — rebuild dropdown each time CMF is opened so a tier
@@ -279,10 +278,10 @@ function showTab(tabId) {
         // just "-- Select Location --". Same pattern as the CMF Bug 7 fix.
         initReportLocationDropdown();
     }
-    if (tabId === 'grants' && !grantState.loaded) initGrantModule();
+    if (tabId === 'grants' && !window.grantState.loaded) initGrantModule();
     if (tabId === 'grants') initDistrictStatisticsOnGrantsTab();  // Initialize district stats section
     if (tabId === 'warrants') {
-        if (!warrantsState.loaded) {
+        if (!window.warrantsState.loaded) {
             initWarrantsTab();
         } else {
             onWarrantsTabReentry();
@@ -293,12 +292,12 @@ function showTab(tabId) {
         updateAIContextIndicator();  // Update AI context when tab is shown
         if (typeof initMUTCDLocationDropdown === 'function') initMUTCDLocationDropdown();
     }
-    if (tabId === 'domain-knowledge' && crashState.loaded) initDomainKnowledge();  // Initialize Domain Knowledge tab
+    if (tabId === 'domain-knowledge' && window.crashState.loaded) initDomainKnowledge();  // Initialize Domain Knowledge tab
     if (tabId === 'safety') {
         // Hide/show empty state based on data availability
         const safetyEmptyState = document.getElementById('safetyEmptyState');
         const safetyContainer = document.querySelector('.safety-focus-container');
-        if (crashState.loaded || _supabaseTabReady('getSafetyCategories')) {
+        if (window.crashState.loaded || _supabaseTabReady('getSafetyCategories')) {
             if (safetyEmptyState) safetyEmptyState.style.display = 'none';
             if (safetyContainer) safetyContainer.style.display = '';
             if (!safetyState.loaded) {
@@ -332,8 +331,8 @@ function showTab(tabId) {
             }
         }
     }
-    if (tabId === 'fatalspeeding' && crashState.loaded) {
-        var _fsCurrentTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
+    if (tabId === 'fatalspeeding' && window.crashState.loaded) {
+        var _fsCurrentTier = (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext?.viewTier) || 'county';
         if (!fatalSpeedingState.loaded || fatalSpeedingState._lastTier !== _fsCurrentTier) {
             fatalSpeedingState._lastTier = _fsCurrentTier;
             fatalSpeedingState.loaded = false;
@@ -346,7 +345,7 @@ function showTab(tabId) {
             // matview data we just loaded. Detect Supabase mode and just repaint.
             var _fsSupabaseMode =
                 fatalSpeedingState.source === 'supabase' ||
-                !(crashState.sampleRows && crashState.sampleRows.length > 0);
+                !(window.crashState.sampleRows && window.crashState.sampleRows.length > 0);
             if (_fsSupabaseMode) {
                 updateFSDisplay();
             } else {
@@ -381,12 +380,18 @@ if (window._pendingNavigation) {
     setTimeout(function() { navigateTo(pending); }, 100);
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.app = CL.app || {};
-  window.showTab = showTab; CL.app.showTab = showTab;
-  window.navigateTo = navigateTo; CL.app.navigateTo = navigateTo;
-  CL._registerModule('app/tab-dispatcher');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.app = CL.app || {};
+CL.app.showTab = showTab;
+CL.app.navigateTo = navigateTo;
+
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
+window.showTab = showTab;
+window.navigateTo = navigateTo;
+
+export { showTab, navigateTo };
+
+CL._registerModule('app/tab-dispatcher');
