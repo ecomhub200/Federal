@@ -66,3 +66,4 @@ import './modules/scorecard/scorecard.js';
 
 // batch-ba cluster (cyclic — runtime-safe via transitional CL.batchBA.*)
 import './modules/batch-ba/batch-ba-state.js';
+import './modules/batch-ba/batch-ba-engine.js';
