@@ -832,4 +832,5 @@ function yieldToUI() {
   window.showGrantRankingProgress = CL.grants.rank.showGrantRankingProgress = showGrantRankingProgress;
   window.yieldToUI = CL.grants.rank.yieldToUI = yieldToUI;
   CL._registerModule('grants/grants-rank-score');
+  if (typeof window !== 'undefined') window.CRASH_PATTERN_REGEX = CRASH_PATTERN_REGEX;
 })();
