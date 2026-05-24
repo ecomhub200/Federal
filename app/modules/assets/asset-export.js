@@ -16,9 +16,8 @@
  *
  * Depends on (must load before this file): `assets/transit-tab`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 /**
  * Switch between resource tabs in School Safety sub-tab (Design Guides, Regulations, Grants)
@@ -444,16 +443,30 @@ async function assetExportPDF() {
     }
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.assets = CL.assets || {};
-  window.switchSchoolTabResourceTab = switchSchoolTabResourceTab; CL.assets.switchSchoolTabResourceTab = switchSchoolTabResourceTab;
-  window.switchTransitTabResourceTab = switchTransitTabResourceTab; CL.assets.switchTransitTabResourceTab = switchTransitTabResourceTab;
-  window.toggleAssetExportMenu = toggleAssetExportMenu; CL.assets.toggleAssetExportMenu = toggleAssetExportMenu;
-  window.hideAssetExportMenu = hideAssetExportMenu; CL.assets.hideAssetExportMenu = hideAssetExportMenu;
-  window.assetExportKML = assetExportKML; CL.assets.assetExportKML = assetExportKML;
-  window.assetExportPDF = assetExportPDF; CL.assets.assetExportPDF = assetExportPDF;
-  CL._registerModule('assets/asset-export');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.assets = CL.assets || {};
+CL.assets.switchSchoolTabResourceTab = switchSchoolTabResourceTab;
+CL.assets.switchTransitTabResourceTab = switchTransitTabResourceTab;
+CL.assets.toggleAssetExportMenu = toggleAssetExportMenu;
+CL.assets.hideAssetExportMenu = hideAssetExportMenu;
+CL.assets.assetExportKML = assetExportKML;
+CL.assets.assetExportPDF = assetExportPDF;
+
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
+window.assetExportKML = assetExportKML;
+window.assetExportPDF = assetExportPDF;
+window.toggleAssetExportMenu = toggleAssetExportMenu;
+
+export {
+    switchSchoolTabResourceTab,
+    switchTransitTabResourceTab,
+    toggleAssetExportMenu,
+    hideAssetExportMenu,
+    assetExportKML,
+    assetExportPDF
+};
+
+CL._registerModule('assets/asset-export');

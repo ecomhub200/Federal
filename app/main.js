@@ -52,3 +52,4 @@ import './modules/upload/api-connector.js';
 import './modules/upload/road-defaults.js';
 import './modules/upload/upload-tier-ui.js';
 import './modules/core/epdo-presets.js';
+import './modules/assets/asset-export.js';
