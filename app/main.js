@@ -49,3 +49,4 @@ import './modules/spatial/aggregate-loader.js';
 import './modules/spatial/r2-resolve.js';
 import './modules/map/map-safe-helpers.js';
 import './modules/upload/api-connector.js';
+import './modules/upload/road-defaults.js';
