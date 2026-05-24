@@ -20,3 +20,6 @@
 // Creates window.CL + all CL.* keys + CL._registerModule. Remaining inline
 // index.html code still reads CL.*, so window.CL stays.
 import './modules/loader.js';
+
+// --- L1: leaf modules (no cross-module imports) ----------------------------
+import './modules/core/constants.js';
