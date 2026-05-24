@@ -27,8 +27,9 @@
  * appConfig, crashState, clearMapSelection, updateMapDisplay,
  * getJurisdictionLabel, jurisdictionContext.
  */
-'use strict';
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 /**
  * Update the Stats overlay scope label so users see the active jurisdiction
@@ -39,7 +40,7 @@
 function updateMapScopeLabel() {
     const label = (typeof getJurisdictionLabel === 'function')
         ? getJurisdictionLabel()
-        : (window.jurisdictionContext?.jurisdictionName || '');
+        : (jurisdictionContext?.jurisdictionName || '');
     const headerEl = document.getElementById('mapScopeLabel');
     const bodyEl = document.getElementById('mapScope');
     if (headerEl) headerEl.textContent = label ? `· ${label}` : '';
@@ -49,13 +50,13 @@ function updateMapScopeLabel() {
 // Mapbox Geocoding API call - state/jurisdiction-aware search
 async function searchMapboxAddresses(query) {
     // Check if Mapbox token is configured
-    const token = window.appConfig?.apis?.mapbox?.accessToken;
+    const token = appConfig?.apis?.mapbox?.accessToken;
     if (!token || token === 'YOUR_MAPBOX_ACCESS_TOKEN_HERE') {
         console.warn('[Map Search] Mapbox access token not configured');
         return [];
     }
 
-    const endpoint = window.appConfig?.apis?.mapbox?.geocodingEndpoint || 'https://api.mapbox.com/geocoding/v5/mapbox.places';
+    const endpoint = appConfig?.apis?.mapbox?.geocodingEndpoint || 'https://api.mapbox.com/geocoding/v5/mapbox.places';
 
     // Use current map bounds as bounding box for geocoding (dynamically adapts to any state).
     // Default is the world; crashMap.getBounds() supersedes it once the map is initialized.
@@ -80,8 +81,8 @@ async function searchMapboxAddresses(query) {
     }
 
     // Automatically add state context if not already present in the query
-    const stateName = window.appConfig?.stateName
-        || (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext?.stateName)
+    const stateName = appConfig?.stateName
+        || (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.stateName)
         || 'the active state';
     let searchQuery = query.trim();
     const lowerQuery = searchQuery.toLowerCase();
@@ -237,7 +238,7 @@ function clearMapAddressSearch() {
     updateMapSearchClearButton();
 
     // Reset map view to default bounds if crash data is loaded
-    if (window.crashState.mapPoints && window.crashState.mapPoints.length > 0) {
+    if (crashState.mapPoints && crashState.mapPoints.length > 0) {
         updateMapDisplay();
     }
 
@@ -260,11 +261,11 @@ function updateMapSearchClearButton() {
 
 // Find crashes near a point (within radius in meters)
 function findCrashesNearPoint(lat, lng, radiusMeters) {
-    if (!window.crashState.mapPoints || window.crashState.mapPoints.length === 0) {
+    if (!crashState.mapPoints || crashState.mapPoints.length === 0) {
         return [];
     }
 
-    return window.crashState.mapPoints.filter(point => {
+    return crashState.mapPoints.filter(point => {
         const distance = getDistanceMeters(lat, lng, point.lat, point.lng);
         return distance <= radiusMeters;
     });
@@ -292,36 +293,18 @@ function calculateNearbyCrashSeverity(crashes) {
     return { fatal, serious, total: crashes.length };
 }
 
-// ─── EXTRACTED CODE END ───
+  // ─── EXTRACTED CODE END ───
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.map = CL.map || {};
-CL.map.updateMapScopeLabel = updateMapScopeLabel;
-CL.map.searchMapboxAddresses = searchMapboxAddresses;
-CL.map.selectAddressResult = selectAddressResult;
-CL.map.clearMapAddressSearch = clearMapAddressSearch;
-CL.map.updateMapSearchClearButton = updateMapSearchClearButton;
-CL.map.findCrashesNearPoint = findCrashesNearPoint;
-CL.map.getDistanceMeters = getDistanceMeters;
-CL.map.calculateNearbyCrashSeverity = calculateNearbyCrashSeverity;
-
-// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
-// All 8 retained — clearMapAddressSearch + selectAddressResult are survivors;
-// the rest have inline callers outside the moved block (see module docstring).
-window.updateMapScopeLabel = updateMapScopeLabel;
-window.searchMapboxAddresses = searchMapboxAddresses;
-window.selectAddressResult = selectAddressResult;
-window.clearMapAddressSearch = clearMapAddressSearch;
-window.updateMapSearchClearButton = updateMapSearchClearButton;
-window.findCrashesNearPoint = findCrashesNearPoint;
-window.getDistanceMeters = getDistanceMeters;
-window.calculateNearbyCrashSeverity = calculateNearbyCrashSeverity;
-
-export {
-    updateMapScopeLabel, searchMapboxAddresses, selectAddressResult,
-    clearMapAddressSearch, updateMapSearchClearButton, findCrashesNearPoint,
-    getDistanceMeters, calculateNearbyCrashSeverity
-};
-
-CL._registerModule('map/map-layers');
+  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+  window.CL = window.CL || {};
+  CL.map = CL.map || {};
+  window.updateMapScopeLabel = updateMapScopeLabel; CL.map.updateMapScopeLabel = updateMapScopeLabel;
+  window.searchMapboxAddresses = searchMapboxAddresses; CL.map.searchMapboxAddresses = searchMapboxAddresses;
+  window.selectAddressResult = selectAddressResult; CL.map.selectAddressResult = selectAddressResult;
+  window.clearMapAddressSearch = clearMapAddressSearch; CL.map.clearMapAddressSearch = clearMapAddressSearch;
+  window.updateMapSearchClearButton = updateMapSearchClearButton; CL.map.updateMapSearchClearButton = updateMapSearchClearButton;
+  window.findCrashesNearPoint = findCrashesNearPoint; CL.map.findCrashesNearPoint = findCrashesNearPoint;
+  window.getDistanceMeters = getDistanceMeters; CL.map.getDistanceMeters = getDistanceMeters;
+  window.calculateNearbyCrashSeverity = calculateNearbyCrashSeverity; CL.map.calculateNearbyCrashSeverity = calculateNearbyCrashSeverity;
+  CL._registerModule('map/map-layers');
+})();

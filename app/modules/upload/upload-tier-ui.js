@@ -24,9 +24,13 @@
  *                                    Speeding / Intersection / Pedestrian
  *                                    opens (these need row-level data).
  */
-'use strict';
+(function () {
+    'use strict';
+    if (typeof window === 'undefined') return;
+    window.CL = window.CL || {};
+    CL.upload = CL.upload || {};
 
-var TIER_LABELS = {
+    var TIER_LABELS = {
         federal: 'Federal',
         state: 'State',
         region: 'Region',
@@ -42,10 +46,10 @@ var TIER_LABELS = {
 
     function activeStateName() {
         try {
-            if (typeof window.jurisdictionContext !== 'undefined') {
-                var name = window.jurisdictionContext.tierState && window.jurisdictionContext.tierState.name;
+            if (typeof jurisdictionContext !== 'undefined') {
+                var name = jurisdictionContext.tierState && jurisdictionContext.tierState.name;
                 if (name) return name;
-                if (window.jurisdictionContext.stateName) return window.jurisdictionContext.stateName;
+                if (jurisdictionContext.stateName) return jurisdictionContext.stateName;
             }
         } catch (e) {}
         var sel = $('stateSelect');
@@ -159,22 +163,22 @@ var TIER_LABELS = {
             helperText = 'Pre-aggregated nationwide totals from ' + supabaseLabel +
                 '. R2 parquet fallback: _national/' + rtSuffix + '.parquet.';
         } else if (tier === 'region') {
-            var rname = (window.jurisdictionContext.tierRegion && window.jurisdictionContext.tierRegion.name) || 'Select a region above';
+            var rname = (jurisdictionContext.tierRegion && jurisdictionContext.tierRegion.name) || 'Select a region above';
             scopeText = stateName + ' — Region: ' + rname;
             helperText = 'Pre-aggregated regional totals from ' + supabaseLabel + '.';
         } else if (tier === 'mpo') {
-            var mname = (window.jurisdictionContext.tierMpo && window.jurisdictionContext.tierMpo.name) || 'Select an MPO above';
+            var mname = (jurisdictionContext.tierMpo && jurisdictionContext.tierMpo.name) || 'Select an MPO above';
             scopeText = stateName + ' — MPO: ' + mname;
             helperText = 'Pre-aggregated MPO totals from ' + supabaseLabel + '.';
         } else if (tier === 'planning_district') {
-            var pname = (window.jurisdictionContext.tierPlanningDistrict && window.jurisdictionContext.tierPlanningDistrict.name) || 'Select a planning district above';
+            var pname = (jurisdictionContext.tierPlanningDistrict && jurisdictionContext.tierPlanningDistrict.name) || 'Select a planning district above';
             scopeText = stateName + ' — Planning District: ' + pname;
             helperText = 'Pre-aggregated planning-district totals from ' + supabaseLabel + '.';
         } else if (tier === 'county') {
             var jurName = '';
             try {
-                jurName = (typeof window.jurisdictionContext !== 'undefined' &&
-                           window.jurisdictionContext.jurisdictionName) || '';
+                jurName = (typeof jurisdictionContext !== 'undefined' &&
+                           jurisdictionContext.jurisdictionName) || '';
             } catch (e) {}
             if (!jurName) {
                 var jSel = $('jurisdictionSelect');
@@ -187,8 +191,8 @@ var TIER_LABELS = {
         } else if (tier === 'city') {
             var cname = '';
             try {
-                cname = (typeof window.jurisdictionContext !== 'undefined' &&
-                         window.jurisdictionContext.tierCity && window.jurisdictionContext.tierCity.name) || '';
+                cname = (typeof jurisdictionContext !== 'undefined' &&
+                         jurisdictionContext.tierCity && jurisdictionContext.tierCity.name) || '';
             } catch (e) {}
             scopeText = stateName + ' — City / Town: ' + (cname || 'Select a city / town above');
             helperText = 'City/town crash data from Supabase (R2 parquet on demand for detail tabs).';
@@ -641,29 +645,17 @@ var TIER_LABELS = {
         }, 200);
     });
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.upload = CL.upload || {};
-CL.upload.tierUI = {
-    applyUploadTierUI: applyUploadTierUI,
-    paintUploadCard: paintUploadCard,
-    renderTierScopeCard: renderTierScopeCard,
-    fallbackR2Url: fallbackR2Url,
-    updateTierSwitchProgress: updateTierSwitchProgress,
-    removeTierSwitchProgress: removeTierSwitchProgress,
-    setUploadZoneCompact: setUploadZoneCompact
-};
+    CL.upload.tierUI = {
+        applyUploadTierUI: applyUploadTierUI,
+        paintUploadCard: paintUploadCard,
+        renderTierScopeCard: renderTierScopeCard,
+        fallbackR2Url: fallbackR2Url,
+        updateTierSwitchProgress: updateTierSwitchProgress,
+        removeTierSwitchProgress: removeTierSwitchProgress,
+        setUploadZoneCompact: setUploadZoneCompact
+    };
 
-export {
-    applyUploadTierUI,
-    paintUploadCard,
-    renderTierScopeCard,
-    fallbackR2Url,
-    updateTierSwitchProgress,
-    removeTierSwitchProgress,
-    setUploadZoneCompact
-};
-
-if (typeof CL._registerModule === 'function') {
-    CL._registerModule('upload/upload-tier-ui');
-}
+    if (typeof CL._registerModule === 'function') {
+        CL._registerModule('upload/upload-tier-ui');
+    }
+})();

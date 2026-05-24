@@ -4,8 +4,8 @@
  * Depends: core/epdo-presets, analysis/crash-profile (via window/CL mirrors).
  * Public API (dual exposure): window.<fn> ↔ CL.reports.standardCore.<fn>
  */
-'use strict';
-// ─── EXTRACTED CODE START (verbatim) ───
+(function(){ 'use strict';
+  // ─── EXTRACTED CODE START (verbatim) ───
 function showReportSubTab(tabName) {
     // Update tab buttons
     document.querySelectorAll('#tab-reports .grant-tabs .grant-tab').forEach(btn => {
@@ -50,10 +50,10 @@ function updateReportOptions() {
     }
 
     if (type === 'countermeasures') {
-        if (window.cmfState.selectedLocation && window.cmfState.locationCrashes.length > 0) {
-            const locName = window.cmfState.selectedLocation.type === 'node'
+        if (cmfState.selectedLocation && cmfState.locationCrashes.length > 0) {
+            const locName = cmfState.selectedLocation.type === 'node'
                 ? `Node ${cmfState.selectedLocation.name}`
-                : formatRouteName(window.cmfState.selectedLocation.name);
+                : formatRouteName(cmfState.selectedLocation.name);
             cmfLocationInfo.innerHTML = `
                 <label>Selected Location (from Countermeasures tab)</label>
                 <div style="padding:.5rem .75rem;background:#dcfce7;border:2px solid #22c55e;border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
@@ -76,7 +76,7 @@ function updateReportOptions() {
             cmfLocationInfo.style.display = 'flex';
         }
     } else if (type === 'beforeafter') {
-        if (window.baState.selectedLocation && window.baState.locationCrashes.length > 0) {
+        if (baState.selectedLocation && baState.locationCrashes.length > 0) {
             cmfLocationInfo.innerHTML = `
                 <label>Selected Location (from Before/After tab)</label>
                 <div style="padding:.5rem .75rem;background:#dcfce7;border:2px solid #22c55e;border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
@@ -200,9 +200,9 @@ function buildAIContext() {
  */
 function _safeAgg(path, fallback) {
     try {
-        if (typeof window.crashState === 'undefined' || !window.crashState || !window.crashState.aggregates) return fallback;
+        if (typeof crashState === 'undefined' || !crashState || !crashState.aggregates) return fallback;
         const parts = String(path).split('.');
-        let v = window.crashState.aggregates;
+        let v = crashState.aggregates;
         for (const p of parts) {
             if (v == null) return fallback;
             v = v[p];
@@ -434,17 +434,17 @@ function generateReport() {
 
         // For countermeasures report, use CMF tab selection
         if (type === 'countermeasures') {
-            if (!window.cmfState.selectedLocation || window.cmfState.locationCrashes.length === 0) {
+            if (!cmfState.selectedLocation || cmfState.locationCrashes.length === 0) {
                 hideLoading();
                 alert('Please select a location in the Countermeasures tab first.\n\nGo to the Countermeasures tab, search for a road or intersection, and then come back to generate the report.');
                 return;
             }
-            let crashes = window.cmfState.locationCrashes;
+            let crashes = cmfState.locationCrashes;
             if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
             if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
-            const locationName = window.cmfState.selectedLocation.type === 'node'
+            const locationName = cmfState.selectedLocation.type === 'node'
                 ? `Node ${cmfState.selectedLocation.name}`
-                : formatRouteName(window.cmfState.selectedLocation.name);
+                : formatRouteName(cmfState.selectedLocation.name);
             generateCountermeasuresReport(crashes, locationName, title, author);
             document.getElementById('reportOutput').style.display = 'block';
             hideLoading();
@@ -454,7 +454,7 @@ function generateReport() {
 
         // For before/after report, use BA tab data
         if (type === 'beforeafter') {
-            if (!window.baState.selectedLocation || window.baState.locationCrashes.length === 0) {
+            if (!baState.selectedLocation || baState.locationCrashes.length === 0) {
                 hideLoading();
                 alert('Please select a location in the Before/After Study tab first.\n\nGo to the Before/After tab, select a location and run the study, then come back to generate the report.');
                 return;
@@ -475,7 +475,7 @@ function generateReport() {
         // keep the PDF/HTML generators responsive. The matview-driven tabs
         // are unaffected — this is only used by the Reports-tab generators
         // that iterate per-row for chart and table data.
-        let crashes = window.crashState.sampleRows;
+        let crashes = crashState.sampleRows;
         let _hydratedFromSupabase = false;
         // Clear stale matview data from a previous generate-report run so
         // generators that check window._reportMatviewData don't read leftover
@@ -800,4 +800,5 @@ function computeSystemwideCategoryData(crashes) {
   window.generateSystemwideReport = generateSystemwideReport; CL.reports.standardCore.generateSystemwideReport = generateSystemwideReport;
   window._legacySystemwideReport = _legacySystemwideReport; CL.reports.standardCore._legacySystemwideReport = _legacySystemwideReport;
   window.computeSystemwideCategoryData = computeSystemwideCategoryData; CL.reports.standardCore.computeSystemwideCategoryData = computeSystemwideCategoryData;
-CL._registerModule('reports/reports-standard-core');
+  CL._registerModule('reports/reports-standard-core');
+})();

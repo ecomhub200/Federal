@@ -3,9 +3,10 @@
  * Extracted from app/index.html — four profile builder functions
  * These are pure data-in, object-out functions.
  */
-'use strict';
+window.CL = window.CL || {};
+CL.analysis = CL.analysis || {};
 
-export const crashProfile = {
+CL.analysis.crashProfile = {
 
     /**
      * Build county-wide crash profile from aggregates.
@@ -373,10 +374,5 @@ export const crashProfile = {
         return profile;
     }
 };
-
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.analysis = CL.analysis || {};
-CL.analysis.crashProfile = crashProfile;
 
 CL._registerModule('analysis/crash-profile');

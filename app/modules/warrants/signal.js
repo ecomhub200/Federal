@@ -2,9 +2,10 @@
  * CrashLens Signal Warrant Math Utilities
  * Extracted from app/index.html — pure math functions for signal warrant evaluation
  */
-'use strict';
+window.CL = window.CL || {};
+CL.warrants = CL.warrants || {};
 
-export const signal = {
+CL.warrants.signal = {
 
     /**
      * Interpolate minor street threshold from MUTCD curve given major street volume.
@@ -80,10 +81,5 @@ export const signal = {
         return 'p100';
     }
 };
-
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.warrants = CL.warrants || {};
-CL.warrants.signal = signal;
 
 CL._registerModule('warrants/signal');

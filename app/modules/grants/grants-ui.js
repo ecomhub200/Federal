@@ -22,10 +22,11 @@
  * script executes), so loading right after
  * <script src="modules/grants/ranking.js"> is behavior-safe.
  */
-'use strict';
+(function(){
+  'use strict';
 
 function runFullAnalysis() {
-    if (window.grantState.selectedLocationIndices.length === 0) {
+    if (grantState.selectedLocationIndices.length === 0) {
         alert('Please select at least one location first.');
         return;
     }
@@ -115,10 +116,10 @@ async function buildGrantWritingContext() {
     }
     const stateKey = (window.crashLensClient.state || '').toLowerCase();
     // Pull from the authoritative selection state used by the Grant-Ready table.
-    const indices = (typeof window.grantState !== 'undefined' && Array.isArray(window.grantState.selectedLocationIndices))
-        ? window.grantState.selectedLocationIndices : [];
+    const indices = (typeof grantState !== 'undefined' && Array.isArray(grantState.selectedLocationIndices))
+        ? grantState.selectedLocationIndices : [];
     if (!indices.length) return null;
-    const all = (window.grantState && window.grantState.rankedLocations) || [];
+    const all = (grantState && grantState.rankedLocations) || [];
     const picked = indices.map(i => all[i]).filter(Boolean);
     if (!picked.length) return null;
 
@@ -173,8 +174,8 @@ function openNewAppModal() {
             showCrashCount: true,
             onPopulated: function () {
                 // Pre-select the first checked row from the Grant-Ready table if any
-                if (window.grantState.selectedLocationIndices && window.grantState.selectedLocationIndices.length > 0) {
-                    const firstSelected = window.grantState.rankedLocations[window.grantState.selectedLocationIndices[0]];
+                if (grantState.selectedLocationIndices && grantState.selectedLocationIndices.length > 0) {
+                    const firstSelected = grantState.rankedLocations[grantState.selectedLocationIndices[0]];
                     if (firstSelected) {
                         const opt = Array.from(locationSelect.options).find(function (o) {
                             return o.value && o.value.split(':').pop() === firstSelected.name;
@@ -190,14 +191,14 @@ function openNewAppModal() {
 
     locationSelect.innerHTML = '<option value="">Select Location...</option>';
 
-    if (window.grantState.rankedLocations && window.grantState.rankedLocations.length > 0) {
-        window.grantState.rankedLocations.forEach((loc, idx) => {
+    if (grantState.rankedLocations && grantState.rankedLocations.length > 0) {
+        grantState.rankedLocations.forEach((loc, idx) => {
             locationSelect.innerHTML += `<option value="${loc.name}">${loc.name} (${loc.crashes} crashes)</option>`;
         });
     }
 
-    if (window.grantState.selectedLocationIndices.length > 0) {
-        const firstSelected = window.grantState.rankedLocations[window.grantState.selectedLocationIndices[0]];
+    if (grantState.selectedLocationIndices.length > 0) {
+        const firstSelected = grantState.rankedLocations[grantState.selectedLocationIndices[0]];
         if (firstSelected) {
             locationSelect.value = firstSelected.name;
         }
@@ -274,7 +275,7 @@ function helpNavigateTo(destination) {
         'mcp-setup': 'dashboard'
     };
     const tabId = tabMap[destination] || 'dashboard';
-    window.showTab(tabId);
+    showTab(tabId);
 }
 
 // Show How-To Guide
@@ -638,7 +639,7 @@ function saveNewApplication() {
         created: new Date().toISOString()
     };
     
-    window.grantState.applications.push(app);
+    grantState.applications.push(app);
     saveApplications();
     displayApplications();
     closeNewAppModal();
@@ -653,7 +654,7 @@ function saveNewApplication() {
 }
 
 function saveApplications() {
-    localStorage.setItem('grantApplications', JSON.stringify(window.grantState.applications));
+    localStorage.setItem('grantApplications', JSON.stringify(grantState.applications));
 }
 
 function loadApplications() {
@@ -674,11 +675,11 @@ function loadApplications() {
 
     if (saved) {
         try {
-            window.grantState.applications = JSON.parse(saved);
+            grantState.applications = JSON.parse(saved);
             displayApplications();
         } catch (e) {
             console.error('[Grants] Error loading applications:', e);
-            window.grantState.applications = [];
+            grantState.applications = [];
         }
     }
 }
@@ -686,7 +687,7 @@ function loadApplications() {
 function displayApplications() {
     const tbody = document.getElementById('appTrackerBody');
     
-    if (!window.grantState.applications || window.grantState.applications.length === 0) {
+    if (!grantState.applications || grantState.applications.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--gray)"><div style="font-size:2rem;margin-bottom:.5rem">📋</div><strong>No Applications Yet</strong><br><span style="font-size:.85rem">Click "New Application" to start tracking your grant applications</span></td></tr>`;
         return;
     }
@@ -694,7 +695,7 @@ function displayApplications() {
     const grantLabels = { ss4a: 'SS4A', hsip: 'HSIP', nhtsa402: 'NHTSA 402', nhtsa405: 'NHTSA 405' };
     const statusColors = { draft: '#4338ca', submitted: '#d97706', review: '#1e40af', awarded: '#059669', denied: '#dc2626' };
     
-    tbody.innerHTML = window.grantState.applications.map((app, idx) => {
+    tbody.innerHTML = grantState.applications.map((app, idx) => {
         const deadlineDate = new Date(app.deadline);
         const daysUntil = Math.ceil((deadlineDate - new Date()) / (1000 * 60 * 60 * 24));
         const deadlineClass = daysUntil < 0 ? 'past' : daysUntil <= 30 ? 'urgent' : daysUntil <= 90 ? 'soon' : 'ok';
@@ -721,21 +722,21 @@ function displayApplications() {
 }
 
 function updateAppStatus(idx, status) {
-    window.grantState.applications[idx].status = status;
+    grantState.applications[idx].status = status;
     saveApplications();
     displayApplications();
 }
 
 function deleteApplication(idx) {
     if (confirm('Delete this application?')) {
-        window.grantState.applications.splice(idx, 1);
+        grantState.applications.splice(idx, 1);
         saveApplications();
         displayApplications();
     }
 }
 
 async function exportSingleApplication(idx) {
-    const app = window.grantState.applications[idx];
+    const app = grantState.applications[idx];
     if (!app) return;
     
     const { Document, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
@@ -819,7 +820,7 @@ async function exportSingleApplication(idx) {
 }
 
 async function exportAllApplications() {
-    if (!window.grantState.applications || window.grantState.applications.length === 0) {
+    if (!grantState.applications || grantState.applications.length === 0) {
         alert('No applications to export.');
         return;
     }
@@ -848,7 +849,7 @@ async function exportAllApplications() {
         })
     ];
     
-    window.grantState.applications.forEach((app, idx) => {
+    grantState.applications.forEach((app, idx) => {
         if (idx > 0) {
             children.push(new Paragraph({ children: [new PageBreak()] }));
         }
@@ -933,8 +934,8 @@ async function exportAllApplications() {
 // ============================================================
 
 function getGrantAISystemPrompt() {
-    const stateName = window.jurisdictionContext.stateName || 'the state';
-    const fips = window.jurisdictionContext.stateFips || '08';
+    const stateName = jurisdictionContext.stateName || 'the state';
+    const fips = jurisdictionContext.stateFips || '08';
     const stateInfo = (typeof FIPSDatabase !== 'undefined') ? FIPSDatabase.getState(fips) : null;
     const dotName = stateInfo?.dotName || 'State DOT';
 
@@ -988,12 +989,12 @@ Use markdown formatting for readability. Be thorough, data-driven, and write to 
 const GRANT_AI_SYSTEM_PROMPT = getGrantAISystemPrompt();
 
 function getGrantSearchSystemPrompt() {
-    const fips = window.jurisdictionContext.stateFips || '08';
+    const fips = jurisdictionContext.stateFips || '08';
     const stateInfo = (typeof FIPSDatabase !== 'undefined') ? FIPSDatabase.getState(fips) : null;
     const dotName = stateInfo?.dotName || 'State DOT';
     const hso = getStateHSO(fips);
     const hsoAgency = hso.agency || dotName;
-    const stateName = window.jurisdictionContext.stateName || 'the state';
+    const stateName = jurisdictionContext.stateName || 'the state';
 
     return `You are a Grant Search Strategist specializing in highway safety funding. You help traffic engineers in ${stateName} identify the best-fit grants, assess competitiveness, and develop winning application strategies.
 
@@ -1042,11 +1043,11 @@ Be specific and actionable. Estimate potential funding. Be direct about weak vs.
 const GRANT_SEARCH_SYSTEM_PROMPT = getGrantSearchSystemPrompt();
 
 function getFullApplicationSystemPrompt() {
-    const fips = window.jurisdictionContext.stateFips || '08';
+    const fips = jurisdictionContext.stateFips || '08';
     const stateInfo = (typeof FIPSDatabase !== 'undefined') ? FIPSDatabase.getState(fips) : null;
     const dotName = stateInfo?.dotName || 'State DOT';
-    const stateName = window.jurisdictionContext.stateName || 'the state';
-    const countyName = window.jurisdictionContext.jurisdictionName || 'the county';
+    const stateName = jurisdictionContext.stateName || 'the state';
+    const countyName = jurisdictionContext.jurisdictionName || 'the county';
     const eK = EPDO_WEIGHTS.K, eA = EPDO_WEIGHTS.A, eB = EPDO_WEIGHTS.B, eC = EPDO_WEIGHTS.C, eO = EPDO_WEIGHTS.O;
 
     return `You are a senior transportation safety grant writer with 15+ years of experience winning competitive federal highway safety grants including SS4A, HSIP, and NHTSA 402/405 programs. You have served as both an applicant and a USDOT grant reviewer. Your applications have a 90% success rate because you understand exactly what reviewers look for.
@@ -1171,7 +1172,7 @@ const grantAgentState = {
  * using jurisdictionContext. Accessed as GRANT_PROGRAM_REQUIREMENTS.ss4a etc.
  */
 function buildGrantProgramRequirements() {
-    const fips = window.jurisdictionContext.stateFips || '08';
+    const fips = jurisdictionContext.stateFips || '08';
     const stateInfo = (typeof FIPSDatabase !== 'undefined') ? FIPSDatabase.getState(fips) : null;
     const dotName = stateInfo?.dotName || 'State DOT';
     const hso = (typeof getStateHSO === 'function') ? getStateHSO(fips) : {};
@@ -1691,7 +1692,7 @@ function updateGrantProgramUI() {
     const locationEl = document.getElementById('appLocation');
 
     // Check both table selection AND dropdown for location
-    const tableSelectionExists = window.grantState.selectedLocationIndices && window.grantState.selectedLocationIndices.length > 0;
+    const tableSelectionExists = grantState.selectedLocationIndices && grantState.selectedLocationIndices.length > 0;
     const dropdownSelected = locationEl?.value && locationEl.value !== '';
     const locationSelected = tableSelectionExists || dropdownSelected;
     const programSelected = program && program !== '';
@@ -1741,7 +1742,7 @@ async function download4AgentApplicationPDF() {
     }
 
     // Check for table selection first, then fall back to dropdown
-    if (window.grantState.selectedLocationIndices.length === 0) {
+    if (grantState.selectedLocationIndices.length === 0) {
         const locationName = document.getElementById('appLocation')?.value;
         if (!locationName || locationName === '') {
             alert('Please select at least one location from the Grant-Ready Locations table, or select a location from the dropdown.');
@@ -1757,17 +1758,17 @@ async function download4AgentApplicationPDF() {
 
     // Get location data - prioritize table selection over dropdown
     let location, locationNames, isMulti = false;
-    if (window.grantState.selectedLocationIndices.length > 1) {
+    if (grantState.selectedLocationIndices.length > 1) {
         isMulti = true;
         location = getCombinedSelectionStats();
-        locationNames = window.grantState.selectedLocationIndices.map(idx => window.grantState.rankedLocations[idx].name);
-    } else if (window.grantState.selectedLocationIndices.length === 1) {
-        location = window.grantState.rankedLocations[window.grantState.selectedLocationIndices[0]];
+        locationNames = grantState.selectedLocationIndices.map(idx => grantState.rankedLocations[idx].name);
+    } else if (grantState.selectedLocationIndices.length === 1) {
+        location = grantState.rankedLocations[grantState.selectedLocationIndices[0]];
         locationNames = [location.name];
     } else {
         const locationName = document.getElementById('appLocation')?.value;
-        location = window.grantState.rankedLocations?.find(l => l.name === locationName) ||
-                   window.grantState.allRankedLocations?.find(l => l.name === locationName);
+        location = grantState.rankedLocations?.find(l => l.name === locationName) ||
+                   grantState.allRankedLocations?.find(l => l.name === locationName);
         if (!location) {
             alert('Location data not found. Please select a valid location.');
             return;
@@ -1785,15 +1786,15 @@ async function download4AgentApplicationPDF() {
         B: location.B || 0,
         C: location.C || 0,
         O: location.O || 0,
-        yearRange: window.crashState.years?.length > 0 ? `${crashState.years[0]}-${crashState.years[crashState.years.length-1]}` : '5-year',
+        yearRange: crashState.years?.length > 0 ? `${crashState.years[0]}-${crashState.years[crashState.years.length-1]}` : '5-year',
         pedestrian: location.ped || 0,
         bicycle: location.bike || 0,
         collisionTypes: location.collisionTypes || {},
         patterns: location.patterns || (isMulti ? (() => {
             // Aggregate patterns from all selected locations for multi-corridor
             const agg = {};
-            window.grantState.selectedLocationIndices.forEach(idx => {
-                const loc = window.grantState.rankedLocations[idx];
+            grantState.selectedLocationIndices.forEach(idx => {
+                const loc = grantState.rankedLocations[idx];
                 if (loc.patterns) {
                     Object.entries(loc.patterns).forEach(([k, v]) => {
                         if (typeof v === 'number') agg[k] = (agg[k] || 0) + v;
@@ -1853,7 +1854,7 @@ async function download4AgentApplicationWord() {
     }
 
     // Check for table selection first, then fall back to dropdown
-    if (window.grantState.selectedLocationIndices.length === 0) {
+    if (grantState.selectedLocationIndices.length === 0) {
         const locationName = document.getElementById('appLocation')?.value;
         if (!locationName || locationName === '') {
             alert('Please select at least one location from the Grant-Ready Locations table, or select a location from the dropdown.');
@@ -1869,17 +1870,17 @@ async function download4AgentApplicationWord() {
 
     // Get location data - prioritize table selection over dropdown
     let location, locationNames, isMulti = false;
-    if (window.grantState.selectedLocationIndices.length > 1) {
+    if (grantState.selectedLocationIndices.length > 1) {
         isMulti = true;
         location = getCombinedSelectionStats();
-        locationNames = window.grantState.selectedLocationIndices.map(idx => window.grantState.rankedLocations[idx].name);
-    } else if (window.grantState.selectedLocationIndices.length === 1) {
-        location = window.grantState.rankedLocations[window.grantState.selectedLocationIndices[0]];
+        locationNames = grantState.selectedLocationIndices.map(idx => grantState.rankedLocations[idx].name);
+    } else if (grantState.selectedLocationIndices.length === 1) {
+        location = grantState.rankedLocations[grantState.selectedLocationIndices[0]];
         locationNames = [location.name];
     } else {
         const locationName = document.getElementById('appLocation')?.value;
-        location = window.grantState.rankedLocations?.find(l => l.name === locationName) ||
-                   window.grantState.allRankedLocations?.find(l => l.name === locationName);
+        location = grantState.rankedLocations?.find(l => l.name === locationName) ||
+                   grantState.allRankedLocations?.find(l => l.name === locationName);
         if (!location) {
             alert('Location data not found. Please select a valid location.');
             return;
@@ -1893,14 +1894,14 @@ async function download4AgentApplicationWord() {
         locationType: isMulti ? 'Multi-Corridor' : (location.type === 'intersection' ? 'Intersection' : 'Segment'),
         total: location.crashes || 0,
         K: location.K || 0, A: location.A || 0, B: location.B || 0, C: location.C || 0, O: location.O || 0,
-        yearRange: window.crashState.years?.length > 0 ? `${crashState.years[0]}-${crashState.years[crashState.years.length-1]}` : '5-year',
+        yearRange: crashState.years?.length > 0 ? `${crashState.years[0]}-${crashState.years[crashState.years.length-1]}` : '5-year',
         pedestrian: location.ped || 0,
         bicycle: location.bike || 0,
         collisionTypes: location.collisionTypes || {},
         patterns: location.patterns || (isMulti ? (() => {
             const agg = {};
-            window.grantState.selectedLocationIndices.forEach(idx => {
-                const loc = window.grantState.rankedLocations[idx];
+            grantState.selectedLocationIndices.forEach(idx => {
+                const loc = grantState.rankedLocations[idx];
                 if (loc.patterns) {
                     Object.entries(loc.patterns).forEach(([k, v]) => {
                         if (typeof v === 'number') agg[k] = (agg[k] || 0) + v;
@@ -2210,15 +2211,15 @@ async function generateGrant4AgentWord(results, projectParams) {
     URL.revokeObjectURL(url);
 }
 
-// ---- Transitional CL.* namespace + window mirror (stripped in Stage A-cleanup) ----
-window.CL = window.CL || {};
-CL.grants = CL.grants || {};
-CL.grants.ui = CL.grants.ui || {};
+  // ---- Public API: back-compat dual exposure ----
+  window.CL = window.CL || {};
+  CL.grants = CL.grants || {};
+  CL.grants.ui = CL.grants.ui || {};
 
-// Every declaration above was a top-level (global) function before
-// extraction; mirror all to window so remaining inline code in
-// index.html keeps working unchanged.
-window.runFullAnalysis = runFullAnalysis;
+  // Every declaration above was a top-level (global) function before
+  // extraction; mirror all to window so remaining inline code in
+  // index.html keeps working unchanged.
+  window.runFullAnalysis = runFullAnalysis;
   window.scrollToGrantSearch = scrollToGrantSearch;
   window.scrollToWritingAssistant = scrollToWritingAssistant;
   window.populateGrantProgramDropdown = populateGrantProgramDropdown;
@@ -2262,20 +2263,5 @@ window.runFullAnalysis = runFullAnalysis;
   CL.grants.runGrant4AgentAnalysis = CL.grants.ui.runGrant4AgentAnalysis = runGrant4AgentAnalysis;
   CL.grants.updateGrantProgramUI = CL.grants.ui.updateGrantProgramUI = updateGrantProgramUI;
 
-export {
-    runFullAnalysis, scrollToGrantSearch, scrollToWritingAssistant,
-    populateGrantProgramDropdown, buildGrantWritingContext, openNewAppModal,
-    closeNewAppModal, showHelpModal, closeHelpModal, switchHelpTab,
-    toggleConceptCard, helpNavigateTo, showHowTo, saveNewApplication,
-    saveApplications, loadApplications, displayApplications, updateAppStatus,
-    deleteApplication, exportSingleApplication, exportAllApplications,
-    getGrantAISystemPrompt, getGrantSearchSystemPrompt,
-    getFullApplicationSystemPrompt, buildGrantProgramRequirements,
-    callGrantAgentWithRetry, runGrant4AgentAnalysis, buildGrantAgent1Input,
-    updateGrantProgramUI, download4AgentApplicationPDF,
-    download4AgentApplicationWord, showGrant4AgentLoadingModal,
-    hideGrant4AgentLoadingModal, updateGrant4AgentProgress,
-    generateGrant4AgentPDF, generateGrant4AgentWord
-};
-
-CL._registerModule('grants/grants-ui');
+  CL._registerModule('grants/grants-ui');
+})();

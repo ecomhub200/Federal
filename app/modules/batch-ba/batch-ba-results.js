@@ -2,8 +2,6 @@
  * CrashLens Batch Before/After Evaluation — Results Dashboard
  * Renders summary cards, sortable/filterable table, and detail expansion.
  */
-'use strict';
-
 window.CL = window.CL || {};
 CL.batchBA = CL.batchBA || {};
 

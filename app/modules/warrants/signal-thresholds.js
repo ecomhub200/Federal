@@ -14,8 +14,9 @@
  *
  * Depends on (must load before this file): `warrants/signal`
  */
-'use strict';
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 // ============================================================
 // SIGNAL WARRANT MUTCD THRESHOLDS (11th Edition)
@@ -90,23 +91,15 @@ const SIGNAL_WARRANT4_CURVES = {
 // Warrant 5: School Crossing minimum
 const SIGNAL_WARRANT5_MIN_SCHOOLCHILDREN = 20;
 
-// ─── EXTRACTED CODE END ───
+  // ─── EXTRACTED CODE END ───
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.warrants = CL.warrants || {};
-CL.warrants.SIGNAL_WARRANT1_THRESHOLDS = SIGNAL_WARRANT1_THRESHOLDS;
-CL.warrants.SIGNAL_WARRANT2_CURVES = SIGNAL_WARRANT2_CURVES;
-CL.warrants.SIGNAL_WARRANT3_CURVES = SIGNAL_WARRANT3_CURVES;
-CL.warrants.SIGNAL_WARRANT4_CURVES = SIGNAL_WARRANT4_CURVES;
-CL.warrants.SIGNAL_WARRANT5_MIN_SCHOOLCHILDREN = SIGNAL_WARRANT5_MIN_SCHOOLCHILDREN;
-
-export {
-    SIGNAL_WARRANT1_THRESHOLDS,
-    SIGNAL_WARRANT2_CURVES,
-    SIGNAL_WARRANT3_CURVES,
-    SIGNAL_WARRANT4_CURVES,
-    SIGNAL_WARRANT5_MIN_SCHOOLCHILDREN
-};
-
-CL._registerModule('warrants/signal-thresholds');
+  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+  window.CL = window.CL || {};
+  CL.warrants = CL.warrants || {};
+  window.SIGNAL_WARRANT1_THRESHOLDS = SIGNAL_WARRANT1_THRESHOLDS; CL.warrants.SIGNAL_WARRANT1_THRESHOLDS = SIGNAL_WARRANT1_THRESHOLDS;
+  window.SIGNAL_WARRANT2_CURVES = SIGNAL_WARRANT2_CURVES; CL.warrants.SIGNAL_WARRANT2_CURVES = SIGNAL_WARRANT2_CURVES;
+  window.SIGNAL_WARRANT3_CURVES = SIGNAL_WARRANT3_CURVES; CL.warrants.SIGNAL_WARRANT3_CURVES = SIGNAL_WARRANT3_CURVES;
+  window.SIGNAL_WARRANT4_CURVES = SIGNAL_WARRANT4_CURVES; CL.warrants.SIGNAL_WARRANT4_CURVES = SIGNAL_WARRANT4_CURVES;
+  window.SIGNAL_WARRANT5_MIN_SCHOOLCHILDREN = SIGNAL_WARRANT5_MIN_SCHOOLCHILDREN; CL.warrants.SIGNAL_WARRANT5_MIN_SCHOOLCHILDREN = SIGNAL_WARRANT5_MIN_SCHOOLCHILDREN;
+  CL._registerModule('warrants/signal-thresholds');
+})();

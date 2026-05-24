@@ -13,8 +13,9 @@
  *
  * Depends on (must load before this file): `spatial/hierarchy-registry`
  */
-'use strict';
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 const BoundaryService = (() => {
     'use strict';
@@ -282,7 +283,7 @@ const BoundaryService = (() => {
                 _queryTigerWeb(LAYERS.counties, `STATE='${stateFips}'`, 'NAME,COUNTY,STATE,GEOID'),
                 mpoQuery()
             ]);
-            window.jurisdictionContext.boundariesLoaded = !!(stateOutline && counties);
+            jurisdictionContext.boundariesLoaded = !!(stateOutline && counties);
             return { stateOutline, counties, mpos };
         },
 
@@ -468,13 +469,11 @@ const BoundaryService = (() => {
     };
 })();
 
-// ─── EXTRACTED CODE END ───
+  // ─── EXTRACTED CODE END ───
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.spatial = CL.spatial || {};
-CL.spatial.BoundaryService = BoundaryService;
-
-export { BoundaryService };
-
-CL._registerModule('spatial/boundary-service');
+  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+  window.CL = window.CL || {};
+  CL.spatial = CL.spatial || {};
+  window.BoundaryService = BoundaryService; CL.spatial.BoundaryService = BoundaryService;
+  CL._registerModule('spatial/boundary-service');
+})();

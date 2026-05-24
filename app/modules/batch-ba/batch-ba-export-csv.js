@@ -2,8 +2,6 @@
  * CrashLens Batch Before/After Evaluation — CSV Export
  * Exports flat CSV with all computed metrics.
  */
-'use strict';
-
 window.CL = window.CL || {};
 CL.batchBA = CL.batchBA || {};
 

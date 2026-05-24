@@ -2,8 +2,6 @@
  * CrashLens Batch Before/After Evaluation — KML Export
  * Generates KML file with color-coded placemarks and optional crash point layers.
  */
-'use strict';
-
 window.CL = window.CL || {};
 CL.batchBA = CL.batchBA || {};
 

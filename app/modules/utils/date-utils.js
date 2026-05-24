@@ -2,9 +2,10 @@
  * CrashLens Date Utilities
  * Extracted from app/index.html — pure date helper functions
  */
-'use strict';
+window.CL = window.CL || {};
+CL.utils = CL.utils || {};
 
-export const dateUtils = {
+CL.utils.dateUtils = {
     parseCrashDateToTimestamp: function(dateStr) {
         if (!dateStr) return null;
 
@@ -29,10 +30,5 @@ export const dateUtils = {
         return date.toLocaleDateString('en-US', options);
     }
 };
-
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.utils = CL.utils || {};
-CL.utils.dateUtils = dateUtils;
 
 CL._registerModule('utils/date-utils');

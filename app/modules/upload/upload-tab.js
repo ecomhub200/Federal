@@ -11,9 +11,11 @@
  * Globals accessed: crashState, r2State, appConfig, appSettings, connectionState,
  *                   jurisdictionContext, EPDO_WEIGHTS, EPDO_ACTIVE_PRESET, EPDO_PRESETS
  */
-'use strict';
+window.CL = window.CL || {};
+CL.upload = CL.upload || {};
 
-import * as roadTypeMapping from '../data/road-type-mapping.js';
+(function() {
+    'use strict';
 
     // F2/F3 — localStorage key for the user's last-selected state (FIPS).
     // This key is intentionally state-independent: it is NOT purged on a
@@ -32,12 +34,12 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
      * @returns {string} File suffix like 'county_roads', 'dot_roads', 'statewide_all_roads', etc.
      */
     function getActiveRoadTypeSuffix(tier) {
-        var activeTier = tier || (typeof window.jurisdictionContext !== 'undefined' ? window.jurisdictionContext.viewTier : 'county');
+        var activeTier = tier || (typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county');
         // Delegate to the shared road-type-mapping module — single source of
         // truth across supabase-bridge / data-client / index.html.
-        if (roadTypeMapping) {
-            var radioVal = roadTypeMapping.activeRadioValue();
-            var suffix = roadTypeMapping.suffixFor(activeTier, radioVal);
+        if (CL && CL.data && CL.data.roadTypeMapping) {
+            var radioVal = CL.data.roadTypeMapping.activeRadioValue();
+            var suffix = CL.data.roadTypeMapping.suffixFor(activeTier, radioVal);
             // Preserve the legacy 'statewide_all_roads' filename for the state
             // tier's all-roads R2 file (matches existing R2 publish layout).
             if (activeTier === 'state' && suffix === 'all_roads') return 'statewide_all_roads';
@@ -62,7 +64,7 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
      * @returns {string} R2 folder path like 'virginia/henrico', 'colorado/_mpo/drcog', '_national'
      */
     function getR2BasePath() {
-        var tier = typeof window.jurisdictionContext !== 'undefined' ? window.jurisdictionContext.viewTier : 'county';
+        var tier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
         // Fix 7 — _resolveActiveState (defined in app/index.html) is the single
         // source of truth for the active state key. Returns null when neither
         // the user-selected state nor appConfig.defaultState resolves —
@@ -71,41 +73,41 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
         var stateKey = (typeof _resolveActiveState === 'function')
             ? (_resolveActiveState() || '')
             : ((typeof _getActiveStateKey === 'function' && _getActiveStateKey()) ||
-               (typeof window.appConfig !== 'undefined' && window.appConfig && window.appConfig.defaultState) || '');
-        var r2Prefix = (window.appConfig && window.appConfig.states && window.appConfig.states[stateKey] && window.appConfig.states[stateKey].r2Prefix) || stateKey;
+               (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || '');
+        var r2Prefix = (appConfig && appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].r2Prefix) || stateKey;
 
         if (tier === 'federal') return '_national';
         if (tier === 'state') return r2Prefix + '/_state';
 
         if (tier === 'region') {
-            var regionId = window.jurisdictionContext.tierRegion && window.jurisdictionContext.tierRegion.id;
+            var regionId = jurisdictionContext.tierRegion && jurisdictionContext.tierRegion.id;
             if (regionId) return r2Prefix + '/_region/' + regionId;
         }
 
         if (tier === 'mpo') {
-            var mpoId = window.jurisdictionContext.tierMpo && window.jurisdictionContext.tierMpo.id;
+            var mpoId = jurisdictionContext.tierMpo && jurisdictionContext.tierMpo.id;
             if (mpoId) return r2Prefix + '/_mpo/' + mpoId;
         }
 
         if (tier === 'planning_district') {
-            var pdId = window.jurisdictionContext.tierPlanningDistrict && window.jurisdictionContext.tierPlanningDistrict.id;
+            var pdId = jurisdictionContext.tierPlanningDistrict && jurisdictionContext.tierPlanningDistrict.id;
             if (pdId) return r2Prefix + '/_planning_district/' + pdId.toLowerCase();
         }
 
         if (tier === 'city') {
-            var cityId = window.jurisdictionContext.tierCity && window.jurisdictionContext.tierCity.id;
+            var cityId = jurisdictionContext.tierCity && jurisdictionContext.tierCity.id;
             if (cityId) return r2Prefix + '/_city/' + cityId.toLowerCase();
         }
 
         // County tier (default)
         var jurisdiction = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : null;
         if (!jurisdiction) {
-            var stateCfg = (window.appConfig && window.appConfig.states && stateKey) ? window.appConfig.states[stateKey] : null;
+            var stateCfg = (appConfig && appConfig.states && stateKey) ? appConfig.states[stateKey] : null;
             jurisdiction = (stateCfg && stateCfg.defaultJurisdiction) || 'unknown';
             console.warn('[Upload] No active jurisdiction; falling back to', jurisdiction, 'for state', stateKey);
         }
         var r2Jurisdiction = jurisdiction;
-        var stateAbbr = window.appConfig && window.appConfig.states && window.appConfig.states[stateKey] && window.appConfig.states[stateKey].abbreviation;
+        var stateAbbr = appConfig && appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].abbreviation;
         if (stateAbbr) stateAbbr = stateAbbr.toLowerCase();
         if (stateAbbr && jurisdiction.startsWith(stateAbbr + '_')) {
             r2Jurisdiction = jurisdiction.substring(stateAbbr.length + 1);
@@ -122,7 +124,7 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
      * @returns {string} R2-native path like 'virginia/henrico/county_roads.csv'
      */
     function getDataFilePath() {
-        var tier = typeof window.jurisdictionContext !== 'undefined' ? window.jurisdictionContext.viewTier : 'county';
+        var tier = typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county';
         // Fix 7 — _resolveActiveState (defined in app/index.html) is the single
         // source of truth for the active state key. Returns null when neither
         // the user-selected state nor appConfig.defaultState resolves —
@@ -131,8 +133,8 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
         var stateKey = (typeof _resolveActiveState === 'function')
             ? (_resolveActiveState() || '')
             : ((typeof _getActiveStateKey === 'function' && _getActiveStateKey()) ||
-               (typeof window.appConfig !== 'undefined' && window.appConfig && window.appConfig.defaultState) || '');
-        var r2Prefix = (window.appConfig && window.appConfig.states && window.appConfig.states[stateKey] && window.appConfig.states[stateKey].r2Prefix) || stateKey;
+               (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || '');
+        var r2Prefix = (appConfig && appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].r2Prefix) || stateKey;
         var roadType = getActiveRoadTypeSuffix(tier);
 
         // R2 policy (effective 2026-04-23): all crash data is published as
@@ -141,34 +143,34 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
         if (tier === 'state') return r2Prefix + '/_state/' + roadType + '.parquet';
 
         if (tier === 'region') {
-            var regionId = window.jurisdictionContext.tierRegion && window.jurisdictionContext.tierRegion.id;
+            var regionId = jurisdictionContext.tierRegion && jurisdictionContext.tierRegion.id;
             if (regionId) return r2Prefix + '/_region/' + regionId + '/' + roadType + '.parquet';
         }
 
         if (tier === 'mpo') {
-            var mpoId = window.jurisdictionContext.tierMpo && window.jurisdictionContext.tierMpo.id;
+            var mpoId = jurisdictionContext.tierMpo && jurisdictionContext.tierMpo.id;
             if (mpoId) return r2Prefix + '/_mpo/' + mpoId + '/' + roadType + '.parquet';
         }
 
         if (tier === 'planning_district') {
-            var pdId = window.jurisdictionContext.tierPlanningDistrict && window.jurisdictionContext.tierPlanningDistrict.id;
+            var pdId = jurisdictionContext.tierPlanningDistrict && jurisdictionContext.tierPlanningDistrict.id;
             if (pdId) return r2Prefix + '/_planning_district/' + pdId.toLowerCase() + '/' + roadType + '.parquet';
         }
 
         if (tier === 'city') {
-            var cityId = window.jurisdictionContext.tierCity && window.jurisdictionContext.tierCity.id;
+            var cityId = jurisdictionContext.tierCity && jurisdictionContext.tierCity.id;
             if (cityId) return r2Prefix + '/_city/' + cityId.toLowerCase() + '/' + roadType + '.parquet';
         }
 
         // County tier (default)
         var jurisdiction = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : null;
         if (!jurisdiction) {
-            var stateCfg = (window.appConfig && window.appConfig.states && stateKey) ? window.appConfig.states[stateKey] : null;
+            var stateCfg = (appConfig && appConfig.states && stateKey) ? appConfig.states[stateKey] : null;
             jurisdiction = (stateCfg && stateCfg.defaultJurisdiction) || 'unknown';
             console.warn('[Upload] No active jurisdiction; falling back to', jurisdiction, 'for state', stateKey);
         }
         var r2Jurisdiction = jurisdiction;
-        var stateAbbr = window.appConfig && window.appConfig.states && window.appConfig.states[stateKey] && window.appConfig.states[stateKey].abbreviation;
+        var stateAbbr = appConfig && appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].abbreviation;
         if (stateAbbr) stateAbbr = stateAbbr.toLowerCase();
         if (stateAbbr && jurisdiction.startsWith(stateAbbr + '_')) {
             r2Jurisdiction = jurisdiction.substring(stateAbbr.length + 1);
@@ -202,9 +204,9 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
         }
 
         // Strategy 2: Dynamic R2 URL construction for legacy local paths
-        if (normalizedPath.indexOf('data/') === 0 && typeof window.appConfig !== 'undefined' && window.appConfig && window.appConfig.states) {
+        if (normalizedPath.indexOf('data/') === 0 && typeof appConfig !== 'undefined' && appConfig && appConfig.states) {
             var activeStateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
-            var stateConfig = activeStateKey ? window.appConfig.states[activeStateKey] : null;
+            var stateConfig = activeStateKey ? appConfig.states[activeStateKey] : null;
             if (stateConfig && stateConfig.r2Prefix) {
                 var filename = normalizedPath.split('/').pop();
                 if (filename) {
@@ -282,7 +284,7 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
         } else if (filename.indexOf('.gz', filename.length - 3) !== -1) {
             filename = filename.slice(0, -3); // county_roads.csv.gz → county_roads.csv
         }
-        var stateDataDir = window.appConfig && window.appConfig.states && window.appConfig.states[statePrefix] && window.appConfig.states[statePrefix].dataDir;
+        var stateDataDir = appConfig && appConfig.states && appConfig.states[statePrefix] && appConfig.states[statePrefix].dataDir;
 
         if (stateDataDir) {
             fallbacks.push('../data/' + stateDataDir + '/' + jurisdiction + '_' + filename);
@@ -352,21 +354,21 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
      * @returns {{ available: boolean, reason: string, inManifest: boolean, files?: string[] }}
      */
     function checkR2DataAvailability(stateKey, jurisdictionId) {
-        var prefix = (window.appConfig && window.appConfig.states && window.appConfig.states[stateKey] && window.appConfig.states[stateKey].r2Prefix) || stateKey;
-        var tier = (typeof window.jurisdictionContext !== 'undefined') ? window.jurisdictionContext.viewTier : 'county';
+        var prefix = (appConfig && appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].r2Prefix) || stateKey;
+        var tier = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext.viewTier : 'county';
 
         // Build path prefix based on tier
         var pathPrefix;
         if (tier === 'state') {
             pathPrefix = prefix + '/_state/';
-        } else if (tier === 'region' && window.jurisdictionContext.tierRegion) {
-            pathPrefix = prefix + '/_region/' + window.jurisdictionContext.tierRegion.id + '/';
-        } else if (tier === 'planning_district' && window.jurisdictionContext.tierPlanningDistrict) {
-            pathPrefix = prefix + '/_planning_district/' + window.jurisdictionContext.tierPlanningDistrict.id + '/';
-        } else if (tier === 'mpo' && window.jurisdictionContext.tierMpo) {
-            pathPrefix = prefix + '/_mpo/' + window.jurisdictionContext.tierMpo.id + '/';
-        } else if (tier === 'city' && window.jurisdictionContext.tierCity) {
-            pathPrefix = prefix + '/_city/' + window.jurisdictionContext.tierCity.id + '/';
+        } else if (tier === 'region' && jurisdictionContext.tierRegion) {
+            pathPrefix = prefix + '/_region/' + jurisdictionContext.tierRegion.id + '/';
+        } else if (tier === 'planning_district' && jurisdictionContext.tierPlanningDistrict) {
+            pathPrefix = prefix + '/_planning_district/' + jurisdictionContext.tierPlanningDistrict.id + '/';
+        } else if (tier === 'mpo' && jurisdictionContext.tierMpo) {
+            pathPrefix = prefix + '/_mpo/' + jurisdictionContext.tierMpo.id + '/';
+        } else if (tier === 'city' && jurisdictionContext.tierCity) {
+            pathPrefix = prefix + '/_city/' + jurisdictionContext.tierCity.id + '/';
         } else {
             pathPrefix = prefix + '/' + jurisdictionId.toLowerCase() + '/';
         }
@@ -413,7 +415,7 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
         }
 
         // Reload data with the new filter if data was previously loaded
-        if (typeof window.crashState !== 'undefined' && window.crashState.loaded) {
+        if (typeof crashState !== 'undefined' && crashState.loaded) {
             console.log('[Config] Reloading data from:', getDataFilePath());
             if (typeof crashCacheClearAll === 'function') {
                 crashCacheClearAll().catch(function(err) {
@@ -531,7 +533,7 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
      * Clears cache and fetches fresh data from server.
      */
     async function forceRefreshAllData() {
-        if (typeof window.crashState === 'undefined' || !window.crashState.loaded) {
+        if (typeof crashState === 'undefined' || !crashState.loaded) {
             alert('No data loaded. Please upload a crash data file first.');
             return;
         }
@@ -601,11 +603,11 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
 
         if (!display || !nameSpan || !filterSpan) return;
 
-        var tier = (typeof window.jurisdictionContext !== 'undefined') ? window.jurisdictionContext.viewTier : 'county';
+        var tier = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext.viewTier : 'county';
 
         var selectedFilterEl = document.querySelector('input[name="roadTypeFilter"]:checked');
         var profileId = selectedFilterEl ? selectedFilterEl.value : (localStorage.getItem('selectedFilterProfile') || 'countyOnly');
-        var filterProfile = window.appConfig && window.appConfig.filterProfiles ? window.appConfig.filterProfiles[profileId] : null;
+        var filterProfile = appConfig && appConfig.filterProfiles ? appConfig.filterProfiles[profileId] : null;
 
         var tierLabels = {
             state: 'Statewide',
@@ -621,18 +623,18 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
         var entityName = null;
         if (tier === 'county' || tier === 'federal') {
             var jurisdictionId = (typeof getActiveJurisdictionId === 'function') ? getActiveJurisdictionId() : null;
-            var jurisdiction = jurisdictionId && window.appConfig && window.appConfig.jurisdictions ? window.appConfig.jurisdictions[jurisdictionId] : null;
+            var jurisdiction = jurisdictionId && appConfig && appConfig.jurisdictions ? appConfig.jurisdictions[jurisdictionId] : null;
             entityName = jurisdiction ? jurisdiction.name : null;
         } else if (tier === 'state') {
-            entityName = (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext.tierState) ? window.jurisdictionContext.tierState.name : 'Statewide';
+            entityName = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.tierState) ? jurisdictionContext.tierState.name : 'Statewide';
         } else if (tier === 'region') {
-            entityName = (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext.tierRegion) ? window.jurisdictionContext.tierRegion.name : null;
+            entityName = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.tierRegion) ? jurisdictionContext.tierRegion.name : null;
         } else if (tier === 'planning_district') {
-            entityName = (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext.tierPlanningDistrict) ? window.jurisdictionContext.tierPlanningDistrict.name : null;
+            entityName = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.tierPlanningDistrict) ? jurisdictionContext.tierPlanningDistrict.name : null;
         } else if (tier === 'mpo') {
-            entityName = (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext.tierMpo) ? window.jurisdictionContext.tierMpo.name : null;
+            entityName = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.tierMpo) ? jurisdictionContext.tierMpo.name : null;
         } else if (tier === 'city') {
-            entityName = (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext.tierCity) ? window.jurisdictionContext.tierCity.name : null;
+            entityName = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.tierCity) ? jurisdictionContext.tierCity.name : null;
         }
 
         if (entityName && filterProfile) {
@@ -652,7 +654,7 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
         // Delegate to the shared road-type-mapping module — single source of
         // truth. Pre-fix this file, app/index.html, and supabase-bridge.js
         // each had their own slightly different table.
-        var map = roadTypeMapping || null;
+        var map = (CL && CL.data && CL.data.roadTypeMapping) ? CL.data.roadTypeMapping : null;
         if (!map) return;
         var ids = {
             countyOnly:     'filterLabelCountyOnly',
@@ -810,61 +812,38 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
     // PUBLIC API
     // ============================================================
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-// NOTE: assign individual members rather than replacing CL.upload — the
-// IIFE-era CL.upload = {…} replacement worked because of load order; under
-// ESM cutover we keep sibling members (tierUI, pipeline, apiConnector,
-// roadDefaults) intact.
-window.CL = window.CL || {};
-CL.upload = CL.upload || {};
-CL.upload.getActiveRoadTypeSuffix = getActiveRoadTypeSuffix;
-CL.upload.getR2BasePath = getR2BasePath;
-CL.upload.getDataFilePath = getDataFilePath;
-CL.upload.resolveDataUrl = resolveDataUrl;
-CL.upload.buildLocalFallbackPaths = buildLocalFallbackPaths;
-CL.upload.loadR2Manifest = loadR2Manifest;
-CL.upload.checkR2DataAvailability = checkR2DataAvailability;
-CL.upload.getR2DataAvailabilitySummary = getR2DataAvailabilitySummary;
-CL.upload.saveFilterProfile = saveFilterProfile;
-CL.upload.saveUserPreferences = saveUserPreferences;
-CL.upload.clearUserPreferences = clearUserPreferences;
-CL.upload.handleUploadStateChange = handleUploadStateChange;
-CL.upload.forceRefreshAllData = forceRefreshAllData;
-CL.upload.showFilterLoadingState = showFilterLoadingState;
-CL.upload.showRefreshButton = showRefreshButton;
-CL.upload.updateCurrentSelectionDisplay = updateCurrentSelectionDisplay;
-CL.upload.updateRoadTypeLabels = updateRoadTypeLabels;
-CL.upload.toggleEPDOSection = toggleEPDOSection;
-CL.upload.loadEPDOPreset = loadEPDOPreset;
-CL.upload.saveCustomEPDOWeights = saveCustomEPDOWeights;
-CL.upload.applyStateDefaultEPDO = applyStateDefaultEPDO;
+    CL.upload = {
+        // R2 Data Path Utilities
+        getActiveRoadTypeSuffix: getActiveRoadTypeSuffix,
+        getR2BasePath: getR2BasePath,
+        getDataFilePath: getDataFilePath,
+        resolveDataUrl: resolveDataUrl,
+        buildLocalFallbackPaths: buildLocalFallbackPaths,
 
-// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md
-//      watch list — these 4 became survivors after Item 1 deleted the
-//      inline copies in index.html) ---
-window.saveFilterProfile = saveFilterProfile;
-window.saveUserPreferences = saveUserPreferences;
-window.clearUserPreferences = clearUserPreferences;
-window.forceRefreshAllData = forceRefreshAllData;
+        // R2 Manifest & Availability
+        loadR2Manifest: loadR2Manifest,
+        checkR2DataAvailability: checkR2DataAvailability,
+        getR2DataAvailabilitySummary: getR2DataAvailabilitySummary,
 
-export {
-    getActiveRoadTypeSuffix,
-    getR2BasePath,
-    getDataFilePath,
-    resolveDataUrl,
-    buildLocalFallbackPaths,
-    loadR2Manifest,
-    checkR2DataAvailability,
-    getR2DataAvailabilitySummary,
-    saveFilterProfile,
-    saveUserPreferences,
-    clearUserPreferences,
-    handleUploadStateChange,
-    forceRefreshAllData,
-    showFilterLoadingState,
-    showRefreshButton,
-    updateCurrentSelectionDisplay,
-    updateRoadTypeLabels
-};
+        // Filter & Preferences
+        saveFilterProfile: saveFilterProfile,
+        saveUserPreferences: saveUserPreferences,
+        clearUserPreferences: clearUserPreferences,
+        handleUploadStateChange: handleUploadStateChange,
+        forceRefreshAllData: forceRefreshAllData,
 
-CL._registerModule('upload/upload-tab');
+        // UI Helpers
+        showFilterLoadingState: showFilterLoadingState,
+        showRefreshButton: showRefreshButton,
+        updateCurrentSelectionDisplay: updateCurrentSelectionDisplay,
+        updateRoadTypeLabels: updateRoadTypeLabels,
+
+        // EPDO Management
+        toggleEPDOSection: toggleEPDOSection,
+        loadEPDOPreset: loadEPDOPreset,
+        saveCustomEPDOWeights: saveCustomEPDOWeights,
+        applyStateDefaultEPDO: applyStateDefaultEPDO
+    };
+
+    CL._registerModule('upload/upload-tab');
+})();

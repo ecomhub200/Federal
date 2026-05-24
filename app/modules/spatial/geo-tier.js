@@ -16,11 +16,9 @@
  *
  * Depends on (must load before this file): `core/tier`, `spatial/hierarchy-registry`
  */
-'use strict';
-
-import * as tierUI from '../upload/upload-tier-ui.js';
-
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 // ============================================================
 // GEOGRAPHY-BASED TIER HELPERS (City, Town, Planning District)
@@ -119,7 +117,7 @@ function _placeSlugFor(name) {
  * active state, which is true any time handleCitySelection() can run.
  */
 function lookupCountyKeyByFips(fips5) {
-    if (typeof window.appConfig === 'undefined' || !window.appConfig || !window.appConfig.jurisdictions) return null;
+    if (typeof appConfig === 'undefined' || !appConfig || !appConfig.jurisdictions) return null;
     var target = String(fips5 || '').padStart(5, '0');
     if (target.length !== 5) return null;
     var stateFipsFromTarget = target.substring(0, 2);
@@ -128,14 +126,14 @@ function lookupCountyKeyByFips(fips5) {
     // appConfig sources are fallbacks for early-boot calls. Final fallback:
     // read the dropdown directly. State-agnostic.
     var appStateFips = null;
-    if (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext && window.jurisdictionContext.stateFips) {
-        appStateFips = String(window.jurisdictionContext.stateFips).padStart(2, '0');
+    if (typeof jurisdictionContext !== 'undefined' && jurisdictionContext && jurisdictionContext.stateFips) {
+        appStateFips = String(jurisdictionContext.stateFips).padStart(2, '0');
     }
-    if (!appStateFips && window.appConfig.apis && window.appConfig.apis.tigerweb && window.appConfig.apis.tigerweb.stateFips) {
-        appStateFips = String(window.appConfig.apis.tigerweb.stateFips).padStart(2, '0');
+    if (!appStateFips && appConfig.apis && appConfig.apis.tigerweb && appConfig.apis.tigerweb.stateFips) {
+        appStateFips = String(appConfig.apis.tigerweb.stateFips).padStart(2, '0');
     }
-    if (!appStateFips && window.appConfig.state && window.appConfig.state.fips) {
-        appStateFips = String(window.appConfig.state.fips).padStart(2, '0');
+    if (!appStateFips && appConfig.state && appConfig.state.fips) {
+        appStateFips = String(appConfig.state.fips).padStart(2, '0');
     }
     if (!appStateFips) {
         try {
@@ -143,9 +141,9 @@ function lookupCountyKeyByFips(fips5) {
             if (_stSel && _stSel.value) appStateFips = String(_stSel.value).padStart(2, '0');
         } catch (e) { /* non-fatal */ }
     }
-    for (var k in window.appConfig.jurisdictions) {
-        if (!Object.prototype.hasOwnProperty.call(window.appConfig.jurisdictions, k)) continue;
-        var j = window.appConfig.jurisdictions[k];
+    for (var k in appConfig.jurisdictions) {
+        if (!Object.prototype.hasOwnProperty.call(appConfig.jurisdictions, k)) continue;
+        var j = appConfig.jurisdictions[k];
         if (!j) continue;
         // Different state configs key FIPS differently. Try every plausible
         // shape and normalize to a 5-digit string before comparing.
@@ -392,7 +390,7 @@ async function handlePlanningDistrictSelection() {
         const pdSource = hierarchy?.planningDistricts?.[pdId] || hierarchy?.regions?.[pdId] || null;
         const pdName = select.options[select.selectedIndex]?.textContent || pdId;
 
-        window.jurisdictionContext.tierPlanningDistrict = pdSource
+        jurisdictionContext.tierPlanningDistrict = pdSource
             ? { id: pdId, name: pdName, ...pdSource }
             : { id: pdId, name: pdName };
 
@@ -430,17 +428,17 @@ async function handlePlanningDistrictSelection() {
         // PD tier: use Supabase matview (pre-aggregated) instead of R2 CSV.
         try {
             // Reset stale R2 state before Supabase fetch
-            if (typeof window.crashState !== 'undefined') {
-                window.crashState.loaded = false;
-                window.crashState.sampleRows = [];
-                window.crashState.mapPoints = [];
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = false;
+                crashState.sampleRows = [];
+                crashState.mapPoints = [];
             }
             if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 await CL.data.supabaseBridge.injectFastDashboard({ force: true });
             }
-            if (typeof window.crashState !== 'undefined') {
-                window.crashState.loaded = true;
-                window.crashState.sampleRowsLoaded = false;
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = true;
+                crashState.sampleRowsLoaded = false;
             }
             try { updateDataConnectionStatus('connected'); } catch (e2) {}
             try {
@@ -451,7 +449,7 @@ async function handlePlanningDistrictSelection() {
             } catch (mb) { /* non-fatal */ }
             console.log('[Tier] PD view using Supabase matview (R2 download skipped)');
             console.log('[CrashLens] Data loaded at', new Date().toISOString(),
-                        'source: supabase-matview-pd, rows:', (window.crashState && window.crashState.totalRows) || 0);
+                        'source: supabase-matview-pd, rows:', (crashState && crashState.totalRows) || 0);
         } catch (e) {
             console.warn('[Tier] PD Supabase bridge failed:', e.message);
         }
@@ -491,8 +489,8 @@ function handleCountySelection() {
         if (typeof saveJurisdictionSelection === 'function') {
             saveJurisdictionSelection();
         }
-        if (tierUI && tierUI.renderTierScopeCard) {
-            tierUI.renderTierScopeCard('county');
+        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.renderTierScopeCard) {
+            CL.upload.tierUI.renderTierScopeCard('county');
         }
     } catch (e) {
         console.error('[Tier] handleCountySelection failed:', e);
@@ -519,7 +517,7 @@ async function handleCitySelection() {
         const displayName = selectedOption?.textContent || slug;
         const placeType = selectedOption?.dataset?.type || 'city';
 
-        window.jurisdictionContext.tierCity = { id: slug, name: displayName, type: placeType };
+        jurisdictionContext.tierCity = { id: slug, name: displayName, type: placeType };
 
         // Fix 2a — reassign jurisdictionContext to the city's parent county
         // BEFORE any path resolution or data fetch. Without this, a stale
@@ -532,7 +530,7 @@ async function handleCitySelection() {
         try {
             const place = (CL.geo && CL.geo.places) ? CL.geo.places[slug] : null;
             if (place) {
-                const fips2 = String(window.jurisdictionContext.stateFips || _getCurrentStateFips() || '').padStart(2, '0');
+                const fips2 = String(jurisdictionContext.stateFips || _getCurrentStateFips() || '').padStart(2, '0');
                 let fips3 = String(place._parentCountyFips || place.COUNTY || '').padStart(3, '0').replace(/^0+$/, '');
                 if (!fips3 && fips2) {
                     fips3 = await _resolvePlaceParentCountyFips(place, fips2);
@@ -540,18 +538,18 @@ async function handleCitySelection() {
                 if (fips2 && fips3) {
                     const fips5 = fips2 + String(fips3).padStart(3, '0');
                     const parentCountyKey = lookupCountyKeyByFips(fips5);
-                    if (parentCountyKey && parentCountyKey !== window.jurisdictionContext.jurisdictionKey) {
-                        const prevKey = window.jurisdictionContext.jurisdictionKey;
+                    if (parentCountyKey && parentCountyKey !== jurisdictionContext.jurisdictionKey) {
+                        const prevKey = jurisdictionContext.jurisdictionKey;
                         console.log('[Tier] City ' + slug + ' → reassigning parent county from ' + prevKey + ' to ' + parentCountyKey);
-                        window.jurisdictionContext.jurisdictionKey = parentCountyKey;
-                        window.jurisdictionContext.fullFips = fips5;
-                        window.jurisdictionContext.countyFips = String(fips3).padStart(3, '0');
-                        const parentJur = window.appConfig.jurisdictions[parentCountyKey];
+                        jurisdictionContext.jurisdictionKey = parentCountyKey;
+                        jurisdictionContext.fullFips = fips5;
+                        jurisdictionContext.countyFips = String(fips3).padStart(3, '0');
+                        const parentJur = appConfig.jurisdictions[parentCountyKey];
                         if (parentJur) {
-                            window.jurisdictionContext.physicalJurisName = (Array.isArray(parentJur.namePatterns) && parentJur.namePatterns[0]) || window.jurisdictionContext.physicalJurisName;
-                            window.jurisdictionContext.jurisdictionName = parentJur.fullName || parentJur.name || window.jurisdictionContext.jurisdictionName;
+                            jurisdictionContext.physicalJurisName = (Array.isArray(parentJur.namePatterns) && parentJur.namePatterns[0]) || jurisdictionContext.physicalJurisName;
+                            jurisdictionContext.jurisdictionName = parentJur.fullName || parentJur.name || jurisdictionContext.jurisdictionName;
                         } else if (place._parentCountyName) {
-                            window.jurisdictionContext.physicalJurisName = place._parentCountyName.replace(/\s+County$/i, '');
+                            jurisdictionContext.physicalJurisName = place._parentCountyName.replace(/\s+County$/i, '');
                         }
                     } else if (!parentCountyKey) {
                         // Fix E — surface the silent "FIPS resolved but no
@@ -578,8 +576,8 @@ async function handleCitySelection() {
         }
 
         if (typeof updateTierSelectorUI === 'function') updateTierSelectorUI('city');
-        if (tierUI && tierUI.renderTierScopeCard) {
-            tierUI.renderTierScopeCard('city');
+        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.renderTierScopeCard) {
+            CL.upload.tierUI.renderTierScopeCard('city');
         }
         if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
         // Page subtitle (".jurisdiction-subtitle"), map stats scope label and
@@ -624,8 +622,8 @@ async function handleCitySelection() {
                 // Warm cache for the parent county tier in the background so
                 // navigating up is instant (Phase 6 §6.6 prefetchTier).
                 if (window.crashLensClient && typeof window.crashLensClient.prefetchTier === 'function'
-                    && typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext.jurisdictionName) {
-                    window.crashLensClient.prefetchTier('county', window.jurisdictionContext.jurisdictionName, {});
+                    && typeof jurisdictionContext !== 'undefined' && jurisdictionContext.jurisdictionName) {
+                    window.crashLensClient.prefetchTier('county', jurisdictionContext.jurisdictionName, {});
                 }
             }
         } catch (e) { /* non-fatal */ }
@@ -650,11 +648,11 @@ async function handleCitySelection() {
                 ? CL.data.supabaseBridge.resolveTier()
                 : null;
             if (tierResolved && tierResolved.tier === 'county' && tierResolved.value
-                && window.jurisdictionContext.viewTier === 'city') {
+                && jurisdictionContext.viewTier === 'city') {
                 console.log('[Tier] City view using Supabase matview (R2 download skipped)');
-                if (typeof window.crashState !== 'undefined') {
-                    window.crashState.loaded = true;
-                    window.crashState.sampleRowsLoaded = false;
+                if (typeof crashState !== 'undefined') {
+                    crashState.loaded = true;
+                    crashState.sampleRowsLoaded = false;
                 }
                 // Re-enable the Road Type radios + Refresh button. Same
                 // pattern as the county-rollup branch in saveJurisdictionSelection
@@ -718,7 +716,7 @@ async function loadStatewideCSVForTier(stateKey) {
 
     const loadingTitle = document.getElementById('loadingTitle');
     const loadingSubtitle = document.getElementById('loadingSubtitle');
-    if (tierUI?.setUploadZoneCompact) tierUI.setUploadZoneCompact(false);
+    if (CL.upload?.tierUI?.setUploadZoneCompact) CL.upload.tierUI.setUploadZoneCompact(false);
     if (loadingTitle) loadingTitle.textContent = `Loading Statewide Data...`;
     if (loadingSubtitle) loadingSubtitle.textContent = `Parsing ${stateKey} statewide crash records...`;
 
@@ -748,8 +746,8 @@ async function loadStatewideCSVForTier(stateKey) {
                 });
             },
             complete: function() {
-                window.crashState.totalRows = rowCount;
-                window.crashState.loaded = true;
+                crashState.totalRows = rowCount;
+                crashState.loaded = true;
                 console.log('[CrashLens] Data loaded at', new Date().toISOString(),
                             'source: statewide-csv, rows:', rowCount);
                 if (CL && CL.data && CL.data.lazyLoader) CL.data.lazyLoader.markR2Loaded();
@@ -831,7 +829,7 @@ async function handleRegionSelection() {
         const region = hierarchy?.regions?.[regionId];
         if (!region) return;
 
-        window.jurisdictionContext.tierRegion = { id: regionId, ...region };
+        jurisdictionContext.tierRegion = { id: regionId, ...region };
         updateTierSelectorUI('region');
         if (typeof updateAppSubtitle === 'function') updateAppSubtitle(getJurisdictionLabel());
         if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
@@ -871,17 +869,17 @@ async function handleRegionSelection() {
         // Region R2 files can be 300K+ rows which causes browser OOM.
         try {
             // Reset stale R2 state before Supabase fetch
-            if (typeof window.crashState !== 'undefined') {
-                window.crashState.loaded = false;
-                window.crashState.sampleRows = [];
-                window.crashState.mapPoints = [];
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = false;
+                crashState.sampleRows = [];
+                crashState.mapPoints = [];
             }
             if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 await CL.data.supabaseBridge.injectFastDashboard({ force: true });
             }
-            if (typeof window.crashState !== 'undefined') {
-                window.crashState.loaded = true;
-                window.crashState.sampleRowsLoaded = false;
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = true;
+                crashState.sampleRowsLoaded = false;
             }
             try { updateDataConnectionStatus('connected'); } catch (e2) {}
             try {
@@ -892,7 +890,7 @@ async function handleRegionSelection() {
             } catch (mb) { /* non-fatal */ }
             console.log('[Tier] Region view using Supabase matview (R2 download skipped)');
             console.log('[CrashLens] Data loaded at', new Date().toISOString(),
-                        'source: supabase-matview-region, rows:', (window.crashState && window.crashState.totalRows) || 0);
+                        'source: supabase-matview-region, rows:', (crashState && crashState.totalRows) || 0);
         } catch (e) {
             console.warn('[Tier] Region Supabase bridge failed:', e.message);
         }
@@ -923,7 +921,7 @@ async function handleMPOSelection() {
         const mpo = hierarchy?.tprs?.[mpoId];
         if (!mpo) return;
 
-        window.jurisdictionContext.tierMpo = { id: mpoId, ...mpo };
+        jurisdictionContext.tierMpo = { id: mpoId, ...mpo };
         updateTierSelectorUI('mpo');
         if (typeof updateAppSubtitle === 'function') updateAppSubtitle(getJurisdictionLabel());
         if (typeof updateMapSearchPlaceholder === 'function') updateMapSearchPlaceholder();
@@ -1013,7 +1011,7 @@ async function handleMPOSelection() {
         try {
             if (boundary?.features?.length > 0) {
                 // Cache the boundary GeoJSON on the MPO context for reuse when map initializes later
-                window.jurisdictionContext.tierMpo._cachedBoundary = boundary;
+                jurisdictionContext.tierMpo._cachedBoundary = boundary;
 
                 if (typeof displayMPOBoundary === 'function') {
                     displayMPOBoundary(boundary, mpoId, mpo.shortName || mpo.name);
@@ -1051,17 +1049,17 @@ async function handleMPOSelection() {
         // MPO R2 files can be 300K+ rows which causes browser OOM.
         try {
             // Reset stale R2 state before Supabase fetch
-            if (typeof window.crashState !== 'undefined') {
-                window.crashState.loaded = false;
-                window.crashState.sampleRows = [];
-                window.crashState.mapPoints = [];
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = false;
+                crashState.sampleRows = [];
+                crashState.mapPoints = [];
             }
             if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 await CL.data.supabaseBridge.injectFastDashboard({ force: true });
             }
-            if (typeof window.crashState !== 'undefined') {
-                window.crashState.loaded = true;
-                window.crashState.sampleRowsLoaded = false;
+            if (typeof crashState !== 'undefined') {
+                crashState.loaded = true;
+                crashState.sampleRowsLoaded = false;
             }
             try { updateDataConnectionStatus('connected'); } catch (e2) {}
             try {
@@ -1072,7 +1070,7 @@ async function handleMPOSelection() {
             } catch (mb) { /* non-fatal */ }
             console.log('[Tier] MPO view using Supabase matview (R2 download skipped)');
             console.log('[CrashLens] Data loaded at', new Date().toISOString(),
-                        'source: supabase-matview-mpo, rows:', (window.crashState && window.crashState.totalRows) || 0);
+                        'source: supabase-matview-mpo, rows:', (crashState && crashState.totalRows) || 0);
         } catch (e) {
             console.warn('[Tier] MPO Supabase bridge failed:', e.message);
         }
@@ -1100,7 +1098,7 @@ async function handleMPOSelection() {
  * @returns {string[]|null} Array of 3-digit county FIPS strings, or null for no-filter
  */
 function getCountyFIPSListForTier() {
-    const tier = window.jurisdictionContext.viewTier;
+    const tier = jurisdictionContext.viewTier;
     switch (tier) {
         case 'federal':
             // Federal tier skipped for school/transit
@@ -1121,14 +1119,14 @@ function getCountyFIPSListForTier() {
             return null; // no filter
         }
         case 'region': {
-            const region = window.jurisdictionContext.tierRegion;
+            const region = jurisdictionContext.tierRegion;
             if (region?.counties?.length) {
                 return region.counties.map(c => String(c).padStart(3, '0'));
             }
             return [];
         }
         case 'mpo': {
-            const mpo = window.jurisdictionContext.tierMpo;
+            const mpo = jurisdictionContext.tierMpo;
             if (mpo?.counties?.length) {
                 return mpo.counties.map(c => String(c).padStart(3, '0'));
             }
@@ -1137,13 +1135,13 @@ function getCountyFIPSListForTier() {
         case 'county':
         case 'city':
         default: {
-            const fullFips = window.jurisdictionContext.fullFips;
+            const fullFips = jurisdictionContext.fullFips;
             if (fullFips && fullFips.length >= 5) {
                 return [fullFips.substring(2).padStart(3, '0')];
             }
             // Fallback from jurisdiction config
             const jurisdictions = window.appConfig?.jurisdictions || {};
-            const jKey = window.jurisdictionContext.jurisdictionKey;
+            const jKey = jurisdictionContext.jurisdictionKey;
             const j = jurisdictions[jKey];
             if (j?.fips) {
                 const fipsStr = String(j.fips);
@@ -1160,7 +1158,7 @@ function getCountyFIPSListForTier() {
  * @returns {{north:number, south:number, east:number, west:number}|null}
  */
 function getBoundsForTier() {
-    const tier = window.jurisdictionContext.viewTier;
+    const tier = jurisdictionContext.viewTier;
     const hierarchy = HierarchyRegistry.getData();
 
     switch (tier) {
@@ -1172,7 +1170,7 @@ function getBoundsForTier() {
             return null;
         }
         case 'region': {
-            const region = window.jurisdictionContext.tierRegion;
+            const region = jurisdictionContext.tierRegion;
             if (region?.mapBounds) {
                 return {
                     north: region.mapBounds.ne[0],
@@ -1191,7 +1189,7 @@ function getBoundsForTier() {
             return null;
         }
         case 'mpo': {
-            const mpo = window.jurisdictionContext.tierMpo;
+            const mpo = jurisdictionContext.tierMpo;
             if (mpo?.mapBounds) {
                 return {
                     north: mpo.mapBounds.ne[0],
@@ -1212,7 +1210,7 @@ function getBoundsForTier() {
         case 'city':
         default: {
             const jurisdictions = window.appConfig?.jurisdictions || {};
-            const jKey = window.jurisdictionContext.jurisdictionKey;
+            const jKey = jurisdictionContext.jurisdictionKey;
             const jurisdiction = jurisdictions[jKey];
             return jurisdiction ? getCountyBounds(jurisdiction) : null;
         }
@@ -1230,7 +1228,7 @@ function getTierScopeKey(tierOverride) {
     // mismatch when the global tier hadn't propagated yet (symptom:
     // "tier=state, scope=planning_district_*"). Falls back to
     // jurisdictionContext.viewTier when called without an argument.
-    const tier = tierOverride || window.jurisdictionContext.viewTier;
+    const tier = tierOverride || jurisdictionContext.viewTier;
     switch (tier) {
         case 'federal':
             return 'federal_all';
@@ -1255,34 +1253,34 @@ function getTierScopeKey(tierOverride) {
  * @returns {string}
  */
 function getTierScopeName() {
-    const tier = window.jurisdictionContext.viewTier;
+    const tier = jurisdictionContext.viewTier;
     switch (tier) {
         case 'state':
-            return window.jurisdictionContext.stateName || window.jurisdictionContext.tierState?.name || 'Statewide';
+            return jurisdictionContext.stateName || jurisdictionContext.tierState?.name || 'Statewide';
         case 'region': {
-            const r = window.jurisdictionContext.tierRegion;
+            const r = jurisdictionContext.tierRegion;
             const countyCount = r?.counties?.length || 0;
             return r ? `${r.shortName || r.name}${countyCount ? ` (${countyCount} counties)` : ''}` : 'Region';
         }
         case 'mpo': {
-            const m = window.jurisdictionContext.tierMpo;
+            const m = jurisdictionContext.tierMpo;
             const countyCount = m?.counties?.length || 0;
             return m ? `${m.shortName || m.name}${countyCount ? ` (${countyCount} counties)` : ''}` : 'MPO';
         }
         case 'planning_district': {
-            const pd = window.jurisdictionContext.tierPlanningDistrict;
+            const pd = jurisdictionContext.tierPlanningDistrict;
             const countyCount = pd?.counties?.length || 0;
             return pd ? `${pd.shortName || pd.name}${countyCount ? ` (${countyCount} counties)` : ''}` : 'Planning District';
         }
         case 'city': {
-            const c = window.jurisdictionContext.tierCity;
+            const c = jurisdictionContext.tierCity;
             return c ? (c.name || c.id) : 'City/Town';
         }
         case 'federal':
             return 'Nationwide';
         case 'county':
         default:
-            return window.jurisdictionContext.jurisdictionName || 'County';
+            return jurisdictionContext.jurisdictionName || 'County';
     }
 }
 
@@ -1336,10 +1334,10 @@ function _computeMultiCountyBounds(stateFips, countyFipsList) {
  * Called when loading school/transit data at higher tiers.
  */
 async function ensureTierBoundaryDisplayed() {
-    const tier = window.jurisdictionContext.viewTier;
+    const tier = jurisdictionContext.viewTier;
     try {
         if (tier === 'region') {
-            const region = window.jurisdictionContext.tierRegion;
+            const region = jurisdictionContext.tierRegion;
             if (region && typeof displayRegionBoundary === 'function') {
                 // Check if region boundary is already displayed
                 if (!builtInLayersState.regionBoundary?.layer) {
@@ -1360,7 +1358,7 @@ async function ensureTierBoundaryDisplayed() {
         } else if (tier === 'state') {
             // State outline — check if already displayed
             if (!builtInLayersState._stateOutlineLayer && crashMap) {
-                const stateFips = window.jurisdictionContext.stateFips;
+                const stateFips = jurisdictionContext.stateFips;
                 if (stateFips && typeof BoundaryService !== 'undefined') {
                     const stateOutline = await BoundaryService.getStateOutline(stateFips);
                     if (stateOutline?.features?.length > 0) {
@@ -1384,53 +1382,43 @@ async function ensureTierBoundaryDisplayed() {
 
   // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
   window.CL = window.CL || {};
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.spatial = CL.spatial || {};
-CL.spatial.geoTier = CL.spatial.geoTier || {};
+  CL.spatial = CL.spatial || {};
+  CL.spatial.geoTier = CL.spatial.geoTier || {};
 
-// Restore prior global surface: every declaration above was a top-level
-// (global) function before extraction; mirror all to window so remaining
-// inline code in index.html keeps working unchanged.
-window.loadGeoData = loadGeoData;
-window._getCurrentStateFips = _getCurrentStateFips;
-window._getCurrentStateAbbr = _getCurrentStateAbbr;
-window._extractPlaceType = _extractPlaceType;
-window._placeSlugFor = _placeSlugFor;
-window.lookupCountyKeyByFips = lookupCountyKeyByFips;
-window._resolvePlaceParentCountyFips = _resolvePlaceParentCountyFips;
-window.populateGeoTierDropdown = populateGeoTierDropdown;
-window.populatePlanningDistrictDropdown = populatePlanningDistrictDropdown;
-window.handlePlanningDistrictSelection = handlePlanningDistrictSelection;
-window.handleCountySelection = handleCountySelection;
-window.handleCitySelection = handleCitySelection;
-window.loadStatewideCSVForTier = loadStatewideCSVForTier;
-window.populateRegionDropdown = populateRegionDropdown;
-window.populateMPODropdown = populateMPODropdown;
-window.handleRegionSelection = handleRegionSelection;
-window.handleMPOSelection = handleMPOSelection;
-window.getCountyFIPSListForTier = getCountyFIPSListForTier;
-window.getBoundsForTier = getBoundsForTier;
-window.getTierScopeKey = getTierScopeKey;
-window.getTierScopeName = getTierScopeName;
-window._estimateBoundsFromCenter = _estimateBoundsFromCenter;
-window._computeMultiCountyBounds = _computeMultiCountyBounds;
-window.ensureTierBoundaryDisplayed = ensureTierBoundaryDisplayed;
+  // Restore prior global surface: every declaration above was a top-level
+  // (global) function before extraction; mirror all to window so remaining
+  // inline code in index.html keeps working unchanged.
+  window.loadGeoData = loadGeoData;
+  window._getCurrentStateFips = _getCurrentStateFips;
+  window._getCurrentStateAbbr = _getCurrentStateAbbr;
+  window._extractPlaceType = _extractPlaceType;
+  window._placeSlugFor = _placeSlugFor;
+  window.lookupCountyKeyByFips = lookupCountyKeyByFips;
+  window._resolvePlaceParentCountyFips = _resolvePlaceParentCountyFips;
+  window.populateGeoTierDropdown = populateGeoTierDropdown;
+  window.populatePlanningDistrictDropdown = populatePlanningDistrictDropdown;
+  window.handlePlanningDistrictSelection = handlePlanningDistrictSelection;
+  window.handleCountySelection = handleCountySelection;
+  window.handleCitySelection = handleCitySelection;
+  window.loadStatewideCSVForTier = loadStatewideCSVForTier;
+  window.populateRegionDropdown = populateRegionDropdown;
+  window.populateMPODropdown = populateMPODropdown;
+  window.handleRegionSelection = handleRegionSelection;
+  window.handleMPOSelection = handleMPOSelection;
+  window.getCountyFIPSListForTier = getCountyFIPSListForTier;
+  window.getBoundsForTier = getBoundsForTier;
+  window.getTierScopeKey = getTierScopeKey;
+  window.getTierScopeName = getTierScopeName;
+  window._estimateBoundsFromCenter = _estimateBoundsFromCenter;
+  window._computeMultiCountyBounds = _computeMultiCountyBounds;
+  window.ensureTierBoundaryDisplayed = ensureTierBoundaryDisplayed;
 
-// Prompt 25 §2 — CL.spatial + CL.spatial.geoTier exposure for the anchors
-CL.spatial.loadGeoData = CL.spatial.geoTier.loadGeoData = loadGeoData;
-CL.spatial.populateGeoTierDropdown = CL.spatial.geoTier.populateGeoTierDropdown = populateGeoTierDropdown;
-CL.spatial.handleCountySelection = CL.spatial.geoTier.handleCountySelection = handleCountySelection;
-CL.spatial.getBoundsForTier = CL.spatial.geoTier.getBoundsForTier = getBoundsForTier;
-CL.spatial.getCountyFIPSListForTier = CL.spatial.geoTier.getCountyFIPSListForTier = getCountyFIPSListForTier;
+  // Prompt 25 §2 — CL.spatial + CL.spatial.geoTier exposure for the anchors
+  CL.spatial.loadGeoData = CL.spatial.geoTier.loadGeoData = loadGeoData;
+  CL.spatial.populateGeoTierDropdown = CL.spatial.geoTier.populateGeoTierDropdown = populateGeoTierDropdown;
+  CL.spatial.handleCountySelection = CL.spatial.geoTier.handleCountySelection = handleCountySelection;
+  CL.spatial.getBoundsForTier = CL.spatial.geoTier.getBoundsForTier = getBoundsForTier;
+  CL.spatial.getCountyFIPSListForTier = CL.spatial.geoTier.getCountyFIPSListForTier = getCountyFIPSListForTier;
 
-export {
-    loadGeoData, populateGeoTierDropdown, handleCountySelection, getBoundsForTier,
-    getCountyFIPSListForTier, populatePlanningDistrictDropdown,
-    handlePlanningDistrictSelection, handleCitySelection, loadStatewideCSVForTier,
-    populateRegionDropdown, populateMPODropdown, handleRegionSelection,
-    handleMPOSelection, getTierScopeKey, getTierScopeName,
-    ensureTierBoundaryDisplayed
-};
-
-CL._registerModule('spatial/geo-tier');
+  CL._registerModule('spatial/geo-tier');
+})();

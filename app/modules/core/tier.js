@@ -20,16 +20,14 @@
  *
  * Depends on (must load before this file): `core/constants`
  */
-'use strict';
-
-import { applyUploadTierUI } from '../upload/upload-tier-ui.js';
-
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 function setViewTier(tier) {
     if (!TIER_TAB_VISIBILITY[tier]) { console.warn('[Scope] Unknown tier:', tier); return; }
-    const prev = window.jurisdictionContext.viewTier;
-    window.jurisdictionContext.viewTier = tier;
+    const prev = jurisdictionContext.viewTier;
+    jurisdictionContext.viewTier = tier;
     updateTabVisibilityForTier(tier);
     updateTierSelectorUI(tier);
     console.log(`[Scope] View tier changed: ${prev} → ${tier}`);
@@ -53,10 +51,10 @@ function setViewTier(tier) {
     // them right after; Fix 4 keeps totalRows in sync.
     if (prev !== tier) {
         try {
-            if (typeof window.crashState !== 'undefined' && window.crashState) {
-                window.crashState.mapPoints = [];
-                window.crashState.sampleRows = [];
-                window.crashState.sampleRowsLoaded = false;
+            if (typeof crashState !== 'undefined' && crashState) {
+                crashState.mapPoints = [];
+                crashState.sampleRows = [];
+                crashState.sampleRowsLoaded = false;
             }
             // If the Leaflet map exists, repaint it immediately so the user
             // doesn't see the previous tier's markers while the new tier loads.
@@ -115,11 +113,11 @@ function updateTierSelectorUI(tier) {
         if (scopeText) {
             const tierLabels = {
                 federal: 'National (all states with data)',
-                state: window.jurisdictionContext.tierState?.name ? `${jurisdictionContext.tierState.name} (statewide)` : 'Statewide',
-                region: window.jurisdictionContext.tierRegion?.name || 'Select a region',
-                planning_district: window.jurisdictionContext.tierPlanningDistrict?.name || 'Select a planning district',
-                mpo: window.jurisdictionContext.tierMpo?.name || 'Select an MPO',
-                city: window.jurisdictionContext.tierCity?.name || 'Select a city / town'
+                state: jurisdictionContext.tierState?.name ? `${jurisdictionContext.tierState.name} (statewide)` : 'Statewide',
+                region: jurisdictionContext.tierRegion?.name || 'Select a region',
+                planning_district: jurisdictionContext.tierPlanningDistrict?.name || 'Select a planning district',
+                mpo: jurisdictionContext.tierMpo?.name || 'Select an MPO',
+                city: jurisdictionContext.tierCity?.name || 'Select a city / town'
             };
             scopeText.textContent = tierLabels[tier] || tier;
         }
@@ -151,8 +149,8 @@ async function handleTierChange(tier) {
         // ── Repaint upload tab for this tier (hide county dropdown in non-county
         // views, swap in the scope card, reset stale "loaded from delaware/kent"
         // success copy) BEFORE any async fetch so the UI never lies. ──
-        if (typeof applyUploadTierUI === 'function') {
-            applyUploadTierUI(tier);
+        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.applyUploadTierUI) {
+            CL.upload.tierUI.applyUploadTierUI(tier);
         }
 
         // ── Clear previous tier's boundary overlays ──
@@ -177,11 +175,11 @@ async function handleTierChange(tier) {
         }
 
         // If switching to region/mpo/pd, populate the dropdowns from hierarchy
-        if ((tier === 'region' || tier === 'mpo' || tier === 'planning_district') && window.jurisdictionContext.hierarchyLoaded) {
+        if ((tier === 'region' || tier === 'mpo' || tier === 'planning_district') && jurisdictionContext.hierarchyLoaded) {
             if (tier === 'region') populateRegionDropdown();
             if (tier === 'mpo') populateMPODropdown();
             if (tier === 'planning_district') populatePlanningDistrictDropdown();
-        } else if ((tier === 'region' || tier === 'mpo' || tier === 'planning_district') && !window.jurisdictionContext.hierarchyLoaded) {
+        } else if ((tier === 'region' || tier === 'mpo' || tier === 'planning_district') && !jurisdictionContext.hierarchyLoaded) {
             // Need to load hierarchy first
             const stateSelect = document.getElementById('stateSelect');
             const stateKey = stateSelect?.value;
@@ -326,18 +324,18 @@ async function handleTierChange(tier) {
             if (tier === 'state' || tier === 'federal') {
                 try {
                     // Reset stale R2 state before Supabase fetch
-                    if (typeof window.crashState !== 'undefined') {
-                        window.crashState.loaded = false;
-                        window.crashState.sampleRows = [];
-                        window.crashState.mapPoints = [];
+                    if (typeof crashState !== 'undefined') {
+                        crashState.loaded = false;
+                        crashState.sampleRows = [];
+                        crashState.mapPoints = [];
                     }
                     if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                         await CL.data.supabaseBridge.injectFastDashboard({ force: true });
                     }
-                    if (typeof window.crashState !== 'undefined') {
-                        window.crashState.loaded = true;
-                        window.crashState.sampleRowsLoaded = false;
-                        if (typeof window.crashState.totalRows !== 'number') window.crashState.totalRows = 0;
+                    if (typeof crashState !== 'undefined') {
+                        crashState.loaded = true;
+                        crashState.sampleRowsLoaded = false;
+                        if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
                     }
                     try { updateDataConnectionStatus('connected'); } catch (e2) {}
                     // Re-activate Supabase viewport map bridge: mapPoints are
@@ -351,7 +349,7 @@ async function handleTierChange(tier) {
                     } catch (mb) { /* non-fatal */ }
                     console.log(`[Tier] ${tier} view using Supabase matview (R2 download skipped)`);
                     console.log('[CrashLens] Data loaded at', new Date().toISOString(),
-                                'source: supabase-matview-' + tier + ', rows:', (window.crashState && window.crashState.totalRows) || 0);
+                                'source: supabase-matview-' + tier + ', rows:', (crashState && crashState.totalRows) || 0);
                 } catch (e) {
                     console.warn(`[Tier] Supabase bridge for ${tier} failed:`, e.message);
                 }
@@ -359,7 +357,7 @@ async function handleTierChange(tier) {
         }
         // Reset detail tab loaded flags so they reinitialize on next visit
         try {
-            if (typeof window.crashTreeState !== 'undefined' && window.crashTreeState) window.crashTreeState.loaded = false;
+            if (typeof crashTreeState !== 'undefined' && crashTreeState) crashTreeState.loaded = false;
             if (typeof fatalSpeedingState !== 'undefined' && fatalSpeedingState) fatalSpeedingState.loaded = false;
         } catch (e) { /* non-fatal */ }
         // Refresh subtitle, search bar, and map stats scope label so they
@@ -379,19 +377,14 @@ async function handleTierChange(tier) {
     }
 }
 
-// ─── EXTRACTED CODE END ───
+  // ─── EXTRACTED CODE END ───
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.core = CL.core || {};
-CL.core.handleTierChange = handleTierChange;
-CL.core.setViewTier = setViewTier;
-CL.core.updateTabVisibilityForTier = updateTabVisibilityForTier;
-CL.core.updateTierSelectorUI = updateTierSelectorUI;
-
-// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
-window.handleTierChange = handleTierChange;
-
-export { handleTierChange, setViewTier, updateTabVisibilityForTier, updateTierSelectorUI };
-
-CL._registerModule('core/tier');
+  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+  window.CL = window.CL || {};
+  CL.core = CL.core || {};
+  window.handleTierChange = handleTierChange; CL.core.handleTierChange = handleTierChange;
+  window.setViewTier = setViewTier; CL.core.setViewTier = setViewTier;
+  window.updateTabVisibilityForTier = updateTabVisibilityForTier; CL.core.updateTabVisibilityForTier = updateTabVisibilityForTier;
+  window.updateTierSelectorUI = updateTierSelectorUI; CL.core.updateTierSelectorUI = updateTierSelectorUI;
+  CL._registerModule('core/tier');
+})();

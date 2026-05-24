@@ -20,104 +20,102 @@
  * The fetcher is only invoked on cache miss / expiry. In-flight requests for
  * the same key share a single promise so concurrent callers don't race.
  */
-'use strict';
-
-var TTL_MS = 60000;
-var MAX_ENTRIES = 100;
-
-var _cache = new Map();      // key → { ts, data }
-var _inflight = new Map();   // key → Promise
-
-function _key(mvName, tier, value, keyExtra) {
-    var extra = '';
-    if (keyExtra != null) {
-        try { extra = ':' + JSON.stringify(keyExtra); } catch (e) { extra = ':?'; }
-    }
-    return mvName + ':' + (tier || '') + ':' + (value || '') + extra;
-}
-
-function _evictOldest() {
-    if (_cache.size <= MAX_ENTRIES) return;
-    var oldestKey = null, oldestTs = Infinity;
-    _cache.forEach(function (v, k) {
-        if (v.ts < oldestTs) { oldestTs = v.ts; oldestKey = k; }
-    });
-    if (oldestKey) _cache.delete(oldestKey);
-}
-
-export function cachedMatview(mvName, tier, value, fetcher, keyExtra, opts) {
-    var key = _key(mvName, tier, value, keyExtra);
-    // Round 21 §1.2 — accept an optional AbortSignal so callers (prewarm)
-    // can cancel in-flight fetches when superseded. The signal is passed
-    // into the fetcher; fetchers that accept it forward it to fetch().
-    var signal = (opts && opts.signal) ? opts.signal : null;
-
-    var hit = _cache.get(key);
-    if (hit && (Date.now() - hit.ts) < TTL_MS) {
-        return Promise.resolve(hit.data);
-    }
-    if (hit) _cache.delete(key);   // expired
-
-    if (_inflight.has(key)) {
-        return _inflight.get(key);
-    }
-
-    var promise = Promise.resolve()
-        .then(function () { return fetcher(signal ? { signal: signal } : undefined); })
-        .then(function (data) {
-            // Don't poison the cache with a null result returned by an
-            // AbortError-suppressed fetcher.
-            if (signal && signal.aborted) {
-                _inflight.delete(key);
-                return data;
-            }
-            _cache.set(key, { ts: Date.now(), data: data });
-            _evictOldest();
-            _inflight.delete(key);
-            return data;
-        })
-        .catch(function (err) {
-            _inflight.delete(key);
-            throw err;
-        });
-    _inflight.set(key, promise);
-    return promise;
-}
-
-/**
- * Drop cache entries. With no args, clears everything. With (tier, value),
- * drops only entries scoped to that jurisdiction.
- */
-export function invalidateMatviewCache(tier, value) {
-    if (!tier || !value) {
-        _cache.clear();
-        return;
-    }
-    var suffix = ':' + tier + ':' + value;
-    Array.from(_cache.keys())
-        .filter(function (k) { return k.endsWith(suffix); })
-        .forEach(function (k) { _cache.delete(k); });
-}
-
-/**
- * Diagnostic helper — exposes cache stats for DevTools inspection.
- */
-export function matviewCacheStats() {
-    var entries = [];
-    var now = Date.now();
-    _cache.forEach(function (v, k) {
-        entries.push({ key: k, ageMs: now - v.ts, sizeRows: Array.isArray(v.data) ? v.data.length : null });
-    });
-    return { entries: entries, inflight: _inflight.size };
-}
-
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
 window.CL = window.CL || {};
 CL.data = CL.data || {};
-CL.data.cachedMatview = cachedMatview;
-CL.data.invalidateMatviewCache = invalidateMatviewCache;
-CL.data.matviewCacheStats = matviewCacheStats;
 
-if (typeof CL._registerModule === 'function') {
-    CL._registerModule('data/matview-cache');
-}
+(function () {
+    'use strict';
+
+    var TTL_MS = 60000;
+    var MAX_ENTRIES = 100;
+
+    var _cache = new Map();      // key → { ts, data }
+    var _inflight = new Map();   // key → Promise
+
+    function _key(mvName, tier, value, keyExtra) {
+        var extra = '';
+        if (keyExtra != null) {
+            try { extra = ':' + JSON.stringify(keyExtra); } catch (e) { extra = ':?'; }
+        }
+        return mvName + ':' + (tier || '') + ':' + (value || '') + extra;
+    }
+
+    function _evictOldest() {
+        if (_cache.size <= MAX_ENTRIES) return;
+        var oldestKey = null, oldestTs = Infinity;
+        _cache.forEach(function (v, k) {
+            if (v.ts < oldestTs) { oldestTs = v.ts; oldestKey = k; }
+        });
+        if (oldestKey) _cache.delete(oldestKey);
+    }
+
+    CL.data.cachedMatview = function (mvName, tier, value, fetcher, keyExtra, opts) {
+        var key = _key(mvName, tier, value, keyExtra);
+        // Round 21 §1.2 — accept an optional AbortSignal so callers (prewarm)
+        // can cancel in-flight fetches when superseded. The signal is passed
+        // into the fetcher; fetchers that accept it forward it to fetch().
+        var signal = (opts && opts.signal) ? opts.signal : null;
+
+        var hit = _cache.get(key);
+        if (hit && (Date.now() - hit.ts) < TTL_MS) {
+            return Promise.resolve(hit.data);
+        }
+        if (hit) _cache.delete(key);   // expired
+
+        if (_inflight.has(key)) {
+            return _inflight.get(key);
+        }
+
+        var promise = Promise.resolve()
+            .then(function () { return fetcher(signal ? { signal: signal } : undefined); })
+            .then(function (data) {
+                // Don't poison the cache with a null result returned by an
+                // AbortError-suppressed fetcher.
+                if (signal && signal.aborted) {
+                    _inflight.delete(key);
+                    return data;
+                }
+                _cache.set(key, { ts: Date.now(), data: data });
+                _evictOldest();
+                _inflight.delete(key);
+                return data;
+            })
+            .catch(function (err) {
+                _inflight.delete(key);
+                throw err;
+            });
+        _inflight.set(key, promise);
+        return promise;
+    };
+
+    /**
+     * Drop cache entries. With no args, clears everything. With (tier, value),
+     * drops only entries scoped to that jurisdiction.
+     */
+    CL.data.invalidateMatviewCache = function (tier, value) {
+        if (!tier || !value) {
+            _cache.clear();
+            return;
+        }
+        var suffix = ':' + tier + ':' + value;
+        Array.from(_cache.keys())
+            .filter(function (k) { return k.endsWith(suffix); })
+            .forEach(function (k) { _cache.delete(k); });
+    };
+
+    /**
+     * Diagnostic helper — exposes cache stats for DevTools inspection.
+     */
+    CL.data.matviewCacheStats = function () {
+        var entries = [];
+        var now = Date.now();
+        _cache.forEach(function (v, k) {
+            entries.push({ key: k, ageMs: now - v.ts, sizeRows: Array.isArray(v.data) ? v.data.length : null });
+        });
+        return { entries: entries, inflight: _inflight.size };
+    };
+
+    if (typeof CL._registerModule === 'function') {
+        CL._registerModule('data/matview-cache');
+    }
+})();
