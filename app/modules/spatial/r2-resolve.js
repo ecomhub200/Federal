@@ -14,9 +14,8 @@
  *
  * Depends on (must load before this file): `spatial/aggregate-loader`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 /**
  * Load the R2 manifest from data/r2-manifest.json.
@@ -86,7 +85,7 @@ async function loadR2Manifest() {
 function checkR2DataAvailability(stateKey, jurisdiction) {
     const result = { available: true, reason: '', inManifest: false };
 
-    const r2Prefix = appConfig?.states?.[stateKey]?.r2Prefix || stateKey;
+    const r2Prefix = window.appConfig?.states?.[stateKey]?.r2Prefix || stateKey;
 
     // If manifest is loaded, check for diagnostic info (cross-state correction)
     // but never block loading based on manifest contents
@@ -139,9 +138,9 @@ function getR2DataAvailabilitySummary() {
         if (info.size > 0 && !info._status) {
             const parts = r2Key.split('/');
             if (parts.length >= 2 && !parts[1].startsWith('_')) {
-                const stateName = appConfig?.states?.[parts[0]]?.name || parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+                const stateName = window.appConfig?.states?.[parts[0]]?.name || parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
                 const rawJuris = parts[1];
-                const jurisName = appConfig?.jurisdictions?.[rawJuris]?.name || rawJuris.charAt(0).toUpperCase() + rawJuris.slice(1);
+                const jurisName = window.appConfig?.jurisdictions?.[rawJuris]?.name || rawJuris.charAt(0).toUpperCase() + rawJuris.slice(1);
                 if (!stateJurisdictions[stateName]) stateJurisdictions[stateName] = new Set();
                 stateJurisdictions[stateName].add(jurisName);
             }
@@ -203,9 +202,9 @@ function resolveDataUrl(localPath) {
     // Parses the local path pattern: data/{stateDataDir?}/{jurisdiction}_{filter}.{ext}
     // and constructs: {r2BaseUrl}/{r2Prefix}/{jurisdiction}/{filter}.{ext}
     // Only applies to paths starting with 'data/' — R2-native paths skip to Strategy 3.
-    if (normalizedPath.startsWith('data/') && typeof appConfig !== 'undefined' && appConfig?.states) {
+    if (normalizedPath.startsWith('data/') && typeof window.appConfig !== 'undefined' && window.appConfig?.states) {
         const activeStateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
-        const stateConfig = activeStateKey ? appConfig.states[activeStateKey] : null;
+        const stateConfig = activeStateKey ? window.appConfig.states[activeStateKey] : null;
         if (stateConfig?.r2Prefix) {
             // Extract filename from the normalized path (e.g., "henrico_county_roads.csv" from "data/henrico_county_roads.csv")
             const filename = normalizedPath.split('/').pop();
@@ -337,7 +336,7 @@ function buildLocalFallbackPaths(r2NativePath) {
 
     // Look up the state's dataDir from config (e.g., colorado→"CDOT", virginia→null)
     const stateKey = statePrefix;
-    const stateDataDir = appConfig?.states?.[stateKey]?.dataDir;
+    const stateDataDir = window.appConfig?.states?.[stateKey]?.dataDir;
 
     // Strategy A: Legacy local path with state dataDir
     // e.g., ../data/CDOT/douglas_county_roads.csv
@@ -521,21 +520,35 @@ async function validateAppPaths() {
     return results;
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.spatial = CL.spatial || {};
-  window._streamResponseChunks = _streamResponseChunks; CL.spatial._streamResponseChunks = _streamResponseChunks;
-  window.buildLocalFallbackPaths = buildLocalFallbackPaths; CL.spatial.buildLocalFallbackPaths = buildLocalFallbackPaths;
-  window.checkR2DataAvailability = checkR2DataAvailability; CL.spatial.checkR2DataAvailability = checkR2DataAvailability;
-  window.diagR2Connection = diagR2Connection; CL.spatial.diagR2Connection = diagR2Connection;
-  window.fetchCsvWithFallback = fetchCsvWithFallback; CL.spatial.fetchCsvWithFallback = fetchCsvWithFallback;
-  window.getR2DataAvailabilitySummary = getR2DataAvailabilitySummary; CL.spatial.getR2DataAvailabilitySummary = getR2DataAvailabilitySummary;
-  window.loadR2Manifest = loadR2Manifest; CL.spatial.loadR2Manifest = loadR2Manifest;
-  window.resolveDataUrl = resolveDataUrl; CL.spatial.resolveDataUrl = resolveDataUrl;
-  window.streamResponseToArrayBuffer = streamResponseToArrayBuffer; CL.spatial.streamResponseToArrayBuffer = streamResponseToArrayBuffer;
-  window.streamResponseToText = streamResponseToText; CL.spatial.streamResponseToText = streamResponseToText;
-  window.validateAppPaths = validateAppPaths; CL.spatial.validateAppPaths = validateAppPaths;
-  CL._registerModule('spatial/r2-resolve');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.spatial = CL.spatial || {};
+CL.spatial._streamResponseChunks = _streamResponseChunks;
+CL.spatial.buildLocalFallbackPaths = buildLocalFallbackPaths;
+CL.spatial.checkR2DataAvailability = checkR2DataAvailability;
+CL.spatial.diagR2Connection = diagR2Connection;
+CL.spatial.fetchCsvWithFallback = fetchCsvWithFallback;
+CL.spatial.getR2DataAvailabilitySummary = getR2DataAvailabilitySummary;
+CL.spatial.loadR2Manifest = loadR2Manifest;
+CL.spatial.resolveDataUrl = resolveDataUrl;
+CL.spatial.streamResponseToArrayBuffer = streamResponseToArrayBuffer;
+CL.spatial.streamResponseToText = streamResponseToText;
+CL.spatial.validateAppPaths = validateAppPaths;
+
+export {
+    _streamResponseChunks,
+    buildLocalFallbackPaths,
+    checkR2DataAvailability,
+    diagR2Connection,
+    fetchCsvWithFallback,
+    getR2DataAvailabilitySummary,
+    loadR2Manifest,
+    resolveDataUrl,
+    streamResponseToArrayBuffer,
+    streamResponseToText,
+    validateAppPaths
+};
+
+CL._registerModule('spatial/r2-resolve');
