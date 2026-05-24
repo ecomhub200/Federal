@@ -146,4 +146,20 @@ CL.core.constants = {
     }
 };
 
+// Per-tier caps on getMapPoints fetches. Keys on tier (NOT state) so the
+// same cap applies to every state. At federal/state zoom, individual
+// markers aren't legible — the mv_hotspots heatmap carries the visual;
+// capping to 20K loses no information. Default fallback 200K preserves
+// today's behavior on any tier not listed.
+CL.core.POINT_CAPS = Object.freeze({
+    federal: 20000,
+    state: 20000,
+    dot_district: 50000,
+    planning_district: 50000,
+    mpo: 50000,
+    region: 50000,
+    county: 200000,
+    city: 200000
+});
+
 CL._registerModule('core/constants');
