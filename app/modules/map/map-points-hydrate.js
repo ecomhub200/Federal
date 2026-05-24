@@ -32,9 +32,17 @@ const _MAP_POINTS_CACHE_STORE = 'points';
 
 function _openMapPointsCache() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(_MAP_POINTS_CACHE_DB, 1);
+        // v2 — purge pre-PR-206 uncapped entries by recreating the store on
+        // upgrade. Day-bucket TTL doesn't cover this because the cache key
+        // has no cap-version segment, so stale entries (e.g. 132K rows at
+        // planning_district from before the tier cap shipped) would hit on
+        // read for up to 24h and bypass POINT_CAPS.
+        const req = indexedDB.open(_MAP_POINTS_CACHE_DB, 2);
         req.onupgradeneeded = e => {
             const db = e.target.result;
+            if (e.oldVersion < 2 && db.objectStoreNames.contains(_MAP_POINTS_CACHE_STORE)) {
+                db.deleteObjectStore(_MAP_POINTS_CACHE_STORE);
+            }
             if (!db.objectStoreNames.contains(_MAP_POINTS_CACHE_STORE)) {
                 db.createObjectStore(_MAP_POINTS_CACHE_STORE, { keyPath: 'cacheKey' });
             }
@@ -122,8 +130,19 @@ async function _hydrateMapPointsFromMatview(reason) {
         // Round 25 §6 — try IndexedDB cache first
         const cached = await _readMapPointsCache(stateKey, tier, value);
         if (cached) {
-            crashState.mapPoints = cached;
-            console.log('[mapPointsHydrate] HIT cache (' + reason + ') ' + cached.length + ' points');
+            // Defensive: clamp stale cache entries to the current tier cap.
+            // The cache key has no cap-version segment, so a pre-PR-206 entry
+            // (uncapped) can hit here on a 24h-bucket day where the cap value
+            // changed. Re-apply.
+            const POINT_CAPS = (window.CL && window.CL.core && window.CL.core.POINT_CAPS) || {};
+            const cap = POINT_CAPS[tier] || 200000;
+            let clampedCache = cached;
+            if (cached.length > cap) {
+                console.log('[mapPointsHydrate] clamping stale cache ' + cached.length + ' → ' + cap + ' for ' + tier + ' tier');
+                clampedCache = cached.slice(0, cap);
+            }
+            crashState.mapPoints = clampedCache;
+            console.log('[mapPointsHydrate] HIT cache (' + reason + ') ' + clampedCache.length + ' points');
             document.dispatchEvent(new CustomEvent('crashDataLoaded', { detail: { source: 'mv_map_points_cached' } }));
             showBackgroundLoadingIndicator(false);
             return;
