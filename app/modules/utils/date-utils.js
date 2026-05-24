@@ -1,11 +1,18 @@
 /**
  * CrashLens Date Utilities
  * Extracted from app/index.html — pure date helper functions
+ *
+ * Stage A v3 Phase 2.1 — converted from CL-namespace assignment to ESM:
+ *   - Module body is now a top-level `const dateUtils = {...}` binding
+ *   - Named export `dateUtils` (unused by other modules in Phase 2; future-phase only)
+ *   - Back-compat dual exposure preserves `window.CL.utils.dateUtils` for every
+ *     classic-loaded caller (the inline app/index.html scripts + every other
+ *     still-classic module) — call-time reads stay timing-tolerant.
+ *   - No ESM imports — cross-module dependencies stay routed through window.CL.X.
  */
-window.CL = window.CL || {};
-CL.utils = CL.utils || {};
+'use strict';
 
-CL.utils.dateUtils = {
+const dateUtils = {
     parseCrashDateToTimestamp: function(dateStr) {
         if (!dateStr) return null;
 
@@ -31,4 +38,16 @@ CL.utils.dateUtils = {
     }
 };
 
-CL._registerModule('utils/date-utils');
+export { dateUtils };
+
+// === Back-compat dual exposure (classic-loaded callers still read CL.utils.dateUtils) ===
+if (typeof window !== 'undefined') {
+  window.CL = window.CL || {};
+  window.CL.utils = window.CL.utils || {};
+  window.CL.utils.dateUtils = dateUtils;
+}
+
+// === Module registration (load tracker) — routed via window.CL in ESM scope ===
+if (typeof window !== 'undefined' && window.CL && window.CL._registerModule) {
+  window.CL._registerModule('utils/date-utils');
+}
