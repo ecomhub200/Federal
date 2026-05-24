@@ -62,3 +62,4 @@ import './modules/core/tier.js';
 import './modules/upload/upload-pipeline.js';
 import './modules/upload/upload-tab.js';
 import './modules/data/supabase-bridge.js';
+import './modules/scorecard/scorecard.js';
