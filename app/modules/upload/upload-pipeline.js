@@ -10,12 +10,9 @@
  * Dependencies: StateAdapter, Papa (PapaParse), CL.upload, HierarchyRegistry
  * Globals accessed: crashState, appConfig
  */
-window.CL = window.CL || {};
-CL.upload = CL.upload || {};
-CL.upload.pipeline = CL.upload.pipeline || {};
+'use strict';
 
-(function() {
-    'use strict';
+import { constants } from '../core/constants.js';
 
     // Pipeline state
     var pipelineState = {
@@ -44,8 +41,8 @@ CL.upload.pipeline = CL.upload.pipeline || {};
         var stateKey = stateSelect ? stateSelect.value : '';
         if (!stateKey) return '';
         // Use appConfig r2Prefix if available, otherwise use state key directly
-        if (typeof appConfig !== 'undefined' && appConfig && appConfig.states && appConfig.states[stateKey]) {
-            return appConfig.states[stateKey].r2Prefix || stateKey;
+        if (typeof window.appConfig !== 'undefined' && window.appConfig && window.appConfig.states && window.appConfig.states[stateKey]) {
+            return window.appConfig.states[stateKey].r2Prefix || stateKey;
         }
         return stateKey;
     }
@@ -166,10 +163,10 @@ CL.upload.pipeline = CL.upload.pipeline || {};
         var entitySelect = document.getElementById('pipelineJurisdictionSelect');
         entitySelect.innerHTML = '<option value="">-- Select jurisdiction --</option>';
 
-        if (typeof appConfig !== 'undefined' && appConfig && appConfig.jurisdictions) {
-            var stateAbbr = appConfig.states && appConfig.states[stateKey] && appConfig.states[stateKey].abbreviation;
-            Object.keys(appConfig.jurisdictions).forEach(function(key) {
-                var jur = appConfig.jurisdictions[key];
+        if (typeof window.appConfig !== 'undefined' && window.appConfig && window.appConfig.jurisdictions) {
+            var stateAbbr = window.appConfig.states && window.appConfig.states[stateKey] && window.appConfig.states[stateKey].abbreviation;
+            Object.keys(window.appConfig.jurisdictions).forEach(function(key) {
+                var jur = window.appConfig.jurisdictions[key];
                 if (stateAbbr && jur.state === stateAbbr) {
                     var opt = document.createElement('option');
                     opt.value = key;
@@ -531,7 +528,7 @@ CL.upload.pipeline = CL.upload.pipeline || {};
         updateStage(3, 'active');
         updateProgress(55, 'Checking GPS coordinates...');
 
-        var COL = (typeof CL !== 'undefined' && CL.core && CL.core.constants) ? CL.core.constants.COL : null;
+        var COL = constants.COL;
         var withGPS = 0, withoutGPS = 0;
 
         if (COL) {
@@ -568,9 +565,9 @@ CL.upload.pipeline = CL.upload.pipeline || {};
                 if (typeof processRow === 'function') processRow(row);
             });
 
-            if (typeof crashState !== 'undefined') {
-                crashState.totalRows = rows.length;
-                crashState.loaded = true;
+            if (typeof window.crashState !== 'undefined') {
+                window.crashState.totalRows = rows.length;
+                window.crashState.loaded = true;
             }
 
             if (typeof finalizeData === 'function') finalizeData();
@@ -757,17 +754,37 @@ CL.upload.pipeline = CL.upload.pipeline || {};
     // PUBLIC API
     // ============================================================
 
-    CL.upload.pipeline = {
-        state: pipelineState,
-        init: _initStateDropdown,
-        handleFileSelect: handleFileSelect,
-        handleFileDrop: handleFileDrop,
-        handleStateChange: handleStateChange,
-        handleTierChange: handleTierChange,
-        updateR2PathPreview: updateR2PathPreview,
-        buildR2DestinationPath: buildR2DestinationPath,
-        startPipeline: startPipeline
-    };
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.upload = CL.upload || {};
+CL.upload.pipeline = {
+    state: pipelineState,
+    init: _initStateDropdown,
+    handleFileSelect: handleFileSelect,
+    handleFileDrop: handleFileDrop,
+    handleStateChange: handleStateChange,
+    handleTierChange: handleTierChange,
+    updateR2PathPreview: updateR2PathPreview,
+    buildR2DestinationPath: buildR2DestinationPath,
+    startPipeline: startPipeline
+};
 
-    CL._registerModule('upload/upload-pipeline');
-})();
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md
+//      watch list — handleFileSelect promoted to survivor after Item 1; the
+//      handleTierChange mirror preserves pre-Stage-A last-write-wins behavior
+//      against core/tier.js's own window.handleTierChange) ---
+window.handleFileSelect = handleFileSelect;
+window.handleTierChange = handleTierChange;
+
+export {
+    pipelineState,
+    handleFileSelect,
+    handleFileDrop,
+    handleStateChange,
+    handleTierChange,
+    updateR2PathPreview,
+    buildR2DestinationPath,
+    startPipeline
+};
+
+CL._registerModule('upload/upload-pipeline');
