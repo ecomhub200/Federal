@@ -17,13 +17,13 @@
  *   - All failures are swallowed (non-fatal try/catch).
  *   - Skips entirely if crashState.loaded is already true.
  */
-window.CL = window.CL || {};
-CL.data = CL.data || {};
+'use strict';
 
-CL.data.supabaseBridge = (function () {
-    'use strict';
+import { constants } from '../core/constants.js';
+import * as skeletons from '../ui/skeletons.js';
+import * as tierUI from '../upload/upload-tier-ui.js';
 
-    var _injected = false;
+var _injected = false;
     var _refreshTimer = null;
     var _worker = null;
     var _workerSeq = 0;
@@ -150,8 +150,8 @@ CL.data.supabaseBridge = (function () {
 
     function getEpdoWeights() {
         if (typeof EPDO_WEIGHTS !== 'undefined' && EPDO_WEIGHTS) return EPDO_WEIGHTS;
-        if (CL.core && CL.core.constants && CL.core.constants.EPDO_WEIGHTS_DEFAULT) {
-            return CL.core.constants.EPDO_WEIGHTS_DEFAULT;
+        if (constants && constants.EPDO_WEIGHTS_DEFAULT) {
+            return constants.EPDO_WEIGHTS_DEFAULT;
         }
         return { K: 883, A: 94, B: 21, C: 11, O: 1 };
     }
@@ -164,8 +164,8 @@ CL.data.supabaseBridge = (function () {
     function jurisdictionDbName(key) {
         if (!key) return null;
         try {
-            if (typeof appConfig !== 'undefined' && appConfig && appConfig.jurisdictions) {
-                var jur = appConfig.jurisdictions[key];
+            if (typeof window.appConfig !== 'undefined' && window.appConfig && window.appConfig.jurisdictions) {
+                var jur = window.appConfig.jurisdictions[key];
                 if (jur && Array.isArray(jur.namePatterns) && jur.namePatterns.length > 0) {
                     // Bug 15 — matview columns store Title-case ("Sussex") but legacy
                     // entries in us_counties_db.js list ALL-CAPS as namePatterns[0].
@@ -245,7 +245,7 @@ CL.data.supabaseBridge = (function () {
     }
 
     function resolveTier() {
-        var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
+        var ctx = (typeof window.jurisdictionContext !== 'undefined') ? window.jurisdictionContext : null;
         if (!ctx) return { tier: 'state', value: null };
         var t = ctx.viewTier || 'county';
         if (t === 'federal') return { tier: 'federal', value: null };
@@ -364,7 +364,7 @@ CL.data.supabaseBridge = (function () {
      * noInterstate); only federal / state / region are AGGREGATE tiers.
      */
     function roadTypeSpec() {
-        var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
+        var ctx = (typeof window.jurisdictionContext !== 'undefined') ? window.jurisdictionContext : null;
         var tier = (ctx && ctx.viewTier) || 'county';
         var radioVal = (CL.data.roadTypeMapping)
             ? CL.data.roadTypeMapping.activeRadioValue()
@@ -721,7 +721,7 @@ CL.data.supabaseBridge = (function () {
                     stateKey = _getActiveStateKey();
                 }
 
-                var bootDefault = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
+                var bootDefault = (typeof window.appConfig !== 'undefined' && window.appConfig && window.appConfig.defaultState) || null;
                 try {
                     var stateSelectA = document.getElementById('stateSelect');
                     if (stateSelectA && stateSelectA.value && typeof _fipsToStateKey === 'function') {
@@ -769,7 +769,7 @@ CL.data.supabaseBridge = (function () {
         // — never fall back to ctx.stateName-derived state. And never overwrite a
         // non-default crashLensClient.state with the appConfig boot default.
         try {
-            var ctx = (typeof jurisdictionContext !== 'undefined') ? jurisdictionContext : null;
+            var ctx = (typeof window.jurisdictionContext !== 'undefined') ? window.jurisdictionContext : null;
             if (window.crashLensClient) {
                 var dropdownState = null;
                 try {
@@ -782,7 +782,7 @@ CL.data.supabaseBridge = (function () {
                 // values can leak the appConfig default and cause backwards correction.
                 var ctxState = ctx && ctx.stateKey ? ctx.stateKey : null;
                 var targetState = dropdownState || ctxState;
-                var bootDefault = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
+                var bootDefault = (typeof window.appConfig !== 'undefined' && window.appConfig && window.appConfig.defaultState) || null;
 
                 if (
                     targetState &&
@@ -800,7 +800,7 @@ CL.data.supabaseBridge = (function () {
         } catch (e) { /* non-fatal */ }
 
         try {
-            if (!force && typeof crashState !== 'undefined' && crashState && crashState.loaded) {
+            if (!force && typeof window.crashState !== 'undefined' && window.crashState && window.crashState.loaded) {
                 console.log('[Phase2] R2 already loaded before bridge started, skipping');
                 return;
             }
@@ -826,16 +826,16 @@ CL.data.supabaseBridge = (function () {
 
             console.log('[Phase2] Fetching summary from Supabase...', { tier: t.tier, value: t.value, spec: spec });
             try {
-                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
-                    CL.upload.tierUI.updateTierSwitchProgress(15, 'Fetching dashboard summary…');
+                if (tierUI && tierUI.updateTierSwitchProgress) {
+                    tierUI.updateTierSwitchProgress(15, 'Fetching dashboard summary…');
                 }
             } catch (e) { /* non-fatal */ }
             // Round-9 Fix 3 — show shimmer skeletons in all KPI cards while
             // the matview fetch is in flight. Existing paintKPIs() will
             // overwrite textContent and naturally drop the skeleton spans.
             try {
-                if (CL.ui && CL.ui.skeletons && CL.ui.skeletons.showKpis) {
-                    CL.ui.skeletons.showKpis();
+                if (skeletons && skeletons.showKpis) {
+                    skeletons.showKpis();
                 }
             } catch (e) { /* non-fatal */ }
             var startTime = Date.now();
@@ -900,7 +900,7 @@ CL.data.supabaseBridge = (function () {
                 }
             }
 
-            if (!force && typeof crashState !== 'undefined' && crashState && crashState.loaded) {
+            if (!force && typeof window.crashState !== 'undefined' && window.crashState && window.crashState.loaded) {
                 console.log('[Phase2] R2 won the race (' + fetchMs + 'ms fetch, but R2 finished first), discarding');
                 return;
             }
@@ -920,9 +920,9 @@ CL.data.supabaseBridge = (function () {
                         safety: { ped: 0, bike: 0, speed: 0, alcohol: 0, night: 0, animal: 0, fatals: 0, seriousInjured: 0, totalInjured: 0 }
                     });
                     showBanner({ zeroRows: true });
-                    if (typeof crashState !== 'undefined' && crashState && !crashState.loaded) {
-                        crashState.loaded = true;
-                        crashState.sampleRows = [];
+                    if (typeof window.crashState !== 'undefined' && window.crashState && !window.crashState.loaded) {
+                        window.crashState.loaded = true;
+                        window.crashState.sampleRows = [];
                     }
                     try {
                         document.dispatchEvent(new CustomEvent('crashDataLoaded', {
@@ -935,8 +935,8 @@ CL.data.supabaseBridge = (function () {
             }
 
             try {
-                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
-                    CL.upload.tierUI.updateTierSwitchProgress(50, 'Processing ' + rows.length.toLocaleString() + ' summary rows…');
+                if (tierUI && tierUI.updateTierSwitchProgress) {
+                    tierUI.updateTierSwitchProgress(50, 'Processing ' + rows.length.toLocaleString() + ' summary rows…');
                 }
             } catch (e) { /* non-fatal */ }
 
@@ -944,8 +944,8 @@ CL.data.supabaseBridge = (function () {
             paintKPIs(agg);
 
             try {
-                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
-                    CL.upload.tierUI.updateTierSwitchProgress(85, 'Painting dashboard…');
+                if (tierUI && tierUI.updateTierSwitchProgress) {
+                    tierUI.updateTierSwitchProgress(85, 'Painting dashboard…');
                 }
             } catch (e) { /* non-fatal */ }
 
@@ -987,12 +987,12 @@ CL.data.supabaseBridge = (function () {
             // crashState.totalRows from the previous tier's R2 load
             // (e.g. federal tier showing 'rows: 2047' from prior Kent load).
             try {
-                if (typeof crashState !== 'undefined' && crashState) {
-                    if (!crashState.loaded) {
-                        crashState.loaded = true;
-                        if (!Array.isArray(crashState.sampleRows)) crashState.sampleRows = [];
+                if (typeof window.crashState !== 'undefined' && window.crashState) {
+                    if (!window.crashState.loaded) {
+                        window.crashState.loaded = true;
+                        if (!Array.isArray(window.crashState.sampleRows)) window.crashState.sampleRows = [];
                     }
-                    crashState.totalRows = (agg && typeof agg.total === 'number') ? agg.total : 0;
+                    window.crashState.totalRows = (agg && typeof agg.total === 'number') ? agg.total : 0;
                 }
             } catch (gErr) { /* non-fatal */ }
 
@@ -1007,12 +1007,12 @@ CL.data.supabaseBridge = (function () {
             } catch (evtErr) { /* non-fatal */ }
 
             try {
-                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
-                    CL.upload.tierUI.updateTierSwitchProgress(100, 'Ready');
+                if (tierUI && tierUI.updateTierSwitchProgress) {
+                    tierUI.updateTierSwitchProgress(100, 'Ready');
                 }
                 setTimeout(function () {
-                    if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.removeTierSwitchProgress) {
-                        CL.upload.tierUI.removeTierSwitchProgress();
+                    if (tierUI && tierUI.removeTierSwitchProgress) {
+                        tierUI.removeTierSwitchProgress();
                     }
                 }, 500);
             } catch (e) { /* non-fatal */ }
@@ -1021,8 +1021,8 @@ CL.data.supabaseBridge = (function () {
         } catch (e) {
             console.warn('[Phase2] Supabase bridge failed (non-fatal):', e && e.message);
             try {
-                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.removeTierSwitchProgress) {
-                    CL.upload.tierUI.removeTierSwitchProgress();
+                if (tierUI && tierUI.removeTierSwitchProgress) {
+                    tierUI.removeTierSwitchProgress();
                 }
             } catch (e2) { /* non-fatal */ }
         }
@@ -1079,7 +1079,7 @@ CL.data.supabaseBridge = (function () {
             try {
                 if (window.crashLensClient) {
                     var key = _activeStateKey();
-                    var bootDefault = (typeof appConfig !== 'undefined' && appConfig && appConfig.defaultState) || null;
+                    var bootDefault = (typeof window.appConfig !== 'undefined' && window.appConfig && window.appConfig.defaultState) || null;
                     if (!key || key === bootDefault) {
                         try {
                             var sel = document.getElementById('stateSelect');
@@ -1100,16 +1100,28 @@ CL.data.supabaseBridge = (function () {
         }, 250);
     }
 
-    return {
-        injectFastDashboard: injectFastDashboard,
-        onR2LoadComplete: onR2LoadComplete,
-        refresh: refresh,
-        resolveTier: resolveTier,
-        roadTypeSpec: roadTypeSpec,
-        showSkeletonKPIs: showSkeletonKPIs,
-        attachRoadTypeListener: attachRoadTypeListener,
-        get injected() { return _injected; }
-    };
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.data = CL.data || {};
+CL.data.supabaseBridge = {
+    injectFastDashboard: injectFastDashboard,
+    onR2LoadComplete: onR2LoadComplete,
+    refresh: refresh,
+    resolveTier: resolveTier,
+    roadTypeSpec: roadTypeSpec,
+    showSkeletonKPIs: showSkeletonKPIs,
+    attachRoadTypeListener: attachRoadTypeListener,
+    get injected() { return _injected; }
+};
+
+export {
+    injectFastDashboard,
+    onR2LoadComplete,
+    refresh,
+    resolveTier,
+    roadTypeSpec,
+    showSkeletonKPIs,
+    attachRoadTypeListener
+};
 
 CL._registerModule('data/supabase-bridge');
