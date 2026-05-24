@@ -46,3 +46,4 @@ import './modules/spatial/boundary-service.js';
 import './modules/spatial/federal-boundaries.js';
 import './modules/spatial/spatial-clip.js';
 import './modules/spatial/aggregate-loader.js';
+import './modules/spatial/r2-resolve.js';
