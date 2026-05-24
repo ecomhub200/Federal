@@ -44,7 +44,7 @@ function initSafetyFocus() {
     const _hasSampleRows = !!(crashState.sampleRows && crashState.sampleRows.length > 0);
     const _matviewReady = !!(typeof CL !== 'undefined' && CL.data && CL.data.client && typeof CL.data.client.getSafetyCategories === 'function');
     if (_matviewReady && !_hasSampleRows) {
-        _loadSafetyFromMatview().then(function (ok) {
+        _loadSafetyFromMatview().then(async function (ok) {
             if (!ok) {
                 const _container = document.getElementById('tab-safety');
                 if (_container) {
@@ -56,6 +56,12 @@ function initSafetyFocus() {
                 }
                 return;
             }
+            // CC 213 SF3: pull per-category co-factor crosstab so the
+            // sub-KPI panel (speed/senior/young/nighttime/impaired/
+            // distracted) doesn't render zeros at aggregate tiers. Awaited
+            // before updateSafetyCards so the first paint already shows
+            // real counts.
+            try { await _hydrateSafetyCoFactors(); } catch (_) { /* non-fatal */ }
             updateSafetyCards();
             try { selectSafetyCategory('curves'); } catch (e) { /* non-fatal */ }
             safetyState.loaded = true;
@@ -314,6 +320,15 @@ function selectSafetyCategory(category) {
     if (crossingBtn) {
         crossingBtn.style.display = category === 'pedestrian' ? 'inline-block' : 'none';
     }
+
+    // CC 213 SF4: in matview mode the Yearly Trend chart was rendered
+    // above from catData.crashes (empty) and is blank. Hydrate from
+    // mv_safety_categories_yearly and update the chart in place. Also
+    // populates safetyState.data[cat].byYear for downstream consumers
+    // (detail panel + verification harness).
+    if (safetyState.matviewMode) {
+        _hydrateSafetyCategoryYearly(category);
+    }
 }
 
 async function _safetyFocusHasCofactors() {
@@ -331,6 +346,98 @@ async function _safetyFocusHasCofactors() {
     } catch (_) {
         return (_safetyFocusHasCofactors._cache = false);
     }
+}
+
+// CC 213 SF3 — Merge mv_safety_co_factors crosstab counts onto
+// safetyState.data[cat] so the detail-panel sub-KPI cards
+// (speed/senior/young/nighttime/impaired/distracted) render real
+// numbers at aggregate tiers. Categories the matview doesn't ship are
+// silently left without crosstab fields (the renderer's `?? 0`
+// already handles that).
+async function _hydrateSafetyCoFactors() {
+    const dc = (typeof CL !== 'undefined' && CL.data && CL.data.client) || window.crashLensClient;
+    if (!dc || typeof dc.getSafetyCoFactors !== 'function') return;
+    if (!CL.data || !CL.data.supabaseBridge || typeof CL.data.supabaseBridge.resolveTier !== 'function') return;
+    const t = CL.data.supabaseBridge.resolveTier();
+    if (!t || !t.tier) return;
+    const stateKey = (typeof _resolveActiveState === 'function') ? _resolveActiveState() : dc.state;
+    if (stateKey && dc.state !== stateKey) dc.state = stateKey;
+    let coFactors = {};
+    try {
+        coFactors = await CL.data.cachedMatview(
+            'mv_safety_co_factors', t.tier, t.value,
+            () => dc.getSafetyCoFactors(t.tier, t.value, {})
+        );
+    } catch (e) {
+        console.warn('[Safety Focus] getSafetyCoFactors failed:', e && e.message);
+        return;
+    }
+    if (!coFactors || typeof coFactors !== 'object') return;
+    // Matview category key → UI safety-card key.  Mirrors SAFETY_CARD_MAP
+    // in _loadSafetyFromMatview() — `alcohol` lights up the alcoholonly
+    // card; every other key matches by default.
+    const COF_TO_UI = { alcohol: 'alcoholonly' };
+    let merged = 0;
+    Object.keys(coFactors).forEach(matKey => {
+        const uiKey = COF_TO_UI[matKey] || matKey;
+        if (!safetyState.data[uiKey]) return;
+        const c = coFactors[matKey] || {};
+        safetyState.data[uiKey].speed_count      = c.speed_count      || 0;
+        safetyState.data[uiKey].senior_count     = c.senior_count     || 0;
+        safetyState.data[uiKey].young_count      = c.young_count      || 0;
+        safetyState.data[uiKey].nighttime_count  = c.nighttime_count  || 0;
+        safetyState.data[uiKey].impaired_count   = c.impaired_count   || 0;
+        safetyState.data[uiKey].distracted_count = c.distracted_count || 0;
+        merged++;
+    });
+    console.log('[Safety Focus] Co-factor crosstab merged for ' + merged + ' categories');
+}
+
+// CC 213 SF4 — Per-category Yearly Trend hydration from
+// mv_safety_categories_yearly. Populates safetyState.data[cat].byYear
+// and re-renders the year chart in place via the cached chart instance
+// (avoids a chart rebuild when the matview returns).
+async function _hydrateSafetyCategoryYearly(category) {
+    if (!category) return;
+    const dc = (typeof CL !== 'undefined' && CL.data && CL.data.client) || window.crashLensClient;
+    if (!dc || typeof dc.getSafetyCategoryYearly !== 'function') return;
+    if (!CL.data || !CL.data.supabaseBridge || typeof CL.data.supabaseBridge.resolveTier !== 'function') return;
+    const t = CL.data.supabaseBridge.resolveTier();
+    if (!t || !t.tier) return;
+    // Matview UI category mapping (alcoholonly → alcohol).
+    const UI_TO_MAT = { alcoholonly: 'alcohol' };
+    const matCat = UI_TO_MAT[category] || category;
+    let rows = [];
+    try {
+        rows = await CL.data.cachedMatview(
+            'mv_safety_categories_yearly:' + matCat,
+            t.tier, t.value,
+            () => dc.getSafetyCategoryYearly(t.tier, t.value, matCat, {}),
+            { category: matCat }
+        );
+    } catch (e) {
+        console.warn('[Safety Focus] getSafetyCategoryYearly failed:', e && e.message);
+        return;
+    }
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const byYear = {};
+    rows.forEach(r => {
+        const y = Number(r && r.crash_year);
+        if (!Number.isFinite(y)) return;
+        byYear[y] = Number(r.crash_count) || 0;
+    });
+    if (!safetyState.data[category]) return;
+    safetyState.data[category].byYear = byYear;
+    // Live-update the year chart if Chart.js still has the previous
+    // (empty / crashes[]-derived) instance on screen.
+    const chart = safetyState.charts && safetyState.charts.yearTrend;
+    if (chart && chart.data && chart.data.datasets && chart.data.datasets[0]) {
+        const years = Object.keys(byYear).map(Number).sort((a, b) => a - b);
+        chart.data.labels = years;
+        chart.data.datasets[0].data = years.map(y => byYear[y]);
+        try { chart.update(); } catch (_) { /* non-fatal */ }
+    }
+    console.log('[Safety Focus] byYear hydrated for ' + category + ' (' + Object.keys(byYear).length + ' years)');
 }
 
 function updateSafetyLocationTable(byRoute, category) {

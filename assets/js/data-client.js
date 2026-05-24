@@ -73,6 +73,19 @@ class CrashLensDataClient {
       county:            'county',
       city:              'county',
     },
+    // mv_safety_categories_yearly has no dot_district column — only
+    // jurisdiction_county / physical_juris_name / mpo_name /
+    // planning_district. Null out region tier so we don't send a
+    // non-existent column filter and PostgREST 400s.
+    mv_safety_categories_yearly: {
+      federal:           null,
+      state:             'state',
+      region:            null,
+      planning_district: 'planning_district',
+      mpo:               'mpo_name',
+      county:            'physical_juris_name',
+      city:              'physical_juris_name',
+    },
   };
 
   // Frontend column names (Title Case) → Supabase column names (snake_case)
@@ -1042,6 +1055,100 @@ class CrashLensDataClient {
         return null;
       }
     });
+  }
+
+  /**
+   * CC 213 — Co-factor crosstab per category from mv_safety_co_factors.
+   * Returns { [category]: { total, speed_count, senior_count, young_count,
+   *   nighttime_count, impaired_count, distracted_count, fatal_count,
+   *   ksi_count } } aggregated across the rows in scope. Powers the safety
+   * focus sub-KPI cards (SF3) and the crash-tree Risk Factors matview-mode
+   * fallback (CT2).
+   */
+  async getSafetyCoFactors(tier, value, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return {};
+    if (this._traceFn) {
+      this._traceFn({ op: 'getSafetyCoFactors', state: this.state, tier, value, opts });
+    }
+    try {
+      const tierFilters = this._tierFilter(tier, value);
+      const data = await this._supabaseQuery('mv_safety_co_factors', {
+        filters: tierFilters,
+        limit: 2000,
+        signal: opts && opts.signal,
+      });
+      this._source = 'supabase';
+      // At aggregate tiers (state/region/PD/MPO) the same category appears
+      // once per (county × district × ...) row — accumulate.
+      const byCategory = {};
+      (data || []).forEach(r => {
+        if (!r || !r.category) return;
+        if (!byCategory[r.category]) {
+          byCategory[r.category] = {
+            total: 0, speed_count: 0, senior_count: 0, young_count: 0,
+            nighttime_count: 0, impaired_count: 0, distracted_count: 0,
+            fatal_count: 0, ksi_count: 0,
+          };
+        }
+        const c = byCategory[r.category];
+        c.total            += r.total            || 0;
+        c.speed_count      += r.speed_count      || 0;
+        c.senior_count     += r.senior_count     || 0;
+        c.young_count      += r.young_count      || 0;
+        c.nighttime_count  += r.nighttime_count  || 0;
+        c.impaired_count   += r.impaired_count   || 0;
+        c.distracted_count += r.distracted_count || 0;
+        c.fatal_count      += r.fatal_count      || 0;
+        c.ksi_count        += r.ksi_count        || 0;
+      });
+      return byCategory;
+    } catch (e) {
+      console.warn('[DataClient] getSafetyCoFactors failed (matview missing?):', e.message);
+      return {};
+    }
+  }
+
+  /**
+   * CC 213 — Per-year totals for a single category from
+   * mv_safety_categories_yearly. Returns
+   * [{ crash_year, crash_count, k, a, epdo }, ...] sorted ascending.
+   * Powers the Yearly Trend chart at aggregate tiers (SF4).
+   *
+   * Region tier (dot_district) is not supported — the matview has no
+   * dot_district column. Returns [] when tier === 'region'.
+   */
+  async getSafetyCategoryYearly(tier, value, category, opts = {}) {
+    if (!this.preferSupabase || !this.supabaseKey) return [];
+    if (!category) return [];
+    if (tier === 'region') return [];  // matview has no dot_district column
+    if (this._traceFn) {
+      this._traceFn({ op: 'getSafetyCategoryYearly', state: this.state, tier, value, category });
+    }
+    try {
+      const tierFilters = this._tierFilter(tier, value, 'mv_safety_categories_yearly');
+      const data = await this._supabaseQuery('mv_safety_categories_yearly', {
+        filters: { ...tierFilters, category: `eq.${category}` },
+        limit: 2000,
+        signal: opts && opts.signal,
+      });
+      this._source = 'supabase';
+      // Aggregate across rows that share a crash_year (same year may
+      // appear once per county at aggregate tiers).
+      const byYear = {};
+      (data || []).forEach(r => {
+        const y = Number(r && r.crash_year);
+        if (!Number.isFinite(y)) return;
+        if (!byYear[y]) byYear[y] = { crash_year: y, crash_count: 0, k: 0, a: 0, epdo: 0 };
+        byYear[y].crash_count += Number(r.crash_count) || 0;
+        byYear[y].k           += Number(r.k)           || 0;
+        byYear[y].a           += Number(r.a)           || 0;
+        byYear[y].epdo        += Number(r.epdo)        || 0;
+      });
+      return Object.values(byYear).sort((a, b) => a.crash_year - b.crash_year);
+    } catch (e) {
+      console.warn('[DataClient] getSafetyCategoryYearly failed (matview missing?):', e.message);
+      return [];
+    }
   }
 
   /**
