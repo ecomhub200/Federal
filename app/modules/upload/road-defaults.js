@@ -15,8 +15,7 @@
  * User manual overrides are respected: if the user explicitly clicks a
  * different road type, the module won't override it on page reload.
  */
-(function () {
-    'use strict';
+'use strict';
 
     // ============================================================
     // STATE — loaded patterns and cache
@@ -82,14 +81,14 @@
      */
     function getActiveStateAbbr() {
         // 1. From jurisdictionContext (most reliable after selection)
-        if (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.stateCode) {
-            return jurisdictionContext.stateCode;
+        if (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext.stateCode) {
+            return window.jurisdictionContext.stateCode;
         }
 
         // 2. From appConfig.states registry via _getActiveStateKey
-        if (typeof _getActiveStateKey === 'function' && typeof appConfig !== 'undefined' && appConfig.states) {
+        if (typeof _getActiveStateKey === 'function' && typeof window.appConfig !== 'undefined' && window.appConfig.states) {
             var stateKey = _getActiveStateKey();
-            var stateEntry = appConfig.states[stateKey];
+            var stateEntry = window.appConfig.states[stateKey];
             if (stateEntry && stateEntry.abbreviation) {
                 return stateEntry.abbreviation;
             }
@@ -113,8 +112,8 @@
         }
 
         // Global appConfig.jurisdictions
-        if (typeof appConfig !== 'undefined' && appConfig.jurisdictions && appConfig.jurisdictions[jurisdictionId]) {
-            return appConfig.jurisdictions[jurisdictionId];
+        if (typeof window.appConfig !== 'undefined' && window.appConfig.jurisdictions && window.appConfig.jurisdictions[jurisdictionId]) {
+            return window.appConfig.jurisdictions[jurisdictionId];
         }
 
         return null;
@@ -254,13 +253,15 @@
     // PUBLIC API — attach to CL.upload.roadDefaults
     // ============================================================
 
-    CL.upload = CL.upload || {};
-    CL.upload.roadDefaults = {
-        getDefaultRoadType: getDefaultRoadType,
-        applyDefaultRoadType: applyDefaultRoadType,
-        isLoaded: isLoaded
-    };
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.upload = CL.upload || {};
+CL.upload.roadDefaults = {
+    getDefaultRoadType: getDefaultRoadType,
+    applyDefaultRoadType: applyDefaultRoadType,
+    isLoaded: isLoaded
+};
 
-    CL._registerModule('upload/road-defaults');
+export { getDefaultRoadType, applyDefaultRoadType, isLoaded };
 
-})();
+CL._registerModule('upload/road-defaults');
