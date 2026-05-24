@@ -33,3 +33,4 @@ import './modules/data/tab-loaders.js';
 import './modules/data/lazy-loader.js';
 import './modules/data/supabase-map-bridge.js';
 import './modules/data/chunk-loader.js';
+import './modules/ai/context.js';

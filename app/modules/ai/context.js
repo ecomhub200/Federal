@@ -2,10 +2,9 @@
  * CrashLens AI Context Builders
  * Extracted from app/index.html — builds structured context objects for AI prompts
  */
-window.CL = window.CL || {};
-CL.ai = CL.ai || {};
+'use strict';
 
-CL.ai.context = {
+export const context = {
 
     /**
      * Build location-specific crash context for AI from a context object.
@@ -35,5 +34,10 @@ CL.ai.context = {
         };
     }
 };
+
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.ai = CL.ai || {};
+CL.ai.context = context;
 
 CL._registerModule('ai/context');
