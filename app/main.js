@@ -34,3 +34,4 @@ import './modules/data/lazy-loader.js';
 import './modules/data/supabase-map-bridge.js';
 import './modules/data/chunk-loader.js';
 import './modules/ai/context.js';
+import './modules/analysis/crash-profile.js';
