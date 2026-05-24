@@ -7,9 +7,8 @@
  * Module-private: AI_MODE_STORAGE_KEY (not read by remaining inline code —
  *   verified, no window mirror needed).
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim) ───
 const AI_MODE_STORAGE_KEY = 'crashLens_aiModeEnabled';
 
 function toggleAIMode() {
@@ -242,18 +241,32 @@ function initHeaderApiKey() {
         console.warn('[InitHeaderApiKey] Error during initialization:', e.message);
     }
 }
-  // ─── EXTRACTED CODE END ───
-  window.CL = window.CL || {};
-  CL.ai = CL.ai || {};
-  CL.ai.modeToggle = CL.ai.modeToggle || {};
-  window.toggleAIMode = toggleAIMode;                       CL.ai.modeToggle.toggleAIMode = toggleAIMode;
-  window.handleAIToggleKeydown = handleAIToggleKeydown;     CL.ai.modeToggle.handleAIToggleKeydown = handleAIToggleKeydown;
-  window.initAIModeToggle = initAIModeToggle;               CL.ai.modeToggle.initAIModeToggle = initAIModeToggle;
-  window.saveHeaderApiKey = saveHeaderApiKey;               CL.ai.modeToggle.saveHeaderApiKey = saveHeaderApiKey;
-  window.clearHeaderApiKey = clearHeaderApiKey;             CL.ai.modeToggle.clearHeaderApiKey = clearHeaderApiKey;
-  window.updateHeaderKeyStatus = updateHeaderKeyStatus;     CL.ai.modeToggle.updateHeaderKeyStatus = updateHeaderKeyStatus;
-  window.updateAllAIStatusIndicators = updateAllAIStatusIndicators; CL.ai.modeToggle.updateAllAIStatusIndicators = updateAllAIStatusIndicators;
-  window.updateHeaderProviderLink = updateHeaderProviderLink; CL.ai.modeToggle.updateHeaderProviderLink = updateHeaderProviderLink;
-  window.initHeaderApiKey = initHeaderApiKey;               CL.ai.modeToggle.initHeaderApiKey = initHeaderApiKey;
-  CL._registerModule('ai/ai-mode-toggle');
-})();
+// ─── EXTRACTED CODE END ───
+
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.ai = CL.ai || {};
+CL.ai.modeToggle = CL.ai.modeToggle || {};
+CL.ai.modeToggle.toggleAIMode = toggleAIMode;
+CL.ai.modeToggle.handleAIToggleKeydown = handleAIToggleKeydown;
+CL.ai.modeToggle.initAIModeToggle = initAIModeToggle;
+CL.ai.modeToggle.saveHeaderApiKey = saveHeaderApiKey;
+CL.ai.modeToggle.clearHeaderApiKey = clearHeaderApiKey;
+CL.ai.modeToggle.updateHeaderKeyStatus = updateHeaderKeyStatus;
+CL.ai.modeToggle.updateAllAIStatusIndicators = updateAllAIStatusIndicators;
+CL.ai.modeToggle.updateHeaderProviderLink = updateHeaderProviderLink;
+CL.ai.modeToggle.initHeaderApiKey = initHeaderApiKey;
+
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
+window.clearHeaderApiKey = clearHeaderApiKey;
+window.saveHeaderApiKey = saveHeaderApiKey;
+window.toggleAIMode = toggleAIMode;
+window.updateHeaderProviderLink = updateHeaderProviderLink;
+
+export {
+    toggleAIMode, handleAIToggleKeydown, initAIModeToggle,
+    saveHeaderApiKey, clearHeaderApiKey, updateHeaderKeyStatus,
+    updateAllAIStatusIndicators, updateHeaderProviderLink, initHeaderApiKey
+};
+
+CL._registerModule('ai/ai-mode-toggle');
