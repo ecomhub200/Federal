@@ -60,3 +60,4 @@ import './modules/worker/sample-rows-loader.js';
 // --- L2: one-hop dependents -------------------------------------------------
 import './modules/core/tier.js';
 import './modules/upload/upload-pipeline.js';
+import './modules/upload/upload-tab.js';
