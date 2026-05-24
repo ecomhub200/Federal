@@ -72,3 +72,4 @@ import './modules/batch-ba/batch-ba-results.js';
 import './modules/batch-ba/batch-ba-charts.js';
 import './modules/batch-ba/batch-ba-duration.js';
 import './modules/batch-ba/batch-ba-export-csv.js';
+import './modules/batch-ba/batch-ba-export-kml.js';
