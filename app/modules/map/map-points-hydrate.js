@@ -15,9 +15,8 @@
  *
  * Depends on (must load before this file): `data/matview-cache`, `map/map-render`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 // Round 25 §2 — at aggregate tiers, R2 is skipped (parquet is wrong shape
 // for rollups). Instead, lazy-fetch per-marker rows from mv_map_points so
@@ -120,7 +119,7 @@ async function _hydrateMapPointsFromMatview(reason) {
         // Round 25 §6 — try IndexedDB cache first
         const cached = await _readMapPointsCache(stateKey, tier, value);
         if (cached) {
-            crashState.mapPoints = cached;
+            window.crashState.mapPoints = cached;
             console.log('[mapPointsHydrate] HIT cache (' + reason + ') ' + cached.length + ' points');
             document.dispatchEvent(new CustomEvent('crashDataLoaded', { detail: { source: 'mv_map_points_cached' } }));
             showBackgroundLoadingIndicator(false);
@@ -130,11 +129,11 @@ async function _hydrateMapPointsFromMatview(reason) {
         console.log('[mapPointsHydrate] MISS cache (' + reason + '), fetching mv_map_points', opts);
         const t0 = Date.now();
         const rows = await dc.getMapPoints(opts);
-        crashState.mapPoints = rows || [];
-        console.log('[mapPointsHydrate] populated ' + crashState.mapPoints.length +
+        window.crashState.mapPoints = rows || [];
+        console.log('[mapPointsHydrate] populated ' + window.crashState.mapPoints.length +
                     ' points in ' + (Date.now() - t0) + 'ms — filters now operational');
         // Write to cache (best-effort)
-        _writeMapPointsCache(stateKey, tier, value, crashState.mapPoints);
+        _writeMapPointsCache(stateKey, tier, value, window.crashState.mapPoints);
         document.dispatchEvent(new CustomEvent('crashDataLoaded', { detail: { source: 'mv_map_points' } }));
         showBackgroundLoadingIndicator(false);
     })();
@@ -144,11 +143,13 @@ async function _hydrateMapPointsFromMatview(reason) {
     finally { _mapPointsInFlight.delete(dedupeKey); }
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.map = CL.map || {};
-  window._hydrateMapPointsFromMatview = _hydrateMapPointsFromMatview; CL.map._hydrateMapPointsFromMatview = _hydrateMapPointsFromMatview;
-  CL._registerModule('map/map-points-hydrate');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.map = CL.map || {};
+CL.map._hydrateMapPointsFromMatview = _hydrateMapPointsFromMatview;
+
+export { _hydrateMapPointsFromMatview };
+
+CL._registerModule('map/map-points-hydrate');
