@@ -19176,9 +19176,9 @@ Developed by CRASH LENS | <a href="mailto:support@aicreatesai.com" style="color:
 // CRASH ANALYSIS SYSTEM - CORE CONFIGURATION
 // ============================================================
 // EPDO constants now defined in modules/core/constants.js — kept as global aliases
-let EPDO_WEIGHTS = CL.core.constants.EPDO_WEIGHTS_DEFAULT;
-let EPDO_ACTIVE_PRESET = 'hsm2010';
-const EPDO_PRESETS = CL.core.constants.EPDO_PRESETS;
+var EPDO_WEIGHTS = CL.core.constants.EPDO_WEIGHTS_DEFAULT;
+var EPDO_ACTIVE_PRESET = 'hsm2010';
+var EPDO_PRESETS = CL.core.constants.EPDO_PRESETS;
 
 
 // Round 19 §3 — state centroid loader reads from states.capabilities.center
@@ -19236,7 +19236,7 @@ window.getStateCenter = getStateCenter;
 window.getStateCenterSync = getStateCenterSync;
 
 // STATE_EPDO_WEIGHTS now defined in modules/core/constants.js
-const STATE_EPDO_WEIGHTS = CL.core.constants.STATE_EPDO_WEIGHTS;
+var STATE_EPDO_WEIGHTS = CL.core.constants.STATE_EPDO_WEIGHTS;
 
 /**
  * Look up recommended EPDO weights for a state by FIPS code.
@@ -19299,7 +19299,7 @@ function getCurrentStateFips() {
 // We extend it with tier properties AFTER its original declaration using
 // _TIER_EXTENSIONS below. This avoids duplicate const declarations.
 // ============================================================
-const _TIER_EXTENSIONS = {
+var _TIER_EXTENSIONS = {
     viewTier: 'county',           // federal | state | region | planning_district | mpo | county | city | corridor
     tierState: null,              // { fips, name, abbreviation, dot } — tier-level state info
     tierRegion: null,             // { id, name, counties[] }
@@ -19314,7 +19314,7 @@ const _TIER_EXTENSIONS = {
 };
 
 // Tab visibility matrix per tier
-const TIER_TAB_VISIBILITY = {
+var TIER_TAB_VISIBILITY = {
     federal:            { dashboard:1, map:1, crashTree:0, safetyFocus:1, fatalSpeed:0, hotSpots:1, intersections:0, pedBike:0, analysis:1 },
     state:              { dashboard:1, map:1, crashTree:1, safetyFocus:1, fatalSpeed:1, hotSpots:1, intersections:1, pedBike:1, analysis:1 },
     region:             { dashboard:1, map:1, crashTree:1, safetyFocus:1, fatalSpeed:1, hotSpots:1, intersections:1, pedBike:1, analysis:1 },
@@ -22157,7 +22157,7 @@ function updateAppSubtitle(jurisdictionName) {
 const HENRICO_CENTER = [37.55, -77.45];
 
 // COL now defined in modules/core/constants.js — kept as global alias
-const COL = CL.core.constants.COL;
+var COL = CL.core.constants.COL;
 
 // Road properties storage for enhanced location data
 const roadProperties = {};
@@ -26887,7 +26887,7 @@ const isYes = v => v && (String(v).toLowerCase() === 'yes' || v === 'Y' || v ===
 const esc = s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '';
 // JavaScript-safe escape for use in onclick handlers (escapes quotes and backslashes)
 const escJs = s => s ? String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"') : '';
-const calcEPDO = s => CL.core.epdo.calcEPDO(s, EPDO_WEIGHTS);
+var calcEPDO = s => CL.core.epdo.calcEPDO(s, EPDO_WEIGHTS);
 const fmtTime = t => { if(!t)return''; const s=String(t).padStart(4,'0'); return s.slice(0,2)+':'+s.slice(2); };
 const getHour = t => { if(!t)return null; return parseInt(String(t).padStart(4,'0').slice(0,2),10); };
 const isIntersection = row => {

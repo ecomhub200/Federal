@@ -12,7 +12,7 @@
 // ============================================================
 
 // Pre-compiled regex patterns for crash pattern analysis (performance optimization)
-const CRASH_PATTERN_REGEX = {
+var CRASH_PATTERN_REGEX = {
     nightLight: /dark|night|dusk|dawn/i,
     wetSurface: /wet|ice|snow|slush/i,
     angleCollision: /angle/i,
