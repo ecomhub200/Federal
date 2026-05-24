@@ -24,13 +24,9 @@
  *                                    Speeding / Intersection / Pedestrian
  *                                    opens (these need row-level data).
  */
-(function () {
-    'use strict';
-    if (typeof window === 'undefined') return;
-    window.CL = window.CL || {};
-    CL.upload = CL.upload || {};
+'use strict';
 
-    var TIER_LABELS = {
+var TIER_LABELS = {
         federal: 'Federal',
         state: 'State',
         region: 'Region',
@@ -645,17 +641,29 @@
         }, 200);
     });
 
-    CL.upload.tierUI = {
-        applyUploadTierUI: applyUploadTierUI,
-        paintUploadCard: paintUploadCard,
-        renderTierScopeCard: renderTierScopeCard,
-        fallbackR2Url: fallbackR2Url,
-        updateTierSwitchProgress: updateTierSwitchProgress,
-        removeTierSwitchProgress: removeTierSwitchProgress,
-        setUploadZoneCompact: setUploadZoneCompact
-    };
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.upload = CL.upload || {};
+CL.upload.tierUI = {
+    applyUploadTierUI: applyUploadTierUI,
+    paintUploadCard: paintUploadCard,
+    renderTierScopeCard: renderTierScopeCard,
+    fallbackR2Url: fallbackR2Url,
+    updateTierSwitchProgress: updateTierSwitchProgress,
+    removeTierSwitchProgress: removeTierSwitchProgress,
+    setUploadZoneCompact: setUploadZoneCompact
+};
 
-    if (typeof CL._registerModule === 'function') {
-        CL._registerModule('upload/upload-tier-ui');
-    }
-})();
+export {
+    applyUploadTierUI,
+    paintUploadCard,
+    renderTierScopeCard,
+    fallbackR2Url,
+    updateTierSwitchProgress,
+    removeTierSwitchProgress,
+    setUploadZoneCompact
+};
+
+if (typeof CL._registerModule === 'function') {
+    CL._registerModule('upload/upload-tier-ui');
+}
