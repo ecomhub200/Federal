@@ -17,13 +17,13 @@
  *   - All failures are swallowed (non-fatal try/catch).
  *   - Skips entirely if crashState.loaded is already true.
  */
-'use strict';
+window.CL = window.CL || {};
+CL.data = CL.data || {};
 
-import { constants } from '../core/constants.js';
-import * as skeletons from '../ui/skeletons.js';
-import * as tierUI from '../upload/upload-tier-ui.js';
+CL.data.supabaseBridge = (function () {
+    'use strict';
 
-var _injected = false;
+    var _injected = false;
     var _refreshTimer = null;
     var _worker = null;
     var _workerSeq = 0;
@@ -150,8 +150,8 @@ var _injected = false;
 
     function getEpdoWeights() {
         if (typeof EPDO_WEIGHTS !== 'undefined' && EPDO_WEIGHTS) return EPDO_WEIGHTS;
-        if (constants && constants.EPDO_WEIGHTS_DEFAULT) {
-            return constants.EPDO_WEIGHTS_DEFAULT;
+        if (CL.core && CL.core.constants && CL.core.constants.EPDO_WEIGHTS_DEFAULT) {
+            return CL.core.constants.EPDO_WEIGHTS_DEFAULT;
         }
         return { K: 883, A: 94, B: 21, C: 11, O: 1 };
     }
@@ -826,16 +826,16 @@ var _injected = false;
 
             console.log('[Phase2] Fetching summary from Supabase...', { tier: t.tier, value: t.value, spec: spec });
             try {
-                if (tierUI && tierUI.updateTierSwitchProgress) {
-                    tierUI.updateTierSwitchProgress(15, 'Fetching dashboard summary…');
+                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
+                    CL.upload.tierUI.updateTierSwitchProgress(15, 'Fetching dashboard summary…');
                 }
             } catch (e) { /* non-fatal */ }
             // Round-9 Fix 3 — show shimmer skeletons in all KPI cards while
             // the matview fetch is in flight. Existing paintKPIs() will
             // overwrite textContent and naturally drop the skeleton spans.
             try {
-                if (skeletons && skeletons.showKpis) {
-                    skeletons.showKpis();
+                if (CL.ui && CL.ui.skeletons && CL.ui.skeletons.showKpis) {
+                    CL.ui.skeletons.showKpis();
                 }
             } catch (e) { /* non-fatal */ }
             var startTime = Date.now();
@@ -935,8 +935,8 @@ var _injected = false;
             }
 
             try {
-                if (tierUI && tierUI.updateTierSwitchProgress) {
-                    tierUI.updateTierSwitchProgress(50, 'Processing ' + rows.length.toLocaleString() + ' summary rows…');
+                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
+                    CL.upload.tierUI.updateTierSwitchProgress(50, 'Processing ' + rows.length.toLocaleString() + ' summary rows…');
                 }
             } catch (e) { /* non-fatal */ }
 
@@ -944,8 +944,8 @@ var _injected = false;
             paintKPIs(agg);
 
             try {
-                if (tierUI && tierUI.updateTierSwitchProgress) {
-                    tierUI.updateTierSwitchProgress(85, 'Painting dashboard…');
+                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
+                    CL.upload.tierUI.updateTierSwitchProgress(85, 'Painting dashboard…');
                 }
             } catch (e) { /* non-fatal */ }
 
@@ -1007,12 +1007,12 @@ var _injected = false;
             } catch (evtErr) { /* non-fatal */ }
 
             try {
-                if (tierUI && tierUI.updateTierSwitchProgress) {
-                    tierUI.updateTierSwitchProgress(100, 'Ready');
+                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.updateTierSwitchProgress) {
+                    CL.upload.tierUI.updateTierSwitchProgress(100, 'Ready');
                 }
                 setTimeout(function () {
-                    if (tierUI && tierUI.removeTierSwitchProgress) {
-                        tierUI.removeTierSwitchProgress();
+                    if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.removeTierSwitchProgress) {
+                        CL.upload.tierUI.removeTierSwitchProgress();
                     }
                 }, 500);
             } catch (e) { /* non-fatal */ }
@@ -1021,8 +1021,8 @@ var _injected = false;
         } catch (e) {
             console.warn('[Phase2] Supabase bridge failed (non-fatal):', e && e.message);
             try {
-                if (tierUI && tierUI.removeTierSwitchProgress) {
-                    tierUI.removeTierSwitchProgress();
+                if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.removeTierSwitchProgress) {
+                    CL.upload.tierUI.removeTierSwitchProgress();
                 }
             } catch (e2) { /* non-fatal */ }
         }
@@ -1100,28 +1100,16 @@ var _injected = false;
         }, 250);
     }
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.data = CL.data || {};
-CL.data.supabaseBridge = {
-    injectFastDashboard: injectFastDashboard,
-    onR2LoadComplete: onR2LoadComplete,
-    refresh: refresh,
-    resolveTier: resolveTier,
-    roadTypeSpec: roadTypeSpec,
-    showSkeletonKPIs: showSkeletonKPIs,
-    attachRoadTypeListener: attachRoadTypeListener,
-    get injected() { return _injected; }
-};
-
-export {
-    injectFastDashboard,
-    onR2LoadComplete,
-    refresh,
-    resolveTier,
-    roadTypeSpec,
-    showSkeletonKPIs,
-    attachRoadTypeListener
-};
+    return {
+        injectFastDashboard: injectFastDashboard,
+        onR2LoadComplete: onR2LoadComplete,
+        refresh: refresh,
+        resolveTier: resolveTier,
+        roadTypeSpec: roadTypeSpec,
+        showSkeletonKPIs: showSkeletonKPIs,
+        attachRoadTypeListener: attachRoadTypeListener,
+        get injected() { return _injected; }
+    };
+})();
 
 CL._registerModule('data/supabase-bridge');

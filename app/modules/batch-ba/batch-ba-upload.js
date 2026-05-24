@@ -2,8 +2,6 @@
  * CrashLens Batch Before/After Evaluation — Upload & Column Detection
  * Handles CSV/Excel file upload, auto-detection of columns, validation.
  */
-'use strict';
-
 window.CL = window.CL || {};
 CL.batchBA = CL.batchBA || {};
 

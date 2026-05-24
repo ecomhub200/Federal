@@ -2,9 +2,10 @@
  * CrashLens County Baselines & Statistical Analysis
  * Extracted from app/index.html — pure computation functions
  */
-'use strict';
+window.CL = window.CL || {};
+CL.analysis = CL.analysis || {};
 
-export const baselines = {
+CL.analysis.baselines = {
 
     /**
      * Calculate county-wide baseline rates from sample rows.
@@ -257,10 +258,5 @@ export const baselines = {
         };
     }
 };
-
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.analysis = CL.analysis || {};
-CL.analysis.baselines = baselines;
 
 CL._registerModule('analysis/baselines');

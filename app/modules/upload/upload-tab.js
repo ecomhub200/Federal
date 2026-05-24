@@ -11,9 +11,11 @@
  * Globals accessed: crashState, r2State, appConfig, appSettings, connectionState,
  *                   jurisdictionContext, EPDO_WEIGHTS, EPDO_ACTIVE_PRESET, EPDO_PRESETS
  */
-'use strict';
+window.CL = window.CL || {};
+CL.upload = CL.upload || {};
 
-import * as roadTypeMapping from '../data/road-type-mapping.js';
+(function() {
+    'use strict';
 
     // F2/F3 — localStorage key for the user's last-selected state (FIPS).
     // This key is intentionally state-independent: it is NOT purged on a
@@ -35,9 +37,9 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
         var activeTier = tier || (typeof jurisdictionContext !== 'undefined' ? jurisdictionContext.viewTier : 'county');
         // Delegate to the shared road-type-mapping module — single source of
         // truth across supabase-bridge / data-client / index.html.
-        if (roadTypeMapping) {
-            var radioVal = roadTypeMapping.activeRadioValue();
-            var suffix = roadTypeMapping.suffixFor(activeTier, radioVal);
+        if (CL && CL.data && CL.data.roadTypeMapping) {
+            var radioVal = CL.data.roadTypeMapping.activeRadioValue();
+            var suffix = CL.data.roadTypeMapping.suffixFor(activeTier, radioVal);
             // Preserve the legacy 'statewide_all_roads' filename for the state
             // tier's all-roads R2 file (matches existing R2 publish layout).
             if (activeTier === 'state' && suffix === 'all_roads') return 'statewide_all_roads';
@@ -652,7 +654,7 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
         // Delegate to the shared road-type-mapping module — single source of
         // truth. Pre-fix this file, app/index.html, and supabase-bridge.js
         // each had their own slightly different table.
-        var map = roadTypeMapping || null;
+        var map = (CL && CL.data && CL.data.roadTypeMapping) ? CL.data.roadTypeMapping : null;
         if (!map) return;
         var ids = {
             countyOnly:     'filterLabelCountyOnly',
@@ -810,61 +812,38 @@ import * as roadTypeMapping from '../data/road-type-mapping.js';
     // PUBLIC API
     // ============================================================
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-// NOTE: assign individual members rather than replacing CL.upload — the
-// IIFE-era CL.upload = {…} replacement worked because of load order; under
-// ESM cutover we keep sibling members (tierUI, pipeline, apiConnector,
-// roadDefaults) intact.
-window.CL = window.CL || {};
-CL.upload = CL.upload || {};
-CL.upload.getActiveRoadTypeSuffix = getActiveRoadTypeSuffix;
-CL.upload.getR2BasePath = getR2BasePath;
-CL.upload.getDataFilePath = getDataFilePath;
-CL.upload.resolveDataUrl = resolveDataUrl;
-CL.upload.buildLocalFallbackPaths = buildLocalFallbackPaths;
-CL.upload.loadR2Manifest = loadR2Manifest;
-CL.upload.checkR2DataAvailability = checkR2DataAvailability;
-CL.upload.getR2DataAvailabilitySummary = getR2DataAvailabilitySummary;
-CL.upload.saveFilterProfile = saveFilterProfile;
-CL.upload.saveUserPreferences = saveUserPreferences;
-CL.upload.clearUserPreferences = clearUserPreferences;
-CL.upload.handleUploadStateChange = handleUploadStateChange;
-CL.upload.forceRefreshAllData = forceRefreshAllData;
-CL.upload.showFilterLoadingState = showFilterLoadingState;
-CL.upload.showRefreshButton = showRefreshButton;
-CL.upload.updateCurrentSelectionDisplay = updateCurrentSelectionDisplay;
-CL.upload.updateRoadTypeLabels = updateRoadTypeLabels;
-CL.upload.toggleEPDOSection = toggleEPDOSection;
-CL.upload.loadEPDOPreset = loadEPDOPreset;
-CL.upload.saveCustomEPDOWeights = saveCustomEPDOWeights;
-CL.upload.applyStateDefaultEPDO = applyStateDefaultEPDO;
+    CL.upload = {
+        // R2 Data Path Utilities
+        getActiveRoadTypeSuffix: getActiveRoadTypeSuffix,
+        getR2BasePath: getR2BasePath,
+        getDataFilePath: getDataFilePath,
+        resolveDataUrl: resolveDataUrl,
+        buildLocalFallbackPaths: buildLocalFallbackPaths,
 
-// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md
-//      watch list — these 4 became survivors after Item 1 deleted the
-//      inline copies in index.html) ---
-window.saveFilterProfile = saveFilterProfile;
-window.saveUserPreferences = saveUserPreferences;
-window.clearUserPreferences = clearUserPreferences;
-window.forceRefreshAllData = forceRefreshAllData;
+        // R2 Manifest & Availability
+        loadR2Manifest: loadR2Manifest,
+        checkR2DataAvailability: checkR2DataAvailability,
+        getR2DataAvailabilitySummary: getR2DataAvailabilitySummary,
 
-export {
-    getActiveRoadTypeSuffix,
-    getR2BasePath,
-    getDataFilePath,
-    resolveDataUrl,
-    buildLocalFallbackPaths,
-    loadR2Manifest,
-    checkR2DataAvailability,
-    getR2DataAvailabilitySummary,
-    saveFilterProfile,
-    saveUserPreferences,
-    clearUserPreferences,
-    handleUploadStateChange,
-    forceRefreshAllData,
-    showFilterLoadingState,
-    showRefreshButton,
-    updateCurrentSelectionDisplay,
-    updateRoadTypeLabels
-};
+        // Filter & Preferences
+        saveFilterProfile: saveFilterProfile,
+        saveUserPreferences: saveUserPreferences,
+        clearUserPreferences: clearUserPreferences,
+        handleUploadStateChange: handleUploadStateChange,
+        forceRefreshAllData: forceRefreshAllData,
 
-CL._registerModule('upload/upload-tab');
+        // UI Helpers
+        showFilterLoadingState: showFilterLoadingState,
+        showRefreshButton: showRefreshButton,
+        updateCurrentSelectionDisplay: updateCurrentSelectionDisplay,
+        updateRoadTypeLabels: updateRoadTypeLabels,
+
+        // EPDO Management
+        toggleEPDOSection: toggleEPDOSection,
+        loadEPDOPreset: loadEPDOPreset,
+        saveCustomEPDOWeights: saveCustomEPDOWeights,
+        applyStateDefaultEPDO: applyStateDefaultEPDO
+    };
+
+    CL._registerModule('upload/upload-tab');
+})();

@@ -2,11 +2,10 @@
  * CrashLens EPDO Calculation Logic
  * Extracted from app/index.html — pure computation functions only
  */
-'use strict';
+window.CL = window.CL || {};
+CL.core = CL.core || {};
 
-import { constants } from './constants.js';
-
-export const epdo = {
+CL.core.epdo = {
     /**
      * Look up recommended EPDO weights for a state by FIPS code.
      * Falls back to HSM Standard if state not found.
@@ -14,7 +13,7 @@ export const epdo = {
      * @returns {{ name: string, weights: {K:number,A:number,B:number,C:number,O:number}, source: string }}
      */
     getStateEPDOWeights: function(stateFips) {
-        var stateWeights = constants.STATE_EPDO_WEIGHTS;
+        var stateWeights = CL.core.constants.STATE_EPDO_WEIGHTS;
         var padded = String(stateFips).padStart(2, '0');
         return stateWeights[padded] || stateWeights['_default'];
     },
@@ -29,10 +28,5 @@ export const epdo = {
         return (severityObj.K||0)*weights.K + (severityObj.A||0)*weights.A + (severityObj.B||0)*weights.B + (severityObj.C||0)*weights.C + (severityObj.O||0)*weights.O;
     }
 };
-
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.core = CL.core || {};
-CL.core.epdo = epdo;
 
 CL._registerModule('core/epdo');

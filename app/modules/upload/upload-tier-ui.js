@@ -24,9 +24,13 @@
  *                                    Speeding / Intersection / Pedestrian
  *                                    opens (these need row-level data).
  */
-'use strict';
+(function () {
+    'use strict';
+    if (typeof window === 'undefined') return;
+    window.CL = window.CL || {};
+    CL.upload = CL.upload || {};
 
-var TIER_LABELS = {
+    var TIER_LABELS = {
         federal: 'Federal',
         state: 'State',
         region: 'Region',
@@ -641,29 +645,17 @@ var TIER_LABELS = {
         }, 200);
     });
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.upload = CL.upload || {};
-CL.upload.tierUI = {
-    applyUploadTierUI: applyUploadTierUI,
-    paintUploadCard: paintUploadCard,
-    renderTierScopeCard: renderTierScopeCard,
-    fallbackR2Url: fallbackR2Url,
-    updateTierSwitchProgress: updateTierSwitchProgress,
-    removeTierSwitchProgress: removeTierSwitchProgress,
-    setUploadZoneCompact: setUploadZoneCompact
-};
+    CL.upload.tierUI = {
+        applyUploadTierUI: applyUploadTierUI,
+        paintUploadCard: paintUploadCard,
+        renderTierScopeCard: renderTierScopeCard,
+        fallbackR2Url: fallbackR2Url,
+        updateTierSwitchProgress: updateTierSwitchProgress,
+        removeTierSwitchProgress: removeTierSwitchProgress,
+        setUploadZoneCompact: setUploadZoneCompact
+    };
 
-export {
-    applyUploadTierUI,
-    paintUploadCard,
-    renderTierScopeCard,
-    fallbackR2Url,
-    updateTierSwitchProgress,
-    removeTierSwitchProgress,
-    setUploadZoneCompact
-};
-
-if (typeof CL._registerModule === 'function') {
-    CL._registerModule('upload/upload-tier-ui');
-}
+    if (typeof CL._registerModule === 'function') {
+        CL._registerModule('upload/upload-tier-ui');
+    }
+})();

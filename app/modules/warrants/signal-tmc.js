@@ -15,8 +15,9 @@
  *
  * Depends on (must load before this file): `warrants/signal`
  */
-'use strict';
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 // Signal Warrant Analyzer Helper Functions (Redesigned Single-Page Layout)
 
@@ -863,72 +864,39 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 100);
 });
 
-// ─── EXTRACTED CODE END ───
+  // ─── EXTRACTED CODE END ───
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.warrants = CL.warrants || {};
-CL.warrants.signal_toggleAIPanel = signal_toggleAIPanel;
-CL.warrants.signal_toggleDisclaimer = signal_toggleDisclaimer;
-CL.warrants.signal_toggleExportButtons = signal_toggleExportButtons;
-CL.warrants.signal_updateDaySlots = signal_updateDaySlots;
-CL.warrants.signal_handleDisclaimerCheckbox = signal_handleDisclaimerCheckbox;
-CL.warrants.signal_toggleVirginiaInfo = signal_toggleVirginiaInfo;
-CL.warrants.signal_check70pct = signal_check70pct;
-CL.warrants.signal_toggleRTOptions = signal_toggleRTOptions;
-CL.warrants.signal_toggleWarrant4 = signal_toggleWarrant4;
-CL.warrants.signal_updateW4HourVisibility = signal_updateW4HourVisibility;
-CL.warrants.signal_autoPopulateW4MajorVolumes = signal_autoPopulateW4MajorVolumes;
-CL.warrants.signal_toggleWarrant5 = signal_toggleWarrant5;
-CL.warrants.signal_toggleWarrant7 = signal_toggleWarrant7;
-CL.warrants.signal_selectAveragingMethod = signal_selectAveragingMethod;
-CL.warrants.signal_toggleWeekendAnalysis = signal_toggleWeekendAnalysis;
-CL.warrants.signal_setCountType = signal_setCountType;
-CL.warrants.signal_updateTMCGrid = signal_updateTMCGrid;
-CL.warrants.signal_generateTMCRows = signal_generateTMCRows;
-CL.warrants.signal_updateRowTotal = signal_updateRowTotal;
-CL.warrants.signal_markTotalManual = signal_markTotalManual;
-CL.warrants.signal_clearTMCForm = signal_clearTMCForm;
-CL.warrants.signal_addCurrentDay = signal_addCurrentDay;
-CL.warrants.signal_advanceToNextDay = signal_advanceToNextDay;
-CL.warrants.signal_clearAIUploads = signal_clearAIUploads;
-CL.warrants.signal_saveData = signal_saveData;
-CL.warrants.signal_loadSavedData = signal_loadSavedData;
-CL.warrants.signal_exportData = signal_exportData;
-CL.warrants.signal_clearAll = signal_clearAll;
-CL.warrants.signal_renderDayCards = signal_renderDayCards;
-
-// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
-window.signal_addCurrentDay = signal_addCurrentDay;
-window.signal_autoPopulateW4MajorVolumes = signal_autoPopulateW4MajorVolumes;
-window.signal_clearAIUploads = signal_clearAIUploads;
-window.signal_clearAll = signal_clearAll;
-window.signal_clearTMCForm = signal_clearTMCForm;
-window.signal_handleDisclaimerCheckbox = signal_handleDisclaimerCheckbox;
-window.signal_markTotalManual = signal_markTotalManual;
-window.signal_saveData = signal_saveData;
-window.signal_selectAveragingMethod = signal_selectAveragingMethod;
-window.signal_setCountType = signal_setCountType;
-window.signal_toggleAIPanel = signal_toggleAIPanel;
-window.signal_toggleDisclaimer = signal_toggleDisclaimer;
-window.signal_toggleExportButtons = signal_toggleExportButtons;
-window.signal_toggleWarrant7 = signal_toggleWarrant7;
-window.signal_toggleWeekendAnalysis = signal_toggleWeekendAnalysis;
-window.signal_updateDaySlots = signal_updateDaySlots;
-window.signal_updateRowTotal = signal_updateRowTotal;
-
-// --- Named exports (consumers import these directly post-cleanup) ---
-export {
-    signal_toggleAIPanel, signal_toggleDisclaimer, signal_toggleExportButtons,
-    signal_updateDaySlots, signal_handleDisclaimerCheckbox, signal_toggleVirginiaInfo,
-    signal_check70pct, signal_toggleRTOptions, signal_toggleWarrant4,
-    signal_updateW4HourVisibility, signal_autoPopulateW4MajorVolumes, signal_toggleWarrant5,
-    signal_toggleWarrant7, signal_selectAveragingMethod, signal_toggleWeekendAnalysis,
-    signal_setCountType, signal_updateTMCGrid, signal_generateTMCRows,
-    signal_updateRowTotal, signal_markTotalManual, signal_clearTMCForm,
-    signal_addCurrentDay, signal_advanceToNextDay, signal_clearAIUploads,
-    signal_saveData, signal_loadSavedData, signal_exportData,
-    signal_clearAll, signal_renderDayCards
-};
-
-CL._registerModule('warrants/signal-tmc');
+  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+  window.CL = window.CL || {};
+  CL.warrants = CL.warrants || {};
+  window.signal_toggleAIPanel = signal_toggleAIPanel; CL.warrants.signal_toggleAIPanel = signal_toggleAIPanel;
+  window.signal_toggleDisclaimer = signal_toggleDisclaimer; CL.warrants.signal_toggleDisclaimer = signal_toggleDisclaimer;
+  window.signal_toggleExportButtons = signal_toggleExportButtons; CL.warrants.signal_toggleExportButtons = signal_toggleExportButtons;
+  window.signal_updateDaySlots = signal_updateDaySlots; CL.warrants.signal_updateDaySlots = signal_updateDaySlots;
+  window.signal_handleDisclaimerCheckbox = signal_handleDisclaimerCheckbox; CL.warrants.signal_handleDisclaimerCheckbox = signal_handleDisclaimerCheckbox;
+  window.signal_toggleVirginiaInfo = signal_toggleVirginiaInfo; CL.warrants.signal_toggleVirginiaInfo = signal_toggleVirginiaInfo;
+  window.signal_check70pct = signal_check70pct; CL.warrants.signal_check70pct = signal_check70pct;
+  window.signal_toggleRTOptions = signal_toggleRTOptions; CL.warrants.signal_toggleRTOptions = signal_toggleRTOptions;
+  window.signal_toggleWarrant4 = signal_toggleWarrant4; CL.warrants.signal_toggleWarrant4 = signal_toggleWarrant4;
+  window.signal_updateW4HourVisibility = signal_updateW4HourVisibility; CL.warrants.signal_updateW4HourVisibility = signal_updateW4HourVisibility;
+  window.signal_autoPopulateW4MajorVolumes = signal_autoPopulateW4MajorVolumes; CL.warrants.signal_autoPopulateW4MajorVolumes = signal_autoPopulateW4MajorVolumes;
+  window.signal_toggleWarrant5 = signal_toggleWarrant5; CL.warrants.signal_toggleWarrant5 = signal_toggleWarrant5;
+  window.signal_toggleWarrant7 = signal_toggleWarrant7; CL.warrants.signal_toggleWarrant7 = signal_toggleWarrant7;
+  window.signal_selectAveragingMethod = signal_selectAveragingMethod; CL.warrants.signal_selectAveragingMethod = signal_selectAveragingMethod;
+  window.signal_toggleWeekendAnalysis = signal_toggleWeekendAnalysis; CL.warrants.signal_toggleWeekendAnalysis = signal_toggleWeekendAnalysis;
+  window.signal_setCountType = signal_setCountType; CL.warrants.signal_setCountType = signal_setCountType;
+  window.signal_updateTMCGrid = signal_updateTMCGrid; CL.warrants.signal_updateTMCGrid = signal_updateTMCGrid;
+  window.signal_generateTMCRows = signal_generateTMCRows; CL.warrants.signal_generateTMCRows = signal_generateTMCRows;
+  window.signal_updateRowTotal = signal_updateRowTotal; CL.warrants.signal_updateRowTotal = signal_updateRowTotal;
+  window.signal_markTotalManual = signal_markTotalManual; CL.warrants.signal_markTotalManual = signal_markTotalManual;
+  window.signal_clearTMCForm = signal_clearTMCForm; CL.warrants.signal_clearTMCForm = signal_clearTMCForm;
+  window.signal_addCurrentDay = signal_addCurrentDay; CL.warrants.signal_addCurrentDay = signal_addCurrentDay;
+  window.signal_advanceToNextDay = signal_advanceToNextDay; CL.warrants.signal_advanceToNextDay = signal_advanceToNextDay;
+  window.signal_clearAIUploads = signal_clearAIUploads; CL.warrants.signal_clearAIUploads = signal_clearAIUploads;
+  window.signal_saveData = signal_saveData; CL.warrants.signal_saveData = signal_saveData;
+  window.signal_loadSavedData = signal_loadSavedData; CL.warrants.signal_loadSavedData = signal_loadSavedData;
+  window.signal_exportData = signal_exportData; CL.warrants.signal_exportData = signal_exportData;
+  window.signal_clearAll = signal_clearAll; CL.warrants.signal_clearAll = signal_clearAll;
+  window.signal_renderDayCards = signal_renderDayCards; CL.warrants.signal_renderDayCards = signal_renderDayCards;
+  CL._registerModule('warrants/signal-tmc');
+})();

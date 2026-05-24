@@ -14,8 +14,9 @@
  *
  * Depends on (must load before this file): `spatial/aggregate-loader`
  */
-'use strict';
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 /**
  * Load the R2 manifest from data/r2-manifest.json.
@@ -520,35 +521,21 @@ async function validateAppPaths() {
     return results;
 }
 
-// ─── EXTRACTED CODE END ───
+  // ─── EXTRACTED CODE END ───
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.spatial = CL.spatial || {};
-CL.spatial._streamResponseChunks = _streamResponseChunks;
-CL.spatial.buildLocalFallbackPaths = buildLocalFallbackPaths;
-CL.spatial.checkR2DataAvailability = checkR2DataAvailability;
-CL.spatial.diagR2Connection = diagR2Connection;
-CL.spatial.fetchCsvWithFallback = fetchCsvWithFallback;
-CL.spatial.getR2DataAvailabilitySummary = getR2DataAvailabilitySummary;
-CL.spatial.loadR2Manifest = loadR2Manifest;
-CL.spatial.resolveDataUrl = resolveDataUrl;
-CL.spatial.streamResponseToArrayBuffer = streamResponseToArrayBuffer;
-CL.spatial.streamResponseToText = streamResponseToText;
-CL.spatial.validateAppPaths = validateAppPaths;
-
-export {
-    _streamResponseChunks,
-    buildLocalFallbackPaths,
-    checkR2DataAvailability,
-    diagR2Connection,
-    fetchCsvWithFallback,
-    getR2DataAvailabilitySummary,
-    loadR2Manifest,
-    resolveDataUrl,
-    streamResponseToArrayBuffer,
-    streamResponseToText,
-    validateAppPaths
-};
-
-CL._registerModule('spatial/r2-resolve');
+  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+  window.CL = window.CL || {};
+  CL.spatial = CL.spatial || {};
+  window._streamResponseChunks = _streamResponseChunks; CL.spatial._streamResponseChunks = _streamResponseChunks;
+  window.buildLocalFallbackPaths = buildLocalFallbackPaths; CL.spatial.buildLocalFallbackPaths = buildLocalFallbackPaths;
+  window.checkR2DataAvailability = checkR2DataAvailability; CL.spatial.checkR2DataAvailability = checkR2DataAvailability;
+  window.diagR2Connection = diagR2Connection; CL.spatial.diagR2Connection = diagR2Connection;
+  window.fetchCsvWithFallback = fetchCsvWithFallback; CL.spatial.fetchCsvWithFallback = fetchCsvWithFallback;
+  window.getR2DataAvailabilitySummary = getR2DataAvailabilitySummary; CL.spatial.getR2DataAvailabilitySummary = getR2DataAvailabilitySummary;
+  window.loadR2Manifest = loadR2Manifest; CL.spatial.loadR2Manifest = loadR2Manifest;
+  window.resolveDataUrl = resolveDataUrl; CL.spatial.resolveDataUrl = resolveDataUrl;
+  window.streamResponseToArrayBuffer = streamResponseToArrayBuffer; CL.spatial.streamResponseToArrayBuffer = streamResponseToArrayBuffer;
+  window.streamResponseToText = streamResponseToText; CL.spatial.streamResponseToText = streamResponseToText;
+  window.validateAppPaths = validateAppPaths; CL.spatial.validateAppPaths = validateAppPaths;
+  CL._registerModule('spatial/r2-resolve');
+})();

@@ -22,7 +22,8 @@
  * script executes), so loading right after
  * <script src="modules/grants/ranking.js"> is behavior-safe.
  */
-'use strict';
+(function(){
+  'use strict';
 
 function runFullAnalysis() {
     if (grantState.selectedLocationIndices.length === 0) {
@@ -2210,15 +2211,15 @@ async function generateGrant4AgentWord(results, projectParams) {
     URL.revokeObjectURL(url);
 }
 
-// ---- Transitional CL.* namespace + window mirror (stripped in Stage A-cleanup) ----
-window.CL = window.CL || {};
-CL.grants = CL.grants || {};
-CL.grants.ui = CL.grants.ui || {};
+  // ---- Public API: back-compat dual exposure ----
+  window.CL = window.CL || {};
+  CL.grants = CL.grants || {};
+  CL.grants.ui = CL.grants.ui || {};
 
-// Every declaration above was a top-level (global) function before
-// extraction; mirror all to window so remaining inline code in
-// index.html keeps working unchanged.
-window.runFullAnalysis = runFullAnalysis;
+  // Every declaration above was a top-level (global) function before
+  // extraction; mirror all to window so remaining inline code in
+  // index.html keeps working unchanged.
+  window.runFullAnalysis = runFullAnalysis;
   window.scrollToGrantSearch = scrollToGrantSearch;
   window.scrollToWritingAssistant = scrollToWritingAssistant;
   window.populateGrantProgramDropdown = populateGrantProgramDropdown;
@@ -2262,20 +2263,5 @@ window.runFullAnalysis = runFullAnalysis;
   CL.grants.runGrant4AgentAnalysis = CL.grants.ui.runGrant4AgentAnalysis = runGrant4AgentAnalysis;
   CL.grants.updateGrantProgramUI = CL.grants.ui.updateGrantProgramUI = updateGrantProgramUI;
 
-export {
-    runFullAnalysis, scrollToGrantSearch, scrollToWritingAssistant,
-    populateGrantProgramDropdown, buildGrantWritingContext, openNewAppModal,
-    closeNewAppModal, showHelpModal, closeHelpModal, switchHelpTab,
-    toggleConceptCard, helpNavigateTo, showHowTo, saveNewApplication,
-    saveApplications, loadApplications, displayApplications, updateAppStatus,
-    deleteApplication, exportSingleApplication, exportAllApplications,
-    getGrantAISystemPrompt, getGrantSearchSystemPrompt,
-    getFullApplicationSystemPrompt, buildGrantProgramRequirements,
-    callGrantAgentWithRetry, runGrant4AgentAnalysis, buildGrantAgent1Input,
-    updateGrantProgramUI, download4AgentApplicationPDF,
-    download4AgentApplicationWord, showGrant4AgentLoadingModal,
-    hideGrant4AgentLoadingModal, updateGrant4AgentProgress,
-    generateGrant4AgentPDF, generateGrant4AgentWord
-};
-
-CL._registerModule('grants/grants-ui');
+  CL._registerModule('grants/grants-ui');
+})();

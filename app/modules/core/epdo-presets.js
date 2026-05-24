@@ -14,8 +14,9 @@
  *
  * Depends on (must load before this file): `core/epdo`, `core/constants`
  */
-'use strict';
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 /**
  * Auto-apply state-specific EPDO weights when using stateDefault preset.
@@ -247,38 +248,20 @@ function recalculateAllEPDO() {
     console.log('[EPDO] Full recalculation cascade complete');
 }
 
-// ─── EXTRACTED CODE END ───
+  // ─── EXTRACTED CODE END ───
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.core = CL.core || {};
-CL.core.applyStateDefaultEPDO = applyStateDefaultEPDO;
-CL.core.getEPDOPresetLabel = getEPDOPresetLabel;
-CL.core.loadEPDOPreset = loadEPDOPreset;
-CL.core.loadSavedEPDOPreset = loadSavedEPDOPreset;
-CL.core.recalculateAllEPDO = recalculateAllEPDO;
-CL.core.safeJsonParse = safeJsonParse;
-CL.core.saveCustomEPDOWeights = saveCustomEPDOWeights;
-CL.core.toggleEPDOSection = toggleEPDOSection;
-CL.core.updateEPDOPresetUI = updateEPDOPresetUI;
-CL.core.updateEPDOWeightLabels = updateEPDOWeightLabels;
-
-// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
-window.loadEPDOPreset = loadEPDOPreset;
-window.saveCustomEPDOWeights = saveCustomEPDOWeights;
-window.toggleEPDOSection = toggleEPDOSection;
-
-export {
-    applyStateDefaultEPDO,
-    getEPDOPresetLabel,
-    loadEPDOPreset,
-    loadSavedEPDOPreset,
-    recalculateAllEPDO,
-    safeJsonParse,
-    saveCustomEPDOWeights,
-    toggleEPDOSection,
-    updateEPDOPresetUI,
-    updateEPDOWeightLabels
-};
-
-CL._registerModule('core/epdo-presets');
+  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+  window.CL = window.CL || {};
+  CL.core = CL.core || {};
+  window.applyStateDefaultEPDO = applyStateDefaultEPDO; CL.core.applyStateDefaultEPDO = applyStateDefaultEPDO;
+  window.getEPDOPresetLabel = getEPDOPresetLabel; CL.core.getEPDOPresetLabel = getEPDOPresetLabel;
+  window.loadEPDOPreset = loadEPDOPreset; CL.core.loadEPDOPreset = loadEPDOPreset;
+  window.loadSavedEPDOPreset = loadSavedEPDOPreset; CL.core.loadSavedEPDOPreset = loadSavedEPDOPreset;
+  window.recalculateAllEPDO = recalculateAllEPDO; CL.core.recalculateAllEPDO = recalculateAllEPDO;
+  window.safeJsonParse = safeJsonParse; CL.core.safeJsonParse = safeJsonParse;
+  window.saveCustomEPDOWeights = saveCustomEPDOWeights; CL.core.saveCustomEPDOWeights = saveCustomEPDOWeights;
+  window.toggleEPDOSection = toggleEPDOSection; CL.core.toggleEPDOSection = toggleEPDOSection;
+  window.updateEPDOPresetUI = updateEPDOPresetUI; CL.core.updateEPDOPresetUI = updateEPDOPresetUI;
+  window.updateEPDOWeightLabels = updateEPDOWeightLabels; CL.core.updateEPDOWeightLabels = updateEPDOWeightLabels;
+  CL._registerModule('core/epdo-presets');
+})();

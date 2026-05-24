@@ -27,8 +27,9 @@
  * appConfig, crashState, clearMapSelection, updateMapDisplay,
  * getJurisdictionLabel, jurisdictionContext.
  */
-'use strict';
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 /**
  * Update the Stats overlay scope label so users see the active jurisdiction
@@ -292,36 +293,18 @@ function calculateNearbyCrashSeverity(crashes) {
     return { fatal, serious, total: crashes.length };
 }
 
-// ─── EXTRACTED CODE END ───
+  // ─── EXTRACTED CODE END ───
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.map = CL.map || {};
-CL.map.updateMapScopeLabel = updateMapScopeLabel;
-CL.map.searchMapboxAddresses = searchMapboxAddresses;
-CL.map.selectAddressResult = selectAddressResult;
-CL.map.clearMapAddressSearch = clearMapAddressSearch;
-CL.map.updateMapSearchClearButton = updateMapSearchClearButton;
-CL.map.findCrashesNearPoint = findCrashesNearPoint;
-CL.map.getDistanceMeters = getDistanceMeters;
-CL.map.calculateNearbyCrashSeverity = calculateNearbyCrashSeverity;
-
-// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
-// All 8 retained — clearMapAddressSearch + selectAddressResult are survivors;
-// the rest have inline callers outside the moved block (see module docstring).
-window.updateMapScopeLabel = updateMapScopeLabel;
-window.searchMapboxAddresses = searchMapboxAddresses;
-window.selectAddressResult = selectAddressResult;
-window.clearMapAddressSearch = clearMapAddressSearch;
-window.updateMapSearchClearButton = updateMapSearchClearButton;
-window.findCrashesNearPoint = findCrashesNearPoint;
-window.getDistanceMeters = getDistanceMeters;
-window.calculateNearbyCrashSeverity = calculateNearbyCrashSeverity;
-
-export {
-    updateMapScopeLabel, searchMapboxAddresses, selectAddressResult,
-    clearMapAddressSearch, updateMapSearchClearButton, findCrashesNearPoint,
-    getDistanceMeters, calculateNearbyCrashSeverity
-};
-
-CL._registerModule('map/map-layers');
+  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+  window.CL = window.CL || {};
+  CL.map = CL.map || {};
+  window.updateMapScopeLabel = updateMapScopeLabel; CL.map.updateMapScopeLabel = updateMapScopeLabel;
+  window.searchMapboxAddresses = searchMapboxAddresses; CL.map.searchMapboxAddresses = searchMapboxAddresses;
+  window.selectAddressResult = selectAddressResult; CL.map.selectAddressResult = selectAddressResult;
+  window.clearMapAddressSearch = clearMapAddressSearch; CL.map.clearMapAddressSearch = clearMapAddressSearch;
+  window.updateMapSearchClearButton = updateMapSearchClearButton; CL.map.updateMapSearchClearButton = updateMapSearchClearButton;
+  window.findCrashesNearPoint = findCrashesNearPoint; CL.map.findCrashesNearPoint = findCrashesNearPoint;
+  window.getDistanceMeters = getDistanceMeters; CL.map.getDistanceMeters = getDistanceMeters;
+  window.calculateNearbyCrashSeverity = calculateNearbyCrashSeverity; CL.map.calculateNearbyCrashSeverity = calculateNearbyCrashSeverity;
+  CL._registerModule('map/map-layers');
+})();

@@ -2,8 +2,6 @@
  * CrashLens Batch Before/After Evaluation — Processing Engine
  * Runs B/A analysis for each location using spatial crash filtering.
  */
-'use strict';
-
 window.CL = window.CL || {};
 CL.batchBA = CL.batchBA || {};
 

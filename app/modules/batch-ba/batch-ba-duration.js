@@ -3,8 +3,6 @@
  * Provides interactive UI for configuring before/after study periods per location,
  * with feasibility checks based on available crash data date range.
  */
-'use strict';
-
 window.CL = window.CL || {};
 CL.batchBA = CL.batchBA || {};
 CL.batchBA.duration = {};

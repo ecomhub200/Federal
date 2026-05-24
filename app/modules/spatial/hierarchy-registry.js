@@ -10,8 +10,9 @@
  *
  * Depends on (must load before this file): `core/constants`
  */
-'use strict';
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 const HierarchyRegistry = (() => {
     'use strict';
@@ -119,13 +120,11 @@ const HierarchyRegistry = (() => {
     };
 })();
 
-// ─── EXTRACTED CODE END ───
+  // ─── EXTRACTED CODE END ───
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.spatial = CL.spatial || {};
-CL.spatial.HierarchyRegistry = HierarchyRegistry;
-
-export { HierarchyRegistry };
-
-CL._registerModule('spatial/hierarchy-registry');
+  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+  window.CL = window.CL || {};
+  CL.spatial = CL.spatial || {};
+  window.HierarchyRegistry = HierarchyRegistry; CL.spatial.HierarchyRegistry = HierarchyRegistry;
+  CL._registerModule('spatial/hierarchy-registry');
+})();

@@ -2,9 +2,10 @@
  * CrashLens Grant Ranking Logic
  * Extracted from app/index.html — pure grant scoring computation
  */
-'use strict';
+window.CL = window.CL || {};
+CL.grants = CL.grants || {};
 
-export const ranking = {
+CL.grants.ranking = {
 
     /**
      * Calculate improved grant score for a location.
@@ -142,10 +143,5 @@ export const ranking = {
         };
     }
 };
-
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.grants = CL.grants || {};
-CL.grants.ranking = ranking;
 
 CL._registerModule('grants/ranking');

@@ -20,11 +20,9 @@
  *
  * Depends on (must load before this file): `core/constants`
  */
-'use strict';
-
-import { applyUploadTierUI } from '../upload/upload-tier-ui.js';
-
-// ─── EXTRACTED CODE START (verbatim from index.html) ───
+(function(){
+  'use strict';
+  // ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 function setViewTier(tier) {
     if (!TIER_TAB_VISIBILITY[tier]) { console.warn('[Scope] Unknown tier:', tier); return; }
@@ -151,8 +149,8 @@ async function handleTierChange(tier) {
         // ── Repaint upload tab for this tier (hide county dropdown in non-county
         // views, swap in the scope card, reset stale "loaded from delaware/kent"
         // success copy) BEFORE any async fetch so the UI never lies. ──
-        if (typeof applyUploadTierUI === 'function') {
-            applyUploadTierUI(tier);
+        if (CL.upload && CL.upload.tierUI && CL.upload.tierUI.applyUploadTierUI) {
+            CL.upload.tierUI.applyUploadTierUI(tier);
         }
 
         // ── Clear previous tier's boundary overlays ──
@@ -379,19 +377,14 @@ async function handleTierChange(tier) {
     }
 }
 
-// ─── EXTRACTED CODE END ───
+  // ─── EXTRACTED CODE END ───
 
-// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
-window.CL = window.CL || {};
-CL.core = CL.core || {};
-CL.core.handleTierChange = handleTierChange;
-CL.core.setViewTier = setViewTier;
-CL.core.updateTabVisibilityForTier = updateTabVisibilityForTier;
-CL.core.updateTierSelectorUI = updateTierSelectorUI;
-
-// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
-window.handleTierChange = handleTierChange;
-
-export { handleTierChange, setViewTier, updateTabVisibilityForTier, updateTierSelectorUI };
-
-CL._registerModule('core/tier');
+  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+  window.CL = window.CL || {};
+  CL.core = CL.core || {};
+  window.handleTierChange = handleTierChange; CL.core.handleTierChange = handleTierChange;
+  window.setViewTier = setViewTier; CL.core.setViewTier = setViewTier;
+  window.updateTabVisibilityForTier = updateTabVisibilityForTier; CL.core.updateTabVisibilityForTier = updateTabVisibilityForTier;
+  window.updateTierSelectorUI = updateTierSelectorUI; CL.core.updateTierSelectorUI = updateTierSelectorUI;
+  CL._registerModule('core/tier');
+})();
