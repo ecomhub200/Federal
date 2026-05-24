@@ -63,3 +63,6 @@ import './modules/upload/upload-pipeline.js';
 import './modules/upload/upload-tab.js';
 import './modules/data/supabase-bridge.js';
 import './modules/scorecard/scorecard.js';
+
+// batch-ba cluster (cyclic — runtime-safe via transitional CL.batchBA.*)
+import './modules/batch-ba/batch-ba-state.js';
