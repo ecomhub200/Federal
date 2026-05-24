@@ -23,8 +23,12 @@
  * Depends on (load before): spatial/aggregate-loader, spatial/federal-boundaries,
  * ui/skeletons, core/tier (all referenced lazily inside fn bodies).
  */
-(function(){
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+// NOTE (Stage A): Original IIFE wrapper was deliberately non-strict to preserve
+// the original inline <script>'s sloppy-mode semantics. ESM is implicitly strict;
+// the conversion template (STAGE_A_CONVERSION_TEMPLATE.md §1) accepts this.
+import * as prewarm from '../data/prewarm.js';
+
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 // ================================================================
 // Safety Scorecard — Jurisdiction Comparison & Ranking
@@ -90,7 +94,7 @@ const SCORECARD_COLUMNS = {
 };
 
 let _scorecardChart = null;   // Chart.js instance
-let _scorecardData  = [];     // latest fetched rows
+let window._scorecardData  = [];     // latest fetched rows
 let _scorecardSortCol  = 'rank_total_crashes';
 let _scorecardSortAsc  = true;
 let _scorecardInited   = false;
@@ -153,7 +157,7 @@ function setScorecardTier(tier) {
   _scorecardTierFilter = tier;
   _scorecardActivePill = tier;
   _renderTierPills(_scorecardActiveTier);
-  renderScorecardTable(_scorecardData);
+  renderScorecardTable(window._scorecardData);
   updateScorecardChart();
 }
 
@@ -183,7 +187,7 @@ function _renderTierPills(activeTier) {
     _scorecardActivePill = b.dataset.pill;
     _scorecardTierFilter = b.dataset.pill;
     wrap.querySelectorAll('.sc-pill').forEach(x => x.classList.toggle('active', x === b));
-    renderScorecardTable(_scorecardData);
+    renderScorecardTable(window._scorecardData);
     updateScorecardChart();
   }));
 }
@@ -196,7 +200,7 @@ function _renderTierPills(activeTier) {
   let _scorecardReloadTimer = null;
   let _scorecardLastReloadAt = 0;
   function _invalidateScorecard(reason) {
-    _scorecardData = [];
+    window._scorecardData = [];
     const activePanel = document.querySelector('.tab-content.active');
     if (activePanel && activePanel.id === 'tab-scorecard') {
       // Round 24 §5 — debounce reload. Three events fire on every state switch:
@@ -228,7 +232,7 @@ document.addEventListener('jurisdictionChanged', function () {
         var t = (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier)
             ? CL.data.supabaseBridge.resolveTier()
             : null;
-        if (t && CL.data.prewarm) CL.data.prewarm.schedule(t.tier, t.value);
+        if (t && prewarm) prewarm.schedule(t.tier, t.value);
     } catch (e) { /* non-fatal */ }
 });
 
@@ -308,9 +312,9 @@ async function loadScorecardData() {
       } else {
         data = await client.getFederalSummary(year, year);
       }
-      _scorecardData = data || [];
-      _renderFederalKpis(_scorecardData, year);
-      _renderChoropleth(_scorecardData);
+      window._scorecardData = data || [];
+      _renderFederalKpis(window._scorecardData, year);
+      _renderChoropleth(window._scorecardData);
       const kpiEl = document.getElementById('scorecard-federal-kpis');
       const choroEl = document.getElementById('scorecard-choropleth-wrap');
       if (kpiEl) kpiEl.style.display = 'grid';
@@ -319,12 +323,12 @@ async function loadScorecardData() {
       if (mode === 'compare') {
         const compareYear = parseInt(document.getElementById('scorecard-compare-year').value, 10);
         const compareData = await client.getFederalSummary(compareYear, compareYear);
-        renderComparisonTable(_scorecardData, compareData || [], year, compareYear);
+        renderComparisonTable(window._scorecardData, compareData || [], year, compareYear);
       } else {
-        renderScorecardTable(_scorecardData);
+        renderScorecardTable(window._scorecardData);
       }
       updateScorecardChart();
-      const banner = (_scorecardData.length === 1)
+      const banner = (window._scorecardData.length === 1)
         ? ' (1 of 51 states ingested — auto-grows as backend ingests more)'
         : '';
       if (statusEl) statusEl.textContent = `${_scorecardData.length} state${_scorecardData.length===1?'':'s'} · ${mode === 'rolling' ? (year-2)+'–'+year : year}${banner}`;
@@ -370,12 +374,12 @@ async function loadScorecardData() {
       data = await client.getScorecard(stateKey, year, opts);
     }
 
-    _scorecardData = data || [];
+    window._scorecardData = data || [];
 
     // Empty-state UI — current state has no rows in the scorecard_rankings
     // matview yet; tell the user the front-end is ready and the backend
     // pipeline is the gate.
-    if (_scorecardData.length === 0) {
+    if (window._scorecardData.length === 0) {
       const tbody = document.getElementById('scorecardBody');
       const thead = document.getElementById('scorecardHead');
       if (thead) thead.innerHTML = '<tr><th colspan="99" style="text-align:left;padding:1rem;color:#475569">No scorecard data available for ' + stateKey + ' (' + year + ').</th></tr>';
@@ -414,7 +418,7 @@ async function loadScorecardData() {
         const last5 = Array.from(yearsByJuris[juris]).sort((a, b) => a - b).slice(-5);
         sparkByJuris[juris] = last5.map(y => totalsByJurisYear[juris + '|' + y] || 0);
       });
-      _scorecardData.forEach(r => {
+      window._scorecardData.forEach(r => {
         const arr = sparkByJuris[r.jurisdiction];
         if (arr && arr.length >= 2) r.spark_5yr = arr;
       });
@@ -430,9 +434,9 @@ async function loadScorecardData() {
         const arr = sparkByJuris[r.jurisdiction];
         if (arr && arr.length >= 2) r.spark_5yr = arr;
       });
-      renderComparisonTable(_scorecardData, compareData || [], year, compareYear);
+      renderComparisonTable(window._scorecardData, compareData || [], year, compareYear);
     } else {
-      renderScorecardTable(_scorecardData);
+      renderScorecardTable(window._scorecardData);
     }
 
     updateScorecardChart();
@@ -975,38 +979,56 @@ document.addEventListener('CL:tierChanged', () => {
 // END SAFETY SCORECARD MODULE
 // ================================================================
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.scorecard = CL.scorecard || {};
-  window._aggregateRolling = _aggregateRolling; CL.scorecard._aggregateRolling = _aggregateRolling;
-  window._escapeAttr = _escapeAttr; CL.scorecard._escapeAttr = _escapeAttr;
-  window._heatColor = _heatColor; CL.scorecard._heatColor = _heatColor;
-  window._inferScorecardTier = _inferScorecardTier; CL.scorecard._inferScorecardTier = _inferScorecardTier;
-  window._loadChoroplethDeps = _loadChoroplethDeps; CL.scorecard._loadChoroplethDeps = _loadChoroplethDeps;
-  window._matchesPeerPill = _matchesPeerPill; CL.scorecard._matchesPeerPill = _matchesPeerPill;
-  window._rankColor = _rankColor; CL.scorecard._rankColor = _rankColor;
-  window._renderChoropleth = _renderChoropleth; CL.scorecard._renderChoropleth = _renderChoropleth;
-  window._renderFederalKpis = _renderFederalKpis; CL.scorecard._renderFederalKpis = _renderFederalKpis;
-  window._renderTierPills = _renderTierPills; CL.scorecard._renderTierPills = _renderTierPills;
-  window._rerank = _rerank; CL.scorecard._rerank = _rerank;
-  window._spark = _spark; CL.scorecard._spark = _spark;
-  window._statePopulation = _statePopulation; CL.scorecard._statePopulation = _statePopulation;
-  window._titleCase = _titleCase; CL.scorecard._titleCase = _titleCase;
-  window.exportScorecardCSV = exportScorecardCSV; CL.scorecard.exportScorecardCSV = exportScorecardCSV;
-  window.initScorecardTab = initScorecardTab; CL.scorecard.initScorecardTab = initScorecardTab;
-  window.loadScorecardData = loadScorecardData; CL.scorecard.loadScorecardData = loadScorecardData;
-  window.onScorecardModeChange = onScorecardModeChange; CL.scorecard.onScorecardModeChange = onScorecardModeChange;
-  window.renderComparisonTable = renderComparisonTable; CL.scorecard.renderComparisonTable = renderComparisonTable;
-  window.renderScorecardTable = renderScorecardTable; CL.scorecard.renderScorecardTable = renderScorecardTable;
-  window.resetScorecardPins = resetScorecardPins; CL.scorecard.resetScorecardPins = resetScorecardPins;
-  window.scorecardDrillDown = scorecardDrillDown; CL.scorecard.scorecardDrillDown = scorecardDrillDown;
-  window.scorecardSort = scorecardSort; CL.scorecard.scorecardSort = scorecardSort;
-  window.setScorecardTier = setScorecardTier; CL.scorecard.setScorecardTier = setScorecardTier;
-  window.updateScorecardChart = updateScorecardChart; CL.scorecard.updateScorecardChart = updateScorecardChart;
-  // Live getter so the 2 inline HTML handlers (renderScorecardTable(_scorecardData))
-  // keep seeing the current, reassigned module-private _scorecardData.
-  try { Object.defineProperty(window, '_scorecardData', { get: function(){ return _scorecardData; }, configurable: true }); } catch (e) {}
-  CL._registerModule('scorecard/scorecard');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.scorecard = CL.scorecard || {};
+CL.scorecard._aggregateRolling = _aggregateRolling;
+CL.scorecard._escapeAttr = _escapeAttr;
+CL.scorecard._heatColor = _heatColor;
+CL.scorecard._inferScorecardTier = _inferScorecardTier;
+CL.scorecard._loadChoroplethDeps = _loadChoroplethDeps;
+CL.scorecard._matchesPeerPill = _matchesPeerPill;
+CL.scorecard._rankColor = _rankColor;
+CL.scorecard._renderChoropleth = _renderChoropleth;
+CL.scorecard._renderFederalKpis = _renderFederalKpis;
+CL.scorecard._renderTierPills = _renderTierPills;
+CL.scorecard._rerank = _rerank;
+CL.scorecard._spark = _spark;
+CL.scorecard._statePopulation = _statePopulation;
+CL.scorecard._titleCase = _titleCase;
+CL.scorecard.exportScorecardCSV = exportScorecardCSV;
+CL.scorecard.initScorecardTab = initScorecardTab;
+CL.scorecard.loadScorecardData = loadScorecardData;
+CL.scorecard.onScorecardModeChange = onScorecardModeChange;
+CL.scorecard.renderComparisonTable = renderComparisonTable;
+CL.scorecard.renderScorecardTable = renderScorecardTable;
+CL.scorecard.resetScorecardPins = resetScorecardPins;
+CL.scorecard.scorecardDrillDown = scorecardDrillDown;
+CL.scorecard.scorecardSort = scorecardSort;
+CL.scorecard.setScorecardTier = setScorecardTier;
+CL.scorecard.updateScorecardChart = updateScorecardChart;
+
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
+window.exportScorecardCSV = exportScorecardCSV;
+window.loadScorecardData = loadScorecardData;
+window.onScorecardModeChange = onScorecardModeChange;
+window.renderScorecardTable = renderScorecardTable;
+window.resetScorecardPins = resetScorecardPins;
+window.updateScorecardChart = updateScorecardChart;
+// Live getter so the 2 inline HTML handlers (renderScorecardTable(_scorecardData))
+// keep seeing the current, reassigned module-private _scorecardData.
+try { Object.defineProperty(window, '_scorecardData', { get: function(){ return _scorecardData; }, configurable: true }); } catch (e) {}
+
+export {
+    _aggregateRolling, _escapeAttr, _heatColor, _inferScorecardTier,
+    _loadChoroplethDeps, _matchesPeerPill, _rankColor, _renderChoropleth,
+    _renderFederalKpis, _renderTierPills, _rerank, _spark, _statePopulation,
+    _titleCase, exportScorecardCSV, initScorecardTab, loadScorecardData,
+    onScorecardModeChange, renderComparisonTable, renderScorecardTable,
+    resetScorecardPins, scorecardDrillDown, scorecardSort, setScorecardTier,
+    updateScorecardChart
+};
+
+CL._registerModule('scorecard/scorecard');
