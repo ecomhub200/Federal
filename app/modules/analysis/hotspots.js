@@ -2,10 +2,9 @@
  * CrashLens Hotspot Scoring Math
  * Extracted from app/index.html — pure scoring and ranking computations
  */
-window.CL = window.CL || {};
-CL.analysis = CL.analysis || {};
+'use strict';
 
-CL.analysis.hotspots = {
+export const hotspots = {
 
     /**
      * Score and rank location data into hotspot entries.
@@ -55,5 +54,10 @@ CL.analysis.hotspots = {
         return hotspots;
     }
 };
+
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.analysis = CL.analysis || {};
+CL.analysis.hotspots = hotspots;
 
 CL._registerModule('analysis/hotspots');
