@@ -24,3 +24,4 @@ import './modules/loader.js';
 // --- L1: leaf modules (no cross-module imports) ----------------------------
 import './modules/core/constants.js';
 import './modules/core/epdo.js';
+import './modules/utils/date-utils.js';
