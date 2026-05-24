@@ -10,12 +10,9 @@
  * Dependencies: StateAdapter, Papa (PapaParse), CL.upload, HierarchyRegistry
  * Globals accessed: crashState, appConfig
  */
-window.CL = window.CL || {};
-CL.upload = CL.upload || {};
-CL.upload.pipeline = CL.upload.pipeline || {};
+'use strict';
 
-(function() {
-    'use strict';
+import { constants } from '../core/constants.js';
 
     // Pipeline state
     var pipelineState = {
@@ -531,7 +528,7 @@ CL.upload.pipeline = CL.upload.pipeline || {};
         updateStage(3, 'active');
         updateProgress(55, 'Checking GPS coordinates...');
 
-        var COL = (typeof CL !== 'undefined' && CL.core && CL.core.constants) ? CL.core.constants.COL : null;
+        var COL = constants.COL;
         var withGPS = 0, withoutGPS = 0;
 
         if (COL) {
@@ -757,17 +754,37 @@ CL.upload.pipeline = CL.upload.pipeline || {};
     // PUBLIC API
     // ============================================================
 
-    CL.upload.pipeline = {
-        state: pipelineState,
-        init: _initStateDropdown,
-        handleFileSelect: handleFileSelect,
-        handleFileDrop: handleFileDrop,
-        handleStateChange: handleStateChange,
-        handleTierChange: handleTierChange,
-        updateR2PathPreview: updateR2PathPreview,
-        buildR2DestinationPath: buildR2DestinationPath,
-        startPipeline: startPipeline
-    };
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.upload = CL.upload || {};
+CL.upload.pipeline = {
+    state: pipelineState,
+    init: _initStateDropdown,
+    handleFileSelect: handleFileSelect,
+    handleFileDrop: handleFileDrop,
+    handleStateChange: handleStateChange,
+    handleTierChange: handleTierChange,
+    updateR2PathPreview: updateR2PathPreview,
+    buildR2DestinationPath: buildR2DestinationPath,
+    startPipeline: startPipeline
+};
 
-    CL._registerModule('upload/upload-pipeline');
-})();
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md
+//      watch list — handleFileSelect promoted to survivor after Item 1; the
+//      handleTierChange mirror preserves pre-Stage-A last-write-wins behavior
+//      against core/tier.js's own window.handleTierChange) ---
+window.handleFileSelect = handleFileSelect;
+window.handleTierChange = handleTierChange;
+
+export {
+    pipelineState,
+    handleFileSelect,
+    handleFileDrop,
+    handleStateChange,
+    handleTierChange,
+    updateR2PathPreview,
+    buildR2DestinationPath,
+    startPipeline
+};
+
+CL._registerModule('upload/upload-pipeline');
