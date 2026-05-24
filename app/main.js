@@ -75,3 +75,6 @@ import './modules/batch-ba/batch-ba-export-csv.js';
 import './modules/batch-ba/batch-ba-export-kml.js';
 import './modules/batch-ba/batch-ba-export-pdf.js';
 import './modules/batch-ba/batch-ba-export-pdf-details.js';
+
+// --- L3: singleton-slot / inline consumers ----------------------------------
+import './modules/app/tab-dispatcher.js';

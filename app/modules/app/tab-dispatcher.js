@@ -11,9 +11,8 @@
  *
  * Depends on (must load before this file): `(every feature tab module — all must load before this)`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 function showTab(tabId) {
     console.log('[CrashLens] Tab switched to:', tabId,
@@ -381,12 +380,18 @@ if (window._pendingNavigation) {
     setTimeout(function() { navigateTo(pending); }, 100);
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.app = CL.app || {};
-  window.showTab = showTab; CL.app.showTab = showTab;
-  window.navigateTo = navigateTo; CL.app.navigateTo = navigateTo;
-  CL._registerModule('app/tab-dispatcher');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.app = CL.app || {};
+CL.app.showTab = showTab;
+CL.app.navigateTo = navigateTo;
+
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
+window.showTab = showTab;
+window.navigateTo = navigateTo;
+
+export { showTab, navigateTo };
+
+CL._registerModule('app/tab-dispatcher');
