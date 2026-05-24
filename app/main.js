@@ -41,3 +41,4 @@ import './modules/grants/ranking.js';
 import './modules/warrants/signal.js';
 import './modules/warrants/signal-tmc.js';
 import './modules/warrants/signal-thresholds.js';
+import './modules/spatial/hierarchy-registry.js';
