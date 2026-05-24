@@ -19504,6 +19504,7 @@ const jurisdictionContext = {
     // --- Multi-tier expansion properties (merged from _TIER_EXTENSIONS) ---
     ..._TIER_EXTENSIONS
 };
+window.jurisdictionContext = jurisdictionContext;
 
 /**
  * Update the global jurisdiction context and notify all listeners.
@@ -22197,6 +22198,7 @@ const crashState = {
         }
     }
 };
+window.crashState = crashState;
 
 // ============================================================
 // GEOCODING STATE — In-browser GPS coordinate recovery
@@ -22312,6 +22314,7 @@ const crashTreeState = {
     // Report generation
     lastReport: null
 };
+window.crashTreeState = crashTreeState;
 
 // ============================================================
 // DATA CONNECTION MANAGEMENT SYSTEM
