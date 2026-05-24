@@ -3,6 +3,8 @@
  * Renders before/after bar chart, CMF distribution, severity shift, scatter plot.
  * All charts include plain-English descriptions for layperson accessibility.
  */
+'use strict';
+
 window.CL = window.CL || {};
 CL.batchBA = CL.batchBA || {};
 
