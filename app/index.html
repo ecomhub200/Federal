@@ -19454,6 +19454,7 @@ const r2State = {
 
 // Dynamic config - loaded from config.json
 let appConfig = null;
+window.appConfig = appConfig;
 let appSettings = null; // Settings from APP_PATHS.SETTINGS
 let MAP_CENTER = [39.33, -104.93]; // Default fallback (Douglas County, CO)
 let MAP_ZOOM = 11;
@@ -19475,6 +19476,7 @@ const jurisdictionContext = {
     // --- Multi-tier expansion properties (merged from _TIER_EXTENSIONS) ---
     ..._TIER_EXTENSIONS
 };
+window.jurisdictionContext = jurisdictionContext;
 
 /**
  * Update the global jurisdiction context and notify all listeners.
@@ -19879,7 +19881,9 @@ const configReadyPromise = new Promise(resolve => { _configReadyResolve = resolv
 
 // Config path can await userDataReadyPromise to apply profile before first data load
 let _userDataReadyResolve;
+window._userDataReadyResolve = _userDataReadyResolve;
 const userDataReadyPromise = new Promise(resolve => { _userDataReadyResolve = resolve; });
+window._userDataReadyResolve = _userDataReadyResolve;
 // Safety timeout: don't block startup forever if auth is slow or disabled
 setTimeout(() => { _userDataReadyResolve(null); }, 3000);
 
@@ -19908,6 +19912,7 @@ async function loadAppConfig() {
         console.log('[Config] Fetching config from:', APP_PATHS.CONFIG);
         const response = await fetchWithRetry(APP_PATHS.CONFIG);
         appConfig = await response.json();
+        window.appConfig = appConfig;
         window.appConfig = appConfig; // Expose globally for transit and other modules
 
         // Validate config structure
@@ -20063,6 +20068,7 @@ async function loadAppConfig() {
             console.log('[Config] Using cached config as fallback');
             appConfig = cachedConfig;
             window.appConfig = appConfig;
+            window.appConfig = appConfig;
 
             populateStateDropdown();
             populateJurisdictionDropdown();
@@ -20082,6 +20088,7 @@ async function loadAppConfig() {
 
         // Create minimal fallback config
         appConfig = getMinimalFallbackConfig();
+        window.appConfig = appConfig;
         window.appConfig = appConfig;
 
         // Populate with fallback
@@ -22168,6 +22175,7 @@ const crashState = {
         }
     }
 };
+window.crashState = crashState;
 
 // ============================================================
 // GEOCODING STATE — In-browser GPS coordinate recovery
@@ -22283,6 +22291,7 @@ const crashTreeState = {
     // Report generation
     lastReport: null
 };
+window.crashTreeState = crashTreeState;
 
 // ============================================================
 // DATA CONNECTION MANAGEMENT SYSTEM
@@ -22737,6 +22746,7 @@ const grantState = {
     minCrashThreshold: 3,      // Minimum crashes to include location
     baselines: null             // County-wide baselines for improved grant scoring
 };
+window.grantState = grantState;
 
 // District-level crash statistics state (Magisterial Districts / County Subdivisions)
 const districtState = {
@@ -23484,6 +23494,7 @@ const warrantsState = {
     // Selection timestamp for AI context priority ordering
     selectionTimestamp: null
 };
+window.warrantsState = warrantsState;
 
 // ============================================================
 // WARRANT ANALYSIS INDEXEDDB STORAGE SYSTEM
@@ -27968,6 +27979,7 @@ function mergeUploadedFile(file) {
 // Concurrency guard: prevents multiple simultaneous autoLoadCrashData calls
 // from racing and double-populating crashState.mapPoints
 let _autoLoadGeneration = 0;
+window._autoLoadGeneration = _autoLoadGeneration;
 
 // Auto-load crash data based on settings and selected road type filter
 // Now with IndexedDB caching for faster repeat loads
@@ -28094,6 +28106,7 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
     // Increment generation counter — any in-flight load with an older generation
     // will detect it has been superseded and bail out at key checkpoints.
     const myGeneration = ++_autoLoadGeneration;
+    window._autoLoadGeneration = _autoLoadGeneration;
     console.log('[CrashLens] Data load started at', new Date().toISOString(),
                 '(autoLoad gen ' + myGeneration + ', skipCache=' + skipCache + ')');
     console.log(`[AutoLoad] Generation ${myGeneration} starting (skipCache=${skipCache})`);
@@ -59640,6 +59653,7 @@ const baState = {
     mapSelection: null,
     monitoringActive: false
 };
+window.baState = baState;
 
 // Switch between Single Location and Batch Evaluation modes
 function switchBAMode(mode) {
@@ -65281,6 +65295,7 @@ const cmfState = {
         preset: null  // '1yr', '3yr', '5yr', or null for custom/all
     }
 };
+window.cmfState = cmfState;
 
 
 // ============================================================
