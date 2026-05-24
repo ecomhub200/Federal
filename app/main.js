@@ -32,3 +32,4 @@ import './modules/data/matview-cache.js';
 import './modules/data/tab-loaders.js';
 import './modules/data/lazy-loader.js';
 import './modules/data/supabase-map-bridge.js';
+import './modules/data/chunk-loader.js';
