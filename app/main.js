@@ -56,3 +56,6 @@ import './modules/assets/asset-export.js';
 import './modules/assets/school-tab.js';
 import './modules/assets/transit-tab.js';
 import './modules/worker/sample-rows-loader.js';
+
+// --- L2: one-hop dependents -------------------------------------------------
+import './modules/core/tier.js';
