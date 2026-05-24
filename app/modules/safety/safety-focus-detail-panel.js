@@ -179,14 +179,45 @@ async function aggregateSfDetailData() {
                     console.log('[SafetyDetail] matview fallback hydrated', rows.length,
                         'rows for', category, '→ total:', data.total,
                         'K:', data.severity.K, 'A:', data.severity.A, 'EPDO:', data.epdo);
+                    // CC 213 SF3 — surface speed/senior/young/impaired/
+                    // distracted co-factor counts from
+                    // mv_safety_co_factors (merged onto
+                    // safetyState.data[cat] at init time by
+                    // _hydrateSafetyCoFactors) so the Contributing
+                    // Factors and Demographics cards render real numbers
+                    // instead of zeros. Scaling: the matview counts are
+                    // jurisdiction-wide for the category; multi-location
+                    // selection in the detail panel can't slice them, so
+                    // they're shown as the category-wide totals
+                    // (consistent with the existing matview-mode
+                    // category-total UX).
+                    if (catData) {
+                        data.factors.speed       = catData.speed_count      || 0;
+                        data.factors.distracted  = catData.distracted_count || 0;
+                        data.factors.alcohol     = catData.impaired_count   || 0;
+                        data.demographics.senior = catData.senior_count     || 0;
+                        data.demographics.young  = catData.young_count      || 0;
+                    }
+                    // CC 213 SF4 — replace the synthesized first_year..
+                    // last_year byYear estimate with real per-year totals
+                    // from mv_safety_categories_yearly (hydrated by
+                    // _hydrateSafetyCategoryYearly when the category was
+                    // selected). Falls back to the synthesized values if
+                    // the per-year hydration hasn't completed.
+                    if (catData && catData.byYear && Object.keys(catData.byYear).length > 0) {
+                        data.byYear = {};
+                        Object.keys(catData.byYear).forEach(y => {
+                            data.byYear[y] = { total: catData.byYear[y] || 0,
+                                K: 0, A: 0, B: 0, C: 0, O: 0 };
+                        });
+                    }
                     // CC 208 — flag matview-only aggregates so renderers can
                     // surface gap state on sub-KPIs that the matview cannot
-                    // populate (factors.alcohol/speed/distracted/drowsy/drug/
-                    // hitrun, demographics.senior/young/unrestrained, byMonth,
-                    // byDOW, byHour, byCollision, byWeather, bySurface,
-                    // byTrafficControl). Nighttime + intersection breakdowns
-                    // are already populated via byLight['Dark'] and
-                    // byIntType['At Intersection'].
+                    // populate (factors.drowsy/drug/hitrun,
+                    // demographics.unrestrained, byMonth, byDOW, byHour,
+                    // byCollision, byWeather, bySurface, byTrafficControl).
+                    // Nighttime + intersection breakdowns are populated via
+                    // byLight['Dark'] and byIntType['At Intersection'].
                     data._matviewMode = true;
                     sfDetailState.aggregatedData = data;
                     return;   // skip the per-row loop below

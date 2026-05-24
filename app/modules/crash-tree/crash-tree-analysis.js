@@ -230,6 +230,120 @@
   window.CL.crashTree._hydrateRiskFactorsFromMatviews = _hydrateRiskFactorsFromMatviews;
   window.CL.crashTree._computeRiskScore = _computeRiskScore;
 
+  // CC 213 CT2 — Live-panel risk-factor render from
+  // mv_safety_co_factors. Aggregates the per-category co-factor counts
+  // (speed/senior/young/nighttime/impaired/distracted) into a flat
+  // top-factors list. Used at aggregate tiers where row-level
+  // analyzeRiskFactors() can't compute FHWA over-rep ratios.
+  // PDF-report export still uses CC 212's
+  // _hydrateRiskFactorsFromMatviews (mv_safety_categories) for the
+  // over-rep table — distinct concern.
+  const _hydrateRiskFactorsFromMatview = async (el) => {
+      if (!el) return;
+      const dc = (window.CL && CL.data && CL.data.client) || window.crashLensClient;
+      if (!dc || typeof dc.getSafetyCoFactors !== 'function'
+          || !CL.data || !CL.data.supabaseBridge
+          || typeof CL.data.supabaseBridge.resolveTier !== 'function') {
+          el.innerHTML =
+              '<div style="text-align:center;padding:1rem;color:var(--gray);font-size:.75rem;">'
+              + 'Risk factor analysis unavailable — data client not initialized.'
+              + '</div>';
+          return;
+      }
+      el.innerHTML =
+          '<div style="text-align:center;padding:.75rem;color:var(--gray);font-size:.75rem;">'
+          + '⏳ Loading risk factors…'
+          + '</div>';
+      try {
+          const t = CL.data.supabaseBridge.resolveTier();
+          const coFactors = await CL.data.cachedMatview(
+              'mv_safety_co_factors', t.tier, t.value,
+              () => dc.getSafetyCoFactors(t.tier, t.value, {})
+          );
+          // Sum each co-factor across every category in scope. total
+          // is the sum of category totals — used as the denominator for
+          // the displayed % share. ksi is reported separately.
+          const totals = {
+              speed: 0, senior: 0, young: 0, nighttime: 0,
+              impaired: 0, distracted: 0, ksi: 0, total: 0,
+          };
+          Object.values(coFactors || {}).forEach(cat => {
+              totals.speed      += cat.speed_count      || 0;
+              totals.senior     += cat.senior_count     || 0;
+              totals.young      += cat.young_count      || 0;
+              totals.nighttime  += cat.nighttime_count  || 0;
+              totals.impaired   += cat.impaired_count   || 0;
+              totals.distracted += cat.distracted_count || 0;
+              totals.ksi        += cat.ksi_count        || 0;
+              totals.total      += cat.total            || 0;
+          });
+          if (totals.total === 0) {
+              el.innerHTML =
+                  '<div style="text-align:center;padding:1rem;color:var(--gray);font-size:.75rem;">'
+                  + 'Risk factor analysis unavailable — no co-factor data for this jurisdiction.'
+                  + '</div>';
+              return;
+          }
+          const labels = {
+              speed: '⚡ Speed-Related', senior: '👴 Senior Driver',
+              young: '🧒 Young Driver', nighttime: '🌙 Nighttime',
+              impaired: '🍺 Alcohol/Impaired', distracted: '📱 Distracted',
+          };
+          const sorted = Object.entries(totals)
+              .filter(([k]) => k !== 'total' && k !== 'ksi')
+              .sort((a, b) => b[1] - a[1]);
+          // Persist a simplified analyzed[] for downstream consumers
+          // (state inspection, smoke tests). Shape mirrors the
+          // mv_safety_categories analyzed[] keys consumers expect:
+          // { name, ratio (n/a here), allCount, allPct }.
+          const analyzed = sorted.map(([key, count]) => ({
+              name: labels[key].replace(/^[^\s]+\s/, '') || key,
+              icon: labels[key].split(' ')[0] || '',
+              allCount: count,
+              allPct: (count / totals.total * 100).toFixed(1),
+              ratio: 'n/a',
+              overrep: false,
+              severity: 'low',
+          }));
+          crashTreeState.riskFactors.analyzed = analyzed;
+          crashTreeState.riskFactors.score = 0;
+          const rows = sorted.map(([key, count]) => {
+              const pct = (count / totals.total * 100).toFixed(1);
+              const widthPct = Math.min(100, (count / totals.total * 100));
+              return `
+                  <div style="padding:.4rem .25rem;border-bottom:1px solid #e5e7eb;">
+                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem;">
+                          <span style="font-size:.75rem;color:#374151;">${labels[key]}</span>
+                          <span style="font-size:.75rem;font-weight:600;color:#0369a1;">
+                              ${count.toLocaleString()}
+                              <span style="color:#6b7280;font-weight:400;">(${pct}%)</span>
+                          </span>
+                      </div>
+                      <div style="height:4px;background:#f1f5f9;border-radius:2px;overflow:hidden;">
+                          <div style="height:100%;width:${widthPct}%;background:#3b82f6;"></div>
+                      </div>
+                  </div>`;
+          }).join('');
+          el.innerHTML = `
+              <div style="padding:.4rem;">
+                  <div style="font-size:.7rem;color:#6b7280;margin-bottom:.4rem;">
+                      Top contributing factors across ${totals.total.toLocaleString()} crashes
+                      (matview aggregates; FHWA over-rep ratios require row-level data).
+                  </div>
+                  ${rows}
+              </div>`;
+          console.log('[CrashTree] Risk factors hydrated from mv_safety_co_factors '
+              + '(total=' + totals.total + ')');
+      } catch (e) {
+          console.warn('[CrashTree] _hydrateRiskFactorsFromMatview failed:', e && e.message);
+          el.innerHTML =
+              '<div style="text-align:center;padding:1rem;color:#dc2626;font-size:.75rem;">'
+              + 'Risk factor hydration failed: ' + (e && e.message ? e.message : 'unknown error')
+              + '</div>';
+      }
+  };
+  window.CL.crashTree._hydrateRiskFactorsFromMatview = _hydrateRiskFactorsFromMatview;
+
   // ─── EXTRACTED CODE START (verbatim from index.html L85854-L86248) ───
 // Update data table
 function updateCrashTreeDataTable() {
@@ -275,42 +389,18 @@ function updateCrashTreeDataTable() {
 // Analyze risk factors with FHWA-style overrepresentation
 function analyzeRiskFactors() {
     const el = document.getElementById('crashTreeRiskFactors');
-    if (!el || !crashState.loaded) return;
+    if (!el) return;
 
-    // Matview-only mode: row-level fields (NIGHT, SPEED, WEATHER, PED,
-    // BIKE) are unavailable. CC 212: hydrate from mv_safety_categories +
-    // dashboard_summary so the FHWA overrepresentation panel renders real
-    // ratios. Render a loading state synchronously, then overwrite with
-    // the real panel (success) or fall back to the unavailable placeholder
-    // (no client / no data / no overrepresented categories).
-    if (_isSupabaseMode()) {
-        el.innerHTML = `
-            <div class="ct-risk-empty" style="text-align:center;padding:.75rem;color:var(--gray);font-size:.75rem;line-height:1.4;">
-              <div style="font-size:1.25rem;margin-bottom:.25rem;">⏳</div>
-              <div>Loading risk-factor analysis from matviews…</div>
-            </div>`;
-        crashTreeState.riskFactors.analyzed = [];
-        crashTreeState.riskFactors.score = 0;
-        const _placeholderHtml = `
-            <div class="ct-risk-empty" style="text-align:center;padding:.75rem;color:var(--gray);font-size:.75rem;line-height:1.4;">
-              <div style="font-size:1.25rem;margin-bottom:.25rem;">📊</div>
-              <div style="font-weight:600;color:#374151;margin-bottom:.2rem;">Risk-factor analysis unavailable at this scope</div>
-              <div>Drill into a smaller area (city, intersection, or corridor) to see row-level risk-factor ratios.</div>
-            </div>`;
-        _hydrateRiskFactorsFromMatviews().then(hydrated => {
-            if (!hydrated || hydrated.length === 0) {
-                el.innerHTML = _placeholderHtml;
-                return;
-            }
-            const riskScore = _computeRiskScore(hydrated);
-            crashTreeState.riskFactors.analyzed = hydrated;
-            crashTreeState.riskFactors.score = riskScore;
-            _renderRiskFactorsPanel(el, hydrated, riskScore);
-        }).catch(e => {
-            console.warn('[CrashTree] risk factor matview hydration failed:', e && e.message);
-            el.innerHTML = _placeholderHtml;
-        });
-        return;
+    // CC 213 CT2: when row-level crashes aren't loaded (aggregate tiers
+    // skip R2, so crashState.loaded === false), hydrate the panel from
+    // mv_safety_co_factors aggregates. The CC 212 _isSupabaseMode()
+    // branch below was never reachable because the previous
+    // `!crashState.loaded` early-exit fired first. Keep CC 212's helpers
+    // available for crash-tree-export.js (PDF report uses FHWA ratios
+    // from mv_safety_categories) — only the live-panel render switches
+    // to the richer mv_safety_co_factors source.
+    if (!crashState.loaded || _isSupabaseMode()) {
+        return _hydrateRiskFactorsFromMatview(el);
     }
 
     // FHWA overrepresentation requires ALL crashes (not severity-filtered) as baseline
