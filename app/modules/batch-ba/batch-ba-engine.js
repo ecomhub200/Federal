@@ -2,6 +2,8 @@
  * CrashLens Batch Before/After Evaluation — Processing Engine
  * Runs B/A analysis for each location using spatial crash filtering.
  */
+'use strict';
+
 window.CL = window.CL || {};
 CL.batchBA = CL.batchBA || {};
 
@@ -15,7 +17,7 @@ CL.batchBA.startProcessing = function() {
         alert('No valid locations to process. Please upload and validate a file first.');
         return;
     }
-    if (!crashState || !crashState.mapPoints || crashState.mapPoints.length === 0) {
+    if (!window.crashState || !window.crashState.mapPoints || window.crashState.mapPoints.length === 0) {
         alert('No crash data loaded. Please load crash data before running batch analysis.');
         return;
     }
@@ -250,7 +252,7 @@ CL.batchBA._analyzeLocation = function(location, locationIndex) {
  * Find all crashes within a radius (meters) of a lat/lng using Haversine.
  */
 CL.batchBA._findCrashesInRadius = function(lat, lng, radiusMeters) {
-    var points = crashState.mapPoints || [];
+    var points = window.crashState.mapPoints || [];
     var results = [];
     for (var i = 0; i < points.length; i++) {
         var p = points[i];

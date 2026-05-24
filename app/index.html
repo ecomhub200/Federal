@@ -4446,84 +4446,27 @@ textarea:focus-visible {
 <script src="../assets/js/supabase-auth.js?v=migration-phase1"></script>
 <script src="../assets/js/auth.js?v=2"></script>
 
-<!-- CrashLens Module System -->
-<script src="modules/loader.js"></script>
-<!-- Core modules -->
-<script src="modules/core/constants.js"></script>
-<script src="modules/core/epdo.js"></script>
-<!-- Utility modules -->
-<script src="modules/utils/date-utils.js"></script>
-<!-- Analysis modules -->
-<script src="modules/analysis/crash-profile.js"></script>
-<script src="modules/analysis/baselines.js"></script>
-<script src="modules/analysis/hotspots.js"></script>
+<!-- CrashLens Module System — STAGE A cutover: 61 modules consolidated into main.js (ESM) -->
+<script type="module" src="main.js"></script>
+<!-- Non-Stage-A modules (still classic IIFE; converted in a later stage) -->
 <script src="modules/analysis/filter-aggregation.js"></script>
 <script src="modules/hotspots/hotspots-tab-core.js"></script>
 <script src="modules/hotspots/hotspots-tab-render.js"></script>
 <script src="modules/hotspots/hotspots-tab-modal.js"></script>
 <script src="modules/analysis/analysis-tab.js"></script>
 <script src="modules/analysis/analysis-tab-orchestrator.js"></script>
-<!-- Domain modules -->
-<script src="modules/warrants/signal.js"></script>
-<!-- AI modules -->
-<script src="modules/ai/context.js"></script>
-<!-- Grant modules -->
-<script src="modules/grants/ranking.js"></script>
 <script src="modules/grants/grants-rank-init.js"></script>
 <script src="modules/grants/grants-rank-score.js"></script>
-<script src="modules/grants/grants-ui.js"></script>
 <script src="modules/grants/grants-controls.js"></script>
 <script src="modules/cmf/cmf-search.js"></script>
-<script src="modules/spatial/hierarchy-registry.js"></script>
-<script src="modules/spatial/boundary-service.js"></script>
-<script src="modules/spatial/federal-boundaries.js"></script>
-<script src="modules/spatial/spatial-clip.js"></script>
-<script src="modules/spatial/aggregate-loader.js"></script>
-<script src="modules/warrants/signal-tmc.js"></script>
-<script src="modules/warrants/signal-thresholds.js"></script>
-<script src="modules/core/epdo-presets.js"></script>
-<script src="modules/core/tier.js"></script>
-<script src="modules/spatial/geo-tier.js"></script>
-<script src="modules/spatial/r2-resolve.js"></script>
-<script src="modules/map/map-safe-helpers.js"></script>
-<script src="modules/map/map-layers.js"></script>
-<script src="modules/app/tab-dispatcher.js"></script>
-<script src="modules/ai/ai-mode-toggle.js"></script>
 <script src="modules/ai/ai-domain-knowledge-core.js"></script>
 <script src="modules/ai/ai-domain-knowledge-rag.js"></script>
 <script src="modules/ai/ai-domain-knowledge-location.js"></script>
 <script src="modules/ai/ai-domain-knowledge-sources.js"></script>
 <script src="modules/ai/ai-domain-knowledge-query.js"></script>
 <script src="modules/ai/ai-domain-knowledge-chat-ui.js"></script>
-<script src="modules/reports/reports-standard-core.js"></script>
-<script src="modules/reports/reports-standard-core2.js"></script>
-<script src="modules/reports/reports-standard-types.js"></script>
 <script src="modules/reports/reports-pdf.js"></script>
 <script src="modules/reports/reports-charts.js"></script>
-<script src="modules/reports/reports-standard-types2.js"></script>
-<script src="modules/assets/school-tab.js"></script>
-<script src="modules/assets/transit-tab.js"></script>
-
-<!-- Batch Before/After Evaluation -->
-<script src="modules/batch-ba/batch-ba-state.js"></script>
-<script src="modules/batch-ba/batch-ba-upload.js"></script>
-<script src="modules/batch-ba/batch-ba-engine.js"></script>
-<script src="modules/batch-ba/batch-ba-results.js"></script>
-<script src="modules/batch-ba/batch-ba-charts.js"></script>
-<script src="modules/batch-ba/batch-ba-export-pdf.js"></script>
-<script src="modules/batch-ba/batch-ba-export-pdf-details.js"></script>
-<script src="modules/batch-ba/batch-ba-export-csv.js"></script>
-<script src="modules/batch-ba/batch-ba-export-kml.js"></script>
-<script src="modules/batch-ba/batch-ba-duration.js"></script>
-<!-- Upload tab modules -->
-<script src="modules/upload/upload-tab.js"></script>
-<script src="modules/upload/road-defaults.js"></script>
-<script src="modules/upload/upload-pipeline.js"></script>
-<script src="modules/upload/api-connector.js"></script>
-<script src="modules/upload/upload-tier-ui.js"></script>
-
-<!-- Worker support: lazy sampleRows loader (csv-worker.js is loaded via new Worker()) -->
-<script src="modules/worker/sample-rows-loader.js"></script>
 
 </head>
 <body>
@@ -19454,6 +19397,7 @@ const r2State = {
 
 // Dynamic config - loaded from config.json
 let appConfig = null;
+window.appConfig = appConfig;
 let appSettings = null; // Settings from APP_PATHS.SETTINGS
 let MAP_CENTER = [39.33, -104.93]; // Default fallback (Douglas County, CO)
 let MAP_ZOOM = 11;
@@ -19475,6 +19419,7 @@ const jurisdictionContext = {
     // --- Multi-tier expansion properties (merged from _TIER_EXTENSIONS) ---
     ..._TIER_EXTENSIONS
 };
+window.jurisdictionContext = jurisdictionContext;
 
 /**
  * Update the global jurisdiction context and notify all listeners.
@@ -19879,7 +19824,9 @@ const configReadyPromise = new Promise(resolve => { _configReadyResolve = resolv
 
 // Config path can await userDataReadyPromise to apply profile before first data load
 let _userDataReadyResolve;
+window._userDataReadyResolve = _userDataReadyResolve;
 const userDataReadyPromise = new Promise(resolve => { _userDataReadyResolve = resolve; });
+window._userDataReadyResolve = _userDataReadyResolve;
 // Safety timeout: don't block startup forever if auth is slow or disabled
 setTimeout(() => { _userDataReadyResolve(null); }, 3000);
 
@@ -19908,6 +19855,7 @@ async function loadAppConfig() {
         console.log('[Config] Fetching config from:', APP_PATHS.CONFIG);
         const response = await fetchWithRetry(APP_PATHS.CONFIG);
         appConfig = await response.json();
+        window.appConfig = appConfig;
         window.appConfig = appConfig; // Expose globally for transit and other modules
 
         // Validate config structure
@@ -20063,6 +20011,7 @@ async function loadAppConfig() {
             console.log('[Config] Using cached config as fallback');
             appConfig = cachedConfig;
             window.appConfig = appConfig;
+            window.appConfig = appConfig;
 
             populateStateDropdown();
             populateJurisdictionDropdown();
@@ -20082,6 +20031,7 @@ async function loadAppConfig() {
 
         // Create minimal fallback config
         appConfig = getMinimalFallbackConfig();
+        window.appConfig = appConfig;
         window.appConfig = appConfig;
 
         // Populate with fallback
@@ -22168,6 +22118,7 @@ const crashState = {
         }
     }
 };
+window.crashState = crashState;
 
 // ============================================================
 // GEOCODING STATE — In-browser GPS coordinate recovery
@@ -22283,6 +22234,7 @@ const crashTreeState = {
     // Report generation
     lastReport: null
 };
+window.crashTreeState = crashTreeState;
 
 // ============================================================
 // DATA CONNECTION MANAGEMENT SYSTEM
@@ -22737,6 +22689,7 @@ const grantState = {
     minCrashThreshold: 3,      // Minimum crashes to include location
     baselines: null             // County-wide baselines for improved grant scoring
 };
+window.grantState = grantState;
 
 // District-level crash statistics state (Magisterial Districts / County Subdivisions)
 const districtState = {
@@ -23484,6 +23437,7 @@ const warrantsState = {
     // Selection timestamp for AI context priority ordering
     selectionTimestamp: null
 };
+window.warrantsState = warrantsState;
 
 // ============================================================
 // WARRANT ANALYSIS INDEXEDDB STORAGE SYSTEM
@@ -27968,6 +27922,7 @@ function mergeUploadedFile(file) {
 // Concurrency guard: prevents multiple simultaneous autoLoadCrashData calls
 // from racing and double-populating crashState.mapPoints
 let _autoLoadGeneration = 0;
+window._autoLoadGeneration = _autoLoadGeneration;
 
 // Auto-load crash data based on settings and selected road type filter
 // Now with IndexedDB caching for faster repeat loads
@@ -28094,6 +28049,7 @@ async function autoLoadCrashData(skipCache = false, forceR2 = false) {
     // Increment generation counter — any in-flight load with an older generation
     // will detect it has been superseded and bail out at key checkpoints.
     const myGeneration = ++_autoLoadGeneration;
+    window._autoLoadGeneration = _autoLoadGeneration;
     console.log('[CrashLens] Data load started at', new Date().toISOString(),
                 '(autoLoad gen ' + myGeneration + ', skipCache=' + skipCache + ')');
     console.log(`[AutoLoad] Generation ${myGeneration} starting (skipCache=${skipCache})`);
@@ -59640,6 +59596,7 @@ const baState = {
     mapSelection: null,
     monitoringActive: false
 };
+window.baState = baState;
 
 // Switch between Single Location and Batch Evaluation modes
 function switchBAMode(mode) {
@@ -65281,6 +65238,7 @@ const cmfState = {
         preset: null  // '1yr', '3yr', '5yr', or null for custom/all
     }
 };
+window.cmfState = cmfState;
 
 
 // ============================================================
@@ -126089,7 +126047,7 @@ function signDef_exportPDF() {
 <!-- CrashLens Supabase Data Client (Phase 1 — foundation only) -->
 <!-- road-type-mapping.js MUST load before data-client.js and supabase-bridge.js -->
 <!-- (single source of truth for tier × radio → spec/label/r2Suffix mapping). -->
-<script src="modules/ui/skeletons.js"></script>
+<!-- Stage A cutover: ui/skeletons.js loaded via main.js (top of <head>). -->
 <script>
 // Round-9 Fix 3 — paint shimmer skeletons in KPI cards as early as possible
 // so the user sees animated placeholders instead of "0" while the first
@@ -126120,17 +126078,10 @@ if ('serviceWorker' in navigator) {
     });
 }
 </script>
-<script src="modules/data/road-type-mapping.js"></script>
+<!-- Stage A cutover: data/* modules consolidated into main.js (ESM). -->
 <script src="../assets/js/data-client.js"></script>
 <!-- Round 13 — Universal LocationPicker -->
 <script src="../assets/js/location-picker.js"></script>
-<script src="modules/data/matview-cache.js"></script>
-<script src="modules/data/prewarm.js"></script>
-<script src="modules/data/chunk-loader.js"></script>
-<script src="modules/data/supabase-bridge.js"></script>
-<script src="modules/data/lazy-loader.js"></script>
-<script src="modules/data/tab-loaders.js"></script>
-<script src="modules/data/supabase-map-bridge.js"></script>
 <script src="modules/pedbike/pedbike-tab-ped-core.js"></script>
 <script src="modules/pedbike/pedbike-tab-ped-detail.js"></script>
 <script src="modules/pedbike/pedbike-tab-ped-detail-charts.js"></script>
@@ -126161,13 +126112,12 @@ if ('serviceWorker' in navigator) {
 <script src="modules/crash-tree/crash-tree-render.js"></script>
 <script src="modules/crash-tree/crash-tree-analysis.js"></script>
 <script src="modules/crash-tree/crash-tree-export.js"></script>
-<script src="modules/assets/asset-export.js"></script>
+<!-- Stage A cutover: assets/asset-export.js consolidated into main.js. -->
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- SAFETY SCORECARD MODULE                                        -->
+<!-- SAFETY SCORECARD MODULE — Stage A: scorecard, map-points-hydrate -->
+<!-- now loaded via main.js (ESM).                                    -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
-<script src="modules/scorecard/scorecard.js"></script>
-<script src="modules/map/map-points-hydrate.js"></script>
 <script src="modules/notifications/email-chips.js"></script>
 <script src="modules/notifications/email-templates.js"></script>
 

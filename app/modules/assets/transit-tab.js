@@ -18,9 +18,8 @@
  *
  * Depends on (must load before this file): `assets/school-tab`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 /**
  * Initialize the Transit Safety tab.
@@ -33,7 +32,7 @@ function initTransitSafetyTab() {
 
         // Auto-load if no transit stops loaded yet and jurisdiction is available
         const transitAsset = assetState?.assets?.find(a => a.type === 'bus_stop' || a.name?.toLowerCase().includes('transit'));
-        if (!transitAsset && jurisdictionContext.jurisdictionKey) {
+        if (!transitAsset && window.jurisdictionContext.jurisdictionKey) {
             transitTabLoadStopsFromBTS();
         }
         return;
@@ -48,7 +47,7 @@ function initTransitSafetyTab() {
     updateTransitTabUI();
 
     // Auto-load transit stops from BTS on first init
-    if (jurisdictionContext.jurisdictionKey) {
+    if (window.jurisdictionContext.jurisdictionKey) {
         const transitAsset = assetState?.assets?.find(a => a.type === 'bus_stop' || a.name?.toLowerCase().includes('transit'));
         if (!transitAsset) {
             transitTabLoadStopsFromBTS();
@@ -60,7 +59,7 @@ function initTransitSafetyTab() {
  * Sync Transit Safety sub-tab from jurisdictionContext.
  */
 function transitTabSyncFromContext() {
-    const ctx = jurisdictionContext;
+    const ctx = window.jurisdictionContext;
     const select = document.getElementById('transitTabCounty');
 
     if (ctx.jurisdictionKey) {
@@ -200,7 +199,7 @@ async function transitTabLoadStops() {
 async function transitTabLoadStopsFromBTS() {
     const statusEl = document.getElementById('transitTabStatus');
     const statusBanner = document.getElementById('transitTabLayerStatus');
-    const county = transitTabState.county || jurisdictionContext.jurisdictionKey;
+    const county = transitTabState.county || window.jurisdictionContext.jurisdictionKey;
 
     if (!county) {
         if (statusBanner) {
@@ -355,7 +354,7 @@ async function transitTabLoadStopsFromBTS() {
  * For higher tiers, uses a larger bounding box from getBoundsForTier().
  */
 async function transitLoadStopsForTier() {
-    const tier = jurisdictionContext.viewTier;
+    const tier = window.jurisdictionContext.viewTier;
 
     // County/city tier: use existing single-county loader
     if (tier === 'county' || tier === 'city') {
@@ -525,7 +524,7 @@ function _updateTransitTierScopeNotice(tier) {
     if (tier === 'county' || tier === 'city') {
         noticeEl.style.display = 'none';
     } else {
-        const loadedCounty = jurisdictionContext.jurisdictionName || 'the loaded county';
+        const loadedCounty = window.jurisdictionContext.jurisdictionName || 'the loaded county';
         noticeEl.style.display = '';
         noticeEl.innerHTML = `<div style="display:flex;align-items:center;gap:.5rem;padding:.6rem .8rem;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #f59e0b;border-radius:8px;margin-bottom:.75rem">
             <span style="font-size:1.1rem">ℹ️</span>
@@ -791,7 +790,7 @@ function transitTabViewOnMap() {
         mapAssetVisibility[transitAsset.id] = true;
         saveMapAssetVisibility();
         assetShowOnMap(transitAsset.id);
-        showTab('map');
+        window.showTab('map');
     } else {
         alert('Please load transit stops first.');
     }
@@ -799,7 +798,7 @@ function transitTabViewOnMap() {
 
 function transitTabViewOnMapSingle(lat, lng) {
     if (lat && lng && crashMap) {
-        showTab('map');
+        window.showTab('map');
         setTimeout(() => {
             crashMap.setView([lat, lng], 17);
         }, 100);
@@ -829,7 +828,7 @@ function transitTabFocusView() {
 
     // Show transit layer on map
     assetShowOnMap(transitAsset.id);
-    showTab('map');
+    window.showTab('map');
 }
 
 /**
@@ -998,31 +997,82 @@ function softActivateTransitLayer() {
     }
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.assets = CL.assets || {};
-  window.initTransitSafetyTab = initTransitSafetyTab; CL.assets.initTransitSafetyTab = initTransitSafetyTab;
-  window.transitTabSyncFromContext = transitTabSyncFromContext; CL.assets.transitTabSyncFromContext = transitTabSyncFromContext;
-  window.transitTabCountyChange = transitTabCountyChange; CL.assets.transitTabCountyChange = transitTabCountyChange;
-  window.transitTabQuickSelect = transitTabQuickSelect; CL.assets.transitTabQuickSelect = transitTabQuickSelect;
-  window.transitTabLoadStops = transitTabLoadStops; CL.assets.transitTabLoadStops = transitTabLoadStops;
-  window.transitTabLoadStopsFromBTS = transitTabLoadStopsFromBTS; CL.assets.transitTabLoadStopsFromBTS = transitTabLoadStopsFromBTS;
-  window.transitLoadStopsForTier = transitLoadStopsForTier; CL.assets.transitLoadStopsForTier = transitLoadStopsForTier;
-  window._updateTransitTierScopeNotice = _updateTransitTierScopeNotice; CL.assets._updateTransitTierScopeNotice = _updateTransitTierScopeNotice;
-  window.updateTransitTabUI = updateTransitTabUI; CL.assets.updateTransitTabUI = updateTransitTabUI;
-  window.updateTransitTabMetrics = updateTransitTabMetrics; CL.assets.updateTransitTabMetrics = updateTransitTabMetrics;
-  window.updateTransitTabTable = updateTransitTabTable; CL.assets.updateTransitTabTable = updateTransitTabTable;
-  window.transitTabClearStops = transitTabClearStops; CL.assets.transitTabClearStops = transitTabClearStops;
-  window.transitTabClearAllStops = transitTabClearAllStops; CL.assets.transitTabClearAllStops = transitTabClearAllStops;
-  window.transitTabRadiusChange = transitTabRadiusChange; CL.assets.transitTabRadiusChange = transitTabRadiusChange;
-  window.transitTabSetRadius = transitTabSetRadius; CL.assets.transitTabSetRadius = transitTabSetRadius;
-  window.transitTabViewOnMap = transitTabViewOnMap; CL.assets.transitTabViewOnMap = transitTabViewOnMap;
-  window.transitTabViewOnMapSingle = transitTabViewOnMapSingle; CL.assets.transitTabViewOnMapSingle = transitTabViewOnMapSingle;
-  window.transitTabFocusView = transitTabFocusView; CL.assets.transitTabFocusView = transitTabFocusView;
-  window.transitTabExportData = transitTabExportData; CL.assets.transitTabExportData = transitTabExportData;
-  window.transitTabExportKML = transitTabExportKML; CL.assets.transitTabExportKML = transitTabExportKML;
-  window.softActivateTransitLayer = softActivateTransitLayer; CL.assets.softActivateTransitLayer = softActivateTransitLayer;
-  CL._registerModule('assets/transit-tab');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.assets = CL.assets || {};
+CL.assets.initTransitSafetyTab = initTransitSafetyTab;
+CL.assets.transitTabSyncFromContext = transitTabSyncFromContext;
+CL.assets.transitTabCountyChange = transitTabCountyChange;
+CL.assets.transitTabQuickSelect = transitTabQuickSelect;
+CL.assets.transitTabLoadStops = transitTabLoadStops;
+CL.assets.transitTabLoadStopsFromBTS = transitTabLoadStopsFromBTS;
+CL.assets.transitLoadStopsForTier = transitLoadStopsForTier;
+CL.assets._updateTransitTierScopeNotice = _updateTransitTierScopeNotice;
+CL.assets.updateTransitTabUI = updateTransitTabUI;
+CL.assets.updateTransitTabMetrics = updateTransitTabMetrics;
+CL.assets.updateTransitTabTable = updateTransitTabTable;
+CL.assets.transitTabClearStops = transitTabClearStops;
+CL.assets.transitTabClearAllStops = transitTabClearAllStops;
+CL.assets.transitTabRadiusChange = transitTabRadiusChange;
+CL.assets.transitTabSetRadius = transitTabSetRadius;
+CL.assets.transitTabViewOnMap = transitTabViewOnMap;
+CL.assets.transitTabViewOnMapSingle = transitTabViewOnMapSingle;
+CL.assets.transitTabFocusView = transitTabFocusView;
+CL.assets.transitTabExportData = transitTabExportData;
+CL.assets.transitTabExportKML = transitTabExportKML;
+CL.assets.softActivateTransitLayer = softActivateTransitLayer;
+
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
+// All 21 retained per the module's own pre-Stage-A docstring (HTML onclick=
+// + dynamically-generated row handlers). Extends the survivor floor (which
+// only captured transitLoadStopsForTier, transitTabClearStops,
+// transitTabLoadStops, transitTabViewOnMapSingle).
+window.initTransitSafetyTab = initTransitSafetyTab;
+window.transitTabSyncFromContext = transitTabSyncFromContext;
+window.transitTabCountyChange = transitTabCountyChange;
+window.transitTabQuickSelect = transitTabQuickSelect;
+window.transitTabLoadStops = transitTabLoadStops;
+window.transitTabLoadStopsFromBTS = transitTabLoadStopsFromBTS;
+window.transitLoadStopsForTier = transitLoadStopsForTier;
+window._updateTransitTierScopeNotice = _updateTransitTierScopeNotice;
+window.updateTransitTabUI = updateTransitTabUI;
+window.updateTransitTabMetrics = updateTransitTabMetrics;
+window.updateTransitTabTable = updateTransitTabTable;
+window.transitTabClearStops = transitTabClearStops;
+window.transitTabClearAllStops = transitTabClearAllStops;
+window.transitTabRadiusChange = transitTabRadiusChange;
+window.transitTabSetRadius = transitTabSetRadius;
+window.transitTabViewOnMap = transitTabViewOnMap;
+window.transitTabViewOnMapSingle = transitTabViewOnMapSingle;
+window.transitTabFocusView = transitTabFocusView;
+window.transitTabExportData = transitTabExportData;
+window.transitTabExportKML = transitTabExportKML;
+window.softActivateTransitLayer = softActivateTransitLayer;
+
+export {
+    initTransitSafetyTab,
+    transitTabSyncFromContext,
+    transitTabCountyChange,
+    transitTabQuickSelect,
+    transitTabLoadStops,
+    transitTabLoadStopsFromBTS,
+    transitLoadStopsForTier,
+    _updateTransitTierScopeNotice,
+    updateTransitTabUI,
+    updateTransitTabMetrics,
+    updateTransitTabTable,
+    transitTabClearStops,
+    transitTabClearAllStops,
+    transitTabRadiusChange,
+    transitTabSetRadius,
+    transitTabViewOnMap,
+    transitTabViewOnMapSingle,
+    transitTabFocusView,
+    transitTabExportData,
+    transitTabExportKML,
+    softActivateTransitLayer
+};
+
+CL._registerModule('assets/transit-tab');

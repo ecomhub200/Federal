@@ -2,10 +2,9 @@
  * CrashLens Batch Before/After Evaluation — State Management
  * Manages all state for the batch BA feature.
  */
-window.CL = window.CL || {};
-CL.batchBA = CL.batchBA || {};
+'use strict';
 
-CL.batchBA.state = {
+export const state = {
     // Mode toggle
     mode: 'single', // 'single' | 'batch'
 
@@ -61,7 +60,7 @@ CL.batchBA.state = {
 /**
  * Reset batch state to initial values (preserves mode).
  */
-CL.batchBA.resetState = function() {
+export function resetState() {
     var s = CL.batchBA.state;
     s.uploadedFile = null;
     s.parsedRows = [];
@@ -125,7 +124,7 @@ CL.batchBA.resetState = function() {
  * @param {number} cmf
  * @returns {{ label: string, color: string, badgeClass: string }}
  */
-CL.batchBA.getEffectivenessRating = function(cmf) {
+export function getEffectivenessRating(cmf) {
     if (cmf === null || cmf === undefined) return { label: 'N/A', color: '#94a3b8', badgeClass: 'secondary' };
     if (cmf < 0.70) return { label: 'Highly Effective', color: '#16a34a', badgeClass: 'success' };
     if (cmf < 0.90) return { label: 'Effective', color: '#65a30d', badgeClass: 'success' };
@@ -138,7 +137,7 @@ CL.batchBA.getEffectivenessRating = function(cmf) {
  * Get filtered results based on current filter/search state.
  * @returns {Array}
  */
-CL.batchBA.getFilteredResults = function() {
+export function getFilteredResults() {
     var s = CL.batchBA.state;
     var results = s.results.slice();
 
@@ -184,7 +183,7 @@ CL.batchBA.getFilteredResults = function() {
  * and warns the user if existing results are now stale.
  * @param {'all'|'streetlight'} type
  */
-CL.batchBA.setAnalysisType = function(type) {
+export function setAnalysisType(type) {
     if (type !== 'all' && type !== 'streetlight') return;
     var s = CL.batchBA.state;
     var prev = s.analysisType;
@@ -221,6 +220,15 @@ CL.batchBA.setAnalysisType = function(type) {
             }
         }
     }
-};
+}
+
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.batchBA = CL.batchBA || {};
+CL.batchBA.state = state;
+CL.batchBA.resetState = resetState;
+CL.batchBA.getEffectivenessRating = getEffectivenessRating;
+CL.batchBA.getFilteredResults = getFilteredResults;
+CL.batchBA.setAnalysisType = setAnalysisType;
 
 CL._registerModule('batch-ba/state');

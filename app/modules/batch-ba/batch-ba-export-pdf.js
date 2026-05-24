@@ -3,6 +3,8 @@
  * Professional multi-page PDF with executive summary, TOC, charts, and callout boxes.
  * Uses jsPDF + AutoTable with hex color palette, section accent bars, severity bars, and KPI cards.
  */
+'use strict';
+
 window.CL = window.CL || {};
 CL.batchBA = CL.batchBA || {};
 

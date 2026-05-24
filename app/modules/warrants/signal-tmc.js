@@ -15,9 +15,8 @@
  *
  * Depends on (must load before this file): `warrants/signal`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 // Signal Warrant Analyzer Helper Functions (Redesigned Single-Page Layout)
 
@@ -156,7 +155,7 @@ function signal_autoPopulateW4MajorVolumes() {
     }
 
     // Get major direction
-    const majorDir = warrantsState.signal.config.majorDirection;
+    const majorDir = window.warrantsState.signal.config.majorDirection;
     const isMajorEW = majorDir === 'EW';
 
     // Calculate major street volumes for each hour and find the 4 highest
@@ -186,14 +185,14 @@ function signal_autoPopulateW4MajorVolumes() {
     hourlyMajor.sort((a, b) => b.volume - a.volume);
 
     // Take top 4 (or 1 for peak hour analysis)
-    const analysisType = warrantsState.signal.warrant4.analysisType || '4hour';
+    const analysisType = window.warrantsState.signal.warrant4.analysisType || '4hour';
     const hoursNeeded = analysisType === 'peakhour' ? 1 : 4;
     const topHours = hourlyMajor.slice(0, hoursNeeded);
 
     // Populate the state and UI
     for (let i = 0; i < 4; i++) {
         const vol = i < topHours.length ? topHours[i].volume : 0;
-        warrantsState.signal.warrant4.hourlyMajorVolumes[i] = vol;
+        window.warrantsState.signal.warrant4.hourlyMajorVolumes[i] = vol;
         const input = document.getElementById(`signalW4MajorHour${i + 1}`);
         if (input) input.value = vol;
     }
@@ -215,7 +214,7 @@ function signal_toggleWarrant7() {
     const panel = document.getElementById('signalW7Panel');
     const checked = document.getElementById('signalW7Enable')?.checked;
     if (panel) panel.classList.toggle('hidden', !checked);
-    warrantsState.signal.warrant7.enabled = checked;
+    window.warrantsState.signal.warrant7.enabled = checked;
 }
 
 // Select averaging method
@@ -228,14 +227,14 @@ function signal_selectAveragingMethod(method) {
     });
 
     // Update state
-    warrantsState.signal.averagingMethod = method;
+    window.warrantsState.signal.averagingMethod = method;
     signal_updateConfigFromUI();
 
     // Update day cards to reflect new selection
     signal_renderDayCards();
 
     // Re-run analysis if results exist
-    if (warrantsState.signal.analysisResults) {
+    if (window.warrantsState.signal.analysisResults) {
         signal_runAnalysis();
     }
 }
@@ -243,13 +242,13 @@ function signal_selectAveragingMethod(method) {
 // Toggle weekend analysis option
 function signal_toggleWeekendAnalysis(checked) {
     console.log('[Signal] Weekend analysis toggled:', checked);
-    warrantsState.signal.includeWeekend = checked;
+    window.warrantsState.signal.includeWeekend = checked;
 
     // Update day cards to reflect weekend selection
     signal_renderDayCards();
 
     // Re-run analysis if results exist
-    if (warrantsState.signal.analysisResults) {
+    if (window.warrantsState.signal.analysisResults) {
         signal_runAnalysis();
     }
 }
@@ -374,8 +373,8 @@ function signal_updateTMCGrid() {
     thead.innerHTML = headerRow1 + headerRow2;
 
     // Store U-turn config in warrantsState for use by other functions
-    if (typeof warrantsState !== 'undefined' && warrantsState.signal) {
-        warrantsState.signal.hasUTurn = hasUTurn;
+    if (typeof window.warrantsState !== 'undefined' && window.warrantsState.signal) {
+        window.warrantsState.signal.hasUTurn = hasUTurn;
     }
 
     // Regenerate table body to match new header structure and count type
@@ -400,7 +399,7 @@ function signal_generateTMCRows() {
 
     // Get U-turn configuration from warrantsState or calculate it
     const uturnSelection = document.getElementById('signalUTurnSelection')?.value || 'none';
-    const hasUTurn = (typeof warrantsState !== 'undefined' && warrantsState.signal?.hasUTurn) || {
+    const hasUTurn = (typeof window.warrantsState !== 'undefined' && window.warrantsState.signal?.hasUTurn) || {
         NB: (uturnSelection === 'minor' && isMajorEW) || (uturnSelection === 'major' && !isMajorEW),
         SB: (uturnSelection === 'minor' && isMajorEW) || (uturnSelection === 'major' && !isMajorEW),
         EB: (uturnSelection === 'major' && isMajorEW) || (uturnSelection === 'minor' && !isMajorEW),
@@ -580,7 +579,7 @@ function signal_clearAIUploads() {
         }
     }
     // Clear all state
-    warrantsState.signal.uploadedFiles = {};
+    window.warrantsState.signal.uploadedFiles = {};
     signalPendingExtractions = [];
     signalUploadedFiles = {};
     signalAllValidationResults = [];
@@ -616,16 +615,16 @@ function signal_clearAIUploads() {
 function signal_saveData() {
     try {
         const data = {
-            config: warrantsState.signal.config,
-            multiDayData: warrantsState.signal.multiDayData,
-            warrant4: warrantsState.signal.warrant4,
-            warrant5: warrantsState.signal.warrant5,
-            warrant7: warrantsState.signal.warrant7,
-            virginiaMode: warrantsState.signal.virginiaMode,
-            averagingMethod: warrantsState.signal.averagingMethod,
-            includeWeekend: warrantsState.signal.includeWeekend,
-            rtAdjustment: warrantsState.signal.rtAdjustment,
-            analysisResults: warrantsState.signal.analysisResults,
+            config: window.warrantsState.signal.config,
+            multiDayData: window.warrantsState.signal.multiDayData,
+            warrant4: window.warrantsState.signal.warrant4,
+            warrant5: window.warrantsState.signal.warrant5,
+            warrant7: window.warrantsState.signal.warrant7,
+            virginiaMode: window.warrantsState.signal.virginiaMode,
+            averagingMethod: window.warrantsState.signal.averagingMethod,
+            includeWeekend: window.warrantsState.signal.includeWeekend,
+            rtAdjustment: window.warrantsState.signal.rtAdjustment,
+            analysisResults: window.warrantsState.signal.analysisResults,
             savedAt: new Date().toISOString()
         };
 
@@ -660,7 +659,7 @@ function signal_loadSavedData() {
 
         // Restore config
         if (data.config) {
-            warrantsState.signal.config = { ...warrantsState.signal.config, ...data.config };
+            window.warrantsState.signal.config = { ...warrantsState.signal.config, ...data.config };
 
             // Update UI fields
             const fields = {
@@ -692,15 +691,15 @@ function signal_loadSavedData() {
 
         // Restore multi-day data
         if (data.multiDayData) {
-            warrantsState.signal.multiDayData = data.multiDayData;
+            window.warrantsState.signal.multiDayData = data.multiDayData;
             signal_renderDayCards();
         }
 
         // Restore warrant 4, 5, 7
-        if (data.warrant4) warrantsState.signal.warrant4 = data.warrant4;
-        if (data.warrant5) warrantsState.signal.warrant5 = data.warrant5;
+        if (data.warrant4) window.warrantsState.signal.warrant4 = data.warrant4;
+        if (data.warrant5) window.warrantsState.signal.warrant5 = data.warrant5;
         if (data.warrant7) {
-            warrantsState.signal.warrant7 = data.warrant7;
+            window.warrantsState.signal.warrant7 = data.warrant7;
             // Update W7 UI
             const w7Enable = document.getElementById('signalW7Enable');
             if (w7Enable) w7Enable.checked = data.warrant7.enabled;
@@ -718,11 +717,11 @@ function signal_loadSavedData() {
 
         // Restore analysis results if available
         if (data.analysisResults) {
-            warrantsState.signal.analysisResults = data.analysisResults;
+            window.warrantsState.signal.analysisResults = data.analysisResults;
         }
 
         if (data.averagingMethod) {
-            warrantsState.signal.averagingMethod = data.averagingMethod;
+            window.warrantsState.signal.averagingMethod = data.averagingMethod;
             // Update averaging method UI
             document.querySelectorAll('.signal-avg-option').forEach(opt => {
                 opt.classList.toggle('selected', opt.dataset.method === data.averagingMethod);
@@ -731,7 +730,7 @@ function signal_loadSavedData() {
 
         // Restore weekend analysis option
         if (data.includeWeekend !== undefined) {
-            warrantsState.signal.includeWeekend = data.includeWeekend;
+            window.warrantsState.signal.includeWeekend = data.includeWeekend;
             const weekendCheckbox = document.getElementById('signalIncludeWeekend');
             if (weekendCheckbox) weekendCheckbox.checked = data.includeWeekend;
         }
@@ -747,11 +746,11 @@ function signal_loadSavedData() {
 // Export signal warrant data as JSON file
 function signal_exportData() {
     const data = {
-        config: warrantsState.signal.config,
-        multiDayData: warrantsState.signal.multiDayData,
-        warrant4: warrantsState.signal.warrant4,
-        warrant5: warrantsState.signal.warrant5,
-        warrant7: warrantsState.signal.warrant7,
+        config: window.warrantsState.signal.config,
+        multiDayData: window.warrantsState.signal.multiDayData,
+        warrant4: window.warrantsState.signal.warrant4,
+        warrant5: window.warrantsState.signal.warrant5,
+        warrant7: window.warrantsState.signal.warrant7,
         timestamp: new Date().toISOString()
     };
 
@@ -791,7 +790,7 @@ function signal_renderDayCards() {
     const section = document.getElementById('signalAddedDaysSection');
     const dayCount = document.getElementById('signalTMCDayCount');
 
-    const days = Object.keys(warrantsState.signal.multiDayData || {});
+    const days = Object.keys(window.warrantsState.signal.multiDayData || {});
 
     if (dayCount) dayCount.textContent = `${days.length} days entered`;
 
@@ -804,14 +803,14 @@ function signal_renderDayCards() {
 
     let html = '';
     for (const key of days) {
-        const day = warrantsState.signal.multiDayData[key];
+        const day = window.warrantsState.signal.multiDayData[key];
         const dowNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const dowName = dowNames[day.dow] || 'Unknown';
         const isWeekend = day.dow === 0 || day.dow === 6;
 
         // Calculate totals (including U-turn if present)
         let majorTotal = 0, minorTotal = 0;
-        const majorDir = warrantsState.signal.config.majorDirection || 'EW';
+        const majorDir = window.warrantsState.signal.config.majorDirection || 'EW';
         const isMajorEW = majorDir === 'EW';
 
         for (const hour in day.hourlyData) {
@@ -864,39 +863,72 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 100);
 });
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.warrants = CL.warrants || {};
-  window.signal_toggleAIPanel = signal_toggleAIPanel; CL.warrants.signal_toggleAIPanel = signal_toggleAIPanel;
-  window.signal_toggleDisclaimer = signal_toggleDisclaimer; CL.warrants.signal_toggleDisclaimer = signal_toggleDisclaimer;
-  window.signal_toggleExportButtons = signal_toggleExportButtons; CL.warrants.signal_toggleExportButtons = signal_toggleExportButtons;
-  window.signal_updateDaySlots = signal_updateDaySlots; CL.warrants.signal_updateDaySlots = signal_updateDaySlots;
-  window.signal_handleDisclaimerCheckbox = signal_handleDisclaimerCheckbox; CL.warrants.signal_handleDisclaimerCheckbox = signal_handleDisclaimerCheckbox;
-  window.signal_toggleVirginiaInfo = signal_toggleVirginiaInfo; CL.warrants.signal_toggleVirginiaInfo = signal_toggleVirginiaInfo;
-  window.signal_check70pct = signal_check70pct; CL.warrants.signal_check70pct = signal_check70pct;
-  window.signal_toggleRTOptions = signal_toggleRTOptions; CL.warrants.signal_toggleRTOptions = signal_toggleRTOptions;
-  window.signal_toggleWarrant4 = signal_toggleWarrant4; CL.warrants.signal_toggleWarrant4 = signal_toggleWarrant4;
-  window.signal_updateW4HourVisibility = signal_updateW4HourVisibility; CL.warrants.signal_updateW4HourVisibility = signal_updateW4HourVisibility;
-  window.signal_autoPopulateW4MajorVolumes = signal_autoPopulateW4MajorVolumes; CL.warrants.signal_autoPopulateW4MajorVolumes = signal_autoPopulateW4MajorVolumes;
-  window.signal_toggleWarrant5 = signal_toggleWarrant5; CL.warrants.signal_toggleWarrant5 = signal_toggleWarrant5;
-  window.signal_toggleWarrant7 = signal_toggleWarrant7; CL.warrants.signal_toggleWarrant7 = signal_toggleWarrant7;
-  window.signal_selectAveragingMethod = signal_selectAveragingMethod; CL.warrants.signal_selectAveragingMethod = signal_selectAveragingMethod;
-  window.signal_toggleWeekendAnalysis = signal_toggleWeekendAnalysis; CL.warrants.signal_toggleWeekendAnalysis = signal_toggleWeekendAnalysis;
-  window.signal_setCountType = signal_setCountType; CL.warrants.signal_setCountType = signal_setCountType;
-  window.signal_updateTMCGrid = signal_updateTMCGrid; CL.warrants.signal_updateTMCGrid = signal_updateTMCGrid;
-  window.signal_generateTMCRows = signal_generateTMCRows; CL.warrants.signal_generateTMCRows = signal_generateTMCRows;
-  window.signal_updateRowTotal = signal_updateRowTotal; CL.warrants.signal_updateRowTotal = signal_updateRowTotal;
-  window.signal_markTotalManual = signal_markTotalManual; CL.warrants.signal_markTotalManual = signal_markTotalManual;
-  window.signal_clearTMCForm = signal_clearTMCForm; CL.warrants.signal_clearTMCForm = signal_clearTMCForm;
-  window.signal_addCurrentDay = signal_addCurrentDay; CL.warrants.signal_addCurrentDay = signal_addCurrentDay;
-  window.signal_advanceToNextDay = signal_advanceToNextDay; CL.warrants.signal_advanceToNextDay = signal_advanceToNextDay;
-  window.signal_clearAIUploads = signal_clearAIUploads; CL.warrants.signal_clearAIUploads = signal_clearAIUploads;
-  window.signal_saveData = signal_saveData; CL.warrants.signal_saveData = signal_saveData;
-  window.signal_loadSavedData = signal_loadSavedData; CL.warrants.signal_loadSavedData = signal_loadSavedData;
-  window.signal_exportData = signal_exportData; CL.warrants.signal_exportData = signal_exportData;
-  window.signal_clearAll = signal_clearAll; CL.warrants.signal_clearAll = signal_clearAll;
-  window.signal_renderDayCards = signal_renderDayCards; CL.warrants.signal_renderDayCards = signal_renderDayCards;
-  CL._registerModule('warrants/signal-tmc');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.warrants = CL.warrants || {};
+CL.warrants.signal_toggleAIPanel = signal_toggleAIPanel;
+CL.warrants.signal_toggleDisclaimer = signal_toggleDisclaimer;
+CL.warrants.signal_toggleExportButtons = signal_toggleExportButtons;
+CL.warrants.signal_updateDaySlots = signal_updateDaySlots;
+CL.warrants.signal_handleDisclaimerCheckbox = signal_handleDisclaimerCheckbox;
+CL.warrants.signal_toggleVirginiaInfo = signal_toggleVirginiaInfo;
+CL.warrants.signal_check70pct = signal_check70pct;
+CL.warrants.signal_toggleRTOptions = signal_toggleRTOptions;
+CL.warrants.signal_toggleWarrant4 = signal_toggleWarrant4;
+CL.warrants.signal_updateW4HourVisibility = signal_updateW4HourVisibility;
+CL.warrants.signal_autoPopulateW4MajorVolumes = signal_autoPopulateW4MajorVolumes;
+CL.warrants.signal_toggleWarrant5 = signal_toggleWarrant5;
+CL.warrants.signal_toggleWarrant7 = signal_toggleWarrant7;
+CL.warrants.signal_selectAveragingMethod = signal_selectAveragingMethod;
+CL.warrants.signal_toggleWeekendAnalysis = signal_toggleWeekendAnalysis;
+CL.warrants.signal_setCountType = signal_setCountType;
+CL.warrants.signal_updateTMCGrid = signal_updateTMCGrid;
+CL.warrants.signal_generateTMCRows = signal_generateTMCRows;
+CL.warrants.signal_updateRowTotal = signal_updateRowTotal;
+CL.warrants.signal_markTotalManual = signal_markTotalManual;
+CL.warrants.signal_clearTMCForm = signal_clearTMCForm;
+CL.warrants.signal_addCurrentDay = signal_addCurrentDay;
+CL.warrants.signal_advanceToNextDay = signal_advanceToNextDay;
+CL.warrants.signal_clearAIUploads = signal_clearAIUploads;
+CL.warrants.signal_saveData = signal_saveData;
+CL.warrants.signal_loadSavedData = signal_loadSavedData;
+CL.warrants.signal_exportData = signal_exportData;
+CL.warrants.signal_clearAll = signal_clearAll;
+CL.warrants.signal_renderDayCards = signal_renderDayCards;
+
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
+window.signal_addCurrentDay = signal_addCurrentDay;
+window.signal_autoPopulateW4MajorVolumes = signal_autoPopulateW4MajorVolumes;
+window.signal_clearAIUploads = signal_clearAIUploads;
+window.signal_clearAll = signal_clearAll;
+window.signal_clearTMCForm = signal_clearTMCForm;
+window.signal_handleDisclaimerCheckbox = signal_handleDisclaimerCheckbox;
+window.signal_markTotalManual = signal_markTotalManual;
+window.signal_saveData = signal_saveData;
+window.signal_selectAveragingMethod = signal_selectAveragingMethod;
+window.signal_setCountType = signal_setCountType;
+window.signal_toggleAIPanel = signal_toggleAIPanel;
+window.signal_toggleDisclaimer = signal_toggleDisclaimer;
+window.signal_toggleExportButtons = signal_toggleExportButtons;
+window.signal_toggleWarrant7 = signal_toggleWarrant7;
+window.signal_toggleWeekendAnalysis = signal_toggleWeekendAnalysis;
+window.signal_updateDaySlots = signal_updateDaySlots;
+window.signal_updateRowTotal = signal_updateRowTotal;
+
+// --- Named exports (consumers import these directly post-cleanup) ---
+export {
+    signal_toggleAIPanel, signal_toggleDisclaimer, signal_toggleExportButtons,
+    signal_updateDaySlots, signal_handleDisclaimerCheckbox, signal_toggleVirginiaInfo,
+    signal_check70pct, signal_toggleRTOptions, signal_toggleWarrant4,
+    signal_updateW4HourVisibility, signal_autoPopulateW4MajorVolumes, signal_toggleWarrant5,
+    signal_toggleWarrant7, signal_selectAveragingMethod, signal_toggleWeekendAnalysis,
+    signal_setCountType, signal_updateTMCGrid, signal_generateTMCRows,
+    signal_updateRowTotal, signal_markTotalManual, signal_clearTMCForm,
+    signal_addCurrentDay, signal_advanceToNextDay, signal_clearAIUploads,
+    signal_saveData, signal_loadSavedData, signal_exportData,
+    signal_clearAll, signal_renderDayCards
+};
+
+CL._registerModule('warrants/signal-tmc');

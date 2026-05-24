@@ -14,9 +14,8 @@
  *
  * Depends on (must load before this file): `core/epdo`, `core/constants`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 /**
  * Auto-apply state-specific EPDO weights when using stateDefault preset.
@@ -85,7 +84,7 @@ function loadEPDOPreset(presetKey) {
     // doesn't refresh. Force a matview re-paint so the Dashboard reflects
     // the new weights immediately. State-agnostic.
     try {
-        const _hasRows = !!(typeof crashState !== 'undefined' && crashState && crashState.sampleRows && crashState.sampleRows.length > 0);
+        const _hasRows = !!(typeof window.crashState !== 'undefined' && window.crashState && window.crashState.sampleRows && window.crashState.sampleRows.length > 0);
         if (!_hasRows && typeof updateDashboardFromMatview === 'function') {
             const spec = (typeof window._readGlobalFilterSpec === 'function')
                 ? window._readGlobalFilterSpec()
@@ -217,30 +216,30 @@ function getEPDOPresetLabel() {
     const preset = EPDO_PRESETS[EPDO_ACTIVE_PRESET];
     if (!preset) return 'Custom';
     if (EPDO_ACTIVE_PRESET === 'stateDefault') {
-        return (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.stateName ? jurisdictionContext.stateName : 'State') + ' Default';
+        return (typeof window.jurisdictionContext !== 'undefined' && window.jurisdictionContext.stateName ? window.jurisdictionContext.stateName : 'State') + ' Default';
     }
     return preset.name;
 }
 
 function recalculateAllEPDO() {
-    if (!crashState.loaded) return;
+    if (!window.crashState.loaded) return;
     if (typeof updateDashboard === 'function') updateDashboard();
-    if (typeof crashState !== 'undefined' && crashState.hotspots?.length > 0) {
-        crashState.hotspots = [];
+    if (typeof window.crashState !== 'undefined' && window.crashState.hotspots?.length > 0) {
+        window.crashState.hotspots = [];
         if (typeof analyzeHotspots === 'function') analyzeHotspots();
     }
-    if (typeof grantState !== 'undefined' && grantState.loaded) {
-        if (grantState.rankingCache) grantState.rankingCache = { key: null, locations: [] };
+    if (typeof window.grantState !== 'undefined' && window.grantState.loaded) {
+        if (window.grantState.rankingCache) window.grantState.rankingCache = { key: null, locations: [] };
         if (typeof rankLocationsForGrants === 'function') rankLocationsForGrants();
     }
-    if (typeof cmfState !== 'undefined' && cmfState.selectedLocation) {
+    if (typeof window.cmfState !== 'undefined' && window.cmfState.selectedLocation) {
         if (typeof buildCMFCrashProfile === 'function') buildCMFCrashProfile();
         if (typeof updateCMFUI === 'function') updateCMFUI();
     }
     if (typeof safetyState !== 'undefined' && safetyState.activeCategory) {
         if (typeof updateSafetyCategory === 'function') updateSafetyCategory(safetyState.activeCategory);
     }
-    if (typeof baState !== 'undefined' && baState.locationCrashes?.length > 0) {
+    if (typeof window.baState !== 'undefined' && window.baState.locationCrashes?.length > 0) {
         if (typeof updateBAStudy === 'function') updateBAStudy();
     }
     if (typeof updateMapStats === 'function') updateMapStats();
@@ -248,20 +247,38 @@ function recalculateAllEPDO() {
     console.log('[EPDO] Full recalculation cascade complete');
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.core = CL.core || {};
-  window.applyStateDefaultEPDO = applyStateDefaultEPDO; CL.core.applyStateDefaultEPDO = applyStateDefaultEPDO;
-  window.getEPDOPresetLabel = getEPDOPresetLabel; CL.core.getEPDOPresetLabel = getEPDOPresetLabel;
-  window.loadEPDOPreset = loadEPDOPreset; CL.core.loadEPDOPreset = loadEPDOPreset;
-  window.loadSavedEPDOPreset = loadSavedEPDOPreset; CL.core.loadSavedEPDOPreset = loadSavedEPDOPreset;
-  window.recalculateAllEPDO = recalculateAllEPDO; CL.core.recalculateAllEPDO = recalculateAllEPDO;
-  window.safeJsonParse = safeJsonParse; CL.core.safeJsonParse = safeJsonParse;
-  window.saveCustomEPDOWeights = saveCustomEPDOWeights; CL.core.saveCustomEPDOWeights = saveCustomEPDOWeights;
-  window.toggleEPDOSection = toggleEPDOSection; CL.core.toggleEPDOSection = toggleEPDOSection;
-  window.updateEPDOPresetUI = updateEPDOPresetUI; CL.core.updateEPDOPresetUI = updateEPDOPresetUI;
-  window.updateEPDOWeightLabels = updateEPDOWeightLabels; CL.core.updateEPDOWeightLabels = updateEPDOWeightLabels;
-  CL._registerModule('core/epdo-presets');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.core = CL.core || {};
+CL.core.applyStateDefaultEPDO = applyStateDefaultEPDO;
+CL.core.getEPDOPresetLabel = getEPDOPresetLabel;
+CL.core.loadEPDOPreset = loadEPDOPreset;
+CL.core.loadSavedEPDOPreset = loadSavedEPDOPreset;
+CL.core.recalculateAllEPDO = recalculateAllEPDO;
+CL.core.safeJsonParse = safeJsonParse;
+CL.core.saveCustomEPDOWeights = saveCustomEPDOWeights;
+CL.core.toggleEPDOSection = toggleEPDOSection;
+CL.core.updateEPDOPresetUI = updateEPDOPresetUI;
+CL.core.updateEPDOWeightLabels = updateEPDOWeightLabels;
+
+// --- Legacy global exposure for HTML onclick= (see STAGE_A_ONCLICK_API.md) ---
+window.loadEPDOPreset = loadEPDOPreset;
+window.saveCustomEPDOWeights = saveCustomEPDOWeights;
+window.toggleEPDOSection = toggleEPDOSection;
+
+export {
+    applyStateDefaultEPDO,
+    getEPDOPresetLabel,
+    loadEPDOPreset,
+    loadSavedEPDOPreset,
+    recalculateAllEPDO,
+    safeJsonParse,
+    saveCustomEPDOWeights,
+    toggleEPDOSection,
+    updateEPDOPresetUI,
+    updateEPDOWeightLabels
+};
+
+CL._registerModule('core/epdo-presets');

@@ -12,9 +12,8 @@
  *
  * Depends on (must load before this file): `core/constants`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 // ============================================================
 // ROUND 18 §3 — Safe map navigation helpers
@@ -83,13 +82,15 @@ function safeFlyToBounds(map, bounds, options) {
     }
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.map = CL.map || {};
-  window.safeFlyTo = safeFlyTo; CL.map.safeFlyTo = safeFlyTo;
-  window.safeFitBounds = safeFitBounds; CL.map.safeFitBounds = safeFitBounds;
-  window.safeFlyToBounds = safeFlyToBounds; CL.map.safeFlyToBounds = safeFlyToBounds;
-  CL._registerModule('map/map-safe-helpers');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.map = CL.map || {};
+CL.map.safeFlyTo = safeFlyTo;
+CL.map.safeFitBounds = safeFitBounds;
+CL.map.safeFlyToBounds = safeFlyToBounds;
+
+export { safeFlyTo, safeFitBounds, safeFlyToBounds };
+
+CL._registerModule('map/map-safe-helpers');

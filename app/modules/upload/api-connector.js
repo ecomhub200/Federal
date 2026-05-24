@@ -9,12 +9,7 @@
  * Dependencies: CL.upload
  * Globals accessed: appConfig
  */
-window.CL = window.CL || {};
-CL.upload = CL.upload || {};
-CL.upload.apiConnector = CL.upload.apiConnector || {};
-
-(function() {
-    'use strict';
+'use strict';
 
     // API connector state
     var connectorState = {
@@ -318,16 +313,29 @@ CL.upload.apiConnector = CL.upload.apiConnector || {};
     // PUBLIC API
     // ============================================================
 
-    CL.upload.apiConnector = {
-        state: connectorState,
-        presets: statePresets,
-        toggle: toggle,
-        testConnection: testConnection,
-        clearSource: clearSource,
-        applyPreset: applyPreset,
-        handleDataDict: handleDataDict,
-        setMappingMode: setMappingMode
-    };
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.upload = CL.upload || {};
+CL.upload.apiConnector = {
+    state: connectorState,
+    presets: statePresets,
+    toggle: toggle,
+    testConnection: testConnection,
+    clearSource: clearSource,
+    applyPreset: applyPreset,
+    handleDataDict: handleDataDict,
+    setMappingMode: setMappingMode
+};
 
-    CL._registerModule('upload/api-connector');
-})();
+export {
+    connectorState,
+    statePresets,
+    toggle,
+    testConnection,
+    clearSource,
+    applyPreset,
+    handleDataDict,
+    setMappingMode
+};
+
+CL._registerModule('upload/api-connector');
