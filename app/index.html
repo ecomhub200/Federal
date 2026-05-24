@@ -38,6 +38,35 @@
 <meta name="twitter:description" content="Professional crash analysis platform. Analyze crash data, identify high-risk locations, and develop data-driven safety countermeasures.">
 <meta name="twitter:image" content="https://ecomhub200.github.io/Douglas_County_2/data/images/og-image.png">
 
+<script>
+  // STAGE A v3 — Global slot pre-declaration
+  // Creates window.X slots for the 12 known inline-declared globals so:
+  //  (a) bare-identifier reads from any script (classic or module) resolve to window.X (sloppy-mode fallthrough)
+  //  (b) early reads never throw ReferenceError or TDZ — they return null until inline init assigns the real value
+  //  (c) every inline `let X = ...` / `const X = ...` declaration later in index.html still works UNCHANGED
+  //      (the declaration creates a new binding in inline scope; both window.X and the binding coexist; bare reads see the binding)
+  // DO NOT EDIT this list without re-running the audit in queue/304-DIAGNOSTIC.md §2.1
+  (function () {
+    var W = window;
+    W.crashState           = W.crashState           || null;
+    W.jurisdictionContext  = W.jurisdictionContext  || null;
+    W.crashTreeState       = W.crashTreeState       || null;
+    W.warrantsState        = W.warrantsState        || null;
+    W.cmfState             = W.cmfState             || null;
+    W.baState              = W.baState              || null;
+    W.grantState           = W.grantState           || null;
+    W.appConfig            = W.appConfig            || null;
+    W._scorecardData       = W._scorecardData       || null;
+    W._autoLoadGeneration  = (typeof W._autoLoadGeneration === 'number') ? W._autoLoadGeneration : 0;
+    W._userDataReadyResolve = W._userDataReadyResolve || null;
+    // showTab is a FUNCTION not a state value — create a no-op stub so onclick= handlers don't throw before tab-dispatcher loads
+    W.showTab = W.showTab || function (tab) {
+      console.warn('[stub] showTab called before tab-dispatcher loaded — queueing for', tab);
+      (W._pendingShowTab = W._pendingShowTab || []).push(tab);
+    };
+  })();
+</script>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="../states/us_counties_db.js"></script>
