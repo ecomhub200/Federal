@@ -14,9 +14,8 @@
  *
  * Depends on (must load before this file): `spatial/boundary-service`
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+// ─── EXTRACTED CODE START (verbatim from index.html) ───
 
 const FederalBoundaries = (() => {
     'use strict';
@@ -194,11 +193,13 @@ const FederalBoundaries = (() => {
     return { render, remove, getActiveStates };
 })();
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
-  window.CL = window.CL || {};
-  CL.spatial = CL.spatial || {};
-  window.FederalBoundaries = FederalBoundaries; CL.spatial.FederalBoundaries = FederalBoundaries;
-  CL._registerModule('spatial/federal-boundaries');
-})();
+// --- Transitional CL.* namespace (stripped in Stage A-cleanup) ---
+window.CL = window.CL || {};
+CL.spatial = CL.spatial || {};
+CL.spatial.FederalBoundaries = FederalBoundaries;
+
+export { FederalBoundaries };
+
+CL._registerModule('spatial/federal-boundaries');
