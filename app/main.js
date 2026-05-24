@@ -82,3 +82,4 @@ import './modules/map/map-points-hydrate.js';
 import './modules/ai/ai-mode-toggle.js';
 import './modules/spatial/geo-tier.js';
 import './modules/map/map-layers.js';
+import './modules/grants/grants-ui.js';
