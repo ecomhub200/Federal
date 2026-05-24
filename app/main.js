@@ -70,3 +70,4 @@ import './modules/batch-ba/batch-ba-engine.js';
 import './modules/batch-ba/batch-ba-upload.js';
 import './modules/batch-ba/batch-ba-results.js';
 import './modules/batch-ba/batch-ba-charts.js';
+import './modules/batch-ba/batch-ba-duration.js';
