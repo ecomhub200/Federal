@@ -37,3 +37,4 @@ import './modules/ai/context.js';
 import './modules/analysis/crash-profile.js';
 import './modules/analysis/baselines.js';
 import './modules/analysis/hotspots.js';
+import './modules/grants/ranking.js';
