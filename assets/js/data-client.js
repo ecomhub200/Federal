@@ -267,6 +267,13 @@ class CrashLensDataClient {
    * Get summary statistics for a tier/jurisdiction.
    * Source: dashboard_summary matview (instant, ~50K rows total)
    *
+   * @deprecated For pure KPI reads, prefer getDashboardTierKpi() — it hits
+   *   mv_dashboard_tier_kpi (~1600 rows/state, ~50 KB) instead of the
+   *   58K-row dashboard_summary (~31 MB). dashboard_summary is retained for
+   *   per-severity breakdown (B/C/O cards) and the per-func-class/per-
+   *   collision-type tables until mv_dashboard_tier_kpi carries those
+   *   dimensions.
+   *
    * @param {string} tier - 'federal'|'state'|'region'|'planning_district'|'mpo'|'county'|'city'
    * @param {string} value - Jurisdiction name (e.g. 'Kent', 'North District')
    * @param {object} filters - { yearFrom, yearTo, severity, fc, areaType, roadType }
@@ -1467,6 +1474,122 @@ class CrashLensDataClient {
   }
 
   // ─────────────────────────────────────────────────────────
+  //  CC 312 PHASE 2 — mv_dashboard_tier_kpi accessor
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * Tier-rolled dashboard KPIs from mv_dashboard_tier_kpi.
+   * Replaces client-side rollup of 58K-row dashboard_summary.
+   *
+   * The matview stores rows tagged with DATA-DIMENSION tier names
+   * (state, dot_district, mpo, planning_district, jurisdiction) plus a
+   * `federal` UNION for cross-state rollup. Frontend tier names like
+   * `region`, `county`, `city` are translated here (mirroring the established
+   * pattern at app/modules/map/map-points-hydrate.js:115) so callers can
+   * use whatever resolveTier() returns without knowing the matview schema.
+   *
+   * State-agnostic — keys on (state, tier, jurisdiction_id, year). The
+   * region→dot_district mapping is per-state metadata from hierarchy.json,
+   * NOT a hardcoded if-else.
+   *
+   * @param {string} tier  frontend tier — any value resolveTier() can return:
+   *                       state, federal, region, dot_district, mpo,
+   *                       planning_district, county, city, jurisdiction
+   * @param {string|null} jurisdictionId  the tier-specific id (e.g.
+   *                       'North District' for dot_district, 'kent county'
+   *                       for jurisdiction). Pass null for whole-state at
+   *                       tier='state', or null for federal.
+   * @param {number|null} year  filter to single year, or null for all years
+   * @param {object} opts  { signal: AbortSignal? }
+   */
+  async getDashboardTierKpi(tier, jurisdictionId, year, opts = {}) {
+    // ── Frontend-tier → matview-tier translation (state-agnostic) ──
+    let mvTier = tier;
+    let mvJurisdictionId = jurisdictionId;
+    let mvState = this.state;   // by default scope to active state
+
+    if (tier === 'federal') {
+      // Federal rows have state=NULL in the matview
+      mvTier = 'federal';
+      mvJurisdictionId = null;        // ignore any passed id
+      mvState = null;                  // sentinel — query `state=is.null`
+    } else if (tier === 'city' || tier === 'jurisdiction') {
+      // Both collapse to the jurisdiction dimension (physical_juris_name)
+      mvTier = 'jurisdiction';
+    } else if (tier === 'county') {
+      // Silent rollup gotcha — for Delaware county → planning_district per
+      // memory feedback_silent_county_to_pd_rollup_gotcha.md. For states with
+      // genuine county-level rows in the future this can be promoted to a
+      // per-state config lookup.
+      mvTier = 'planning_district';
+    } else if (tier === 'region') {
+      // 'region' is per-state metadata. Look up the active state's hierarchy
+      // to find what data column 'region' maps to. Delaware: regions equal
+      // dot_district values (per CLAUDE.md `dbName` rule). Default fallback
+      // is dot_district so the call still resolves to a real matview row.
+      const reg = (window.CL && CL.spatial && CL.spatial.HierarchyRegistry
+                   && CL.spatial.HierarchyRegistry.getRegionMatviewTier)
+        ? CL.spatial.HierarchyRegistry.getRegionMatviewTier(this.state)
+        : null;
+      mvTier = (reg && reg.matviewTier) || 'dot_district';
+      if (reg && typeof reg.translateId === 'function' && jurisdictionId) {
+        mvJurisdictionId = reg.translateId(jurisdictionId);
+      }
+    }
+    // 'state', 'dot_district', 'mpo', 'planning_district' pass through unchanged.
+
+    // ── Build query ──
+    const params = new URLSearchParams({
+      tier: `eq.${mvTier}`,
+      select: 'state,tier,jurisdiction_id,jurisdiction_name,crash_year,crashes,fatals,serious,injuries,ped,bike,speed,alcohol,night,epdo',
+    });
+    if (mvState === null) {
+      params.append('state', 'is.null');          // federal tier filter
+    } else {
+      params.append('state', `eq.${mvState}`);
+    }
+    if (mvJurisdictionId) params.append('jurisdiction_id', `eq.${mvJurisdictionId}`);
+    if (year != null)     params.append('crash_year', `eq.${year}`);
+    const url = `${this.supabaseUrl}/mv_dashboard_tier_kpi?${params}`;
+
+    // ── Standard timeout + external-signal fetch (mirrors getHotspots/getMapPoints) ──
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, this.timeout);
+    const onExternalAbort = () => controller.abort();
+    if (opts.signal) {
+      if (opts.signal.aborted) {
+        clearTimeout(timer);
+        throw new DOMException('Aborted', 'AbortError');
+      }
+      opts.signal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+    try {
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`,
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (opts.signal) opts.signal.removeEventListener('abort', onExternalAbort);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${resp.status}`);
+      }
+      return await resp.json();
+    } catch (e) {
+      clearTimeout(timer);
+      if (opts.signal) opts.signal.removeEventListener('abort', onExternalAbort);
+      if (e.name === 'AbortError' && !timedOut) throw e;
+      console.warn('[getDashboardTierKpi] fetch failed:', e.message || e);
+      return [];        // gracefully degrade — callers can fall back to dashboard_summary
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
   //  ROUND 12 — NEW MATVIEW ACCESSORS
   // ─────────────────────────────────────────────────────────
 
@@ -2466,7 +2589,11 @@ class CrashLensDataClient {
     return params;
   }
 
-  /** Query dashboard_summary matview */
+  /**
+   * Query dashboard_summary matview.
+   * @deprecated Internal helper for the deprecated getSummary() path —
+   *   see getDashboardTierKpi() for pure KPI reads.
+   */
   async _supabaseSummary(tier, value, filters) {
     const tierFilters = this._tierFilter(tier, value);
     const allFilters = { ...tierFilters };

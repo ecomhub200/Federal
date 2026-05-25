@@ -121,6 +121,55 @@ CL.data.supabaseBridge = (function () {
     }
 
     /**
+     * CC 312 Phase 2 — fold mv_dashboard_tier_kpi rows into the shape
+     * paintKPIs() expects. The matview only carries fatals(=K), serious(=A),
+     * and totals — not B/C breakdown — so `bySeverity.B`/`C` are 0 and
+     * `bySeverity.O` lumps `total - K - A` (i.e. B+C+O). This is corrected
+     * ~1s later when the dashboard_summary fetch returns and paintKPIs
+     * re-runs with full per-severity rows.
+     */
+    function _aggregateTierKpiRows(rows) {
+        var bySeverity = { K: 0, A: 0, B: 0, C: 0, O: 0 };
+        var byYear = {};
+        var total = 0, fatals = 0, serious = 0;
+        var ped = 0, bike = 0, speed = 0, alcohol = 0, night = 0;
+        for (var i = 0; i < rows.length; i++) {
+            var r = rows[i];
+            var c = +r.crashes || 0;
+            var f = +r.fatals || 0;
+            var s = +r.serious || 0;
+            total   += c;
+            fatals  += f;
+            serious += s;
+            ped     += +r.ped     || 0;
+            bike    += +r.bike    || 0;
+            speed   += +r.speed   || 0;
+            alcohol += +r.alcohol || 0;
+            night   += +r.night   || 0;
+            byYear[r.crash_year] = {
+                total: c, K: f, A: s, B: 0, C: 0, O: Math.max(0, c - f - s),
+                ped: +r.ped || 0, bike: +r.bike || 0,
+                speed: +r.speed || 0, night: +r.night || 0,
+            };
+        }
+        bySeverity.K = fatals;
+        bySeverity.A = serious;
+        bySeverity.O = Math.max(0, total - fatals - serious);
+        return {
+            total: total,
+            bySeverity: bySeverity,
+            byYear: byYear,
+            byFuncClass: {},
+            byCollision: {},
+            safety: {
+                ped: ped, bike: bike, speed: speed, alcohol: alcohol,
+                night: night, animal: 0, fatals: fatals,
+                seriousInjured: serious, totalInjured: 0,
+            },
+        };
+    }
+
+    /**
      * Run aggregate(rows) — preferring the off-main-thread worker when
      * available, falling back to the synchronous in-module implementation
      * when Workers are unavailable, blocked by CSP, or the worker errored
@@ -843,6 +892,42 @@ CL.data.supabaseBridge = (function () {
             if (spec.roadType) summaryFilters.roadType = spec.roadType;
             if (spec.roadTypes) summaryFilters.roadTypes = spec.roadTypes;
             if (spec.noInterstate) summaryFilters.noInterstate = true;
+
+            // ─── CC 312 Phase 2 — mv_dashboard_tier_kpi fast-path ───
+            // Paint KPI cards from the pre-aggregated tier-rolled matview
+            // (~50 KB / ~400 ms) BEFORE the full 31 MB dashboard_summary fetch
+            // completes. Tables (yearly / func-class / collision) still need
+            // the per-severity/per-func-class breakdown, so we fall through to
+            // the existing fetch unchanged.
+            //
+            // Skipped when any filter requires a dimension the matview lacks
+            // (severity / fc / area / road-type) — those fall straight through
+            // to the existing path. State-agnostic; no state literals.
+            var _canFastPath = !summaryFilters.severity && !summaryFilters.fc &&
+                               !summaryFilters.areaType && !summaryFilters.roadType &&
+                               !Array.isArray(summaryFilters.roadTypes) &&
+                               !summaryFilters.noInterstate;
+            if (_canFastPath && CL.data && typeof CL.data.cachedMatview === 'function') {
+                try {
+                    var _tkpiRows = await CL.data.cachedMatview(
+                        'mv_dashboard_tier_kpi', t.tier, t.value || '',
+                        function (callOpts) {
+                            return window.crashLensClient.getDashboardTierKpi(
+                                t.tier, t.value || null, null, callOpts || {});
+                        },
+                        { year: 'all' }
+                    );
+                    if (Array.isArray(_tkpiRows) && _tkpiRows.length) {
+                        var _tkpiMs = Date.now() - startTime;
+                        console.log('[Phase2 fast-path] mv_dashboard_tier_kpi painted ' + _tkpiRows.length + ' rows in ' + _tkpiMs + 'ms');
+                        paintKPIs(_aggregateTierKpiRows(_tkpiRows));
+                    }
+                } catch (e) {
+                    // Non-fatal — matview not deployed yet, or PostgREST 404.
+                    // Existing getSummary path runs unchanged below.
+                }
+            }
+            // ─── end CC 312 fast-path ───
 
             // Round-9 Fix 1A — try the 60s result cache first.
             var rows;

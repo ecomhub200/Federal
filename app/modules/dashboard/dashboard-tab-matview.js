@@ -2,7 +2,13 @@
  *  see modular-prompts/15-v2-dashboard-tab.md + MODULAR_PLAN_PROMPT_15-v2_VERIFY.md.
  *  Verbatim except: _tierComparisonCache qualified to window._tierComparisonCache
  *  (reassigned in 15b, invalidated from 15d — cross-IIFE shared mutable global).
- *  No behavior change. */
+ *  No behavior change.
+ *
+ *  CC 312 Phase 2 note: this module reads mv_analysis_summary
+ *  (getAnalysisBreakdown) for chart breakdowns — NOT dashboard_summary.
+ *  KPI-card aggregates (total/K/A/ped/bike/speed/night/EPDO) now come
+ *  from mv_dashboard_tier_kpi via crashLensClient.getDashboardTierKpi(),
+ *  invoked from app/modules/data/supabase-bridge.js. */
 (function(){ 'use strict';
   // ─── EXTRACTED CODE START (verbatim from index.html L43358-L43836) ───
 async function paintDashboardChartsFromMatview() {
