@@ -23974,7 +23974,7 @@ async function loadSampleRowsInBackground(loadGeneration) {
     const _skipTiers = new Set(['federal', 'state', 'region', 'mpo', 'planning_district', 'city']);
     if (_skipTiers.has(_bgTier)) {
         console.log(`[CrashCache] Skipping R2 (matview path) — fetching mv_map_points instead for ${_bgTier} tier`);
-        _hydrateMapPointsFromMatview('skipTier=' + _bgTier);
+        _hydrateMapPointsIfNeeded('skipTier=' + _bgTier);  // CC 313 lazy gate
         return;
     }
     // County tier with rollup: the bridge painted the planning_district /
@@ -23990,7 +23990,7 @@ async function loadSampleRowsInBackground(loadGeneration) {
             console.log('[CrashCache] County rolled up to ' +
                 (_bgResolved.rollupColumn || _bgResolved.tier) + '=' + _bgResolved.value +
                 ' — fetching mv_map_points for filterability');
-            _hydrateMapPointsFromMatview('rolledUpFrom=county');
+            _hydrateMapPointsIfNeeded('rolledUpFrom=county');  // CC 313 lazy gate
             return;
         }
     } catch (e) { /* non-fatal */ }
@@ -42346,8 +42346,8 @@ document.addEventListener('tierChanged', () => {
         window.crashLensClient._mapPointDetailCache.clear();
     }
     window._flagMatchSets = [];
-    if (typeof _hydrateMapPointsFromMatview === 'function') {
-        _hydrateMapPointsFromMatview('tierChanged');
+    if (typeof _hydrateMapPointsIfNeeded === 'function') {
+        _hydrateMapPointsIfNeeded('tierChanged');  // CC 313 lazy gate
     }
 });
 // Dashboard tier KPI cascade — handleTierChange() only re-fetches the
@@ -42379,8 +42379,8 @@ document.addEventListener('jurisdictionChanged', () => {
         window.crashLensClient._mapPointDetailCache.clear();
     }
     window._flagMatchSets = [];
-    if (typeof _hydrateMapPointsFromMatview === 'function') {
-        _hydrateMapPointsFromMatview('jurisdictionChanged');
+    if (typeof _hydrateMapPointsIfNeeded === 'function') {
+        _hydrateMapPointsIfNeeded('jurisdictionChanged');  // CC 313 lazy gate
     }
 });
 
