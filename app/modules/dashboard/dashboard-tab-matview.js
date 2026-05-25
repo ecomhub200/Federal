@@ -21,8 +21,12 @@ async function paintDashboardChartsFromMatview() {
 
     // Round-9 Fix 7 — share the matview cache so other tabs hitting the same
     // analysis_summary key don't re-fetch.
+    // Perf Phase 4 (CC 314) — opt in to IDB persistence (24h, state-scoped).
     const D = await CL.data.cachedMatview('mv_analysis_summary', tierResolved.tier, tierResolved.value,
-        () => dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value));
+        () => dc.getAnalysisBreakdown(tierResolved.tier, tierResolved.value),
+        undefined,
+        { persist: true, persistTtlMs: 24 * 60 * 60 * 1000,
+          state: (window.crashLensClient && window.crashLensClient.state) });
     if (!D) return;
 
     const sortedYears = Object.keys(D.byYear || {}).map(Number).filter(y => y >= 2000).sort((a, b) => a - b);

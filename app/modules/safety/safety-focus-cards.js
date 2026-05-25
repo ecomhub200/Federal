@@ -364,9 +364,13 @@ async function _hydrateSafetyCoFactors() {
     if (stateKey && dc.state !== stateKey) dc.state = stateKey;
     let coFactors = {};
     try {
+        // Perf Phase 4 (CC 314) — opt in to IDB persistence (24h, state-scoped).
         coFactors = await CL.data.cachedMatview(
             'mv_safety_co_factors', t.tier, t.value,
-            () => dc.getSafetyCoFactors(t.tier, t.value, {})
+            () => dc.getSafetyCoFactors(t.tier, t.value, {}),
+            undefined,
+            { persist: true, persistTtlMs: 24 * 60 * 60 * 1000,
+              state: (window.crashLensClient && window.crashLensClient.state) }
         );
     } catch (e) {
         console.warn('[Safety Focus] getSafetyCoFactors failed:', e && e.message);

@@ -105,13 +105,16 @@ async function _loadHotspotsFromMatview() {
         // exports read these without a second roundtrip.
         // Round 15 §3 — fetch AADT-rate matview in parallel. Used to enrich
         // each row with crash_rate_mvmt + AADT for the new rate columns.
+        // Perf Phase 4 (CC 314) — opt in to IDB persistence (6h, state-scoped).
         const _ratesPromise = (typeof window.crashLensClient.getHotspotsWithRates === 'function')
             ? CL.data.cachedMatview('mv_hotspots_with_rates', t.tier, t.value,
                 () => window.crashLensClient.getHotspotsWithRates({
                     county: t.tier === 'county' ? t.value : undefined,
                     limit: Math.max(200, topN * 4)
                 }),
-                { county: t.tier === 'county' ? t.value : null, limit: Math.max(200, topN * 4) })
+                { county: t.tier === 'county' ? t.value : null, limit: Math.max(200, topN * 4) },
+                { persist: true, persistTtlMs: 6 * 60 * 60 * 1000,
+                  state: (window.crashLensClient && window.crashLensClient.state) })
             : Promise.resolve(null);
         const [data, topCollMap, factorsMap, ratesRows] = await Promise.all([
             CL.data.cachedMatview('mv_hotspots', t.tier, t.value,
