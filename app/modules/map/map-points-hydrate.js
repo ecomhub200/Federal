@@ -167,9 +167,57 @@ async function _hydrateMapPointsFromMatview(reason) {
 
   // ─── EXTRACTED CODE END ───
 
+  // CC 313 — lazy-hydrate gate. The original event-driven hydrate above fired
+  // on every jurisdictionChanged / tierChanged regardless of which tab the
+  // user was on, paying a ~4s 50K-row fetch even when no consumer tab was
+  // open. Map-tab Leaflet rendering goes through supabase-map-bridge.js
+  // (viewport RPC, never touches crashState.mapPoints) — only the
+  // per-row-filter tabs below actually read the dataset.
+  //
+  // Wide/safer consumer set per the §1 audit doc. Other tabs (upload,
+  // dashboard, scorecard, etc.) defer until the user navigates to a
+  // consumer. State-agnostic — keys on tab activation, not on state.
+  const _MAP_POINTS_CONSUMER_TABS = new Set([
+      'map', 'hotspots', 'intersection', 'pedestrian', 'analysis',
+      'warrants', 'cmf', 'assets'
+  ]);
+
+  function _readActiveTabId() {
+      // No CL.app.activeTab global — derive from DOM.
+      const el = document.querySelector(
+          '.sidebar-nav-item.active[data-tab], .sidebar-standalone-item.active[data-tab]'
+      );
+      if (el && el.dataset && el.dataset.tab) return el.dataset.tab;
+      const tc = document.querySelector('.tab-content.active');
+      if (tc && tc.id && tc.id.indexOf('tab-') === 0) return tc.id.slice(4);
+      return '';
+  }
+
+  async function _hydrateMapPointsIfNeeded(reason, forceFetch) {
+      // Already hydrated this session? Short-circuit — covers the case where
+      // a consumer tab forced the fetch earlier, then a tierChanged event
+      // fires while still on that tab (or any other tab — the data is
+      // already there).
+      if (Array.isArray(crashState.mapPoints) && crashState.mapPoints.length > 0) {
+          return crashState.mapPoints;
+      }
+      if (!forceFetch) {
+          const activeTab = _readActiveTabId();
+          if (!_MAP_POINTS_CONSUMER_TABS.has(activeTab)) {
+              console.log('[mapPointsHydrate] LAZY-SKIP (' + reason
+                  + ') — active tab "' + activeTab
+                  + '" does not consume crashState.mapPoints');
+              return null;
+          }
+      }
+      return _hydrateMapPointsFromMatview(reason);
+  }
+
   // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
   window.CL = window.CL || {};
   CL.map = CL.map || {};
   window._hydrateMapPointsFromMatview = _hydrateMapPointsFromMatview; CL.map._hydrateMapPointsFromMatview = _hydrateMapPointsFromMatview;
+  window._hydrateMapPointsIfNeeded = _hydrateMapPointsIfNeeded; CL.map._hydrateMapPointsIfNeeded = _hydrateMapPointsIfNeeded;
+  CL.map._MAP_POINTS_CONSUMER_TABS = _MAP_POINTS_CONSUMER_TABS;
   CL._registerModule('map/map-points-hydrate');
 })();

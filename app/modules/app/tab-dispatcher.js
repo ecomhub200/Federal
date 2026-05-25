@@ -357,6 +357,19 @@ function showTab(tabId) {
     if (tabId === 'scorecard') {
         initScorecardTab();
     }
+
+    // CC 313 — lazy hydrate of crashState.mapPoints. Fires only when a
+    // consumer tab (per CL.map._MAP_POINTS_CONSUMER_TABS) activates. The
+    // length-guard inside _hydrateMapPointsIfNeeded short-circuits once the
+    // first hydrate has populated the dataset, so repeat visits are free.
+    // Try-wrapped: a hydrate failure must never block the tab switch.
+    try {
+        const consumerSet = (window.CL && CL.map && CL.map._MAP_POINTS_CONSUMER_TABS) || null;
+        if (consumerSet && consumerSet.has(tabId)
+            && typeof window._hydrateMapPointsIfNeeded === 'function') {
+            window._hydrateMapPointsIfNeeded('tab-activation:' + tabId, true);
+        }
+    } catch (e) { /* never block tab switch on hydrate gating */ }
 }
 
 // ========================================
