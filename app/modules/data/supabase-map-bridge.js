@@ -27,7 +27,6 @@ CL.data.mapBridge = (function () {
     var _lastZoom = null;
     var _lastBounds = null;
     var _totalInViewport = 0;           // total crash count from clusters (for stats overlay)
-    var _attachRetries = 0;             // Round-4 Patch 5 — retry counter for deferred attach
     var _pendingMapReadyHandler = null; // Round 15 §12.11 — wait on crashlens:mapready event
     var _recentFetchKeys = new Map();   // M2 — key → timestamp LRU for dedupe
     var _pendingViewportRequest = null; // M3 — single-slot queue for filter changes while off-tab
@@ -43,33 +42,26 @@ CL.data.mapBridge = (function () {
      * Call this ONCE after initMap() creates the Leaflet map.
      */
     function attach() {
-        // Round 15 §12.11 — prefer event-driven attachment over polling. If
-        // crashMap isn't live yet, listen for the `crashlens:mapready` event
-        // (dispatched by initMap after L.map() succeeds) and attach exactly
-        // once it fires. Falls back to the original 5×250ms retry loop in
-        // case the event was dispatched before this listener was wired (no
-        // change to existing behavior in that hot path).
+        // M4 — event-driven attach. crashlens:mapready is dispatched by
+        // initMap after L.map() succeeds, so the event listener is the
+        // primary (and reliable) path. The previous 5×250ms polling
+        // fallback spammed the console with retry logs even when the
+        // event was about to fire. We keep a single 250ms safety-net
+        // retry only on the very first call (no counter, no log spam).
         if (typeof crashMap === 'undefined' || !crashMap) {
             if (!_pendingMapReadyHandler) {
                 _pendingMapReadyHandler = function () {
-                    document.removeEventListener('crashlens:mapready', _pendingMapReadyHandler);
                     _pendingMapReadyHandler = null;
-                    _attachRetries = 0;
                     attach();
                 };
                 document.addEventListener('crashlens:mapready', _pendingMapReadyHandler, { once: true });
+                // One-shot safety net in case crashlens:mapready was already
+                // dispatched before this listener was wired. Subsequent calls
+                // to attach() while waiting are no-ops (handler already set).
+                setTimeout(function () { if (_pendingMapReadyHandler) attach(); }, 250);
             }
-            if (_attachRetries < 5) {
-                _attachRetries += 1;
-                console.log('[MapBridge] crashMap not ready, retrying in 250ms (attempt ' + _attachRetries + ')');
-                setTimeout(attach, 250);
-                return;
-            }
-            console.warn('[MapBridge] crashMap not ready after 5 retries; waiting on crashlens:mapready event.');
-            _attachRetries = 0;
             return;
         }
-        _attachRetries = 0;
         if (_pendingMapReadyHandler) {
             document.removeEventListener('crashlens:mapready', _pendingMapReadyHandler);
             _pendingMapReadyHandler = null;
