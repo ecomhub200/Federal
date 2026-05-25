@@ -52729,8 +52729,8 @@ async function _loadIntersectionsFromHotspots() {
         const intSeriousEl = document.getElementById('intSerious');
         const intPctEl = document.getElementById('intPct');
         if (intTotalEl) intTotalEl.textContent = finalTotal.toLocaleString();
-        if (intFatalEl) intFatalEl.textContent = finalK;
-        if (intSeriousEl) intSeriousEl.textContent = finalA;
+        if (intFatalEl) intFatalEl.textContent = (finalK || 0).toLocaleString();
+        if (intSeriousEl) intSeriousEl.textContent = (finalA || 0).toLocaleString();
         if (intPctEl) intPctEl.textContent = (typeof pct === 'function' ? pct(finalTotal, baseTotal) : ((baseTotal > 0 ? (finalTotal/baseTotal*100) : 0).toFixed(1))) + '%';
 
         // Bug 12 fix — the matview ships now. Remove any stale banner from a
@@ -52954,8 +52954,8 @@ function _renderIntersectionKpisFromMatview(rows) {
     const elSerious = document.getElementById('intSerious');
     const elPct     = document.getElementById('intPct');
     if (elTotal)   elTotal.textContent   = agg.total.toLocaleString();
-    if (elFatal)   elFatal.textContent   = agg.K;
-    if (elSerious) elSerious.textContent = agg.A;
+    if (elFatal)   elFatal.textContent   = (agg.K || 0).toLocaleString();
+    if (elSerious) elSerious.textContent = (agg.A || 0).toLocaleString();
     if (elPct)     elPct.textContent     = (typeof pct === 'function'
         ? pct(agg.total, baseTotal)
         : ((baseTotal > 0 ? (agg.total / baseTotal * 100) : 0).toFixed(1))) + '%';
