@@ -592,7 +592,9 @@
     var TIER_SUBJURISDICTION_DROPDOWN = {
         region: 'tierRegionSelect',
         mpo: 'tierMPOSelect',
-        planning_district: 'tierPlanningDistrictSelect'
+        planning_district: 'tierPlanningDistrictSelect',
+        city: 'tierCitySelect',
+        county: 'tierCountySelect'
     };
 
     // The dropdown is not always populated on the synchronous frame the
