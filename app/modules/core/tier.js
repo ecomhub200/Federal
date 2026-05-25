@@ -19,15 +19,28 @@
  * were pre-drift; §8 governs. Verbatim, no behavior change.
  *
  * Depends on (must load before this file): `core/constants`
+ *
+ * Stage A v3 Phase 2.3 — IIFE → ESM:
+ *   - IIFE wrapper removed; `'use strict'` kept at top.
+ *   - All 16 `crashState` + 10 `jurisdictionContext` + 3 `crashTreeState` bare
+ *     reads rewritten to `window.X` (those stub globals are exposed as window
+ *     properties post-PR #205, Phase 2-prep-2).
+ *   - `TIER_TAB_VISIBILITY` and `_TIER_EXTENSIONS` stay bare — they resolve via
+ *     globalThis lookup (var-declared inline post-PR #203, Phase 2-prep).
+ *   - 4 named exports (`setViewTier`, `updateTabVisibilityForTier`,
+ *     `updateTierSelectorUI`, `handleTierChange`) for future-phase imports.
+ *   - Back-compat dual exposure preserved: `window.<fn>` + `CL.core.<fn>`.
+ *   - `_registerModule` call routed via `window.CL._registerModule`.
+ *   - No ESM imports — cross-module deps stay routed through `window.CL.X`.
  */
-(function(){
-  'use strict';
-  // ─── EXTRACTED CODE START (verbatim from index.html) ───
+'use strict';
+
+// ─── EXTRACTED CODE START (verbatim from index.html, except bare-read rewrites) ───
 
 function setViewTier(tier) {
     if (!TIER_TAB_VISIBILITY[tier]) { console.warn('[Scope] Unknown tier:', tier); return; }
-    const prev = jurisdictionContext.viewTier;
-    jurisdictionContext.viewTier = tier;
+    const prev = window.jurisdictionContext.viewTier;
+    window.jurisdictionContext.viewTier = tier;
     updateTabVisibilityForTier(tier);
     updateTierSelectorUI(tier);
     console.log(`[Scope] View tier changed: ${prev} → ${tier}`);
@@ -51,10 +64,10 @@ function setViewTier(tier) {
     // them right after; Fix 4 keeps totalRows in sync.
     if (prev !== tier) {
         try {
-            if (typeof crashState !== 'undefined' && crashState) {
-                crashState.mapPoints = [];
-                crashState.sampleRows = [];
-                crashState.sampleRowsLoaded = false;
+            if (typeof window.crashState !== 'undefined' && window.crashState) {
+                window.crashState.mapPoints = [];
+                window.crashState.sampleRows = [];
+                window.crashState.sampleRowsLoaded = false;
             }
             // If the Leaflet map exists, repaint it immediately so the user
             // doesn't see the previous tier's markers while the new tier loads.
@@ -113,11 +126,11 @@ function updateTierSelectorUI(tier) {
         if (scopeText) {
             const tierLabels = {
                 federal: 'National (all states with data)',
-                state: jurisdictionContext.tierState?.name ? `${jurisdictionContext.tierState.name} (statewide)` : 'Statewide',
-                region: jurisdictionContext.tierRegion?.name || 'Select a region',
-                planning_district: jurisdictionContext.tierPlanningDistrict?.name || 'Select a planning district',
-                mpo: jurisdictionContext.tierMpo?.name || 'Select an MPO',
-                city: jurisdictionContext.tierCity?.name || 'Select a city / town'
+                state: window.jurisdictionContext.tierState?.name ? `${window.jurisdictionContext.tierState.name} (statewide)` : 'Statewide',
+                region: window.jurisdictionContext.tierRegion?.name || 'Select a region',
+                planning_district: window.jurisdictionContext.tierPlanningDistrict?.name || 'Select a planning district',
+                mpo: window.jurisdictionContext.tierMpo?.name || 'Select an MPO',
+                city: window.jurisdictionContext.tierCity?.name || 'Select a city / town'
             };
             scopeText.textContent = tierLabels[tier] || tier;
         }
@@ -175,11 +188,11 @@ async function handleTierChange(tier) {
         }
 
         // If switching to region/mpo/pd, populate the dropdowns from hierarchy
-        if ((tier === 'region' || tier === 'mpo' || tier === 'planning_district') && jurisdictionContext.hierarchyLoaded) {
+        if ((tier === 'region' || tier === 'mpo' || tier === 'planning_district') && window.jurisdictionContext.hierarchyLoaded) {
             if (tier === 'region') populateRegionDropdown();
             if (tier === 'mpo') populateMPODropdown();
             if (tier === 'planning_district') populatePlanningDistrictDropdown();
-        } else if ((tier === 'region' || tier === 'mpo' || tier === 'planning_district') && !jurisdictionContext.hierarchyLoaded) {
+        } else if ((tier === 'region' || tier === 'mpo' || tier === 'planning_district') && !window.jurisdictionContext.hierarchyLoaded) {
             // Need to load hierarchy first
             const stateSelect = document.getElementById('stateSelect');
             const stateKey = stateSelect?.value;
@@ -324,18 +337,18 @@ async function handleTierChange(tier) {
             if (tier === 'state' || tier === 'federal') {
                 try {
                     // Reset stale R2 state before Supabase fetch
-                    if (typeof crashState !== 'undefined') {
-                        crashState.loaded = false;
-                        crashState.sampleRows = [];
-                        crashState.mapPoints = [];
+                    if (typeof window.crashState !== 'undefined') {
+                        window.crashState.loaded = false;
+                        window.crashState.sampleRows = [];
+                        window.crashState.mapPoints = [];
                     }
                     if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                         await CL.data.supabaseBridge.injectFastDashboard({ force: true });
                     }
-                    if (typeof crashState !== 'undefined') {
-                        crashState.loaded = true;
-                        crashState.sampleRowsLoaded = false;
-                        if (typeof crashState.totalRows !== 'number') crashState.totalRows = 0;
+                    if (typeof window.crashState !== 'undefined') {
+                        window.crashState.loaded = true;
+                        window.crashState.sampleRowsLoaded = false;
+                        if (typeof window.crashState.totalRows !== 'number') window.crashState.totalRows = 0;
                     }
                     try { updateDataConnectionStatus('connected'); } catch (e2) {}
                     // Re-activate Supabase viewport map bridge: mapPoints are
@@ -349,7 +362,7 @@ async function handleTierChange(tier) {
                     } catch (mb) { /* non-fatal */ }
                     console.log(`[Tier] ${tier} view using Supabase matview (R2 download skipped)`);
                     console.log('[CrashLens] Data loaded at', new Date().toISOString(),
-                                'source: supabase-matview-' + tier + ', rows:', (crashState && crashState.totalRows) || 0);
+                                'source: supabase-matview-' + tier + ', rows:', (window.crashState && window.crashState.totalRows) || 0);
                 } catch (e) {
                     console.warn(`[Tier] Supabase bridge for ${tier} failed:`, e.message);
                 }
@@ -357,7 +370,7 @@ async function handleTierChange(tier) {
         }
         // Reset detail tab loaded flags so they reinitialize on next visit
         try {
-            if (typeof crashTreeState !== 'undefined' && crashTreeState) crashTreeState.loaded = false;
+            if (typeof window.crashTreeState !== 'undefined' && window.crashTreeState) window.crashTreeState.loaded = false;
             if (typeof fatalSpeedingState !== 'undefined' && fatalSpeedingState) fatalSpeedingState.loaded = false;
         } catch (e) { /* non-fatal */ }
         // Refresh subtitle, search bar, and map stats scope label so they
@@ -377,14 +390,22 @@ async function handleTierChange(tier) {
     }
 }
 
-  // ─── EXTRACTED CODE END ───
+// ─── EXTRACTED CODE END ───
 
-  // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
+// === ESM exports (unused by other modules in Phase 2; for future-phase imports) ===
+export { setViewTier, updateTabVisibilityForTier, updateTierSelectorUI, handleTierChange };
+
+// === Back-compat dual exposure — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace ===
+if (typeof window !== 'undefined') {
   window.CL = window.CL || {};
-  CL.core = CL.core || {};
-  window.handleTierChange = handleTierChange; CL.core.handleTierChange = handleTierChange;
-  window.setViewTier = setViewTier; CL.core.setViewTier = setViewTier;
-  window.updateTabVisibilityForTier = updateTabVisibilityForTier; CL.core.updateTabVisibilityForTier = updateTabVisibilityForTier;
-  window.updateTierSelectorUI = updateTierSelectorUI; CL.core.updateTierSelectorUI = updateTierSelectorUI;
-  CL._registerModule('core/tier');
-})();
+  window.CL.core = window.CL.core || {};
+  window.handleTierChange = handleTierChange;                              window.CL.core.handleTierChange = handleTierChange;
+  window.setViewTier = setViewTier;                                        window.CL.core.setViewTier = setViewTier;
+  window.updateTabVisibilityForTier = updateTabVisibilityForTier;          window.CL.core.updateTabVisibilityForTier = updateTabVisibilityForTier;
+  window.updateTierSelectorUI = updateTierSelectorUI;                      window.CL.core.updateTierSelectorUI = updateTierSelectorUI;
+}
+
+// === Module registration (load tracker) — routed via window.CL in ESM scope ===
+if (typeof window !== 'undefined' && window.CL && window.CL._registerModule) {
+  window.CL._registerModule('core/tier');
+}
