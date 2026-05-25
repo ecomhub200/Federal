@@ -934,8 +934,8 @@ async function exportAllApplications() {
 // ============================================================
 
 function getGrantAISystemPrompt() {
-    const stateName = jurisdictionContext.stateName || 'the state';
-    const fips = jurisdictionContext.stateFips || '08';
+    const stateName = jurisdictionContext?.stateName || 'the state';
+    const fips = jurisdictionContext?.stateFips || '08';
     const stateInfo = (typeof FIPSDatabase !== 'undefined') ? FIPSDatabase.getState(fips) : null;
     const dotName = stateInfo?.dotName || 'State DOT';
 
@@ -989,12 +989,12 @@ Use markdown formatting for readability. Be thorough, data-driven, and write to 
 const GRANT_AI_SYSTEM_PROMPT = getGrantAISystemPrompt();
 
 function getGrantSearchSystemPrompt() {
-    const fips = jurisdictionContext.stateFips || '08';
+    const fips = jurisdictionContext?.stateFips || '08';
     const stateInfo = (typeof FIPSDatabase !== 'undefined') ? FIPSDatabase.getState(fips) : null;
     const dotName = stateInfo?.dotName || 'State DOT';
     const hso = getStateHSO(fips);
     const hsoAgency = hso.agency || dotName;
-    const stateName = jurisdictionContext.stateName || 'the state';
+    const stateName = jurisdictionContext?.stateName || 'the state';
 
     return `You are a Grant Search Strategist specializing in highway safety funding. You help traffic engineers in ${stateName} identify the best-fit grants, assess competitiveness, and develop winning application strategies.
 
@@ -1043,11 +1043,11 @@ Be specific and actionable. Estimate potential funding. Be direct about weak vs.
 const GRANT_SEARCH_SYSTEM_PROMPT = getGrantSearchSystemPrompt();
 
 function getFullApplicationSystemPrompt() {
-    const fips = jurisdictionContext.stateFips || '08';
+    const fips = jurisdictionContext?.stateFips || '08';
     const stateInfo = (typeof FIPSDatabase !== 'undefined') ? FIPSDatabase.getState(fips) : null;
     const dotName = stateInfo?.dotName || 'State DOT';
-    const stateName = jurisdictionContext.stateName || 'the state';
-    const countyName = jurisdictionContext.jurisdictionName || 'the county';
+    const stateName = jurisdictionContext?.stateName || 'the state';
+    const countyName = jurisdictionContext?.jurisdictionName || 'the county';
     const eK = EPDO_WEIGHTS.K, eA = EPDO_WEIGHTS.A, eB = EPDO_WEIGHTS.B, eC = EPDO_WEIGHTS.C, eO = EPDO_WEIGHTS.O;
 
     return `You are a senior transportation safety grant writer with 15+ years of experience winning competitive federal highway safety grants including SS4A, HSIP, and NHTSA 402/405 programs. You have served as both an applicant and a USDOT grant reviewer. Your applications have a 90% success rate because you understand exactly what reviewers look for.
@@ -1172,7 +1172,7 @@ const grantAgentState = {
  * using jurisdictionContext. Accessed as GRANT_PROGRAM_REQUIREMENTS.ss4a etc.
  */
 function buildGrantProgramRequirements() {
-    const fips = jurisdictionContext.stateFips || '08';
+    const fips = jurisdictionContext?.stateFips || '08';
     const stateInfo = (typeof FIPSDatabase !== 'undefined') ? FIPSDatabase.getState(fips) : null;
     const dotName = stateInfo?.dotName || 'State DOT';
     const hso = (typeof getStateHSO === 'function') ? getStateHSO(fips) : {};
@@ -1646,7 +1646,7 @@ function buildGrantAgent1Input(crashData, projectParams) {
 
 LOCATION: ${crashData.locationName || 'Selected Location'}
 TYPE: ${crashData.locationType || 'Intersection'}
-JURISDICTION: ${jurisdictionContext.jurisdictionName || 'Unknown'}, ${jurisdictionContext.stateName || 'Unknown'}
+JURISDICTION: ${jurisdictionContext?.jurisdictionName || 'Unknown'}, ${jurisdictionContext?.stateName || 'Unknown'}
 
 CRASHES: Total=${crashData.total}, K=${crashData.K||0}, A=${crashData.A||0}, B=${crashData.B||0}, C=${crashData.C||0}, O=${crashData.O||0}
 K+A RATE: ${crashData.total > 0 ? (((crashData.K||0) + (crashData.A||0)) / crashData.total * 100).toFixed(1) : 0}%
@@ -2052,7 +2052,7 @@ async function generateGrant4AgentPDF(results, projectParams) {
     y += 8;
     doc.text(`Federal Share: ${programInfo.federalShare || '80%'}`, margin, y);
     y += 8;
-    doc.text(`Applicant: ${jurisdictionContext.jurisdictionName || 'County'}, ${jurisdictionContext.stateName || 'State'} - Department of Public Works`, margin, y);
+    doc.text(`Applicant: ${jurisdictionContext?.jurisdictionName || 'County'}, ${jurisdictionContext?.stateName || 'State'} - Department of Public Works`, margin, y);
     y += 8;
     doc.text(`Date: ${new Date().toLocaleDateString()}`, margin, y);
     y += 15;
