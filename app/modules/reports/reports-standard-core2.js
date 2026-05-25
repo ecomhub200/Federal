@@ -326,6 +326,195 @@ function generateEnhancedRecommendations(stats, crashes, categoryData) {
         </div>
     `;
 }
+
+// ============================================================
+// CC 324 BUGs G/H/I — matview-mode siblings
+// ============================================================
+// At aggregate tiers (county-rollup, region, MPO, PD, state, federal) the
+// dashboard report runs with crashes = [] stub array. The row-iterating
+// builders above return zeros. These siblings read window._reportMatviewData
+// (populated by hydrateReportFromMatviews) so the same dashboard sections
+// render real numbers without a 100K-row pull. State-agnostic.
+
+/**
+ * BUG G — Build the same shape as computeSystemwideCategoryData but from
+ * already-fetched matviews. _M.safetyCategories carries one row per category
+ * (mv_safety_categories); _M.safetyFocusLocations carries rows per (category,
+ * location); _M.intersectionSummary carries rows per (intersection_type, ...).
+ */
+function computeSystemwideCategoryDataFromMatviews(_M) {
+    const cats = {
+        fatal:        { total: 0, byRoute: {}, K: 0, A: 0 },
+        pedestrian:   { total: 0, byRoute: {}, K: 0, A: 0 },
+        bicycle:      { total: 0, byRoute: {}, K: 0, A: 0 },
+        speed:        { total: 0, byRoute: {}, K: 0, A: 0 },
+        intersection: { total: 0, byRoute: {}, K: 0, A: 0 },
+        nighttime:    { total: 0, byRoute: {}, K: 0, A: 0 },
+        impaired:     { total: 0, byRoute: {}, K: 0, A: 0 }
+    };
+
+    // Top-level totals from the dashboard_summary roll-up (always present).
+    cats.fatal.total      = (_M.bySeverity && _M.bySeverity.K) || 0;
+    cats.fatal.K          = cats.fatal.total;
+    cats.pedestrian.total = _M.ped || 0;
+    cats.bicycle.total    = _M.bike || 0;
+    cats.speed.total      = _M.speed || 0;
+    cats.nighttime.total  = _M.night || 0;
+    cats.impaired.total   = _M.alcohol || 0;
+
+    // K/A per category from mv_safety_categories rows. Map matview category
+    // label (lowercase) to our category key — defensive against label drift.
+    const aliasMap = {
+        pedestrian: 'pedestrian', ped: 'pedestrian',
+        bicycle: 'bicycle', bike: 'bicycle',
+        speed: 'speed', 'speed-related': 'speed', speeding: 'speed',
+        nighttime: 'nighttime', night: 'nighttime',
+        impaired: 'impaired', alcohol: 'impaired', dui: 'impaired',
+        intersection: 'intersection',
+        fatal: 'fatal'
+    };
+    (_M.safetyCategories || []).forEach(row => {
+        const label = String(row.category || row.category_name || '').toLowerCase().trim();
+        const key = aliasMap[label];
+        if (!key || !cats[key]) return;
+        cats[key].K = Number(row.k || row.K || 0) || cats[key].K;
+        cats[key].A = Number(row.a || row.A || 0) || cats[key].A;
+        // Trust the matview total over the dashboard_summary roll-up when
+        // present (more granular). Falls back to the existing top-level total.
+        const matTotal = Number(row.total || row.total_crashes || 0);
+        if (matTotal > 0) cats[key].total = matTotal;
+    });
+
+    // Intersection total — sum mv_intersection_summary rows excluding the
+    // "Not at Intersection" sentinel. Matches Intersections-tab math.
+    const _intRows = Array.isArray(_M.intersectionSummary) ? _M.intersectionSummary : [];
+    let intTotal = 0, intK = 0, intA = 0;
+    const intByRoute = {};
+    _intRows.forEach(r => {
+        const itype = String(r.intersection_type || '').toLowerCase();
+        if (!itype || itype.includes('not at intersection') || itype.startsWith('0.')) return;
+        intTotal += Number(r.total) || 0;
+        intK += Number(r.k) || 0;
+        intA += Number(r.a) || 0;
+    });
+    cats.intersection.total = intTotal;
+    cats.intersection.K = intK;
+    cats.intersection.A = intA;
+
+    // Top locations per category from mv_safety_focus_locations rows. Used by
+    // generateExplorationDashboard's `Top: …` footer on each tile, and reused
+    // by generateCategoryTopLocationsFromMatviews below.
+    (_M.safetyFocusLocations || []).forEach(row => {
+        const label = String(row.category || row.category_name || '').toLowerCase().trim();
+        const key = aliasMap[label];
+        if (!key || !cats[key]) return;
+        const name = row.location_name || row.rte_name || row.intersection_name || '';
+        if (!name) return;
+        const cnt = Number(row.total || row.total_crashes || 0) || 0;
+        cats[key].byRoute[name] = (cats[key].byRoute[name] || 0) + cnt;
+    });
+    // Intersection top-locations: mv_intersection_summary doesn't carry
+    // location names, but mv_safety_focus_locations may have an "intersection"
+    // category. If empty, top-N falls back to topHotspots filtered by node.
+    if (Object.keys(cats.intersection.byRoute).length === 0 && Array.isArray(_M.topHotspots)) {
+        _M.topHotspots
+            .filter(h => h && (h.node_id || h.intersection_name))
+            .slice(0, 25)
+            .forEach(h => {
+                const name = h.intersection_name || (`Node ${h.node_id}`);
+                const cnt = Number(h.total_crashes || 0) || 0;
+                cats.intersection.byRoute[name] = (cats.intersection.byRoute[name] || 0) + cnt;
+            });
+    }
+
+    return cats;
+}
+
+/**
+ * BUG H — Top Crash Locations by Category in matview mode. Same HTML shape as
+ * generateCategoryTopLocations, but the byRoute objects come pre-populated on
+ * categoryData (built by computeSystemwideCategoryDataFromMatviews above).
+ */
+function generateCategoryTopLocationsFromMatviews(_M, categoryData) {
+    // Delegate to the row-mode renderer — it only reads categoryData.{cat}.byRoute,
+    // which is already populated from mv_safety_focus_locations. Keeps one HTML
+    // template; the matview siblings just guarantee the data is there.
+    return generateCategoryTopLocations([], categoryData);
+}
+
+/**
+ * BUG I — Recommended Actions in matview mode. Uses _M.total instead of
+ * crashes.length for the intersection-share threshold, otherwise identical to
+ * the row-mode generator. Falls back to a clear gap-state if no recs trigger.
+ */
+function generateEnhancedRecommendationsFromMatviews(stats, _M, categoryData) {
+    const recs = [];
+    const totalCrashes = (_M && _M.total) || (stats && stats.total) || 0;
+
+    if (categoryData.fatal.total > 0) {
+        recs.push({ priority: 'high', icon: '💀',
+            text: 'Conduct detailed fatal crash reviews at top locations to identify systemic issues and immediate countermeasures' });
+    }
+    if (categoryData.pedestrian.total >= 5) {
+        const topPed = getTopLocation(categoryData.pedestrian.byRoute);
+        recs.push({ priority: 'high', icon: '🚶',
+            text: `Evaluate pedestrian facilities at high-crash corridors${topPed ? ` especially ${truncateRoute(topPed.name, 25)}` : ''} - consider RRFB, PHB, refuge islands, or enhanced crossings` });
+    }
+    if (categoryData.bicycle.total >= 3) {
+        recs.push({ priority: 'medium', icon: '🚴',
+            text: 'Review bicycle infrastructure and consider protected bike lanes, bike boxes, or separated facilities at high-crash locations' });
+    }
+    if (categoryData.speed.total >= 10) {
+        recs.push({ priority: 'medium', icon: '⚡',
+            text: 'Implement speed management strategies including traffic calming, speed feedback signs, or appropriate speed limit reviews' });
+    }
+    if (totalCrashes > 0 && categoryData.intersection.total > totalCrashes * 0.4) {
+        recs.push({ priority: 'high', icon: '🚦',
+            text: 'Focus intersection safety improvements including signal timing optimization, left-turn treatments, and geometric modifications' });
+    }
+    if (categoryData.nighttime.K + categoryData.nighttime.A > 5) {
+        recs.push({ priority: 'medium', icon: '🌙',
+            text: 'Consider lighting improvements and enhanced delineation at locations with high nighttime crash severity' });
+    }
+    if (categoryData.impaired.K > 0) {
+        recs.push({ priority: 'high', icon: '🍺',
+            text: 'Coordinate with law enforcement for targeted impaired driving enforcement at high-crash corridors' });
+    }
+
+    // Gap-state when nothing triggered (vanishingly rare at any populated tier).
+    if (recs.length === 0) {
+        return `
+            <h4 style="display:flex;align-items:center;gap:.5rem">
+                <svg style="width:18px;height:18px" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+                Recommended Actions
+            </h4>
+            <p style="font-size:.85rem;color:#64748b;margin-top:.5rem">
+                No deterministic recommendations triggered for this dataset. Detailed AI-generated recommendations available via AI Mode (enable in the header).
+            </p>
+        `;
+    }
+
+    const priorityOrder = { high: 1, medium: 2, low: 3 };
+    recs.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+
+    return `
+        <h4 style="display:flex;align-items:center;gap:.5rem">
+            <svg style="width:18px;height:18px" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+            Recommended Actions
+        </h4>
+        <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:.5rem">
+            ${recs.map(r => `
+                <div style="display:flex;align-items:flex-start;gap:.5rem;padding:.5rem .75rem;background:${r.priority === 'high' ? '#fef2f2' : r.priority === 'medium' ? '#fff7ed' : '#f8fafc'};border:1px solid ${r.priority === 'high' ? '#fca5a5' : r.priority === 'medium' ? '#fdba74' : '#e2e8f0'};border-radius:6px">
+                    <span style="font-size:1.1rem">${r.icon}</span>
+                    <div style="flex:1">
+                        <span style="font-size:.65rem;font-weight:600;color:${r.priority === 'high' ? '#dc2626' : r.priority === 'medium' ? '#ea580c' : '#64748b'};text-transform:uppercase">${r.priority} Priority</span>
+                        <div style="font-size:.8rem;color:#334155;margin-top:.15rem">${r.text}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
   // ─── EXTRACTED CODE END ───
   window.CL = window.CL || {}; CL.reports = CL.reports || {};
   CL.reports.standardCore2 = CL.reports.standardCore2 || {};
@@ -335,5 +524,9 @@ function generateEnhancedRecommendations(stats, crashes, categoryData) {
   window.generateCategoryTopLocations = generateCategoryTopLocations; CL.reports.standardCore2.generateCategoryTopLocations = generateCategoryTopLocations;
   window.generateEnhancedFindings = generateEnhancedFindings; CL.reports.standardCore2.generateEnhancedFindings = generateEnhancedFindings;
   window.generateEnhancedRecommendations = generateEnhancedRecommendations; CL.reports.standardCore2.generateEnhancedRecommendations = generateEnhancedRecommendations;
+  // CC 324 BUGs G/H/I — matview-mode siblings
+  window.computeSystemwideCategoryDataFromMatviews = computeSystemwideCategoryDataFromMatviews; CL.reports.standardCore2.computeSystemwideCategoryDataFromMatviews = computeSystemwideCategoryDataFromMatviews;
+  window.generateCategoryTopLocationsFromMatviews = generateCategoryTopLocationsFromMatviews; CL.reports.standardCore2.generateCategoryTopLocationsFromMatviews = generateCategoryTopLocationsFromMatviews;
+  window.generateEnhancedRecommendationsFromMatviews = generateEnhancedRecommendationsFromMatviews; CL.reports.standardCore2.generateEnhancedRecommendationsFromMatviews = generateEnhancedRecommendationsFromMatviews;
   CL._registerModule('reports/reports-standard-core2');
 })();
