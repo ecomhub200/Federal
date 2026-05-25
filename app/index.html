@@ -13603,7 +13603,7 @@ Search across traffic safety standards with AI-powered retrieval. Select a locat
 <option value="OTHER">Other (FHWA Default)</option>
 </select>
 <select id="roundQuickCounty" onchange="roundaboutQuick_updateLocationFactors()" style="padding:.35rem;border:1px solid #86efac;border-radius:4px;font-size:.7rem;background:white">
-<option value="DOUGLAS" selected>Douglas County</option>
+<option value="DOUGLAS">Douglas County</option>
 <option value="HENRICO">Henrico County (Richmond Dist.)</option>
 <option value="RICHMOND_CITY">City of Richmond</option>
 <option value="CHESTERFIELD">Chesterfield County</option>
@@ -19484,7 +19484,8 @@ const r2State = {
 // Dynamic config - loaded from config.json
 let appConfig = null;
 let appSettings = null; // Settings from APP_PATHS.SETTINGS
-let MAP_CENTER = [39.33, -104.93]; // Default fallback (Douglas County, CO)
+// Pre-config fallback; runtime value is reassigned from appConfig once it loads.
+let MAP_CENTER = (typeof appConfig !== 'undefined' && appConfig?.jurisdictions?.[appConfig?.states?.[appConfig?.defaultState]?.defaultJurisdiction]?.mapCenter) || [39.33, -104.93];
 let MAP_ZOOM = 11;
 
 // ============================================================
@@ -125145,7 +125146,9 @@ function signDef_initMap() {
     }
 
     // Calculate center from deficiencies or crash data centroid
-    var center = [39.0, -105.0]; // Default (Douglas County CO)
+    // Map center: prefer the active state's default jurisdiction from appConfig;
+    // fall back to the legacy literal when appConfig hasn't loaded yet.
+    var center = (typeof appConfig !== 'undefined' && appConfig?.jurisdictions?.[appConfig?.states?.[appConfig?.defaultState]?.defaultJurisdiction]?.mapCenter) || [39.0, -105.0];
     var zoom = 11;
     if (signDefState.deficiencies.length > 0) {
         var lats = signDefState.deficiencies.map(function(d) { return d.lat; });
