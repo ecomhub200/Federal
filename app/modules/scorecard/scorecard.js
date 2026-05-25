@@ -504,6 +504,24 @@ function _rerank(rows, valKey, rankKey) {
 let _scorecardSortKey = 'total_crashes';
 let _scorecardSortDir = 'desc';
 const _scorecardPinned = new Set();
+
+// SC3 fix — compute YoY delta from whichever data source is available.
+// Federal tier: matview provides yoy_total / yoy_fatal pre-computed.
+// State/jurisdiction tier: those columns are NULL on scorecard_rankings,
+// so derive from the 5-yr history array (r.spark_5yr) populated at L417-420.
+// Returns null when no comparable prior year exists (caller renders em-dash).
+function _computeYoyDelta(r) {
+  if (r && r.yoy_total != null && isFinite(Number(r.yoy_total))) return Number(r.yoy_total);
+  if (r && r.yoy_fatal != null && isFinite(Number(r.yoy_fatal))) return Number(r.yoy_fatal);
+  const s = r && r.spark_5yr;
+  if (Array.isArray(s) && s.length >= 2) {
+    const cur = Number(s[s.length - 1]) || 0;
+    const prev = Number(s[s.length - 2]) || 0;
+    if (prev > 0) return ((cur - prev) / prev) * 100;
+  }
+  return null;
+}
+
 function renderScorecardTable(data) {
   const head = document.getElementById('scorecardHead');
   const body = document.getElementById('scorecardBody');
@@ -588,13 +606,20 @@ function renderScorecardTable(data) {
       ? r._totalRate.toFixed(1)
       : Number(r.total_crashes||0).toLocaleString();
     const dispKsi = normalize ? Number(r._ksiRate||0).toFixed(1) : Number(r.ksi_crashes||0).toLocaleString();
-    const yoyRaw = (r.yoy_total != null ? Number(r.yoy_total) : (r.yoy_fatal != null ? Number(r.yoy_fatal) : 0));
-    const yoy = isFinite(yoyRaw) ? yoyRaw : 0;
+    const yoyDelta = _computeYoyDelta(r);
     const _scMode = document.getElementById('scorecard-year-mode')?.value || 'single';
-    const yoyArr = (_scMode === 'rolling') ? ''   // YoY is meaningless across a rolling 3-yr sum
-                : yoy > 0.5 ? `<span class="delta-up">▲ ${yoy.toFixed(1)}%</span>`
-                : yoy < -0.5 ? `<span class="delta-down">▼ ${Math.abs(yoy).toFixed(1)}%</span>`
-                : `<span class="delta-flat">▬ ${yoy.toFixed(1)}%</span>`;
+    let yoyArr;
+    if (_scMode === 'rolling') {
+      yoyArr = '';   // YoY is meaningless across a rolling 3-yr sum
+    } else if (yoyDelta === null) {
+      yoyArr = `<span class="delta-flat" title="No prior-year data">— </span>`;
+    } else if (yoyDelta > 0.5) {
+      yoyArr = `<span class="delta-up" title="${yoyDelta.toFixed(1)}% YoY">▲ ${yoyDelta.toFixed(1)}%</span>`;
+    } else if (yoyDelta < -0.5) {
+      yoyArr = `<span class="delta-down" title="${yoyDelta.toFixed(1)}% YoY">▼ ${Math.abs(yoyDelta).toFixed(1)}%</span>`;
+    } else {
+      yoyArr = `<span class="delta-flat" title="${yoyDelta.toFixed(1)}% YoY">▬ ${yoyDelta.toFixed(1)}%</span>`;
+    }
     const sparkVals = Array.isArray(r.spark_5yr) && r.spark_5yr.length
       ? r.spark_5yr
       : [r.total_crashes, r.total_crashes, r.total_crashes, r.total_crashes, r.total_crashes];
