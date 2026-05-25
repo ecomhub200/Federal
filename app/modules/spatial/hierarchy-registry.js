@@ -122,6 +122,23 @@ const HierarchyRegistry = (() => {
 
   // ─── EXTRACTED CODE END ───
 
+  // CC 312 Phase 2 — region-tier resolver for getDashboardTierKpi().
+  // Declares what matview tier the frontend's `region` tier resolves to for a
+  // given state. Defaults to `dot_district` (correct for Delaware per the
+  // CLAUDE.md hierarchy.json `dbName` rule — DE region names equal
+  // dot_district values byte-for-byte).
+  //
+  // Returns: { matviewTier: 'dot_district' | 'planning_district' | ...,
+  //            translateId?: (regionId: string) => string }
+  //
+  // TODO (state-2 onboarding): switch on the `state` arg or read a
+  // `regionMatviewTier` key from states/{state}/hierarchy.json, so the
+  // mapping is metadata-driven rather than hardcoded. Until then this
+  // default catches every state where region names == dot_district names.
+  HierarchyRegistry.getRegionMatviewTier = function (state) {
+    return { matviewTier: 'dot_district' };
+  };
+
   // Public API — window.<fn> (HTML onclick/hoisting back-compat) + CL namespace
   window.CL = window.CL || {};
   CL.spatial = CL.spatial || {};
