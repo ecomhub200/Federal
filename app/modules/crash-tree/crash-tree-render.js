@@ -225,13 +225,30 @@ function autoExpandDominantPath() {
     // Find dominant path (highest count at each level)
     const path = ['root'];
     let node = crashTreeState.treeData;
+    let isRootLevel = true;
 
     while (node.children && node.children.length > 0) {
-        const dominant = node.children.reduce((max, child) =>
-            child.total > max.total ? child : max
-        );
+        let dominant;
+        if (isRootLevel && crashTreeState.treeType === 'facility') {
+            // CT-A: in facility mode, level1 IS the severity bucket
+            // (K/A/B/C/O). Picking max.total always lands on O (PDOs
+            // dominate) -- every descendant of O has K=0/A=0 by
+            // definition, useless for safety targeting. Pick max K+A
+            // so focus lands on a real fatal/serious branch.
+            dominant = node.children.reduce((best, c) => {
+                const ka = (c.K || 0) + (c.A || 0);
+                const bestKa = best ? ((best.K || 0) + (best.A || 0)) : -1;
+                return ka > bestKa ? c : best;
+            }, null);
+        } else {
+            dominant = node.children.reduce((max, child) =>
+                child.total > max.total ? child : max
+            );
+        }
+        if (!dominant) break;
         path.push(dominant.id);
         node = dominant;
+        isRootLevel = false;
     }
 
     crashTreeState.dominantPath = path;
