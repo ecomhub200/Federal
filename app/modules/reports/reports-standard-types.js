@@ -541,29 +541,37 @@ function buildExecutiveSummary(stats, crashes, reportType, locationName) {
     // Total crashes summary
     keyPoints.push(`<strong>${stats.total.toLocaleString()}</strong> total crashes analyzed in this ${reportType || 'analysis'}`);
 
-    // Severity highlight
+    // Severity highlight (CC 324 BUG C — comma-format integer counts)
     if (stats.K > 0 || stats.A > 0) {
         const sevText = [];
-        if (stats.K > 0) sevText.push(`<span style="color:#dc2626;font-weight:600">${stats.K} fatal</span>`);
-        if (stats.A > 0) sevText.push(`<span style="color:#ea580c;font-weight:600">${stats.A} serious injury</span>`);
+        if (stats.K > 0) sevText.push(`<span style="color:#dc2626;font-weight:600">${stats.K.toLocaleString()} fatal</span>`);
+        if (stats.A > 0) sevText.push(`<span style="color:#ea580c;font-weight:600">${stats.A.toLocaleString()} serious injury</span>`);
         keyPoints.push(`Includes ${sevText.join(' and ')} crash${(stats.K + stats.A) > 1 ? 'es' : ''} (${kaRate}% K+A rate)`);
     }
 
     // EPDO score
     keyPoints.push(`EPDO Score: <strong>${epdo.toLocaleString()}</strong> (weighted severity measure)`);
 
-    // VRU highlight
+    // VRU highlight (CC 324 BUG C — comma-format integer counts)
     if (stats.ped > 0 || stats.bike > 0) {
         const vruParts = [];
-        if (stats.ped > 0) vruParts.push(`${stats.ped} pedestrian`);
-        if (stats.bike > 0) vruParts.push(`${stats.bike} bicycle`);
+        if (stats.ped > 0) vruParts.push(`${stats.ped.toLocaleString()} pedestrian`);
+        if (stats.bike > 0) vruParts.push(`${stats.bike.toLocaleString()} bicycle`);
         keyPoints.push(`Vulnerable road users: ${vruParts.join(', ')} crashes identified`);
     }
 
-    // Top collision type
+    // Top collision type (CC 324 BUG J — prefer matview byCollision when crashes
+    // is a hydrated stub; skip 'Unknown'/empty buckets so a real category wins).
     const byType = {};
-    crashes.forEach(c => { const t = c[COL.COLLISION] || 'Unknown'; byType[t] = (byType[t] || 0) + 1; });
-    const topType = Object.entries(byType).sort((a, b) => b[1] - a[1])[0];
+    const _M = window._reportMatviewData;
+    if (_M && _M.byCollision && Object.keys(_M.byCollision).length > 0) {
+        Object.entries(_M.byCollision).forEach(([k, v]) => { byType[k] = (byType[k] || 0) + (Number(v) || 0); });
+    } else {
+        crashes.forEach(c => { const t = c[COL.COLLISION] || 'Unknown'; byType[t] = (byType[t] || 0) + 1; });
+    }
+    const topType = Object.entries(byType)
+        .filter(([k]) => k && k.toLowerCase() !== 'unknown')
+        .sort((a, b) => b[1] - a[1])[0];
     if (topType && topType[1] > 1) {
         const pct = ((topType[1] / stats.total) * 100).toFixed(0);
         keyPoints.push(`Most common crash type: <strong>${topType[0]}</strong> (${pct}% of crashes)`);
@@ -593,12 +601,28 @@ function updateReportFooter(yearRange, reportId, crashCount = 0) {
     const timestamp = getFullTimestamp();
 
     if (footerTimestamp) footerTimestamp.textContent = `Generated: ${timestamp}`;
-    if (footerPeriod) footerPeriod.textContent = `Analysis Period: ${yearRange}`;
+    // CC 324 BUG D — yearRange may be '--' when crashes is a hydrated stub.
+    // Derive a meaningful range from matview byYear keys so the footer never
+    // renders "Analysis Period: --". State-agnostic.
+    let displayYearRange = yearRange;
+    if (!displayYearRange || displayYearRange === '--') {
+        const M = window._reportMatviewData;
+        const ys = (M && M.byYear) ? Object.keys(M.byYear).map(Number).filter(n => n > 1900).sort() : [];
+        displayYearRange = ys.length ? `All Years (${ys[0]}–${ys[ys.length - 1]})` : 'All Years';
+    }
+    if (footerPeriod) footerPeriod.textContent = `Analysis Period: ${displayYearRange}`;
     if (footerReportId) footerReportId.textContent = reportId;
     if (footerReportIdBottom) footerReportIdBottom.textContent = `Report ID: ${reportId}`;
     if (footerCitation) {
+        // CC 324 BUG B — state-aware DMV citation. Title-case the runtime state
+        // key so the footer reads "Delaware DMV records" / "Virginia DMV records"
+        // instead of a hardcoded literal. State-agnostic.
+        const stateRaw = (window.crashLensClient && window.crashLensClient.state) || '';
+        const stateDisplay = stateRaw
+            ? stateRaw.charAt(0).toUpperCase() + stateRaw.slice(1).toLowerCase()
+            : 'State';
         const citationText = crashCount > 0
-            ? `${crashCount.toLocaleString()} crashes analyzed from Virginia DMV records`
+            ? `${crashCount.toLocaleString()} crashes analyzed from ${stateDisplay} DMV records`
             : getDataSourceLabel();
         footerCitation.textContent = citationText;
     }
