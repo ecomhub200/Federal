@@ -19506,6 +19506,19 @@ const jurisdictionContext = {
 };
 window.jurisdictionContext = jurisdictionContext;
 
+// Debounce jurisdictionChanged at the dispatch source. A single tier-button
+// click cascades to 4-7 dispatches via parent listeners; 22 downstream
+// listeners (16 inline + 6 modules) re-run state refresh work for each.
+// See memory/knowledge/concepts/jurisdictionchanged-over-firing.md.
+let _jurisdictionChangedDebounce = null;
+function fireJurisdictionChanged(detail) {
+    if (_jurisdictionChangedDebounce) clearTimeout(_jurisdictionChangedDebounce);
+    _jurisdictionChangedDebounce = setTimeout(function () {
+        _jurisdictionChangedDebounce = null;
+        document.dispatchEvent(new CustomEvent('jurisdictionChanged', { detail: detail }));
+    }, 250);
+}
+
 /**
  * Update the global jurisdiction context and notify all listeners.
  * Called when user changes state or jurisdiction on Upload Data tab.
@@ -19525,9 +19538,7 @@ function updateJurisdictionContext(updates) {
         `(${jurisdictionContext.fullFips}) in ${jurisdictionContext.stateName}`);
 
     // Fire event for all listeners (School Safety, Transit Safety, etc.)
-    document.dispatchEvent(new CustomEvent('jurisdictionChanged', {
-        detail: { ...jurisdictionContext }
-    }));
+    fireJurisdictionChanged({ ...jurisdictionContext });
 }
 
 /**
