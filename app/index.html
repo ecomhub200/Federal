@@ -76863,7 +76863,8 @@ async function _hydrateSafetyLocationsFromMatview(uiCategory) {
         if (!byRoute[route]) {
             byRoute[route] = {
                 crashes: [],
-                severity: { K: 0, A: 0, B: 0, C: 0, O: 0 }
+                severity: { K: 0, A: 0, B: 0, C: 0, O: 0 },
+                __matviewStub: true   // SF2 — routes aggregateSfDetailData's _hasPerRow to the matview-fallback path
             };
         }
         const ent = byRoute[route];
