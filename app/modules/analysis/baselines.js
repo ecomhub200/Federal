@@ -1,11 +1,21 @@
+'use strict';
 /**
  * CrashLens County Baselines & Statistical Analysis
- * Extracted from app/index.html — pure computation functions
+ * Extracted from app/index.html — pure computation functions.
+ *
+ * Stage A v3 Phase 2.5: native ES module. Bare-global reads of `COL`,
+ * `CRASH_PATTERN_REGEX`, and `calcEPDO` (the arity-1 wrapper at
+ * app/index.html:26893) rewritten to `window.X` so the deferred-execution
+ * module scope still resolves them via the shared global object.
+ *
+ * Public API stays unchanged: `CL.analysis.baselines.*` (object literal
+ * below) — no new ESM exports are introduced because every consumer reads
+ * via the CL namespace + window mirror.
  */
 window.CL = window.CL || {};
-CL.analysis = CL.analysis || {};
+window.CL.analysis = window.CL.analysis || {};
 
-CL.analysis.baselines = {
+window.CL.analysis.baselines = {
 
     /**
      * Calculate county-wide baseline rates from sample rows.
@@ -25,35 +35,35 @@ CL.analysis.baselines = {
         var crashesByYear = {};
 
         sampleRows.forEach(function(row) {
-            var sev = (row[COL.SEVERITY] || '').toUpperCase().trim();
+            var sev = (row[window.COL.SEVERITY] || '').toUpperCase().trim();
             if (sev === 'K') totalK++;
             else if (sev === 'A') totalA++;
             else if (sev === 'B') totalB++;
             else if (sev === 'C') totalC++;
             else totalO++;
 
-            if (row[COL.PED] === 'Y' || row[COL.PED] === '1' || row[COL.PED] === 1) totalPed++;
-            if (row[COL.BIKE] === 'Y' || row[COL.BIKE] === '1' || row[COL.BIKE] === 1) totalBike++;
+            if (row[window.COL.PED] === 'Y' || row[window.COL.PED] === '1' || row[window.COL.PED] === 1) totalPed++;
+            if (row[window.COL.BIKE] === 'Y' || row[window.COL.BIKE] === '1' || row[window.COL.BIKE] === 1) totalBike++;
 
-            var light = (row[COL.LIGHT] || '').toLowerCase();
-            if (CRASH_PATTERN_REGEX.nightLight.test(light)) totalNight++;
+            var light = (row[window.COL.LIGHT] || '').toLowerCase();
+            if (window.CRASH_PATTERN_REGEX.nightLight.test(light)) totalNight++;
 
-            var collision = (row[COL.COLLISION] || '').toLowerCase();
-            if (CRASH_PATTERN_REGEX.angleCollision.test(collision)) totalAngle++;
-            if (CRASH_PATTERN_REGEX.headOnCollision.test(collision)) totalHeadOn++;
-            if (CRASH_PATTERN_REGEX.rearEndCollision.test(collision)) totalRearEnd++;
-            if (CRASH_PATTERN_REGEX.runOffRoad.test(collision)) totalRunOff++;
+            var collision = (row[window.COL.COLLISION] || '').toLowerCase();
+            if (window.CRASH_PATTERN_REGEX.angleCollision.test(collision)) totalAngle++;
+            if (window.CRASH_PATTERN_REGEX.headOnCollision.test(collision)) totalHeadOn++;
+            if (window.CRASH_PATTERN_REGEX.rearEndCollision.test(collision)) totalRearEnd++;
+            if (window.CRASH_PATTERN_REGEX.runOffRoad.test(collision)) totalRunOff++;
 
-            var surface = (row[COL.WEATHER] || '').toLowerCase();
-            if (CRASH_PATTERN_REGEX.wetSurface.test(surface)) totalWet++;
+            var surface = (row[window.COL.WEATHER] || '').toLowerCase();
+            if (window.CRASH_PATTERN_REGEX.wetSurface.test(surface)) totalWet++;
 
-            var impaired = (row[COL.ALCOHOL] || row[COL.DRUG] || '').toString();
+            var impaired = (row[window.COL.ALCOHOL] || row[window.COL.DRUG] || '').toString();
             if (impaired === 'Y' || impaired === '1' || impaired === 'Yes') totalImpaired++;
 
-            var speed = (row[COL.SPEED] || '').toString();
+            var speed = (row[window.COL.SPEED] || '').toString();
             if (speed === 'Y' || speed === '1' || speed === 'Yes') totalSpeed++;
 
-            var date = row[COL.DATE];
+            var date = row[window.COL.DATE];
             if (date) {
                 var year = new Date(date).getFullYear();
                 if (!isNaN(year)) {
@@ -104,7 +114,7 @@ CL.analysis.baselines = {
             baselines.stdCrashesPerIntersection = Math.sqrt(variance);
             baselines.avgEPDOPerIntersection = nodeEntries.reduce(function(sum, entry) {
                 var d = entry[1];
-                return sum + calcEPDO({ K: d.K || 0, A: d.A || 0, B: d.B || 0, C: d.C || 0, O: d.O || 0 });
+                return sum + window.calcEPDO({ K: d.K || 0, A: d.A || 0, B: d.B || 0, C: d.C || 0, O: d.O || 0 });
             }, 0) / nodeEntries.length;
         }
 
@@ -116,7 +126,7 @@ CL.analysis.baselines = {
             baselines.stdCrashesPerSegment = Math.sqrt(variance2);
             baselines.avgEPDOPerSegment = routeEntries.reduce(function(sum, entry) {
                 var d = entry[1];
-                return sum + calcEPDO({ K: d.K || 0, A: d.A || 0, B: d.B || 0, C: d.C || 0, O: d.O || 0 });
+                return sum + window.calcEPDO({ K: d.K || 0, A: d.A || 0, B: d.B || 0, C: d.C || 0, O: d.O || 0 });
             }, 0) / routeEntries.length;
         }
 
@@ -234,7 +244,7 @@ CL.analysis.baselines = {
         var ebEstimate = w * expected + (1 - w) * observed;
         var psi = ebEstimate - expected;
 
-        var observedEPDO = calcEPDO({
+        var observedEPDO = window.calcEPDO({
             K: locationData.K || 0, A: locationData.A || 0,
             B: locationData.B || 0, C: locationData.C || 0, O: locationData.O || 0
         });
@@ -259,4 +269,6 @@ CL.analysis.baselines = {
     }
 };
 
-CL._registerModule('analysis/baselines');
+window.CL._registerModule('analysis/baselines');
+
+export {};
