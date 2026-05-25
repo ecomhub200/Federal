@@ -9226,7 +9226,7 @@ Schools with <strong>documented pedestrian/bicycle crashes</strong> and supporti
 <div class="two-col">
 <!-- People Type Donut Chart -->
 <div class="chart-card" style="background:var(--white);position:relative">
-<div class="chart-title" style="text-align:center">👥 People Injured by Type</div>
+<div class="chart-title" style="text-align:center">👥 Injured People — All Modes</div>
 <div style="display:flex;align-items:center;justify-content:center;gap:2rem;padding:1rem">
 <div style="position:relative;width:280px;height:280px">
 <canvas id="chartPeopleType"></canvas>
@@ -9237,6 +9237,7 @@ Schools with <strong>documented pedestrian/bicycle crashes</strong> and supporti
 </div>
 <div id="peopleTypeLegend" style="font-size:.85rem;line-height:2"></div>
 </div>
+<div id="peopleVruSubtotal" style="text-align:center;font-size:.85rem;color:#0369a1;margin-top:.25rem"></div>
 </div>
 <!-- People by Year Bar Chart -->
 <div class="chart-card" style="background:var(--white)">
@@ -53351,6 +53352,13 @@ async function updatePeopleFromMatview(tier) {
         const totalNumEl = document.getElementById('peopleTotalNum');
         if (totalNumEl) totalNumEl.textContent = totalPeople.toLocaleString();
 
+        const vruTotal = peopleData.walking + peopleData.motorcycle + peopleData.bike;
+        const vruPct = totalPeople > 0 ? ((vruTotal / totalPeople) * 100).toFixed(1) : '0.0';
+        const vruEl = document.getElementById('peopleVruSubtotal');
+        if (vruEl) {
+            vruEl.innerHTML = `🚶 Vulnerable Road Users: <strong>${vruTotal.toLocaleString()}</strong> (${vruPct}%)`;
+        }
+
         const _typeColorsAll = ['#f97316', '#eab308', '#22c55e', '#3b82f6', '#06b6d4', '#8b5cf6'];
         const _typeLabelsAll = ['Walking', 'Riding Motorcycle', 'Riding Bike', 'No Belt', 'Protected (not senior)', 'Senior wearing seatbelt'];
         const _typeDataAll = [peopleData.walking, peopleData.motorcycle, peopleData.bike,
@@ -53797,7 +53805,14 @@ function updatePeopleAnalysis() {
     
     const totalPeople = Object.values(peopleData).reduce((a, b) => a + b, 0);
     document.getElementById('peopleTotalNum').textContent = totalPeople.toLocaleString();
-    
+
+    const vruTotal = peopleData.walking + peopleData.motorcycle + peopleData.bike;
+    const vruPct = totalPeople > 0 ? ((vruTotal / totalPeople) * 100).toFixed(1) : '0.0';
+    const vruEl = document.getElementById('peopleVruSubtotal');
+    if (vruEl) {
+        vruEl.innerHTML = `🚶 Vulnerable Road Users: <strong>${vruTotal.toLocaleString()}</strong> (${vruPct}%)`;
+    }
+
     // Build custom legend for people type chart. The "Senior wearing seatbelt"
     // slot is dropped when the active state's source data lacks a senior flag.
     let _hasSenior2 = true;
