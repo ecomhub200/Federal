@@ -76805,9 +76805,13 @@ async function _loadSafetyFromMatview() {
         const uiKey = SAFETY_CARD_MAP[matviewCat] || matviewCat;
         if (safetyState.data[uiKey]) {
             const m = cats[matviewCat] || {};
-            safetyState.data[uiKey].total = m.total || 0;
+            safetyState.data[uiKey].total = m.total || m.Total || 0;
             safetyState.data[uiKey].severity = {
-                K: m.K || 0, A: m.A || 0, B: m.B || 0, C: m.C || 0, O: m.O || 0
+                K: m.K || m.k || 0,
+                A: m.A || m.a || 0,
+                B: m.B || m.b || 0,
+                C: m.C || m.c || 0,
+                O: m.O || m.o || 0
             };
             mapped++;
         }
