@@ -109,7 +109,13 @@ async function aggregateSfDetailData() {
         && typeof CL.data.supabaseBridge.resolveTier === 'function') {
         const dc = window.crashLensClient;
         const t = CL.data.supabaseBridge.resolveTier();
-        if (t && t.tier && t.value) {
+        // SF2 hotfix — at state/federal tier `t.value === null` (no slice
+        // value). The inner query at L128 already handles that (tier filter
+        // is gated by `tierCol && t.value`), so dropping `&& t.value` here
+        // lets the matview-fallback run at state/federal and return real
+        // severity-weighted EPDO instead of falling through to the per-row
+        // loop that iterates __matviewStub empty {} stubs.
+        if (t && t.tier) {
             // Mirrors data-client.js TIER_COLUMNS_BY_MATVIEW.default so the
             // aggregate query matches the same rows that _hydrateSafetyLocations-
             // FromMatview pulled. county was previously mapped to
