@@ -19,6 +19,8 @@ CL.data.mapBridge = (function () {
     // ── Config ──────────────────────────────────────────────
     var DEBOUNCE_MS = 400;              // ms after last pan/zoom before firing query
     var MAX_SYNTH_PER_CLUSTER = 200;    // cap synthetic markers per server-cluster
+    var DEDUPE_WINDOW_MS = 500;         // M2 — collapse identical viewport requests within this window
+    var DEDUPE_LRU_MAX = 20;            // M2 — cap dedupe map size
     var _enabled = false;               // set true when Supabase client is available
     var _debounceTimer = null;
     var _abortController = null;        // abort in-flight fetch on new pan/zoom
@@ -27,6 +29,7 @@ CL.data.mapBridge = (function () {
     var _totalInViewport = 0;           // total crash count from clusters (for stats overlay)
     var _attachRetries = 0;             // Round-4 Patch 5 — retry counter for deferred attach
     var _pendingMapReadyHandler = null; // Round 15 §12.11 — wait on crashlens:mapready event
+    var _recentFetchKeys = new Map();   // M2 — key → timestamp LRU for dedupe
 
     // ── Severity colors (match createMarker) ────────────────
     var SEV_COLORS = { K: '#dc2626', A: '#ea580c', B: '#eab308', C: '#22c55e', O: '#64748b' };
@@ -144,10 +147,6 @@ CL.data.mapBridge = (function () {
     async function _fetchViewport() {
         if (!crashMap || !_enabled) return;
 
-        // Abort any in-flight request
-        if (_abortController) _abortController.abort();
-        _abortController = new AbortController();
-
         var zoom = crashMap.getZoom();
         var b = crashMap.getBounds();
         var bounds = {
@@ -157,8 +156,36 @@ CL.data.mapBridge = (function () {
             east:  b.getEast()
         };
 
-        // Build filter options from current UI state and attach abort signal
+        // Build filter options from current UI state
         var opts = _buildFilterOpts();
+
+        // M2 — bbox-bucket dedupe. Rounding to 0.01° collapses sub-pixel pan
+        // churn; combined with the filter signature it suppresses duplicate
+        // RPCs fired from multiple callers (moveend + zoomend + tier change)
+        // within DEDUPE_WINDOW_MS. The 400ms debounce still runs upstream;
+        // this is additive and covers non-move sources.
+        var bucketKey =
+            bounds.south.toFixed(2) + ',' + bounds.west.toFixed(2) + ',' +
+            bounds.north.toFixed(2) + ',' + bounds.east.toFixed(2) + '|' +
+            zoom + '|' +
+            JSON.stringify({
+                t: opts.tier, v: opts.tierValue, y: opts.year, s: opts.severity,
+                r: opts.roadType, rs: opts.roadTypes, ni: opts.noInterstate
+            });
+        var now = Date.now();
+        var prevTs = _recentFetchKeys.get(bucketKey);
+        if (prevTs && (now - prevTs) < DEDUPE_WINDOW_MS) {
+            return; // in-flight or just-completed request will satisfy this
+        }
+        _recentFetchKeys.set(bucketKey, now);
+        if (_recentFetchKeys.size > DEDUPE_LRU_MAX) {
+            var oldestKey = _recentFetchKeys.keys().next().value;
+            _recentFetchKeys.delete(oldestKey);
+        }
+
+        // Abort any in-flight request
+        if (_abortController) _abortController.abort();
+        _abortController = new AbortController();
         opts.signal = _abortController.signal;
 
         try {
