@@ -284,6 +284,16 @@
                   + '</div>';
               return;
           }
+          // CT-B: totals.total is the SUM of per-category cat.total (a
+          // crash hitting N factors counts N times) -- not a crash count.
+          // Use crashTreeState.totalCrashes (scope total set by
+          // crash-tree-loader at matview load) so percentages answer
+          // "what share of all in-scope crashes have this factor flag".
+          // Fall back to totals.total only if the scope total isn't ready
+          // (e.g., a PDF-export caller hydrating before tree load).
+          const scopeTotal = (typeof crashTreeState !== 'undefined'
+              && crashTreeState && crashTreeState.totalCrashes)
+              || totals.total;
           const labels = {
               speed: '⚡ Speed-Related', senior: '👴 Senior Driver',
               young: '🧒 Young Driver', nighttime: '🌙 Nighttime',
@@ -300,7 +310,7 @@
               name: labels[key].replace(/^[^\s]+\s/, '') || key,
               icon: labels[key].split(' ')[0] || '',
               allCount: count,
-              allPct: (count / totals.total * 100).toFixed(1),
+              allPct: (count / scopeTotal * 100).toFixed(1),
               ratio: 'n/a',
               overrep: false,
               severity: 'low',
@@ -308,8 +318,8 @@
           crashTreeState.riskFactors.analyzed = analyzed;
           crashTreeState.riskFactors.score = 0;
           const rows = sorted.map(([key, count]) => {
-              const pct = (count / totals.total * 100).toFixed(1);
-              const widthPct = Math.min(100, (count / totals.total * 100));
+              const pct = (count / scopeTotal * 100).toFixed(1);
+              const widthPct = Math.min(100, (count / scopeTotal * 100));
               return `
                   <div style="padding:.4rem .25rem;border-bottom:1px solid #e5e7eb;">
                       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem;">
@@ -327,13 +337,13 @@
           el.innerHTML = `
               <div style="padding:.4rem;">
                   <div style="font-size:.7rem;color:#6b7280;margin-bottom:.4rem;">
-                      Top contributing factors across ${totals.total.toLocaleString()} crashes
+                      Top contributing factors across ${scopeTotal.toLocaleString()} crashes
                       (matview aggregates; FHWA over-rep ratios require row-level data).
                   </div>
                   ${rows}
               </div>`;
           console.log('[CrashTree] Risk factors hydrated from mv_safety_co_factors '
-              + '(total=' + totals.total + ')');
+              + '(scopeTotal=' + scopeTotal + ', flagSum=' + totals.total + ')');
       } catch (e) {
           console.warn('[CrashTree] _hydrateRiskFactorsFromMatview failed:', e && e.message);
           el.innerHTML =
