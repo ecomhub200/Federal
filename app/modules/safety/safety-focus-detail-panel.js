@@ -98,6 +98,10 @@ async function aggregateSfDetailData() {
     // keys on the resolved tier + crashLensClient.state.
     const _hasPerRow = sfDetailState.selectedLocations.some(route => {
         const rd = catData.byRoute && catData.byRoute[route];
+        // SF2 — matview-hydrated entries push empty {} stubs into crashes[]
+        // to preserve the Top Locations count column; skip them here so the
+        // matview-fallback path below hydrates real severity/EPDO/byYear.
+        if (rd && rd.__matviewStub) return false;
         return rd && Array.isArray(rd.crashes) && rd.crashes.length > 0;
     });
     if (!_hasPerRow && window.crashLensClient && window.CL && CL.data
