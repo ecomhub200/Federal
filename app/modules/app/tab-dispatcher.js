@@ -257,6 +257,9 @@ function showTab(tabId) {
     if (tabId === 'dashboard') {
         window.dispatchEvent(new CustomEvent('crashtab:dashboard:shown'));
     }
+    if (tabId === 'map') {
+        window.dispatchEvent(new CustomEvent('crashtab:map:shown'));
+    }
     if (tabId === 'knowledge' || tabId === 'cmf') {
         window.dispatchEvent(new CustomEvent('crashtab:' + tabId + ':shown'));
     }

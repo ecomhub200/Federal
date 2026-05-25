@@ -30,6 +30,8 @@ CL.data.mapBridge = (function () {
     var _attachRetries = 0;             // Round-4 Patch 5 — retry counter for deferred attach
     var _pendingMapReadyHandler = null; // Round 15 §12.11 — wait on crashlens:mapready event
     var _recentFetchKeys = new Map();   // M2 — key → timestamp LRU for dedupe
+    var _pendingViewportRequest = null; // M3 — single-slot queue for filter changes while off-tab
+    var PENDING_TTL_MS = 300000;        // M3 — drop pending requests older than 5 min
 
     // ── Severity colors (match createMarker) ────────────────
     var SEV_COLORS = { K: '#dc2626', A: '#ea580c', B: '#eab308', C: '#22c55e', O: '#64748b' };
@@ -145,7 +147,13 @@ CL.data.mapBridge = (function () {
     }
 
     async function _fetchViewport() {
-        if (!crashMap || !_enabled) return;
+        // M3 — when the map isn't live (off-tab, not initialized, or detached),
+        // remember that a request was wanted so we can flush on tab-return
+        // instead of silently dropping it (stale-data-after-tab-switch bug).
+        if (!crashMap || !_enabled) {
+            _pendingViewportRequest = { ts: Date.now() };
+            return;
+        }
 
         var zoom = crashMap.getZoom();
         var b = crashMap.getBounds();
@@ -493,6 +501,20 @@ CL.data.mapBridge = (function () {
         // Show "viewport" label instead of "of Y" since we're showing viewport data
         el = document.getElementById('mapOfTotal'); if (el) el.textContent = '(viewport)';
         el = document.getElementById('mapMissingRow'); if (el) el.style.display = 'none';
+    }
+
+    // M3 — flush any pending viewport request when the user returns to the
+    // Map tab. Dispatched by app/tab-dispatcher.js when tabId === 'map'.
+    // The pending slot is captured in _fetchViewport()'s early-return path
+    // (off-tab filter changes). Stale requests (>5 min) are dropped.
+    if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('crashtab:map:shown', function () {
+            if (!_pendingViewportRequest) return;
+            var pending = _pendingViewportRequest;
+            _pendingViewportRequest = null;
+            if (Date.now() - pending.ts > PENDING_TTL_MS) return;
+            if (_enabled && crashMap) _fetchViewport();
+        });
     }
 
     // ── Public interface ────────────────────────────────────
