@@ -544,6 +544,31 @@ function generateReport() {
 
     showLoading('Generating report...');
 
+    // CC 328 BUG I — overlay watchdog. The "Generating report..." overlay is
+    // page-level fixed (covers the whole window); if a generator hangs
+    // (Infographic / Comprehensive / Hotspot — open as of CC 329), the
+    // user can't even switch tabs. After 30s, dismiss the overlay and
+    // surface a clear error so the page stays usable. The check on the
+    // overlay's `visible` class avoids an annoying alert on the normal
+    // success path (where hideLoading already fired before 30s elapsed).
+    if (window._reportWatchdog) clearTimeout(window._reportWatchdog);
+    window._reportWatchdog = setTimeout(() => {
+        const ov = document.getElementById('loadingOverlay');
+        if (ov && ov.classList.contains('visible')) {
+            hideLoading();
+            alert('Report generation timed out after 30 seconds. Check the console for details.');
+        }
+        window._reportWatchdog = null;
+    }, 30000);
+    // CC 328 BUG J — timing markers so the next hang investigation can pinpoint
+    // which step is slow (matview hydrate vs row hydrate vs the per-type
+    // generator vs DOM mount). Logs are cheap; remove later if noisy.
+    const _reportT0 = performance.now();
+    const _reportType = type;
+    const _reportMark = (label) =>
+        console.log(`[Report:${_reportType}] ${label} @${Math.round(performance.now() - _reportT0)}ms`);
+    _reportMark('start');
+
     // Round 14 §0.3 — kick off the per-type Supabase pre-fetch in parallel
     // with the row hydration. The result lands on window._reportDataCache for
     // generators that opt in; legacy generators continue to read crashState
@@ -658,6 +683,7 @@ function generateReport() {
                         crashes = new Array(Math.min(matviewData.total, 10000)).fill(null).map(() => ({}));
                         _hydratedFromSupabase = true;
                         console.log('[Report] Matview hydration complete in ' + (Date.now() - t0) + 'ms (total=' + matviewData.total + ')');
+                        _reportMark('matview-hydrate done');
                     }
                 }
             } catch (e) {
@@ -686,6 +712,7 @@ function generateReport() {
                     crashes = result.rows;
                     _hydratedFromSupabase = true;
                     console.log('[Report] Hydrated ' + crashes.length + ' crashes from Supabase for tier=' + t.tier);
+                    _reportMark('row-hydrate done');
                 }
             } catch (e) {
                 console.warn('[Report] Hydration failed:', e && e.message);
@@ -704,7 +731,9 @@ function generateReport() {
             // patch the real cause. State-agnostic; behaviorally inert when
             // generateInfographic completes normally.
             try {
+                _reportMark('infographic-start');
                 await generateInfographic(crashes, title, agency, department, startDate, endDate);
+                _reportMark('infographic done');
             } catch (e) {
                 console.error('[Report][BUG A] generateInfographic threw — spinner dismissed defensively:', e);
             } finally {
@@ -717,6 +746,7 @@ function generateReport() {
         if (type === 'comprehensive') {
             const agency = document.getElementById('reportAgency').value || getJurisdictionLabel();
             const department = document.getElementById('reportDepartment').value || 'Traffic Engineering Division';
+            _reportMark('comprehensive-start');
             generateComprehensiveReport(crashes, title, agency, department, author, startDate, endDate);
             return;
         }
@@ -739,6 +769,7 @@ function generateReport() {
         }
 
         try {
+            _reportMark('generator-start');
             // Generate based on type
             if (type === 'dashboard') generateDashboardReport(crashes, title, author);
             else if (type === 'corridor') generateCorridorReport(crashes, route || 'All Routes', title, author);
@@ -751,9 +782,11 @@ function generateReport() {
             else if (type === 'fatalspeed') await generateFatalSpeedReport(crashes, title, author);
             else if (type === 'hotspot') generateHotspotRankingReport(crashes, title, author);
             else if (type === 'grantsupport') generateGrantSupportReport(crashes, title, author);
+            _reportMark('generator done');
 
             document.getElementById('reportOutput').style.display = 'block';
             document.getElementById('reportOutput').scrollIntoView({ behavior: 'smooth' });
+            _reportMark('complete');
         } catch (err) {
             console.error('Report generation error:', err);
             alert('Error generating report: ' + err.message);

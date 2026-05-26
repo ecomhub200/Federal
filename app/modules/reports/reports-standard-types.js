@@ -586,7 +586,10 @@ function buildExecutiveSummary(stats, crashes, reportType, locationName) {
         .sort((a, b) => b[1] - a[1])[0];
     if (topType && topType[1] > 1) {
         const pct = ((topType[1] / stats.total) * 100).toFixed(0);
-        keyPoints.push(`Most common crash type: <strong>${topType[0]}</strong> (${pct}% of crashes)`);
+        // CC 328 BUG F — strip raw enum-index prefix ("8. Non-Collision" →
+        // "Non-Collision") that some matview dim_value rows carry through.
+        const displayType = String(topType[0]).replace(/^\d+\.\s*/, '');
+        keyPoints.push(`Most common crash type: <strong>${displayType}</strong> (${pct}% of crashes)`);
     }
 
     return `
