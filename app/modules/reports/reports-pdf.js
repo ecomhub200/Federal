@@ -921,7 +921,15 @@ function generateStandardReportPDF(type, crashes, title, author, route, startDat
             const ct = c[COL.COLLISION] || 'Unknown';
             locDataHotspot[loc].collisions[ct] = (locDataHotspot[loc].collisions[ct] || 0) + 1;
         });
-        const topLocs = Object.entries(locDataHotspot).map(([n, d]) => ({ name: n, ...d, epdo: calcEPDO(d) })).sort((a,b) => b.epdo - a.epdo).slice(0, 5);
+        // CC 329 — filter blank / 'Unknown' / '0' route names before slicing
+        // top-N so PDF hotspot ranking doesn't display "Unknown (200)" rows.
+        // Mirrors the same filter already at reports-pdf.js:620 and the
+        // _isKnownLocationName helper in reports-standard-core2.js:88.
+        const topLocs = Object.entries(locDataHotspot)
+            .filter(([n]) => { const s = String(n || '').trim(); return s !== '' && s !== '0' && s.toLowerCase() !== 'unknown'; })
+            .map(([n, d]) => ({ name: n, ...d, epdo: calcEPDO(d) }))
+            .sort((a,b) => b.epdo - a.epdo)
+            .slice(0, 5);
 
         topLocs.forEach((loc, i) => {
             if (i > 0) checkPageBreak(40);
@@ -946,7 +954,14 @@ function generateStandardReportPDF(type, crashes, title, author, route, startDat
             const sev = (c[COL.SEVERITY] || 'O').charAt(0).toUpperCase();
             if (['K','A','B','C','O'].includes(sev)) nodeData[node][sev]++;
         });
-        const nodeRows = Object.entries(nodeData).map(([n, d]) => ({ name: n, ...d, epdo: calcEPDO(d) })).sort((a,b) => b.epdo - a.epdo).slice(0, 15).map((n, i) => [(i+1).toString(), cleanText(n.name).substring(0,35), n.count, n.K, n.A, n.epdo.toLocaleString()]);
+        // CC 329 — filter blank / 'Unknown' / '0' node IDs before slicing
+        // top-N intersection ranking. Same justification as topLocs above.
+        const nodeRows = Object.entries(nodeData)
+            .filter(([n]) => { const s = String(n || '').trim(); return s !== '' && s !== '0' && s.toLowerCase() !== 'unknown'; })
+            .map(([n, d]) => ({ name: n, ...d, epdo: calcEPDO(d) }))
+            .sort((a,b) => b.epdo - a.epdo)
+            .slice(0, 15)
+            .map((n, i) => [(i+1).toString(), cleanText(n.name).substring(0,35), n.count, n.K, n.A, n.epdo.toLocaleString()]);
 
         if (nodeRows.length > 0) {
             doc.autoTable({

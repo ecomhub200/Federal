@@ -1801,6 +1801,77 @@ class CrashLensDataClient {
   async getLocationPicker(opts) {
     if (!this.preferSupabase || !this.supabaseKey) return null;
     opts = opts || {};
+    // CC 329 — try the new mv_location_picker REST view first (created by
+    // Cowork this week, indexed on state+jurisdiction+location_type). Falls
+    // back transparently to the original rpc/get_location_picker on 404
+    // (matview not deployed yet) or any non-2xx — no functional regression.
+    const matviewResult = await this._getLocationPickerMatview(opts);
+    if (matviewResult !== null) return matviewResult;
+    return this._getLocationPickerRpc(opts);
+  }
+
+  /**
+   * CC 329 — mv_location_picker REST source. Returns array on success, null
+   * on any failure so the caller can fall back to the RPC. Tier-column map
+   * mirrors the matview index layout (county/PD/MPO/region direct).
+   */
+  async _getLocationPickerMatview(opts) {
+    const state = (opts.state || this.state || '').toLowerCase();
+    if (!state) return null;
+    const tierColMap = {
+      region: 'region', mpo: 'mpo',
+      planning_district: 'planning_district', county: 'county',
+      city: 'county', city_town: 'county',
+    };
+    const tierCol = opts.jurisdictionKind ? tierColMap[opts.jurisdictionKind] : null;
+    // county input may include the trailing ' County' suffix; matview rows
+    // store the bare county name, so strip the suffix here for parity with
+    // the RPC's server-side strip.
+    let tierVal = opts.jurisdictionValue || null;
+    if (tierCol === 'county' && tierVal && /\s+County\s*$/i.test(tierVal)) {
+      tierVal = tierVal.replace(/\s+County\s*$/i, '');
+    }
+    const params = new URLSearchParams({
+      state: 'eq.' + state,
+      select: 'location_name,location_id,location_type,total_crashes,k,a,b,c,o,epdo,ped_count,bike_count,lat,lon',
+      order: 'epdo.desc',
+      limit: String(opts.limit || 500),
+    });
+    if (tierCol && tierVal) params.set(tierCol, 'eq.' + tierVal);
+    if (opts.locationType)  params.set('location_type', 'eq.' + opts.locationType);
+    if (opts.minCrashes)    params.set('total_crashes', 'gte.' + opts.minCrashes);
+    const url = `${this.supabaseUrl}/mv_location_picker?${params}`;
+    const headers = {
+      'apikey': this.supabaseKey,
+      'Authorization': `Bearer ${this.supabaseKey}`,
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const resp = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(timer);
+      if (!resp.ok) {
+        // 404 = matview not deployed in this environment yet. Quiet on first
+        // miss; the RPC fallback handles it.
+        if (resp.status !== 404) {
+          console.warn(`[DataClient] mv_location_picker HTTP ${resp.status}, falling back to RPC`);
+        }
+        return null;
+      }
+      const data = await resp.json();
+      if (!Array.isArray(data)) return null;
+      this._source = 'supabase';
+      return data;
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[DataClient] mv_location_picker failed, falling back to RPC:', e && e.message);
+      return null;
+    }
+  }
+
+  /** CC 329 — original RPC implementation, now used as fallback only. */
+  async _getLocationPickerRpc(opts) {
+    opts = opts || {};
     const body = {
       p_state:               (opts.state || this.state || '').toLowerCase(),
       p_jurisdiction_kind:   opts.jurisdictionKind || null,

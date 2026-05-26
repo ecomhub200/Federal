@@ -129,7 +129,13 @@ function generateSafetyReport(crashes, title, author) {
     });
     
     const topSevereType = Object.entries(severeByType).sort((a,b) => b[1]-a[1])[0];
-    if (topSevereType) severeFindings.push({ type: 'danger', text: `Most common severe crash type: ${topSevereType[0]} (${topSevereType[1]} K+A crashes)` });
+    // CC 329 — strip the raw enum-index prefix ("8. Non-Collision" →
+    // "Non-Collision") that some matview dim_value rows carry through.
+    // Mirrors the existing fix at L591 in the keyPoints block.
+    if (topSevereType) {
+        const displaySevereType = String(topSevereType[0]).replace(/^\d+\.\s*/, '');
+        severeFindings.push({ type: 'danger', text: `Most common severe crash type: ${displaySevereType} (${topSevereType[1]} K+A crashes)` });
+    }
     
     const darkCrashes = Object.entries(severeByLight).filter(([k]) => k.toLowerCase().includes('dark')).reduce((s,e) => s+e[1], 0);
     if (darkCrashes > severeCrashes.length * 0.3) {
