@@ -753,9 +753,12 @@ function _legacySystemwideReport(crashes, title, author) {
         : getDateRange(crashes);
     const reportId = generateReportId();
 
-    document.getElementById('rptTitle').textContent = title;
-    document.getElementById('rptSubtitle').textContent = `${getJurisdictionLabel()} System-Wide Safety Analysis`;
-    document.getElementById('rptMeta').textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
+    const rptTitle = document.getElementById('rptTitle');
+    if (rptTitle) rptTitle.textContent = title;
+    const rptSubtitle = document.getElementById('rptSubtitle');
+    if (rptSubtitle) rptSubtitle.textContent = `${getJurisdictionLabel()} System-Wide Safety Analysis`;
+    const rptMeta = document.getElementById('rptMeta');
+    if (rptMeta) rptMeta.textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
 
     // Update footer and report ID with crash count
     updateReportFooter(yearRange, reportId, stats.total);

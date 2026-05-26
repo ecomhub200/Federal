@@ -46,9 +46,12 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
         dateRange = getDateRange(crashState.sampleRows);
     }
 
-    document.getElementById('rptTitle').textContent = reportData.type === 'summary' ? 'Safety Focus Analysis Report' : title;
-    document.getElementById('rptSubtitle').textContent = reportData.title;
-    document.getElementById('rptMeta').textContent = `Period: ${dateRange} | Prepared by: ${author} | Generated: ${new Date().toLocaleDateString()}`;
+    const rptTitle = document.getElementById('rptTitle');
+    if (rptTitle) rptTitle.textContent = reportData.type === 'summary' ? 'Safety Focus Analysis Report' : title;
+    const rptSubtitle = document.getElementById('rptSubtitle');
+    if (rptSubtitle) rptSubtitle.textContent = reportData.title;
+    const rptMeta = document.getElementById('rptMeta');
+    if (rptMeta) rptMeta.textContent = `Period: ${dateRange} | Prepared by: ${author} | Generated: ${new Date().toLocaleDateString()}`;
 
     // Count total safety crashes for footer
     const categories = ['curves', 'workzone', 'school', 'guardrail', 'senior', 'young'];
