@@ -27,6 +27,104 @@ function showReportSubTab(tabName) {
     if (tabName === 'beforeafter') {
         initBALocationDropdown();
     }
+    // CC 324 BUG K — populate the corridor/intersection legacy dropdowns when
+    // the user opens the standard reports tab (catches aggregate-tier sessions
+    // where crashState.aggregates is empty and initDropdowns left the selects
+    // with just the placeholder option).
+    if (tabName === 'standard') {
+        populateReportLocations();
+    }
+}
+
+/**
+ * CC 324 BUG K — fill the legacy reportRoute / reportNode selects from
+ * crashState.aggregates when those are populated (tier modes where rows are
+ * loaded), else fall back to mv_hotspots so users on aggregate tiers can pick
+ * a route or intersection. State-agnostic — mirrors the Hot Spots tab pattern.
+ */
+function populateReportLocations() {
+    const routeSel = document.getElementById('reportRoute');
+    const nodeSel = document.getElementById('reportNode');
+    if (!routeSel && !nodeSel) return;
+
+    const escHtml = s => String(s).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+
+    const fillRoutes = (entries) => {
+        if (!routeSel || entries.length === 0) return;
+        const opts = entries
+            .filter(([name]) => name && name !== 'Unknown')
+            .sort((a, b) => (b[1].total || 0) - (a[1].total || 0))
+            .map(([name, d]) => `<option value="${escHtml(name)}">${escHtml(name)}${d.total ? ` (${Number(d.total).toLocaleString()} crashes)` : ''}</option>`)
+            .join('');
+        routeSel.innerHTML = '<option value="">All Routes</option>' + opts;
+    };
+
+    const fillNodes = (entries) => {
+        if (!nodeSel || entries.length === 0) return;
+        const opts = entries
+            .filter(([id]) => id)
+            .sort((a, b) => (b[1].total || 0) - (a[1].total || 0))
+            .map(([id, d]) => {
+                const label = d.label || d.intersection_name || (`Node ${id}`);
+                return `<option value="${escHtml(id)}">${escHtml(label)}${d.total ? ` (${Number(d.total).toLocaleString()} crashes)` : ''}</option>`;
+            })
+            .join('');
+        nodeSel.innerHTML = '<option value="">All Intersections</option>' + opts;
+    };
+
+    // 1) Prefer locally-loaded aggregates when present.
+    const agg = (window.crashState && window.crashState.aggregates) || {};
+    const routeEntries = Object.entries(agg.byRoute || {});
+    const nodeEntries = Object.entries(agg.byNode || {});
+    if (routeEntries.length > 0 || nodeEntries.length > 0) {
+        fillRoutes(routeEntries);
+        fillNodes(nodeEntries);
+        return;
+    }
+
+    // 2) Aggregate-tier fallback — pull from mv_hotspots. Mirrors the canonical
+    // matview reader at app/modules/hotspots/hotspots-tab-render.js.
+    const dc = window.crashLensClient;
+    if (!dc || !window.CL || !CL.data || !CL.data.supabaseBridge) return;
+    const t = CL.data.supabaseBridge.resolveTier && CL.data.supabaseBridge.resolveTier();
+    if (!t || !t.tier) return;
+    const tierColMap = {
+        federal: null, state: null, region: 'dot_district', mpo: 'mpo_name',
+        planning_district: 'planning_district', county: 'planning_district',
+        city: 'physical_juris_name', city_town: 'physical_juris_name'
+    };
+    const tierCol = tierColMap[t.tier];
+    const stateKey = String(dc.state || '').toLowerCase();
+    const params = new URLSearchParams({ state: 'eq.' + stateKey, select: '*', order: 'total_crashes.desc', limit: '500' });
+    if (tierCol && t.value) params.set(tierCol, 'eq.' + t.value);
+    fetch(`${dc.supabaseUrl}/mv_hotspots?${params.toString()}`, {
+        headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
+    })
+        .then(r => r.ok ? r.json() : [])
+        .then(rows => {
+            if (!Array.isArray(rows) || rows.length === 0) return;
+            const routeAgg = {};
+            const nodeAgg = {};
+            rows.forEach(r => {
+                const total = Number(r.total_crashes) || 0;
+                const rte = r.rte_name || r.route || '';
+                if (rte && rte !== 'Unknown') {
+                    if (!routeAgg[rte]) routeAgg[rte] = { total: 0 };
+                    routeAgg[rte].total += total;
+                }
+                const nodeId = r.node_id || r.node || '';
+                if (nodeId && String(nodeId) !== '0') {
+                    if (!nodeAgg[nodeId]) nodeAgg[nodeId] = { total: 0, label: r.intersection_name || '' };
+                    nodeAgg[nodeId].total += total;
+                    if (r.intersection_name && !nodeAgg[nodeId].label) nodeAgg[nodeId].label = r.intersection_name;
+                }
+            });
+            fillRoutes(Object.entries(routeAgg));
+            fillNodes(Object.entries(nodeAgg));
+        })
+        .catch(e => console.warn('[Reports] populateReportLocations matview fallback failed:', e && e.message));
 }
 
 function updateReportOptions() {
@@ -36,6 +134,9 @@ function updateReportOptions() {
     const showRouteGroup = (type === 'corridor' || type === 'intersection');
     document.getElementById('reportRouteGroup').style.display = showRouteGroup ? 'flex' : 'none';
     document.getElementById('reportNodeGroup').style.display = type === 'intersection' ? 'flex' : 'none';
+    // CC 324 BUG K — top-up the dropdowns when the user switches to a
+    // corridor/intersection report type. Idempotent (no-op if already filled).
+    if (showRouteGroup) populateReportLocations();
 
     // Show/hide CMF location info for countermeasures report
     let cmfLocationInfo = document.getElementById('cmfLocationInfo');
@@ -253,14 +354,19 @@ async function hydrateReportFromMatviews(reportType, tier, value) {
         }
     };
 
-    const [dash, hotspots, fatal, speed, safety, intersection, analysis] = await Promise.all([
+    // CC 324 BUGs E/H — fetch mv_safety_focus_locations alongside the existing
+    // matviews so the dashboard report's Top Locations section can render real
+    // top-N per category at aggregate tiers (same matview the Safety Focus
+    // detail panel uses).
+    const [dash, hotspots, fatal, speed, safety, intersection, analysis, safetyLocations] = await Promise.all([
         fetchJson('dashboard_summary', { select: 'crash_count,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,night_crashes,alcohol_crashes,animal_crashes,crash_severity,crash_year,collision_type,functional_class,road_type,is_interstate' }),
         fetchJson('mv_hotspots', { select: '*', order: 'total_crashes.desc', limit: '100' }),
         fetchJson('mv_fatal_factors', { select: '*' }),
         fetchJson('mv_speed_summary', { select: '*' }),
         fetchJson('mv_safety_categories', { select: '*' }),
         fetchJson('mv_intersection_summary', { select: 'intersection_type,traffic_control_type,collision_type,total,k,a,b,c,o,crash_year' }),
-        fetchJson('mv_analysis_summary', { select: 'dimension,dim_value,total,k,a,b,c,o' })
+        fetchJson('mv_analysis_summary', { select: 'dimension,dim_value,total,k,a,b,c,o' }),
+        fetchJson('mv_safety_focus_locations', { select: '*', order: 'total.desc', limit: '500' })
     ]);
 
     const aggregated = {
@@ -276,6 +382,10 @@ async function hydrateReportFromMatviews(reportType, tier, value) {
         animal: dash.reduce((s, r) => s + (Number(r.animal_crashes) || 0), 0),
         bySeverity: { K: 0, A: 0, B: 0, C: 0, O: 0 },
         byYear: {},
+        // CC 324 BUG E — per-year severity + VRU breakdown so the YoY table
+        // renders non-zero K/A/Ped/Bike per row. Same dashboard_summary rows,
+        // just grouped (year × severity) instead of year only.
+        byYearDetail: {},
         byCollision: {},
         byFuncClass: {},
         topHotspots: hotspots,
@@ -284,14 +394,26 @@ async function hydrateReportFromMatviews(reportType, tier, value) {
         safetyCategories: safety,
         intersectionSummary: intersection,
         analysisSummary: analysis,
+        safetyFocusLocations: safetyLocations,
     };
     dash.forEach(r => {
         const sev = String(r.crash_severity || '').charAt(0).toUpperCase();
-        if (sev in aggregated.bySeverity) aggregated.bySeverity[sev] += Number(r.crash_count) || 0;
+        const cnt = Number(r.crash_count) || 0;
+        if (sev in aggregated.bySeverity) aggregated.bySeverity[sev] += cnt;
         const y = r.crash_year;
-        if (y) aggregated.byYear[y] = (aggregated.byYear[y] || 0) + (Number(r.crash_count) || 0);
-        if (r.collision_type) aggregated.byCollision[r.collision_type] = (aggregated.byCollision[r.collision_type] || 0) + (Number(r.crash_count) || 0);
-        if (r.functional_class) aggregated.byFuncClass[r.functional_class] = (aggregated.byFuncClass[r.functional_class] || 0) + (Number(r.crash_count) || 0);
+        if (y) {
+            aggregated.byYear[y] = (aggregated.byYear[y] || 0) + cnt;
+            if (!aggregated.byYearDetail[y]) {
+                aggregated.byYearDetail[y] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, ped: 0, bike: 0 };
+            }
+            const yd = aggregated.byYearDetail[y];
+            yd.total += cnt;
+            if (sev in aggregated.bySeverity) yd[sev] += cnt;
+            yd.ped += Number(r.ped_crashes) || 0;
+            yd.bike += Number(r.bike_crashes) || 0;
+        }
+        if (r.collision_type) aggregated.byCollision[r.collision_type] = (aggregated.byCollision[r.collision_type] || 0) + cnt;
+        if (r.functional_class) aggregated.byFuncClass[r.functional_class] = (aggregated.byFuncClass[r.functional_class] || 0) + cnt;
     });
     return aggregated;
 }
@@ -548,8 +670,20 @@ function generateReport() {
         if (type === 'infographic') {
             const agency = document.getElementById('reportAgency').value || getJurisdictionLabel();
             const department = document.getElementById('reportDepartment').value || 'Traffic Engineering Division';
-            await generateInfographic(crashes, title, agency, department, startDate, endDate);
-            hideLoading();
+            // CC 324 BUG A — defensive try/finally so a throw inside
+            // generateInfographic (e.g. an undefined-deref in
+            // populateInfographicPage1/2 when crashes is a hydrated stub) can
+            // never strand the "Generating report..." overlay. The console
+            // surfaces the underlying error so a post-deploy verify pass can
+            // patch the real cause. State-agnostic; behaviorally inert when
+            // generateInfographic completes normally.
+            try {
+                await generateInfographic(crashes, title, agency, department, startDate, endDate);
+            } catch (e) {
+                console.error('[Report][BUG A] generateInfographic threw — spinner dismissed defensively:', e);
+            } finally {
+                hideLoading();
+            }
             return;
         }
 
@@ -792,6 +926,7 @@ function computeSystemwideCategoryData(crashes) {
   CL.reports.standardCore = CL.reports.standardCore || {};
   window.showReportSubTab = showReportSubTab; CL.reports.standardCore.showReportSubTab = showReportSubTab;
   window.updateReportOptions = updateReportOptions; CL.reports.standardCore.updateReportOptions = updateReportOptions;
+  window.populateReportLocations = populateReportLocations; CL.reports.standardCore.populateReportLocations = populateReportLocations;
   window.buildAIContext = buildAIContext; CL.reports.standardCore.buildAIContext = buildAIContext;
   window._safeAgg = _safeAgg; CL.reports.standardCore._safeAgg = _safeAgg;
   window.hydrateReportFromMatviews = hydrateReportFromMatviews; CL.reports.standardCore.hydrateReportFromMatviews = hydrateReportFromMatviews;

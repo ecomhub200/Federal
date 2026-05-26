@@ -29646,6 +29646,10 @@ function initReportLocationDropdown() {
         createLocationTypeSelector('reportLocationTypeSelector', 'reportLocationType', 'updateReportLocationDropdown()', 'all');
     }
     updateReportLocationDropdown();
+    // CC 324 BUG K — also populate the legacy reportRoute/reportNode selects
+    // (shown for Corridor / Intersection report types) using aggregates or a
+    // mv_hotspots fallback. State-agnostic; idempotent.
+    if (typeof populateReportLocations === 'function') populateReportLocations();
 }
 
 // Update Report location dropdown based on selected type
@@ -57769,9 +57773,17 @@ function generateDashboardReport(crashes, title, author) {
     // reportEndDate) so the rendered HTML preview and the Word memo both
     // show the same period the user asked for. Fall back to the crash
     // min/max when no filter is set (legacy behavior).
-    const yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
+    const _M = window._reportMatviewData;
+    let yearRange = (document.getElementById('reportStartDate')?.value || document.getElementById('reportEndDate')?.value)
         ? resolveReportPeriod('reportStartDate', 'reportEndDate')
         : getDateRange(crashes);
+    // CC 324 BUG D — getDateRange() returns '--' when crashes is a hydrated
+    // stub array (every row blank). Derive a meaningful range from matview
+    // byYear keys so the header/footer never renders "Period: --".
+    if (yearRange === '--' || yearRange === '' || yearRange == null) {
+        const ys = (_M && _M.byYear) ? Object.keys(_M.byYear).map(Number).filter(n => n > 1900).sort() : [];
+        yearRange = ys.length ? `All Years (${ys[0]}–${ys[ys.length - 1]})` : 'All Years';
+    }
     const reportId = generateReportId();
     const epdo = calcEPDO(stats);
     const kaRate = stats.total > 0 ? ((stats.K + stats.A) / stats.total * 100).toFixed(1) : '0.0';
@@ -57783,20 +57795,28 @@ function generateDashboardReport(crashes, title, author) {
     showExecutiveSummary(stats, crashes, 'executive dashboard summary', getJurisdictionLabel());
     showTableOfContents('dashboard');
 
-    const categoryData = computeSystemwideCategoryData(crashes);
+    // CC 324 BUG G — when matview-hydrated, build category data from the
+    // already-fetched matviews instead of iterating empty stub rows. The
+    // sibling reads _M.safetyCategories + _M.intersectionSummary so Safety
+    // Focus Exploration tiles, Top Locations, and Recommendations all render
+    // real numbers at aggregate tiers.
+    const categoryData = (_M && typeof computeSystemwideCategoryDataFromMatviews === 'function')
+        ? computeSystemwideCategoryDataFromMatviews(_M)
+        : computeSystemwideCategoryData(crashes);
 
     // KPIs - 8 key metrics
     // Round 23 §1.3 — prefer matview totals when generator was hydrated from
     // matviews. Falls back to per-row iteration for the legacy row-pull path.
-    const _M = window._reportMatviewData;
     const nightCount = (_M && _M.night != null) ? _M.night : crashes.filter(r => isYes(r[COL.NIGHT])).length;
     const speedCount = (_M && _M.speed != null) ? _M.speed : crashes.filter(r => isYes(r[COL.SPEED])).length;
+    // CC 324 BUG C — wrap all integer KPI values in .toLocaleString() so the
+    // strip matches the comma-formatted Total Crashes / EPDO siblings.
     document.getElementById('rptKPIs').innerHTML = `
         <div class="report-kpi" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5">
-            <div class="value" style="color:#dc2626">${stats.K}</div><div class="label">Fatal (K)</div>
+            <div class="value" style="color:#dc2626">${stats.K.toLocaleString()}</div><div class="label">Fatal (K)</div>
         </div>
         <div class="report-kpi" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1px solid #fdba74">
-            <div class="value" style="color:#ea580c">${stats.A}</div><div class="label">Serious Injury (A)</div>
+            <div class="value" style="color:#ea580c">${stats.A.toLocaleString()}</div><div class="label">Serious Injury (A)</div>
         </div>
         <div class="report-kpi">
             <div class="value">${stats.total.toLocaleString()}</div><div class="label">Total Crashes</div>
@@ -57808,13 +57828,13 @@ function generateDashboardReport(crashes, title, author) {
             <div class="value" style="color:#7c3aed">${epdo.toLocaleString()}</div><div class="label">EPDO Score</div>
         </div>
         <div class="report-kpi" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd">
-            <div class="value" style="color:#2563eb">${stats.ped + stats.bike}</div><div class="label">VRU Crashes</div>
+            <div class="value" style="color:#2563eb">${(stats.ped + stats.bike).toLocaleString()}</div><div class="label">VRU Crashes</div>
         </div>
         <div class="report-kpi">
-            <div class="value">${speedCount}</div><div class="label">Speed-Related</div>
+            <div class="value">${speedCount.toLocaleString()}</div><div class="label">Speed-Related</div>
         </div>
         <div class="report-kpi">
-            <div class="value">${nightCount}</div><div class="label">Nighttime</div>
+            <div class="value">${nightCount.toLocaleString()}</div><div class="label">Nighttime</div>
         </div>
     `;
 
@@ -57838,11 +57858,15 @@ function generateDashboardReport(crashes, title, author) {
     `;
 
     // Year-Over-Year Comparison
-    // Round 23 §1.3 — when matview-hydrated, use M.byYear totals. K/A/ped/bike
-    // breakdowns aren't surfaced per-year by dashboard_summary at this rollup,
-    // so they're left at 0 (the table still renders the year + total + EPDO).
+    // CC 324 BUG E — extended hydrateReportFromMatviews() now produces
+    // _M.byYearDetail with per-year K/A/B/C/O + ped + bike (rolled up from
+    // dashboard_summary tuples). Prefer that over the year-only _M.byYear so
+    // the YoY table shows non-zero severity/VRU columns at aggregate tiers.
     const byYear = {};
-    if (_M && _M.byYear && Object.keys(_M.byYear).length > 0) {
+    if (_M && _M.byYearDetail && Object.keys(_M.byYearDetail).length > 0) {
+        Object.entries(_M.byYearDetail).forEach(([y, d]) => { byYear[y] = d; });
+    } else if (_M && _M.byYear && Object.keys(_M.byYear).length > 0) {
+        // Backwards-compatible fallback if a stale hydrator skipped byYearDetail.
         Object.entries(_M.byYear).forEach(([y, total]) => {
             byYear[y] = { total: Number(total) || 0, K: 0, A: 0, B: 0, C: 0, O: 0, ped: 0, bike: 0 };
         });
@@ -57863,7 +57887,7 @@ function generateDashboardReport(crashes, title, author) {
         const prevTotal = i > 0 ? byYear[years[i-1]].total : null;
         const trend = prevTotal ? (d.total > prevTotal ? '<span style="color:#dc2626">↑</span>' : d.total < prevTotal ? '<span style="color:#16a34a">↓</span>' : '<span style="color:#6b7280">→</span>') : '-';
         const yEpdo = calcEPDO(d);
-        return `<tr><td><strong>${y}</strong></td><td>${d.total}</td><td>${d.K}</td><td>${d.A}</td><td>${d.K + d.A}</td><td>${yEpdo.toLocaleString()}</td><td>${d.ped}</td><td>${d.bike}</td><td>${trend}</td></tr>`;
+        return `<tr><td><strong>${y}</strong></td><td>${d.total.toLocaleString()}</td><td>${(d.K||0).toLocaleString()}</td><td>${(d.A||0).toLocaleString()}</td><td>${((d.K||0) + (d.A||0)).toLocaleString()}</td><td>${yEpdo.toLocaleString()}</td><td>${(d.ped||0).toLocaleString()}</td><td>${(d.bike||0).toLocaleString()}</td><td>${trend}</td></tr>`;
     }).join('');
 
     document.getElementById('rptYearlySection').innerHTML = `
@@ -57875,10 +57899,22 @@ function generateDashboardReport(crashes, title, author) {
     `;
 
     // Quick Facts Panel + Safety Focus Exploration
-    // Round 23 §1.3 — intersection count isn't on dashboard_summary, fall back
-    // to 0 in matview mode (the panel shows "0%" which is more honest than
-    // showing inflated nonsense from empty stub iteration).
-    const intCount = _M ? 0 : crashes.filter(r => isIntersection(r)).length;
+    // CC 324 BUG F — derive intersection count in matview mode from
+    // _M.intersectionSummary (rows from mv_intersection_summary, each row =
+    // {intersection_type, total, ...}). Sum totals where intersection_type
+    // isn't the "Not at Intersection" sentinel. State-agnostic — matches the
+    // Intersections tab's ~57.9% share at Sussex.
+    let intCount;
+    if (_M) {
+        const _intRows = Array.isArray(_M.intersectionSummary) ? _M.intersectionSummary : [];
+        intCount = _intRows.reduce((sum, r) => {
+            const itype = String(r.intersection_type || '').toLowerCase();
+            if (!itype || itype.includes('not at intersection') || itype.startsWith('0.')) return sum;
+            return sum + (Number(r.total) || 0);
+        }, 0);
+    } else {
+        intCount = crashes.filter(r => isIntersection(r)).length;
+    }
     const explorationHtml = generateExplorationDashboard(crashes, categoryData);
     document.getElementById('rptChartsSection').innerHTML = `
         <div class="report-section" style="grid-column:1/-1">
@@ -57913,10 +57949,19 @@ function generateDashboardReport(crashes, title, author) {
     `;
 
     // Top Locations
-    document.getElementById('rptTablesSection').innerHTML = generateCategoryTopLocations(crashes, categoryData);
+    // CC 324 BUG H/I — at aggregate tiers the row-iterating builders produce
+    // empty sections; prefer matview-mode siblings when _M is present so the
+    // sections always render real numbers.
+    document.getElementById('rptTablesSection').innerHTML =
+        (_M && typeof generateCategoryTopLocationsFromMatviews === 'function')
+            ? generateCategoryTopLocationsFromMatviews(_M, categoryData)
+            : generateCategoryTopLocations(crashes, categoryData);
 
     // Recommendations
-    document.getElementById('rptRecommendations').innerHTML = generateEnhancedRecommendations(stats, crashes, categoryData);
+    document.getElementById('rptRecommendations').innerHTML =
+        (_M && typeof generateEnhancedRecommendationsFromMatviews === 'function')
+            ? generateEnhancedRecommendationsFromMatviews(stats, _M, categoryData)
+            : generateEnhancedRecommendations(stats, crashes, categoryData);
 }
 
 /**
