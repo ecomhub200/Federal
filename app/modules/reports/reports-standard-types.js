@@ -18,9 +18,12 @@ function generateCorridorReport(crashes, route, title, author) {
         : getDateRange(crashes);
     const reportId = generateReportId();
 
-    document.getElementById('rptTitle').textContent = `${title}: ${route}`;
-    document.getElementById('rptSubtitle').textContent = `Corridor Crash Analysis`;
-    document.getElementById('rptMeta').textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
+    const rptTitle = document.getElementById('rptTitle');
+    if (rptTitle) rptTitle.textContent = `${title}: ${route}`;
+    const rptSubtitle = document.getElementById('rptSubtitle');
+    if (rptSubtitle) rptSubtitle.textContent = `Corridor Crash Analysis`;
+    const rptMeta = document.getElementById('rptMeta');
+    if (rptMeta) rptMeta.textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
 
     // Update footer and report ID with crash count
     updateReportFooter(yearRange, reportId, stats.total);
@@ -86,9 +89,12 @@ function generateSafetyReport(crashes, title, author) {
     const kaRate = stats.total > 0 ? ((stats.K + stats.A) / stats.total * 100).toFixed(2) : 0;
     const reportId = generateReportId();
 
-    document.getElementById('rptTitle').textContent = title;
-    document.getElementById('rptSubtitle').textContent = `Traffic Safety Performance Report`;
-    document.getElementById('rptMeta').textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
+    const rptTitle = document.getElementById('rptTitle');
+    if (rptTitle) rptTitle.textContent = title;
+    const rptSubtitle = document.getElementById('rptSubtitle');
+    if (rptSubtitle) rptSubtitle.textContent = `Traffic Safety Performance Report`;
+    const rptMeta = document.getElementById('rptMeta');
+    if (rptMeta) rptMeta.textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
 
     // Update footer and report ID with crash count
     updateReportFooter(yearRange, reportId, stats.total);
@@ -180,9 +186,12 @@ function generatePedBikeReport(crashes, title, author) {
     const totalVRU = pedStats.total + bikeStats.total;
     const totalVRUKA = (pedStats.K + pedStats.A) + (bikeStats.K + bikeStats.A);
 
-    document.getElementById('rptTitle').textContent = title;
-    document.getElementById('rptSubtitle').textContent = `Vulnerable Road User Safety Analysis`;
-    document.getElementById('rptMeta').textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
+    const rptTitle = document.getElementById('rptTitle');
+    if (rptTitle) rptTitle.textContent = title;
+    const rptSubtitle = document.getElementById('rptSubtitle');
+    if (rptSubtitle) rptSubtitle.textContent = `Vulnerable Road User Safety Analysis`;
+    const rptMeta = document.getElementById('rptMeta');
+    if (rptMeta) rptMeta.textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
 
     // Update footer and report ID with VRU crash count
     updateReportFooter(yearRange, reportId, totalVRU);
@@ -385,9 +394,12 @@ function generateTrendReport(crashes, title, author) {
         : getDateRange(crashes);
     const reportId = generateReportId();
 
-    document.getElementById('rptTitle').textContent = title;
-    document.getElementById('rptSubtitle').textContent = `Multi-Year Trend Analysis`;
-    document.getElementById('rptMeta').textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
+    const rptTitle = document.getElementById('rptTitle');
+    if (rptTitle) rptTitle.textContent = title;
+    const rptSubtitle = document.getElementById('rptSubtitle');
+    if (rptSubtitle) rptSubtitle.textContent = `Multi-Year Trend Analysis`;
+    const rptMeta = document.getElementById('rptMeta');
+    if (rptMeta) rptMeta.textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
 
     // Update footer and report ID with crash count
     updateReportFooter(yearRange, reportId, stats.total);
