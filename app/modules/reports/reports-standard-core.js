@@ -332,17 +332,30 @@ function _safeAgg(path, fallback) {
 async function hydrateReportFromMatviews(reportType, tier, value) {
     const dc = window.crashLensClient;
     if (!dc || !window.CL || !CL.data || !CL.data.supabaseBridge) return null;
+    // Route through resolveTier() so Reports applies the same silent
+    // county→planning_district (and county→region) rollup that the
+    // Dashboard / Hot Spots / Safety Focus tabs use. Without this, a
+    // Delaware/Sussex caller passes (county, Sussex) straight into
+    // mv_hotspots, which has rows only under planning_district='South
+    // District' → 0 rows → undefined downstream fields → textContent
+    // null crash (the sibling fix in this PR). Falls back to the raw
+    // tier/value args if resolveTier isn't available (defensive).
+    let effTier = tier, effValue = value;
+    if (typeof CL.data.supabaseBridge.resolveTier === 'function') {
+        const t = CL.data.supabaseBridge.resolveTier();
+        if (t && t.tier) { effTier = t.tier; effValue = t.value; }
+    }
     const tierColMap = {
         federal: null, state: null, region: 'dot_district', mpo: 'mpo_name',
         planning_district: 'planning_district', county: 'planning_district',
         city: 'physical_juris_name', city_town: 'physical_juris_name'
     };
-    const tierCol = tierColMap[tier];
+    const tierCol = tierColMap[effTier];
     const stateKey = String(dc.state || '').toLowerCase();
     const headers = { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey };
     const baseParams = (extra = {}) => {
         const p = new URLSearchParams({ state: 'eq.' + stateKey, ...extra });
-        if (tierCol && value) p.set(tierCol, 'eq.' + value);
+        if (tierCol && effValue) p.set(tierCol, 'eq.' + effValue);
         return p.toString();
     };
     const fetchJson = async (path, extra) => {
