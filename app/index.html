@@ -69194,6 +69194,79 @@ function populateLocationDropdown(selectId, options = {}) {
         ...options
     };
 
+    // CC 328 BUG D — at aggregate tiers (federal/state/region/MPO/PD/county
+    // rollup) crashState.sampleRows is empty (concept/aggregate-tier-samplerows-empty),
+    // so buildLocationData() returns an empty list and the Reports/B&A
+    // dropdowns stay frozen at "-- Select Location --". Fall back to the live
+    // get_location_picker RPC. State-agnostic — keys on resolved tier.
+    const needsRemoteFetch =
+        (!crashState.sampleRows || crashState.sampleRows.length === 0)
+        && window.crashLensClient
+        && typeof window.crashLensClient.getLocationPicker === 'function';
+    if (needsRemoteFetch) {
+        select.innerHTML = `<option value="">Loading locations…</option>`;
+        const tierInfo = (window.CL && CL.data && CL.data.supabaseBridge
+                          && typeof CL.data.supabaseBridge.resolveTier === 'function')
+            ? CL.data.supabaseBridge.resolveTier() : {};
+        const locTypeArg = (opts.locationType === 'all') ? null : opts.locationType;
+        window.crashLensClient.getLocationPicker({
+            state: tierInfo.state || window.crashLensClient.state,
+            jurisdictionKind: tierInfo.tier || null,
+            jurisdictionValue: tierInfo.value || null,
+            locationType: locTypeArg,
+            limit: 500
+        }).then(rows => {
+            const s = document.getElementById(selectId);
+            if (!s) return;
+            s.innerHTML = `<option value="">${opts.placeholder}</option>`;
+            if (!Array.isArray(rows) || rows.length === 0) {
+                const empty = document.createElement('option');
+                empty.value = '';
+                empty.disabled = true;
+                empty.textContent = 'No locations available at this tier';
+                s.appendChild(empty);
+                return;
+            }
+            const make = (loc) => {
+                const optEl = document.createElement('option');
+                const name = loc.location_name || 'Unknown';
+                if (loc.location_type === 'segment') {
+                    optEl.value = 'route:' + name;
+                } else {
+                    optEl.value = 'node:' + (loc.location_id || name);
+                }
+                const cnt = Number(loc.total_crashes) || 0;
+                optEl.textContent = (opts.showCrashCount && cnt > 0)
+                    ? `${name} (${cnt} crashes)`
+                    : name;
+                return optEl;
+            };
+            const segments       = rows.filter(r => r.location_type === 'segment');
+            const intersections  = rows.filter(r => r.location_type === 'intersection');
+            if (opts.useOptgroups && opts.locationType === 'all'
+                && segments.length > 0 && intersections.length > 0) {
+                const segGroup = document.createElement('optgroup');
+                segGroup.label = opts.segmentLabel;
+                segments.forEach(loc => segGroup.appendChild(make(loc)));
+                s.appendChild(segGroup);
+                const intGroup = document.createElement('optgroup');
+                intGroup.label = opts.intersectionLabel;
+                intersections.forEach(loc => intGroup.appendChild(make(loc)));
+                s.appendChild(intGroup);
+            } else {
+                const list = locTypeArg === 'segment' ? segments
+                           : locTypeArg === 'intersection' ? intersections
+                           : rows;
+                list.forEach(loc => s.appendChild(make(loc)));
+            }
+        }).catch(e => {
+            console.warn('[Picker] remote fetch failed for', selectId, ':', e && e.message);
+            const s = document.getElementById(selectId);
+            if (s) s.innerHTML = `<option value="">${opts.placeholder}</option>`;
+        });
+        return;
+    }
+
     const locationData = buildLocationData({
         includeSegments: opts.locationType === 'all' || opts.locationType === 'segment',
         includeIntersections: opts.locationType === 'all' || opts.locationType === 'intersection'
