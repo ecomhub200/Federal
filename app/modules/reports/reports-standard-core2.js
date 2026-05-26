@@ -85,8 +85,16 @@ function generateExplorationDashboard(crashes, categoryData) {
 /**
  * Get top location from byRoute object
  */
+// CC 328 BUG G — filter out blank/'Unknown'/'0' route names so the top-N
+// renderers don't surface "Top: Unknown (4305)" when the leading bucket is
+// an unmapped catch-all. State-agnostic.
+function _isKnownLocationName(n) {
+    if (!n) return false;
+    const s = String(n).trim();
+    return s !== '' && s !== '0' && s.toLowerCase() !== 'unknown';
+}
 function getTopLocation(byRoute) {
-    const entries = Object.entries(byRoute);
+    const entries = Object.entries(byRoute).filter(([k]) => _isKnownLocationName(k));
     if (entries.length === 0) return null;
     const sorted = entries.sort((a, b) => b[1] - a[1]);
     return { name: sorted[0][0], count: sorted[0][1] };
@@ -110,7 +118,9 @@ function generateCategoryTopLocations(crashes, categoryData) {
 
     // Helper to build top locations table for a category
     const buildTopTable = (title, icon, byRoute, color) => {
+        // CC 328 BUG G — filter blank/'Unknown'/'0' route names from top-N.
         const sorted = Object.entries(byRoute)
+            .filter(([k]) => _isKnownLocationName(k))
             .sort((a, b) => b[1] - a[1])
             .slice(0, topN);
 
