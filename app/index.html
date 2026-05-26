@@ -59022,6 +59022,16 @@ function createWordDocumentWithHeaderFooter(children, title) {
         ]
     });
 
+    // CC 324 BUG B (Word export sibling) — state-aware data-source citation
+    // mirrors the HTML footer accessor at
+    // app/modules/reports/reports-standard-types.js:617-628 so the .docx
+    // footer reads "Data: Delaware DMV" / "Data: Colorado DMV" / etc.
+    // instead of a Virginia literal. State-agnostic.
+    const _wordFooterStateRaw = (window.crashLensClient && window.crashLensClient.state) || '';
+    const wordFooterDataSource = _wordFooterStateRaw
+        ? _wordFooterStateRaw.charAt(0).toUpperCase() + _wordFooterStateRaw.slice(1).toLowerCase()
+        : 'State';
+
     // Create footer with page numbers
     const footer = new Footer({
         children: [
@@ -59035,7 +59045,7 @@ function createWordDocumentWithHeaderFooter(children, title) {
                 children: [
                     new TextRun({ text: 'Crash Analysis Tool', size: 14, color: '94A3B8', font: MEMO_STYLES.fontFamily }),
                     new TextRun({ children: [new Tab()] }),
-                    new TextRun({ text: 'Data: Virginia DMV', size: 14, color: '94A3B8', font: MEMO_STYLES.fontFamily }),
+                    new TextRun({ text: `Data: ${wordFooterDataSource} DMV`, size: 14, color: '94A3B8', font: MEMO_STYLES.fontFamily }),
                     new TextRun({ children: [new Tab()] }),
                     new TextRun({ text: 'Page ', size: 14, color: '64748B', font: MEMO_STYLES.fontFamily }),
                     new TextRun({ children: [PageNumber.CURRENT], size: 14, color: '64748B', font: MEMO_STYLES.fontFamily }),
