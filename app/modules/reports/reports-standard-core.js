@@ -371,16 +371,29 @@ async function hydrateReportFromMatviews(reportType, tier, value) {
     // matviews so the dashboard report's Top Locations section can render real
     // top-N per category at aggregate tiers (same matview the Safety Focus
     // detail panel uses).
+    //
+    // CC 327 — route through CL.data.cachedMatview so back-to-back Generate
+    // clicks on the same (mvName, effTier, effValue) hit the in-memory cache
+    // (~1.1s → <50ms). Cache keys aligned with CL.data.prewarm literals where
+    // possible so prewarm slots are shared. Notes:
+    //   - mv_hotspots prewarm uses {limit:25}; Reports needs 100 rows →
+    //     separate cache slot (intentional, both kept hot independently).
+    //   - mv_safety_focus_locations / mv_fatal_factors / mv_speed_summary
+    //     aren't prewarmed today, so first click is cold; re-click is hot.
+    const cached = (mvName, fetcher, keyExtra) =>
+        CL.data.cachedMatview(mvName, effTier, effValue, fetcher, keyExtra);
+    const t0 = performance.now();
     const [dash, hotspots, fatal, speed, safety, intersection, analysis, safetyLocations] = await Promise.all([
-        fetchJson('dashboard_summary', { select: 'crash_count,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,night_crashes,alcohol_crashes,animal_crashes,crash_severity,crash_year,collision_type,functional_class,road_type,is_interstate' }),
-        fetchJson('mv_hotspots', { select: '*', order: 'total_crashes.desc', limit: '100' }),
-        fetchJson('mv_fatal_factors', { select: '*' }),
-        fetchJson('mv_speed_summary', { select: '*' }),
-        fetchJson('mv_safety_categories', { select: '*' }),
-        fetchJson('mv_intersection_summary', { select: 'intersection_type,traffic_control_type,collision_type,total,k,a,b,c,o,crash_year' }),
-        fetchJson('mv_analysis_summary', { select: 'dimension,dim_value,total,k,a,b,c,o' }),
-        fetchJson('mv_safety_focus_locations', { select: '*', order: 'total.desc', limit: '500' })
+        cached('dashboard_summary',          () => fetchJson('dashboard_summary', { select: 'crash_count,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,night_crashes,alcohol_crashes,animal_crashes,crash_severity,crash_year,collision_type,functional_class,road_type,is_interstate' })),
+        cached('mv_hotspots',                () => fetchJson('mv_hotspots', { select: '*', order: 'total_crashes.desc', limit: '100' }), { limit: 100 }),
+        cached('mv_fatal_factors',           () => fetchJson('mv_fatal_factors', { select: '*' })),
+        cached('mv_speed_summary',           () => fetchJson('mv_speed_summary', { select: '*' })),
+        cached('mv_safety_categories',       () => fetchJson('mv_safety_categories', { select: '*' })),
+        cached('mv_intersection_summary',    () => fetchJson('mv_intersection_summary', { select: 'intersection_type,traffic_control_type,collision_type,total,k,a,b,c,o,crash_year' })),
+        cached('mv_analysis_summary',        () => fetchJson('mv_analysis_summary', { select: 'dimension,dim_value,total,k,a,b,c,o' })),
+        cached('mv_safety_focus_locations',  () => fetchJson('mv_safety_focus_locations', { select: '*', order: 'total.desc', limit: '500' }), { limit: 500 })
     ]);
+    console.log(`[Report] Matview hydration complete in ${Math.round(performance.now() - t0)}ms`);
 
     const aggregated = {
         total: dash.reduce((s, r) => s + (Number(r.crash_count) || 0), 0),
