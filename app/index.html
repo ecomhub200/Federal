@@ -57821,6 +57821,35 @@ function generateDashboardReport(crashes, title, author) {
  * Maps to: Crash Tree tab
  */
 function generateCrashTreeSystemicReport(crashes, title, author) {
+    // CC 333 — the systemic crash-tree fundamentally needs per-row cross-tabs
+    // (Crash Type × Facility Type matrix, high-risk combinations) that no
+    // matview exposes. At aggregate tiers the dispatcher hands a blank stub
+    // array, so render a clear gap-state instead of empty/garbage tables.
+    // State-agnostic.
+    const _isStubArray = Array.isArray(crashes) && crashes.length > 0
+        && crashes.every(r => !r || Object.keys(r).length === 0);
+    if (_isStubArray) {
+        const titleEl = document.getElementById('rptTitle');
+        const subEl = document.getElementById('rptSubtitle');
+        const metaEl = document.getElementById('rptMeta');
+        if (titleEl) titleEl.textContent = title;
+        if (subEl) subEl.textContent = `${getJurisdictionLabel()} Systemic Safety Analysis — per-row data required`;
+        if (metaEl) metaEl.textContent = '';
+        const findEl = document.getElementById('rptFindings');
+        if (findEl) {
+            findEl.innerHTML =
+                '<div style="padding:1.5rem;color:#78350f;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;max-width:700px;margin:1rem auto;">' +
+                '<p style="margin:0 0 .5rem;font-weight:600;color:#92400e;">Systemic Crash-Tree Report requires per-row crash data</p>' +
+                '<p style="margin:0;">The crash-tree builds a Crash&nbsp;Type&nbsp;&times;&nbsp;Facility&nbsp;Type cross-analysis matrix and ranks high-risk combinations, which need individual crash records (collision type, facility/road type, severity). Only aggregate matview data is loaded at this tier.</p>' +
+                '<p style="margin:.75rem 0 0;"><strong>To generate this report:</strong> drill down to <strong>City/Town tier</strong> on the Upload tab to load the row-level dataset, then return and click Generate Report again.</p>' +
+                '</div>';
+        }
+        ['rptKPIs','rptYearlySection','rptChartsSection','rptTablesSection','rptRecommendations','rptCountermeasures'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '';
+        });
+        return;
+    }
     const stats = computeStats(crashes);
     // Prefer the Reports tab's user-selected timeline (reportStartDate /
     // reportEndDate) so the rendered HTML preview and the Word memo both
@@ -57961,6 +57990,14 @@ function generateCrashTreeSystemicReport(crashes, title, author) {
  * Maps to: Fatal & Speeding tab
  */
 async function generateFatalSpeedReport(crashes, title, author) {
+    // CC 333 — at aggregate tiers the dispatcher hands a length-N stub array of
+    // blank objects; treat it as empty so the _supaMode matview path below
+    // engages (KPIs + top-fatal locations from matviews, per-row sub-sections
+    // show "unavailable in aggregate view" placeholders). Mirrors
+    // generateInfographic's stub handling. State-agnostic.
+    if (Array.isArray(crashes) && crashes.length > 0 && crashes.every(r => !r || Object.keys(r).length === 0)) {
+        crashes = [];
+    }
     const stats = computeStats(crashes);
     // Prefer the Reports tab's user-selected timeline (reportStartDate /
     // reportEndDate) so the rendered HTML preview and the Word memo both
@@ -58224,9 +58261,16 @@ function generateHotspotRankingReport(crashes, title, author) {
     // table renders + EPDO math produce garbage and historically hung the
     // overlay watchdog. Render a clear "switch tier" message instead.
     // State-agnostic.
+    // CC 333 — at aggregate tiers the dispatcher hands us stub crashes but
+    // populates window._reportMatviewData.topHotspots (mv_hotspots, top 100 by
+    // total_crashes with per-location k/a/epdo). Build the ranking from that
+    // instead of showing a gap-state. Only fall back to the "switch tier"
+    // message when neither per-row data nor usable matview rows are available.
+    const _M = window._reportMatviewData;
+    const _hasMatviewHotspots = _M && Array.isArray(_M.topHotspots) && _M.topHotspots.length > 0;
     const _isStubArray = Array.isArray(crashes) && crashes.length > 0
         && crashes.every(r => !r || Object.keys(r).length === 0);
-    if (_isStubArray) {
+    if (_isStubArray && !_hasMatviewHotspots) {
         const titleEl = document.getElementById('rptTitle');
         const subEl = document.getElementById('rptSubtitle');
         const metaEl = document.getElementById('rptMeta');
@@ -58265,27 +58309,51 @@ function generateHotspotRankingReport(crashes, title, author) {
     showExecutiveSummary(stats, crashes, 'high-crash location analysis', getJurisdictionLabel());
     showTableOfContents('hotspot');
 
-    // Build location rankings from aggregates
+    // Build location rankings. At aggregate tiers use the pre-ranked
+    // _M.topHotspots rows (mv_hotspots); intersection rows carry node_id /
+    // intersection_name, route rows carry rte_name / location_name. Prefer the
+    // matview's own epdo when present, else recompute from K/A/B/C/O.
     const byRoute = {};
     const byNode = {};
-    crashes.forEach(r => {
-        const route = r[COL.ROUTE] || 'Unknown';
-        const node = r[COL.NODE] || '';
-        const s = (r[COL.SEVERITY] || 'O').charAt(0).toUpperCase();
-        // Route aggregation
-        if (!byRoute[route]) byRoute[route] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
-        byRoute[route].total++;
-        if (['K','A','B','C','O'].includes(s)) byRoute[route][s]++;
-        // Node aggregation
-        if (node) {
-            if (!byNode[node]) byNode[node] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, route: route };
-            byNode[node].total++;
-            if (['K','A','B','C','O'].includes(s)) byNode[node][s]++;
-        }
-    });
+    if (_hasMatviewHotspots) {
+        _M.topHotspots.forEach(h => {
+            if (!h) return;
+            const isNode = (h.node_id != null && h.node_id !== '') || !!h.intersection_name;
+            const d = {
+                total: Number(h.total || h.total_crashes) || 0,
+                K: Number(h.k) || 0, A: Number(h.a) || 0,
+                B: Number(h.b) || 0, C: Number(h.c) || 0, O: Number(h.o) || 0
+            };
+            const mvEpdo = Number(h.epdo != null ? h.epdo : h.epdo_score);
+            if (mvEpdo > 0) d._mvEpdo = mvEpdo;
+            if (isNode) {
+                const name = h.intersection_name || h.location_name || `Node ${h.node_id}`;
+                byNode[name] = { ...d, route: h.rte_name || '' };
+            } else {
+                const name = h.rte_name || h.location_name || 'Unknown';
+                byRoute[name] = d;
+            }
+        });
+    } else {
+        crashes.forEach(r => {
+            const route = r[COL.ROUTE] || 'Unknown';
+            const node = r[COL.NODE] || '';
+            const s = (r[COL.SEVERITY] || 'O').charAt(0).toUpperCase();
+            // Route aggregation
+            if (!byRoute[route]) byRoute[route] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+            byRoute[route].total++;
+            if (['K','A','B','C','O'].includes(s)) byRoute[route][s]++;
+            // Node aggregation
+            if (node) {
+                if (!byNode[node]) byNode[node] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, route: route };
+                byNode[node].total++;
+                if (['K','A','B','C','O'].includes(s)) byNode[node][s]++;
+            }
+        });
+    }
 
-    const routeRanking = Object.entries(byRoute).map(([name, d]) => ({ name, ...d, epdo: calcEPDO(d), type: 'Route' })).sort((a,b) => b.epdo - a.epdo);
-    const nodeRanking = Object.entries(byNode).map(([name, d]) => ({ name, ...d, epdo: calcEPDO(d), type: 'Intersection' })).sort((a,b) => b.epdo - a.epdo);
+    const routeRanking = Object.entries(byRoute).map(([name, d]) => ({ name, ...d, epdo: d._mvEpdo || calcEPDO(d), type: 'Route' })).sort((a,b) => b.epdo - a.epdo);
+    const nodeRanking = Object.entries(byNode).map(([name, d]) => ({ name, ...d, epdo: d._mvEpdo || calcEPDO(d), type: 'Intersection' })).sort((a,b) => b.epdo - a.epdo);
     const combined = [...routeRanking, ...nodeRanking].sort((a,b) => b.epdo - a.epdo).slice(0, 25);
 
     // KPIs
@@ -58341,7 +58409,16 @@ function generateHotspotRankingReport(crashes, title, author) {
     `;
 
     document.getElementById('rptTablesSection').innerHTML = '';
-    document.getElementById('rptRecommendations').innerHTML = generateEnhancedRecommendations(stats, crashes, computeSystemwideCategoryData(crashes));
+    // CC 333 — prefer the matview-mode recommendation builder at aggregate tiers
+    // (same siblings the Dashboard report uses) so recommendations reflect real
+    // category data instead of empty stub-derived categories.
+    const _hotspotCategoryData = (_M && typeof computeSystemwideCategoryDataFromMatviews === 'function')
+        ? computeSystemwideCategoryDataFromMatviews(_M)
+        : computeSystemwideCategoryData(crashes);
+    document.getElementById('rptRecommendations').innerHTML =
+        (_M && typeof generateEnhancedRecommendationsFromMatviews === 'function')
+            ? generateEnhancedRecommendationsFromMatviews(stats, _M, _hotspotCategoryData)
+            : generateEnhancedRecommendations(stats, crashes, _hotspotCategoryData);
     document.getElementById('rptCountermeasures').innerHTML = '';
 }
 

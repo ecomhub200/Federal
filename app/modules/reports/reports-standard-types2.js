@@ -28,9 +28,14 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
     }
 
     // Process safety data from filtered crashes if date filter was applied
-    // This allows Report tab date filters to take precedence
+    // This allows Report tab date filters to take precedence.
+    // CC 333 — at aggregate tiers the dispatcher hands a blank stub array;
+    // processing it would wipe the (matview-populated) safetyState.data, so
+    // skip the row-level reprocess and keep the Safety Focus tab's own data.
+    const _isStubArray = Array.isArray(crashes) && crashes.length > 0
+        && crashes.every(r => !r || Object.keys(r).length === 0);
     let safetyData = safetyState.data;
-    if (startDate || endDate) {
+    if ((startDate || endDate) && !_isStubArray) {
         safetyData = processSafetyDataForReport(crashes);
     }
 

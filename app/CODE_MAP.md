@@ -1884,7 +1884,7 @@ Before any code edit:
 | generateCountermeasuresReport | inline @ L59159 | inline | reports |
 | generateCrashSelectionPDF | inline @ L46705 | inline | shared |
 | generateCrashTreeReport | modules/crash-tree/crash-tree-export.js | window+CL | crashtree, reports |
-| generateCrashTreeSystemicReport | inline @ L59586 | inline | crashtree, reports |
+| generateCrashTreeSystemicReport | inline @ L57823 (CC 333: aggregate-tier gap-state) | inline | crashtree, reports |
 | generateDashboardReport | inline @ L59426 | inline | dashboard, reports |
 | generateDataInsight | inline @ L57458 | inline | shared |
 | generateDistrictRecommendations | inline @ L125800 | inline | shared |
@@ -1893,14 +1893,14 @@ Before any code edit:
 | generateEnhancedFindings | modules/reports/reports-standard-core2.js | window+CL | reports |
 | generateEnhancedRecommendations | modules/reports/reports-standard-core2.js | window+CL | reports |
 | generateExplorationDashboard | modules/reports/reports-standard-core2.js | window+CL | reports |
-| generateFatalSpeedReport | inline @ L59726 | inline | fatalspeeding, reports |
+| generateFatalSpeedReport | inline @ L57992 (CC 333: stub-array → _supaMode matview path) | inline | fatalspeeding, reports |
 | generateFindings | modules/reports/reports-standard-types.js | window+CL | reports |
 | generateFullApplicationContent | inline @ L34237 | inline | shared |
 | generateGrant4AgentPDF | modules/grants/grants-ui.js | window+CL | grants |
 | generateGrant4AgentWord | modules/grants/grants-ui.js | window+CL | grants |
 | generateGrantSummaryEmail | inline @ L33031 | inline | grants |
 | generateGrantSupportReport | inline @ L60222 | inline | reports, grants |
-| generateHotspotRankingReport | inline @ L58219 (CC 330: stub-array guard) | inline | hotspots, reports |
+| generateHotspotRankingReport | inline @ L58256 (CC 330 stub guard + CC 333 matview ranking from _M.topHotspots) | inline | hotspots, reports |
 | generateHotspotReport | inline @ L59400 | inline | hotspots, reports |
 | generateInfographic | inline @ L54327 (CC 330: stub-array guard) | inline | intersection, pedestrian |
 | generateIntersectionReport | inline @ L59396 | inline | intersection, reports |

@@ -187,8 +187,18 @@ function generateSafetyReport(crashes, title, author) {
 }
 
 function generatePedBikeReport(crashes, title, author) {
-    const pedCrashes = crashes.filter(c => isYes(c[COL.PED]));
-    const bikeCrashes = crashes.filter(c => isYes(c[COL.BIKE]));
+    // CC 333 — at aggregate tiers crashes is a blank stub array. Derive ped/bike
+    // totals + K/A from the matview category roll-up (reuses
+    // computeSystemwideCategoryDataFromMatviews, which reads mv_safety_categories
+    // + mv_safety_focus_locations). B/C/O aren't surfaced per-VRU by the matview,
+    // so EPDO is computed from K/A at aggregate tiers; per-row sub-sections
+    // (dark conditions, contributing factors, yearly, location tables) show an
+    // "aggregate view" note. Falls back to full per-row analysis at row tiers.
+    const _M = window._reportMatviewData;
+    const _vruCats = (_M && typeof computeSystemwideCategoryDataFromMatviews === 'function')
+        ? computeSystemwideCategoryDataFromMatviews(_M) : null;
+    const pedCrashes = _vruCats ? [] : crashes.filter(c => isYes(c[COL.PED]));
+    const bikeCrashes = _vruCats ? [] : crashes.filter(c => isYes(c[COL.BIKE]));
     // Prefer the Reports tab's user-selected timeline (reportStartDate /
     // reportEndDate) so the rendered HTML preview and the Word memo both
     // show the same period the user asked for. Fall back to the crash
@@ -198,8 +208,12 @@ function generatePedBikeReport(crashes, title, author) {
         : getDateRange(crashes);
     const reportId = generateReportId();
 
-    const pedStats = computeStats(pedCrashes);
-    const bikeStats = computeStats(bikeCrashes);
+    const pedStats = _vruCats
+        ? { total: _vruCats.pedestrian.total || 0, K: _vruCats.pedestrian.K || 0, A: _vruCats.pedestrian.A || 0, B: 0, C: 0, O: 0, ped: _vruCats.pedestrian.total || 0, bike: 0, intersection: 0 }
+        : computeStats(pedCrashes);
+    const bikeStats = _vruCats
+        ? { total: _vruCats.bicycle.total || 0, K: _vruCats.bicycle.K || 0, A: _vruCats.bicycle.A || 0, B: 0, C: 0, O: 0, ped: 0, bike: _vruCats.bicycle.total || 0, intersection: 0 }
+        : computeStats(bikeCrashes);
 
     const pedEPDO = calcEPDO(pedStats);
     const bikeEPDO = calcEPDO(bikeStats);
@@ -250,7 +264,10 @@ function generatePedBikeReport(crashes, title, author) {
     if (parseFloat(pedDarkPct) > 30) findings.push({ type: 'warning', text: `${pedDarkPct}% of pedestrian crashes occur in dark conditions - consider enhanced lighting` });
     if (parseFloat(bikeDarkPct) > 30) findings.push({ type: 'warning', text: `${bikeDarkPct}% of bicycle crashes occur in dark conditions - consider enhanced lighting` });
     
-    findings.push({ type: '', text: `Total VRU crashes: ${totalVRU} (${(totalVRU / crashes.length * 100).toFixed(2)}% of all crashes)` });
+    // CC 333 — at aggregate tiers crashes.length is the capped stub count, not
+    // the real jurisdiction total; use _M.total as the denominator.
+    const _allCrashesTotal = (_M && _M.total > 0) ? _M.total : crashes.length;
+    findings.push({ type: '', text: `Total VRU crashes: ${totalVRU} (${_allCrashesTotal > 0 ? (totalVRU / _allCrashesTotal * 100).toFixed(2) : '0.00'}% of all crashes)` });
     
     document.getElementById('rptFindings').innerHTML = `<h4>🚨 Vulnerable Road User Findings</h4>${findings.map(f => `<div class="finding-item ${f.type}">${f.text}</div>`).join('')}`;
     
@@ -292,14 +309,14 @@ function generatePedBikeReport(crashes, title, author) {
                     <td style="text-align:center;font-weight:600">${bikeEPDO.toLocaleString()}</td>
                     <td style="text-align:center;font-weight:700">${(pedEPDO + bikeEPDO).toLocaleString()}</td></tr>
                 <tr><td><strong>Dark Condition Crashes</strong></td>
-                    <td style="text-align:center">${pedDark} (${pedDarkPct}%)</td>
-                    <td style="text-align:center">${bikeDark} (${bikeDarkPct}%)</td>
-                    <td style="text-align:center">${pedDark + bikeDark}</td></tr>
+                    <td style="text-align:center">${_M ? '—' : `${pedDark} (${pedDarkPct}%)`}</td>
+                    <td style="text-align:center">${_M ? '—' : `${bikeDark} (${bikeDarkPct}%)`}</td>
+                    <td style="text-align:center">${_M ? '—' : (pedDark + bikeDark)}</td></tr>
             </tbody>
         </table>
-        ${generatePedBikeYearlySection(pedCrashes, bikeCrashes)}
+        ${_M ? '' : generatePedBikeYearlySection(pedCrashes, bikeCrashes)}
     `;
-    
+
     document.getElementById('rptChartsSection').innerHTML = `
         <div class="report-section"><h4>🚶 Pedestrian Crashes by Year</h4><div style="height:220px"><canvas id="rptChartPedYear"></canvas></div></div>
         <div class="report-section"><h4>🚴 Bicycle Crashes by Year</h4><div style="height:220px"><canvas id="rptChartBikeYear"></canvas></div></div>
@@ -351,7 +368,28 @@ function generatePedBikeReport(crashes, title, author) {
         </div>
     `;
 
-    document.getElementById('rptTablesSection').innerHTML = generatePedBikeLocationTable(pedCrashes, bikeCrashes) + factorsTable;
+    // CC 333 — at aggregate tiers the per-row location table + contributing-
+    // factor cards are unavailable; render top VRU locations from the matview
+    // category roll-up (mv_safety_focus_locations) instead.
+    if (_M) {
+        const _vruLocTable = (label, byRoute) => {
+            const rows = Object.entries(byRoute || {}).sort((a, b) => b[1] - a[1]).slice(0, 15);
+            return `<div><h4>${label} (${rows.length})</h4><div class="table-wrapper"><table class="data-table">
+                <thead><tr><th>Location</th><th>Crashes</th></tr></thead>
+                <tbody>${rows.length
+                    ? rows.map(([n, c]) => `<tr><td>${esc(n)}</td><td>${c}</td></tr>`).join('')
+                    : '<tr><td colspan="2" style="text-align:center;color:#94a3b8">No ranked locations at this tier</td></tr>'}</tbody></table></div></div>`;
+        };
+        document.getElementById('rptTablesSection').innerHTML = `
+            <div class="two-col">
+                ${_vruLocTable('🚶 Top Pedestrian Crash Locations', _vruCats.pedestrian.byRoute)}
+                ${_vruLocTable('🚴 Top Bicycle Crash Locations', _vruCats.bicycle.byRoute)}
+            </div>
+            <p style="margin-top:1rem;font-size:.8rem;color:#94a3b8">Per-crash contributing factors (speed, alcohol, distraction) and day/light breakdowns require row-level data — switch to City/Town tier for the full ped/bike analysis.</p>
+        `;
+    } else {
+        document.getElementById('rptTablesSection').innerHTML = generatePedBikeLocationTable(pedCrashes, bikeCrashes) + factorsTable;
+    }
     document.getElementById('rptRecommendations').innerHTML = generatePedBikeRecommendations(pedStats, bikeStats, pedDarkPct, bikeDarkPct);
 }
 

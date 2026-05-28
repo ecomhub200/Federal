@@ -677,7 +677,12 @@ async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) 
     const MATVIEW_REPORT_TYPES = new Set([
         'dashboard', 'systemwide',
         // Treatment A — stats-object templates (computeStats + shared helpers)
-        'comprehensive', 'corridor', 'safety', 'trend', 'grantsupport', 'infographic'
+        'comprehensive', 'corridor', 'safety', 'trend', 'grantsupport', 'infographic',
+        // Treatment B — direct matview-slice templates (hotspot ranking,
+        // fatal/speed self-hydration, ped/bike category roll-up, safety-focus
+        // via safetyState; intersection delegates to corridor; crashtree shows
+        // a per-row-required gap-state)
+        'safetyfocus', 'fatalspeed', 'hotspot', 'intersection', 'pedbike', 'crashtree'
     ]);
 
     const real = (async () => {
