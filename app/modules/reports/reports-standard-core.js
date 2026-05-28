@@ -352,6 +352,19 @@ async function hydrateReportFromMatviews(reportType, tier, value) {
     };
     const tierCol = tierColMap[effTier];
     const stateKey = String(dc.state || '').toLowerCase();
+    // CC 329 — observability for the still-leaking-scope mystery. Logs the
+    // resolved scope so the user can verify in DevTools that Sussex County
+    // is rolling up to its PD (not silently fetching state-wide rows).
+    console.log('[Report] resolveTier →', { effTier, effValue, originalTier: tier, originalValue: value, tierCol, stateKey });
+    // CC 329 — refuse-and-warn guard: if the matview has a tier column to
+    // filter on but resolveTier handed us no value, every fetcher would
+    // silently return state-wide rows and the report would render an
+    // incorrect total. Better to bail out so the caller falls back to the
+    // row-level hydration path (or surfaces an error) than to mislead.
+    if (tierCol && !effValue) {
+        console.warn(`[Report] resolveTier returned ${effTier} with null value — refusing to fetch state-wide rows (would leak scope)`);
+        return null;
+    }
     const headers = { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey };
     const baseParams = (extra = {}) => {
         const p = new URLSearchParams({ state: 'eq.' + stateKey, ...extra });
@@ -380,10 +393,33 @@ async function hydrateReportFromMatviews(reportType, tier, value) {
     //     separate cache slot (intentional, both kept hot independently).
     //   - mv_safety_focus_locations / mv_fatal_factors / mv_speed_summary
     //     aren't prewarmed today, so first click is cold; re-click is hot.
-    const cached = (mvName, fetcher, keyExtra) =>
-        CL.data.cachedMatview(mvName, effTier, effValue, fetcher, keyExtra);
+    // CC 329 — observability for the cache-not-engaging mystery. Logs a
+    // per-matview pre-hit flag so re-clicks within TTL can be verified to
+    // hit the in-memory cache. If any preHit is false on a second generate
+    // within ~60s of the first, the cache-key drifted between calls.
+    const cached = (mvName, fetcher, keyExtra) => {
+        const cacheKey = `${mvName}:${effTier || ''}:${effValue || ''}` + (keyExtra != null ? ':' + JSON.stringify(keyExtra) : '');
+        let preHit = false;
+        try {
+            const stats = CL.data.matviewCacheStats && CL.data.matviewCacheStats();
+            if (stats && Array.isArray(stats.entries)) {
+                preHit = stats.entries.some(e => e && e.key === cacheKey);
+            }
+        } catch (e) { /* non-fatal */ }
+        console.log(`[Report cache] ${mvName} key=${cacheKey} preHit=${preHit}`);
+        return CL.data.cachedMatview(mvName, effTier, effValue, fetcher, keyExtra);
+    };
+    // CC 329 — defense-in-depth arrify. cachedMatview returns the fetcher's
+    // resolved value unchanged; if for any reason a downstream caller stored
+    // a wrapped object (e.g. {rows:[…]} from an upstream API shape drift),
+    // every downstream `.forEach`/`.map` would throw `forEach is not a
+    // function`. Coerce to array here so generators can assume array shape.
+    const arrify = (x) => Array.isArray(x) ? x
+                        : (x && Array.isArray(x.rows)) ? x.rows
+                        : (x && Array.isArray(x.data)) ? x.data
+                        : [];
     const t0 = performance.now();
-    const [dash, hotspots, fatal, speed, safety, intersection, analysis, safetyLocations] = await Promise.all([
+    const [dashRaw, hotspotsRaw, fatalRaw, speedRaw, safetyRaw, intersectionRaw, analysisRaw, safetyLocationsRaw] = await Promise.all([
         cached('dashboard_summary',          () => fetchJson('dashboard_summary', { select: 'crash_count,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,night_crashes,alcohol_crashes,animal_crashes,crash_severity,crash_year,collision_type,functional_class,road_type,is_interstate' })),
         cached('mv_hotspots',                () => fetchJson('mv_hotspots', { select: '*', order: 'total_crashes.desc', limit: '100' }), { limit: 100 }),
         cached('mv_fatal_factors',           () => fetchJson('mv_fatal_factors', { select: '*' })),
@@ -393,7 +429,15 @@ async function hydrateReportFromMatviews(reportType, tier, value) {
         cached('mv_analysis_summary',        () => fetchJson('mv_analysis_summary', { select: 'dimension,dim_value,total,k,a,b,c,o' })),
         cached('mv_safety_focus_locations',  () => fetchJson('mv_safety_focus_locations', { select: '*', order: 'total.desc', limit: '500' }), { limit: 500 })
     ]);
-    console.log(`[Report] Matview hydration complete in ${Math.round(performance.now() - t0)}ms`);
+    const dash             = arrify(dashRaw);
+    const hotspots         = arrify(hotspotsRaw);
+    const fatal            = arrify(fatalRaw);
+    const speed            = arrify(speedRaw);
+    const safety           = arrify(safetyRaw);
+    const intersection     = arrify(intersectionRaw);
+    const analysis         = arrify(analysisRaw);
+    const safetyLocations  = arrify(safetyLocationsRaw);
+    console.log(`[Report] Matview hydration complete in ${Math.round(performance.now() - t0)}ms (scope=${effTier}:${effValue || '∅'})`);
 
     const aggregated = {
         total: dash.reduce((s, r) => s + (Number(r.crash_count) || 0), 0),
@@ -421,6 +465,10 @@ async function hydrateReportFromMatviews(reportType, tier, value) {
         intersectionSummary: intersection,
         analysisSummary: analysis,
         safetyFocusLocations: safetyLocations,
+        // CC 329 — expose the scope this aggregation was computed over so
+        // generators can introspect (and the caller can log it next to the
+        // total). Helps diagnose the Sussex-shows-Delaware-total leak.
+        _scope: { tier: effTier, value: effValue },
     };
     dash.forEach(r => {
         const sev = String(r.crash_severity || '').charAt(0).toUpperCase();
@@ -682,7 +730,7 @@ function generateReport() {
                         // numbers and never iterate the stub rows.
                         crashes = new Array(Math.min(matviewData.total, 10000)).fill(null).map(() => ({}));
                         _hydratedFromSupabase = true;
-                        console.log('[Report] Matview hydration complete in ' + (Date.now() - t0) + 'ms (total=' + matviewData.total + ')');
+                        console.log('[Report] Matview hydration complete in ' + (Date.now() - t0) + 'ms (total=' + matviewData.total + ', scope=' + (matviewData._scope && matviewData._scope.tier) + ':' + ((matviewData._scope && matviewData._scope.value) || '∅') + ')');
                         _reportMark('matview-hydrate done');
                     }
                 }

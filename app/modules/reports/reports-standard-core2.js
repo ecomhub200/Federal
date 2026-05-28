@@ -383,7 +383,11 @@ function computeSystemwideCategoryDataFromMatviews(_M) {
         intersection: 'intersection',
         fatal: 'fatal'
     };
-    (_M.safetyCategories || []).forEach(row => {
+    // CC 329 — defensive Array.isArray guard. The `(_M.X || []).forEach`
+    // pattern only saves us when `_M.X` is null/undefined; if some upstream
+    // path stores a non-array truthy value (object wrapper, error payload),
+    // `.forEach` throws and the entire report generation aborts. Hard-guard.
+    (Array.isArray(_M.safetyCategories) ? _M.safetyCategories : []).forEach(row => {
         const label = String(row.category || row.category_name || '').toLowerCase().trim();
         const key = aliasMap[label];
         if (!key || !cats[key]) return;
@@ -414,7 +418,7 @@ function computeSystemwideCategoryDataFromMatviews(_M) {
     // Top locations per category from mv_safety_focus_locations rows. Used by
     // generateExplorationDashboard's `Top: …` footer on each tile, and reused
     // by generateCategoryTopLocationsFromMatviews below.
-    (_M.safetyFocusLocations || []).forEach(row => {
+    (Array.isArray(_M.safetyFocusLocations) ? _M.safetyFocusLocations : []).forEach(row => {
         const label = String(row.category || row.category_name || '').toLowerCase().trim();
         const key = aliasMap[label];
         if (!key || !cats[key]) return;
