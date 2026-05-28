@@ -498,14 +498,14 @@ Before any code edit:
   - `generateReportForEmail()` @ L33379 — Uses the actual generateStandardReportPDF() to produce multi-page professional reports
   - `generateLocationReport()` @ L43655 — if (selectedMapLocations.length === 0) return;
   - `locationJumpToBAStudy()` @ L43881 — Jump to Before/After Study tab with selected location
-  - `generateComprehensiveReport()` @ L56989 — 
+  - `generateComprehensiveReport()` @ modules/reports/reports-standard-core2.js (CC 330 — extracted from inline; stub-array guard + 6s/8s timeouts)
   - `generateCountermeasuresReport()` @ L59159 — const locationName = route || 'System-Wide';
   - `generateIntersectionReport()` @ L59396 — generateCorridorReport(crashes, route || 'All Intersections', title + ' - Inters
   - `generateHotspotReport()` @ L59400 — document.getElementById('reportType').value = 'hotspot';
   - `generateDashboardReport()` @ L59426 — const stats = computeStats(crashes);
   - `generateCrashTreeSystemicReport()` @ L59586 — const stats = computeStats(crashes);
   - `generateFatalSpeedReport()` @ L59726 — const stats = computeStats(crashes);
-  - `generateHotspotRankingReport()` @ L59982 — const stats = computeStats(crashes);
+  - `generateHotspotRankingReport()` @ L58219 — const stats = computeStats(crashes); (CC 330: stub-array guard)
   - `generateBeforeAfterStudyReport()` @ L60086 — 
   - `generateGrantSupportReport()` @ L60222 — const stats = computeStats(crashes);
   - `downloadReportWord()` @ L60347 — const type = document.getElementById('reportType').value;
@@ -1877,7 +1877,7 @@ Before any code edit:
 | generateBeforeAfterStudyReport | inline @ L60086 | inline | reports |
 | generateCategoryTopLocations | modules/reports/reports-standard-core2.js | window+CL | reports |
 | generateCMFDescription | inline @ L77947 | inline | cmf |
-| generateComprehensiveReport | inline @ L56989 | inline | reports |
+| generateComprehensiveReport | modules/reports/reports-standard-core2.js (CC 330) | window+CL.reports.standardCore2 | reports |
 | generateCorridorReport | modules/reports/reports-standard-types.js | window+CL | reports |
 | generateCorridorWordMemo | inline @ L60767 | inline | intersection |
 | generateCountermeasureBundles | inline @ L76266 | inline | intersection, pedestrian |
@@ -1900,9 +1900,9 @@ Before any code edit:
 | generateGrant4AgentWord | modules/grants/grants-ui.js | window+CL | grants |
 | generateGrantSummaryEmail | inline @ L33031 | inline | grants |
 | generateGrantSupportReport | inline @ L60222 | inline | reports, grants |
-| generateHotspotRankingReport | inline @ L59982 | inline | hotspots, reports |
+| generateHotspotRankingReport | inline @ L58219 (CC 330: stub-array guard) | inline | hotspots, reports |
 | generateHotspotReport | inline @ L59400 | inline | hotspots, reports |
-| generateInfographic | inline @ L55983 | inline | intersection, pedestrian |
+| generateInfographic | inline @ L54327 (CC 330: stub-array guard) | inline | intersection, pedestrian |
 | generateIntersectionReport | inline @ L59396 | inline | intersection, reports |
 | generateKML | inline @ L52055 | inline | shared |
 | generateLocationReport | inline @ L43655 | inline | reports |

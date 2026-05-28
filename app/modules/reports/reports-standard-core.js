@@ -646,7 +646,97 @@ function generateReport() {
         console.warn('[Report] Pre-fetch setup failed:', e && e.message);
     }
 
-    setTimeout(async () => {
+    // CC 330 — unwrap the setTimeout(async ()=>{},100) IIFE into a top-level
+    // async runner. Pure readability — the await-Promise/setTimeout-50 at the
+    // top preserves the deferred-tick yield so the spinner paints before any
+    // heavy work begins. The .catch on the call site guarantees that any
+    // unexpected throw still releases the spinner.
+    _runReportGeneration(type, _reportT0, _reportMark).catch(err => {
+        console.error('[Report] dispatcher crashed:', err);
+        hideLoading();
+    });
+}
+
+// CC 330 — race matview + row-hydrate against a 25s timer so the dispatcher
+// can never sit past the 30s overlay watchdog. The MATVIEW set stays narrow
+// (only generators ported to read window._reportMatviewData); everything
+// else uses the row-hydrate fallback (≤100k rows over ~10 chunks).
+//
+// Promise.race leaks the slow promise on timeout — accept it. The
+// dispatched fetch eventually resolves into the void; the next click resets
+// window._reportMatviewData. Memory cost is negligible.
+async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) {
+    const INNER_BUDGET_MS = 25000;
+    const MATVIEW_REPORT_TYPES = new Set(['dashboard', 'systemwide']);
+
+    const real = (async () => {
+        let crashes = null, hydrated = false;
+
+        // Matview path — fast (~3s) when the generator is ported to read
+        // window._reportMatviewData.
+        if (MATVIEW_REPORT_TYPES.has(type) &&
+            window.CL && CL.data && CL.data.supabaseBridge &&
+            typeof CL.data.supabaseBridge.resolveTier === 'function') {
+            console.log(`[Report:${type}] sampleRows empty — entering matview fallback path (aggregate tier)`);
+            try {
+                const t = CL.data.supabaseBridge.resolveTier();
+                if (t && t.tier) {
+                    const t0 = Date.now();
+                    const matviewData = await hydrateReportFromMatviews(type, t.tier, t.value);
+                    if (matviewData && matviewData.total > 0) {
+                        window._reportMatviewData = matviewData;
+                        // Stub crashes (length = total, capped 10k) so
+                        // generators that gate on length>0 don't bail.
+                        // Ported generators read window._reportMatviewData
+                        // for the real numbers and never iterate the stubs.
+                        crashes = new Array(Math.min(matviewData.total, 10000)).fill(null).map(() => ({}));
+                        hydrated = true;
+                        console.log('[Report] Matview hydration complete in ' + (Date.now() - t0) + 'ms (total=' + matviewData.total + ', scope=' + (matviewData._scope && matviewData._scope.tier) + ':' + ((matviewData._scope && matviewData._scope.value) || '∅') + ')');
+                        _reportMark('matview-hydrate done');
+                    }
+                }
+            } catch (e) {
+                console.warn('[Report] Matview hydration failed:', e && e.message);
+            }
+        }
+
+        // Row-hydrate fallback — slow (~30-90s) but works for any tier +
+        // any unported generator. getCrashes pages internally at 10k/req.
+        if (!hydrated && window.crashLensClient &&
+            window.CL && window.CL.data && window.CL.data.supabaseBridge &&
+            typeof window.CL.data.supabaseBridge.resolveTier === 'function') {
+            console.log(`[Report:${type}] sampleRows + matview empty — entering row-hydrate fallback (≤100k rows)`);
+            try {
+                const t = window.CL.data.supabaseBridge.resolveTier();
+                const fetchOpts = { all: true, maxRows: 100000 };
+                if (route) fetchOpts.route = route;
+                if (startDate) fetchOpts.dateFrom = startDate;
+                if (endDate) fetchOpts.dateTo = endDate;
+                const result = await window.crashLensClient.getCrashes(t.tier, t.value, fetchOpts);
+                if (result && Array.isArray(result.rows) && result.rows.length > 0) {
+                    crashes = result.rows;
+                    hydrated = true;
+                    console.log('[Report] Hydrated ' + crashes.length + ' crashes from Supabase for tier=' + t.tier);
+                    _reportMark('row-hydrate done');
+                }
+            } catch (e) {
+                console.warn('[Report] Hydration failed:', e && e.message);
+            }
+        }
+
+        return { crashes, hydrated, timedOut: false };
+    })();
+
+    const timeout = new Promise(resolve =>
+        setTimeout(() => resolve({ crashes: null, hydrated: false, timedOut: true }), INNER_BUDGET_MS)
+    );
+
+    return Promise.race([real, timeout]);
+}
+
+async function _runReportGeneration(type, _reportT0, _reportMark) {
+    await new Promise(r => setTimeout(r, 50));
+    {
         const title = document.getElementById('reportTitle').value || 'Crash Analysis Report';
         const author = document.getElementById('reportAuthor').value || 'Traffic Engineering Division';
         const route = document.getElementById('reportRoute').value;
@@ -687,83 +777,29 @@ function generateReport() {
             return;
         }
 
-        // ROUND-8 (2026-05-09): in Supabase-only mode `crashState.sampleRows`
-        // is empty for every aggregate tier, which used to break all 13
-        // report types (infographic, comprehensive, pedbike, fatalspeed,
-        // hotspot, dashboard, corridor, safety, safetyfocus, trend,
-        // intersection, crashtree, grantsupport).
-        // Hydrate row-level crashes from Supabase first; cap at 200k to
-        // keep the PDF/HTML generators responsive. The matview-driven tabs
-        // are unaffected — this is only used by the Reports-tab generators
-        // that iterate per-row for chart and table data.
+        // Round 8 (2026-05-09) + CC 330: at county/city tier sampleRows is
+        // already loaded — use it directly (fast path). At aggregate tier
+        // (state/MPO/PD/region/federal) sampleRows is empty and we hydrate
+        // via _hydrateWithBudget, which races matview → row-hydrate against
+        // a 25s timer. Anything slower aborts cleanly before the 30s overlay
+        // watchdog can fire. State-agnostic.
         let crashes = crashState.sampleRows;
         let _hydratedFromSupabase = false;
-        // Clear stale matview data from a previous generate-report run so
-        // generators that check window._reportMatviewData don't read leftover
-        // numbers from a different report.
         window._reportMatviewData = null;
 
-        // Round 23 §1.2 — for aggregate report types whose generators have
-        // been ported to read window._reportMatviewData, hydrate aggregations
-        // directly from matviews (~3s) instead of pulling 100K row-level
-        // crashes (~60-90s). Other report types fall through to the legacy
-        // row pull below. State-agnostic — keys on resolved tier + stateKey.
-        // NOTE: keep this set narrow — only include generators that have been
-        // ported in §1.3 to read window._reportMatviewData. Unported generators
-        // iterating an empty stub array would render mostly-empty reports.
-        // Other types fall through to the legacy row pull below.
-        const MATVIEW_REPORT_TYPES = new Set(['dashboard', 'systemwide']);
-        if (MATVIEW_REPORT_TYPES.has(type) &&
-            window.CL && CL.data && CL.data.supabaseBridge &&
-            typeof CL.data.supabaseBridge.resolveTier === 'function' &&
-            (!crashes || crashes.length === 0)) {
-            try {
-                const t = CL.data.supabaseBridge.resolveTier();
-                if (t && t.tier) {
-                    const t0 = Date.now();
-                    const matviewData = await hydrateReportFromMatviews(type, t.tier, t.value);
-                    if (matviewData && matviewData.total > 0) {
-                        window._reportMatviewData = matviewData;
-                        // Stub crashes (length = total) so generators that
-                        // gate on length>0 don't bail. Generators ported in
-                        // §1.3 read window._reportMatviewData for the actual
-                        // numbers and never iterate the stub rows.
-                        crashes = new Array(Math.min(matviewData.total, 10000)).fill(null).map(() => ({}));
-                        _hydratedFromSupabase = true;
-                        console.log('[Report] Matview hydration complete in ' + (Date.now() - t0) + 'ms (total=' + matviewData.total + ', scope=' + (matviewData._scope && matviewData._scope.tier) + ':' + ((matviewData._scope && matviewData._scope.value) || '∅') + ')');
-                        _reportMark('matview-hydrate done');
-                    }
-                }
-            } catch (e) {
-                console.warn('[Report] Matview hydration failed:', e && e.message);
+        if (crashes && crashes.length > 0) {
+            console.log(`[Report:${type}] using sampleRows fast-path (${crashes.length} rows)`);
+        } else {
+            const hydration = await _hydrateWithBudget(type, route, startDate, endDate, _reportMark);
+            if (hydration.timedOut) {
+                console.warn(`[Report:${type}] hydration exceeded 25s budget — aborting before overlay watchdog`);
+                hideLoading();
+                alert('Report hydration took longer than 25 seconds. Try a smaller tier or a narrower date range.');
+                return;
             }
-        }
-
-        if (!_hydratedFromSupabase &&
-            (!crashes || crashes.length === 0) &&
-            window.crashLensClient &&
-            window.CL && window.CL.data && window.CL.data.supabaseBridge &&
-            typeof window.CL.data.supabaseBridge.resolveTier === 'function') {
-            try {
-                const t = window.CL.data.supabaseBridge.resolveTier();
-                // Round 17 §9.6 — drop the cap to a workable chunked budget.
-                // getCrashes now pages internally at 10K/request, so 100K is
-                // ~10 chunks. Statement-timeout 500s at 200K are gone, and
-                // PDF/HTML generators were already truncating anything above
-                // ~100K for chart legibility.
-                const fetchOpts = { all: true, maxRows: 100000 };
-                if (route) fetchOpts.route = route;
-                if (startDate) fetchOpts.dateFrom = startDate;
-                if (endDate) fetchOpts.dateTo = endDate;
-                const result = await window.crashLensClient.getCrashes(t.tier, t.value, fetchOpts);
-                if (result && Array.isArray(result.rows) && result.rows.length > 0) {
-                    crashes = result.rows;
-                    _hydratedFromSupabase = true;
-                    console.log('[Report] Hydrated ' + crashes.length + ' crashes from Supabase for tier=' + t.tier);
-                    _reportMark('row-hydrate done');
-                }
-            } catch (e) {
-                console.warn('[Report] Hydration failed:', e && e.message);
+            if (hydration.crashes) {
+                crashes = hydration.crashes;
+                _hydratedFromSupabase = hydration.hydrated;
             }
         }
 
@@ -790,12 +826,23 @@ function generateReport() {
             return;
         }
 
-        // For comprehensive quarterly report, use dedicated generator
+        // For comprehensive quarterly report, use dedicated generator.
+        // CC 330 — match the infographic try/catch/finally pattern so a
+        // throw inside generateComprehensiveReport (or one of the awaited
+        // AI insights / computeLocationDetails) can never strand the
+        // spinner. generateComprehensiveReport is async.
         if (type === 'comprehensive') {
             const agency = document.getElementById('reportAgency').value || getJurisdictionLabel();
             const department = document.getElementById('reportDepartment').value || 'Traffic Engineering Division';
-            _reportMark('comprehensive-start');
-            generateComprehensiveReport(crashes, title, agency, department, author, startDate, endDate);
+            try {
+                _reportMark('comprehensive-start');
+                await generateComprehensiveReport(crashes, title, agency, department, author, startDate, endDate);
+                _reportMark('comprehensive done');
+            } catch (e) {
+                console.error('[Report] generateComprehensiveReport threw — spinner dismissed defensively:', e);
+            } finally {
+                hideLoading();
+            }
             return;
         }
 
@@ -841,7 +888,7 @@ function generateReport() {
         } finally {
             hideLoading();
         }
-    }, 100);
+    }
 }
 
 function generateSystemwideReport(crashes, title, author) {
