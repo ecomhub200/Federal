@@ -54,15 +54,19 @@ function generateCorridorReport(crashes, route, title, author) {
 
     // Enhanced: Node-by-node breakdown + collision type per segment + weather/light
     const nodeTable = generateNodeTable(crashes);
-    const byWeather = {};
-    crashes.forEach(r => { const w = r[COL.WEATHER] || 'Unknown'; byWeather[w] = (byWeather[w] || 0) + 1; });
-    const byLight = {};
-    crashes.forEach(r => { const l = r[COL.LIGHT] || 'Unknown'; byLight[l] = (byLight[l] || 0) + 1; });
-    const weatherRows = Object.entries(byWeather).sort((a,b) => b[1]-a[1]).slice(0,6).map(([w,c]) => `<tr><td>${w}</td><td>${c}</td><td>${pct(c, stats.total)}%</td></tr>`).join('');
-    const lightRows = Object.entries(byLight).sort((a,b) => b[1]-a[1]).map(([l,c]) => `<tr><td>${l}</td><td>${c}</td><td>${pct(c, stats.total)}%</td></tr>`).join('');
-
-    document.getElementById('rptTablesSection').innerHTML = `
-        ${nodeTable}
+    // CC 333 — weather/light have no matview slice; at aggregate tiers (_M set)
+    // they would render empty tables, so omit them rather than show noise. The
+    // per-row path (row-level tiers) renders them as before.
+    const _M = window._reportMatviewData;
+    let weatherLightHtml = '';
+    if (!_M) {
+        const byWeather = {};
+        crashes.forEach(r => { const w = r[COL.WEATHER] || 'Unknown'; byWeather[w] = (byWeather[w] || 0) + 1; });
+        const byLight = {};
+        crashes.forEach(r => { const l = r[COL.LIGHT] || 'Unknown'; byLight[l] = (byLight[l] || 0) + 1; });
+        const weatherRows = Object.entries(byWeather).sort((a,b) => b[1]-a[1]).slice(0,6).map(([w,c]) => `<tr><td>${w}</td><td>${c}</td><td>${pct(c, stats.total)}%</td></tr>`).join('');
+        const lightRows = Object.entries(byLight).sort((a,b) => b[1]-a[1]).map(([l,c]) => `<tr><td>${l}</td><td>${c}</td><td>${pct(c, stats.total)}%</td></tr>`).join('');
+        weatherLightHtml = `
         <div class="two-col" style="margin-top:1.5rem">
             <div>
                 <h4>Weather Conditions</h4>
@@ -72,7 +76,12 @@ function generateCorridorReport(crashes, route, title, author) {
                 <h4>Light Conditions</h4>
                 <table class="report-table"><thead><tr><th>Light</th><th>Count</th><th>%</th></tr></thead><tbody>${lightRows}</tbody></table>
             </div>
-        </div>
+        </div>`;
+    }
+
+    document.getElementById('rptTablesSection').innerHTML = `
+        ${nodeTable}
+        ${weatherLightHtml}
     `;
     document.getElementById('rptRecommendations').innerHTML = generateRecommendations(stats, crashes);
 }
@@ -154,7 +163,12 @@ function generateSafetyReport(crashes, title, author) {
     const kaByTypeRows = Object.entries(severeByType).sort((a,b) => b[1]-a[1]).slice(0,10).map(([t,c]) => `<tr><td>${t}</td><td>${c}</td><td>${severeCrashes.length > 0 ? (c/severeCrashes.length*100).toFixed(1) : 0}%</td></tr>`).join('');
     const kaByLightRows = Object.entries(severeByLight).sort((a,b) => b[1]-a[1]).map(([l,c]) => `<tr><td>${l}</td><td>${c}</td><td>${severeCrashes.length > 0 ? (c/severeCrashes.length*100).toFixed(1) : 0}%</td></tr>`).join('');
 
-    document.getElementById('rptTablesSection').innerHTML = `
+    // CC 333 — the K+A-by-collision/light tables come from per-row severeCrashes,
+    // which is empty at aggregate tiers (no matview slice for K+A × collision/light
+    // yet). Omit those two tables when matview-hydrated and render the (now
+    // matview-aware) top K+A locations table on its own.
+    const _M = window._reportMatviewData;
+    const kaTablesHtml = _M ? '' : `
         <div class="two-col" style="margin-bottom:1.5rem">
             <div>
                 <h4>K+A Crashes by Collision Type</h4>
@@ -164,7 +178,9 @@ function generateSafetyReport(crashes, title, author) {
                 <h4>K+A Crashes by Light Condition</h4>
                 <table class="report-table"><thead><tr><th>Light</th><th>K+A Count</th><th>%</th></tr></thead><tbody>${kaByLightRows}</tbody></table>
             </div>
-        </div>
+        </div>`;
+    document.getElementById('rptTablesSection').innerHTML = `
+        ${kaTablesHtml}
         ${generateTopLocationsTable(crashes, true)}
     `;
     document.getElementById('rptRecommendations').innerHTML = generateSafetyRecommendations(stats, severeCrashes);
@@ -416,16 +432,26 @@ function generateTrendReport(crashes, title, author) {
     // Show Table of Contents
     showTableOfContents('trend');
 
+    // CC 333 — trend math (slope, forecast, K+A trend) depends on per-year
+    // counts. At aggregate tiers crashes is a blank stub array, so prefer the
+    // pre-aggregated _M.byYearDetail. Falls back to per-row at row-level tiers.
+    const _M = window._reportMatviewData;
     const byYear = {};
-    crashes.forEach(c => {
-        const y = parseInt(c[COL.YEAR]) || null;
-        if (!y) return;
-        if (!byYear[y]) byYear[y] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
-        byYear[y].total++;
-        const s = (c[COL.SEVERITY]||'').charAt(0);
-        if (byYear[y][s] !== undefined) byYear[y][s]++;
-    });
-    
+    if (_M && _M.byYearDetail && Object.keys(_M.byYearDetail).length > 0) {
+        Object.entries(_M.byYearDetail).forEach(([y, d]) => {
+            byYear[y] = { total: d.total || 0, K: d.K || 0, A: d.A || 0, B: d.B || 0, C: d.C || 0, O: d.O || 0 };
+        });
+    } else {
+        crashes.forEach(c => {
+            const y = parseInt(c[COL.YEAR]) || null;
+            if (!y) return;
+            if (!byYear[y]) byYear[y] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+            byYear[y].total++;
+            const s = (c[COL.SEVERITY]||'').charAt(0);
+            if (byYear[y][s] !== undefined) byYear[y][s]++;
+        });
+    }
+
     const years = Object.keys(byYear).sort();
     let trend = 'stable';
     if (years.length >= 3) {

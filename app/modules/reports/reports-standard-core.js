@@ -667,7 +667,18 @@ function generateReport() {
 // window._reportMatviewData. Memory cost is negligible.
 async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) {
     const INNER_BUDGET_MS = 25000;
-    const MATVIEW_REPORT_TYPES = new Set(['dashboard', 'systemwide']);
+    // CC 333 — every report type whose generator reads window._reportMatviewData
+    // (directly or via the matview-aware shared helpers computeStats /
+    // generateYearlySection / generateTopLocationsTable / generateNodeTable).
+    // Types in this set hydrate from matviews (~3s) at aggregate tiers instead
+    // of taking the slow row-hydrate fallback (which hangs / aborts at 25s).
+    // countermeasures + beforeafter are intentionally absent — they require
+    // per-row data and render a gap-state panel at aggregate tiers.
+    const MATVIEW_REPORT_TYPES = new Set([
+        'dashboard', 'systemwide',
+        // Treatment A — stats-object templates (computeStats + shared helpers)
+        'comprehensive', 'corridor', 'safety', 'trend', 'grantsupport', 'infographic'
+    ]);
 
     const real = (async () => {
         let crashes = null, hydrated = false;
