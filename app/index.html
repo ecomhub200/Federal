@@ -54325,8 +54325,19 @@ document.addEventListener('click', function(e) {
 let infographicDefaults = {};
 
 async function generateInfographic(allCrashes, title, agency, department, startDate, endDate) {
+    // CC 330 — when the dispatcher hydrated stub crashes from a matview
+    // (new Array(N).fill({}) in _hydrateWithBudget), `allCrashes` is an
+    // array of empty objects. The compute* helpers below would iterate
+    // each one calling new Date(Number(undefined)) and producing all-zero
+    // histograms, then Chart.js would silently render an empty timeseries
+    // with NaN axes — past behavior was a 30s overlay-watchdog hang. Treat
+    // stubs as empty so the matview-only `_supabaseMode` branch runs and
+    // the row-iterating helpers short-circuit cleanly. State-agnostic.
+    const _isStubArray = Array.isArray(allCrashes) && allCrashes.length > 0
+        && allCrashes.every(r => !r || Object.keys(r).length === 0);
+
     // Filter crashes by date if specified
-    let crashes = (allCrashes || []).slice();
+    let crashes = _isStubArray ? [] : (allCrashes || []).slice();
     if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
     if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
 
@@ -54392,11 +54403,16 @@ async function generateInfographic(allCrashes, title, agency, department, startD
     // Compute top locations
     let topLocations = computeTopLocations(crashes, 5);
 
-    // Compute trend data
-    const trendData = computeTrendComparison(allCrashes, startDate, endDate);
+    // Compute trend data — CC 330: skip on stub-array (matview hydration);
+    // these helpers iterate per-row date fields and would spin on undefined.
+    const trendData = _isStubArray
+        ? { current: 0, previous: 0, change: 0 }
+        : computeTrendComparison(allCrashes, startDate, endDate);
 
     // Compute Quarter-over-Quarter comparison (the main focus for quarterly reports)
-    const quarterComparison = computeYoYComparison(allCrashes, startDate, endDate);
+    const quarterComparison = _isStubArray
+        ? null
+        : computeYoYComparison(allCrashes, startDate, endDate);
 
     // Determine focus topic based on crash patterns
     const focusTopic = determineFocusTopic(crashes, stats);
@@ -54404,8 +54420,8 @@ async function generateInfographic(allCrashes, title, agency, department, startD
     // Compute risky behaviors for public-friendly display
     let riskyBehaviors = computeRiskyBehaviors(crashes, total);
 
-    // Compute year-over-year trends
-    let yearTrends = computeYearTrends(allCrashes);
+    // Compute year-over-year trends — CC 330: same per-row reason as above.
+    let yearTrends = _isStubArray ? [] : computeYearTrends(allCrashes);
 
     // Round 7 (2026-05-09): override the row-based compute*() outputs above
     // with matview-derived equivalents when in Supabase-only mode. Keeps
@@ -55330,173 +55346,9 @@ async function downloadInfographicPDF() {
 
 let comprehensiveReportData = null;
 
-async function generateComprehensiveReport(allCrashes, title, agency, department, author, startDate, endDate) {
-    // Show progress UI
-    document.getElementById('reportOutput').style.display = 'none';
-    document.getElementById('infographicOutput').style.display = 'none';
-    document.getElementById('comprehensiveReportOutput').style.display = 'block';
-    document.getElementById('comprehensiveProgress').style.display = 'block';
-    document.getElementById('comprehensivePreview').style.display = 'none';
-    document.getElementById('comprehensiveTOC').style.display = 'none';
-    document.getElementById('btnComprehensivePDF').disabled = true;
-    document.getElementById('btnComprehensiveWord').disabled = true;
-    document.getElementById('btnComprehensivePrint').disabled = true;
-
-    const updateProgress = (percent, status) => {
-        document.getElementById('comprehensiveProgressBar').style.width = `${percent}%`;
-        document.getElementById('comprehensiveProgressStatus').textContent = status;
-    };
-
-    try {
-        updateProgress(5, 'Filtering crash data by date range...');
-
-        // Filter crashes by date if specified
-        let crashes = allCrashes.slice();
-        if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
-        if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
-
-        updateProgress(10, 'Computing crash statistics...');
-
-        // Compute comprehensive statistics
-        const stats = computeStats(crashes);
-        const quarter = getQuarterLabel(startDate, endDate);
-        const peakPatterns = computePeakPatterns(crashes);
-        const factors = computeContributingFactors(crashes);
-        const topLocations = computeTopLocations(crashes, 10);
-        const trendData = computeTrendComparison(allCrashes, startDate, endDate);
-        const focusTopic = determineFocusTopic(crashes, stats);
-
-        updateProgress(20, 'Analyzing collision types...');
-
-        // Compute detailed breakdowns
-        const collisionBreakdown = computeCollisionBreakdown(crashes);
-        const monthlyTrends = computeMonthlyTrends(crashes);
-        const dayOfWeekAnalysis = computeDayOfWeekAnalysis(crashes);
-        const hourlyDistribution = computeHourlyDistribution(crashes);
-        const weatherImpact = computeWeatherImpact(crashes);
-        const lightConditions = computeLightConditions(crashes);
-        const vulnerableUsers = computeVulnerableUserAnalysis(crashes);
-
-        updateProgress(25, 'Computing temporal patterns...');
-
-        // NEW: Compute Day×Hour heat matrix for visualization
-        const dayHourMatrix = computeDayHourMatrix(crashes);
-
-        // NEW: Compute Quarter-over-Quarter comparison and historical totals
-        const yoyComparison = computeYoYComparison(allCrashes, startDate, endDate);
-
-        // NEW: Generate data-driven insights
-        const dataInsights = generateDataInsight(crashes, collisionBreakdown, dayHourMatrix, lightConditions);
-
-        updateProgress(35, 'Identifying high-priority locations...');
-
-        // Detailed location analysis for top 10
-        const locationDetails = await computeLocationDetails(crashes, topLocations);
-
-        updateProgress(50, 'Generating AI insights for executive summary...');
-
-        // Generate AI insights for each section
-        const apiKey = getGrantApiKey();
-        let aiInsights = {};
-
-        if (apiKey) {
-            try {
-                aiInsights.executive = await generateAISectionInsight('executive', {
-                    total: stats.total, K: stats.K, A: stats.A, B: stats.B, C: stats.C, O: stats.O,
-                    ped: stats.ped, bike: stats.bike, epdo: calcEPDO(stats),
-                    trend: trendData, quarter, agency
-                });
-                updateProgress(55, 'Generating AI insights for severity analysis...');
-
-                aiInsights.severity = await generateAISectionInsight('severity', {
-                    K: stats.K, A: stats.A, B: stats.B, C: stats.C, O: stats.O,
-                    total: stats.total, trend: trendData
-                });
-                updateProgress(60, 'Generating AI insights for location hotspots...');
-
-                aiInsights.locations = await generateAISectionInsight('locations', {
-                    topLocations: topLocations.slice(0, 5), total: stats.total
-                });
-                updateProgress(65, 'Generating AI insights for temporal patterns...');
-
-                aiInsights.temporal = await generateAISectionInsight('temporal', {
-                    peakPatterns, monthlyTrends, hourlyDistribution
-                });
-                updateProgress(70, 'Generating AI insights for safety focus...');
-
-                aiInsights.focus = await generateAISectionInsight('focus', {
-                    focusTopic, vulnerableUsers, factors
-                });
-                updateProgress(75, 'Finalizing AI analysis...');
-
-                // NOTE: Countermeasures section removed per design requirements
-            } catch (e) {
-                console.warn('[Comprehensive Report] AI insights failed:', e);
-            }
-        }
-
-        updateProgress(85, 'Building report sections...');
-
-        // Build report data structure - REDESIGNED for visual storytelling
-        // Reduced from 20 pages to 14 pages with enhanced visualizations
-        comprehensiveReportData = {
-            metadata: {
-                title, agency, department, author, quarter,
-                startDate, endDate,
-                generatedAt: new Date().toISOString(),
-                crashCount: crashes.length,
-                totalPages: 14
-            },
-            sections: [
-                { page: 1, type: 'dashboard', title: 'Executive Dashboard', data: { stats, trendData, yoyComparison, dataInsights, topLocations: topLocations.slice(0, 3) } },
-                { page: 2, type: 'toc', title: 'Table of Contents' },
-                { page: 3, type: 'executive', title: 'Executive Summary', data: { stats, trendData, yoyComparison, aiInsight: aiInsights.executive } },
-                { page: 4, type: 'temporal', title: 'Temporal Analysis', data: { peakPatterns, dayOfWeekAnalysis, hourlyDistribution, dayHourMatrix, aiInsight: aiInsights.temporal } },
-                { page: 5, type: 'locations', title: 'High-Priority Locations', data: { locations: topLocations, collisionBreakdown, aiInsight: aiInsights.locations } },
-                { page: 6, type: 'locationmap', title: 'Crash Concentration Map', data: { topLocations, crashes } },
-                { page: 7, type: 'collision', title: 'Collision Analysis', data: { collisionBreakdown, stats } },
-                { page: 8, type: 'severity', title: 'Severity Distribution', data: { stats, trendData, yoyComparison, aiInsight: aiInsights.severity } },
-                { page: 9, type: 'factors', title: 'Contributing Factors', data: { factors, weatherImpact, lightConditions, stats } },
-                { page: 10, type: 'vulnerable', title: 'Vulnerable Road Users', data: { vulnerableUsers, aiInsight: aiInsights.focus } },
-                { page: 11, type: 'trends', title: 'Trends & Comparison', data: { monthlyTrends, trendData, yoyComparison } },
-                { page: 12, type: 'priorities', title: 'Safety Priorities', data: { topLocations, stats, collisionBreakdown } },
-                { page: 13, type: 'funding', title: 'Funding Opportunities', data: { stats, topLocations, vulnerableUsers } },
-                { page: 14, type: 'appendix', title: 'Data & Methodology', data: { crashCount: crashes.length, startDate, endDate, stats } }
-            ],
-            rawData: { stats, trendData, peakPatterns, factors, topLocations, monthlyTrends,
-                       dayOfWeekAnalysis, hourlyDistribution, weatherImpact, lightConditions,
-                       vulnerableUsers, collisionBreakdown, focusTopic, dayHourMatrix, yoyComparison, dataInsights,
-                       locationCoverage: calculateLocationCoverage(crashes) },
-            aiInsights
-        };
-
-        updateProgress(95, 'Rendering preview...');
-
-        // Render preview
-        renderComprehensivePreview(comprehensiveReportData);
-        renderComprehensiveTOC(comprehensiveReportData);
-
-        updateProgress(100, 'Report ready!');
-
-        // Show results
-        setTimeout(() => {
-            document.getElementById('comprehensiveProgress').style.display = 'none';
-            document.getElementById('comprehensivePreview').style.display = 'block';
-            document.getElementById('comprehensiveTOC').style.display = 'block';
-            document.getElementById('btnComprehensivePDF').disabled = false;
-            document.getElementById('btnComprehensiveWord').disabled = false;
-            document.getElementById('btnComprehensivePrint').disabled = false;
-        }, 500);
-
-    } catch (e) {
-        console.error('[Comprehensive Report] Error:', e);
-        updateProgress(0, 'Error generating report: ' + e.message);
-        document.getElementById('comprehensiveProgressTitle').textContent = 'Error';
-        document.getElementById('comprehensiveProgressTitle').style.color = '#dc2626';
-    }
-
-    hideLoading();
-}
+// CC 330 — generateComprehensiveReport moved to
+// app/modules/reports/reports-standard-core2.js (extracted with stub-array
+// guard + computeLocationDetails timeout + per-section AI timeouts).
 
 function computeCollisionBreakdown(crashes) {
     const types = {};
@@ -58365,6 +58217,36 @@ async function generateFatalSpeedReport(crashes, title, author) {
  * Maps to: Hot Spots tab
  */
 function generateHotspotRankingReport(crashes, title, author) {
+    // CC 330 — guard against the dispatcher's matview stub-array hydration.
+    // Hotspot ranking iterates per-row to build byRoute/byNode aggregations
+    // keyed on r[COL.ROUTE] / r[COL.NODE]; stubs are empty objects so every
+    // row lands in `byRoute['Unknown']` with 10k counts, then downstream
+    // table renders + EPDO math produce garbage and historically hung the
+    // overlay watchdog. Render a clear "switch tier" message instead.
+    // State-agnostic.
+    const _isStubArray = Array.isArray(crashes) && crashes.length > 0
+        && crashes.every(r => !r || Object.keys(r).length === 0);
+    if (_isStubArray) {
+        const titleEl = document.getElementById('rptTitle');
+        const subEl = document.getElementById('rptSubtitle');
+        const metaEl = document.getElementById('rptMeta');
+        if (titleEl) titleEl.textContent = title;
+        if (subEl) subEl.textContent = `${getJurisdictionLabel()} Hotspot Ranking — data unavailable at this tier`;
+        if (metaEl) metaEl.textContent = '';
+        const findEl = document.getElementById('rptFindings');
+        if (findEl) {
+            findEl.innerHTML =
+                '<p style="padding:1rem;color:#6b7280;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;">' +
+                'Hotspot ranking requires per-row crash data with Route and Node columns. ' +
+                'Please switch to a county, route, or intersection scope to generate this report.' +
+                '</p>';
+        }
+        ['rptKPIs','rptYearlySection','rptChartsSection','rptTablesSection','rptRecommendations','rptCountermeasures'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '';
+        });
+        return;
+    }
     const stats = computeStats(crashes);
     // Prefer the Reports tab's user-selected timeline (reportStartDate /
     // reportEndDate) so the rendered HTML preview and the Word memo both

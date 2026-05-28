@@ -529,9 +529,232 @@ function generateEnhancedRecommendationsFromMatviews(stats, _M, categoryData) {
         </div>
     `;
 }
+
+// ─── CC 330 — generateComprehensiveReport extracted from app/index.html ───
+// Per CLAUDE.md extract-on-touch policy (>100 LOC + material edits during
+// the CC 330 hang fix). Three surgical changes vs the original L55349-55515:
+//   1. Stub-array early-return — when the dispatcher hydrated empty {}
+//      crashes from a matview, the per-row compute helpers spin on undefined
+//      fields and Chart.js renders NaN. Surface a clear "switch tier" msg.
+//   2. computeLocationDetails wrapped in Promise.race vs 6s — it issues a
+//      network call per location and can stall on a slow upstream.
+//   3. Each generateAISectionInsight wrapped in Promise.race vs 8s — the AI
+//      API can hang past the 30s overlay watchdog; skip a section
+//      gracefully instead of failing the whole report.
+// State-agnostic.
+async function generateComprehensiveReport(allCrashes, title, agency, department, author, startDate, endDate) {
+    // Show progress UI
+    document.getElementById('reportOutput').style.display = 'none';
+    document.getElementById('infographicOutput').style.display = 'none';
+    document.getElementById('comprehensiveReportOutput').style.display = 'block';
+    document.getElementById('comprehensiveProgress').style.display = 'block';
+    document.getElementById('comprehensivePreview').style.display = 'none';
+    document.getElementById('comprehensiveTOC').style.display = 'none';
+    document.getElementById('btnComprehensivePDF').disabled = true;
+    document.getElementById('btnComprehensiveWord').disabled = true;
+    document.getElementById('btnComprehensivePrint').disabled = true;
+
+    const updateProgress = (percent, status) => {
+        document.getElementById('comprehensiveProgressBar').style.width = `${percent}%`;
+        document.getElementById('comprehensiveProgressStatus').textContent = status;
+    };
+
+    // CC 330 Fix 1 — stub-array detection. When the dispatcher hydrated
+    // crashes from a matview, every row is an empty {} and the per-row
+    // compute helpers below all silently return zeros, then renderer
+    // hangs on NaN axes. The comprehensive report fundamentally needs
+    // per-row data — render a clear graceful-degradation message.
+    const _isStubArray = Array.isArray(allCrashes) && allCrashes.length > 0
+        && allCrashes.every(r => !r || Object.keys(r).length === 0);
+    if (_isStubArray) {
+        updateProgress(100, 'Aggregate-tier data not available for the comprehensive report.');
+        const prog = document.getElementById('comprehensiveProgress');
+        if (prog) prog.style.display = 'none';
+        const prev = document.getElementById('comprehensivePreview');
+        if (prev) {
+            prev.innerHTML =
+                '<div style="padding:2rem;color:#6b7280;text-align:center;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;margin:1rem 0;">' +
+                '<h3 style="color:#92400e;margin:0 0 .5rem 0;">Per-Row Data Required</h3>' +
+                '<p>The Comprehensive Quarterly Report needs per-crash detail (collision type, weather, light conditions, day/hour, vulnerable-user flags). ' +
+                'It cannot be generated at aggregate tiers (state, region, MPO, planning district).</p>' +
+                '<p style="margin-top:.75rem;"><strong>Please switch to a county, route, or intersection scope to generate this report.</strong></p>' +
+                '</div>';
+            prev.style.display = 'block';
+        }
+        return;
+    }
+
+    try {
+        updateProgress(5, 'Filtering crash data by date range...');
+
+        // Filter crashes by date if specified
+        let crashes = allCrashes.slice();
+        if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
+        if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
+
+        updateProgress(10, 'Computing crash statistics...');
+
+        // Compute comprehensive statistics
+        const stats = computeStats(crashes);
+        const quarter = getQuarterLabel(startDate, endDate);
+        const peakPatterns = computePeakPatterns(crashes);
+        const factors = computeContributingFactors(crashes);
+        const topLocations = computeTopLocations(crashes, 10);
+        const trendData = computeTrendComparison(allCrashes, startDate, endDate);
+        const focusTopic = determineFocusTopic(crashes, stats);
+
+        updateProgress(20, 'Analyzing collision types...');
+
+        // Compute detailed breakdowns
+        const collisionBreakdown = computeCollisionBreakdown(crashes);
+        const monthlyTrends = computeMonthlyTrends(crashes);
+        const dayOfWeekAnalysis = computeDayOfWeekAnalysis(crashes);
+        const hourlyDistribution = computeHourlyDistribution(crashes);
+        const weatherImpact = computeWeatherImpact(crashes);
+        const lightConditions = computeLightConditions(crashes);
+        const vulnerableUsers = computeVulnerableUserAnalysis(crashes);
+
+        updateProgress(25, 'Computing temporal patterns...');
+
+        // NEW: Compute Day×Hour heat matrix for visualization
+        const dayHourMatrix = computeDayHourMatrix(crashes);
+
+        // NEW: Compute Quarter-over-Quarter comparison and historical totals
+        const yoyComparison = computeYoYComparison(allCrashes, startDate, endDate);
+
+        // NEW: Generate data-driven insights
+        const dataInsights = generateDataInsight(crashes, collisionBreakdown, dayHourMatrix, lightConditions);
+
+        updateProgress(35, 'Identifying high-priority locations...');
+
+        // CC 330 Fix 2 — bound computeLocationDetails to 6s. It issues a
+        // network call per location and can stall the entire report when
+        // an upstream geocoder is slow. Fallback to empty details.
+        const locationDetails = await Promise.race([
+            computeLocationDetails(crashes, topLocations),
+            new Promise(resolve => setTimeout(() => {
+                console.warn('[Comprehensive Report] computeLocationDetails timed out at 6s — using empty details.');
+                resolve([]);
+            }, 6000))
+        ]);
+
+        updateProgress(50, 'Generating AI insights for executive summary...');
+
+        // Generate AI insights for each section
+        const apiKey = getGrantApiKey();
+        let aiInsights = {};
+
+        if (apiKey) {
+            // CC 330 Fix 3 — wrap each AI call in Promise.race vs 8s.
+            // generateAISectionInsight can hang on a slow LLM response; the
+            // outer try/catch only catches sync throws, not stuck promises.
+            // Skip a section gracefully instead of stalling the whole report.
+            const aiCall = (section, ctx) => Promise.race([
+                generateAISectionInsight(section, ctx),
+                new Promise((_, reject) => setTimeout(
+                    () => reject(new Error(`AI ${section} timed out at 8s`)), 8000))
+            ]).catch(e => {
+                console.warn(`[Comprehensive Report] AI ${section} skipped:`, e && e.message);
+                return null;
+            });
+
+            aiInsights.executive = await aiCall('executive', {
+                total: stats.total, K: stats.K, A: stats.A, B: stats.B, C: stats.C, O: stats.O,
+                ped: stats.ped, bike: stats.bike, epdo: calcEPDO(stats),
+                trend: trendData, quarter, agency
+            });
+            updateProgress(55, 'Generating AI insights for severity analysis...');
+
+            aiInsights.severity = await aiCall('severity', {
+                K: stats.K, A: stats.A, B: stats.B, C: stats.C, O: stats.O,
+                total: stats.total, trend: trendData
+            });
+            updateProgress(60, 'Generating AI insights for location hotspots...');
+
+            aiInsights.locations = await aiCall('locations', {
+                topLocations: topLocations.slice(0, 5), total: stats.total
+            });
+            updateProgress(65, 'Generating AI insights for temporal patterns...');
+
+            aiInsights.temporal = await aiCall('temporal', {
+                peakPatterns, monthlyTrends, hourlyDistribution
+            });
+            updateProgress(70, 'Generating AI insights for safety focus...');
+
+            aiInsights.focus = await aiCall('focus', {
+                focusTopic, vulnerableUsers, factors
+            });
+            updateProgress(75, 'Finalizing AI analysis...');
+
+            // NOTE: Countermeasures section removed per design requirements
+        }
+
+        updateProgress(85, 'Building report sections...');
+
+        // Build report data structure - REDESIGNED for visual storytelling
+        // Reduced from 20 pages to 14 pages with enhanced visualizations
+        comprehensiveReportData = {
+            metadata: {
+                title, agency, department, author, quarter,
+                startDate, endDate,
+                generatedAt: new Date().toISOString(),
+                crashCount: crashes.length,
+                totalPages: 14
+            },
+            sections: [
+                { page: 1, type: 'dashboard', title: 'Executive Dashboard', data: { stats, trendData, yoyComparison, dataInsights, topLocations: topLocations.slice(0, 3) } },
+                { page: 2, type: 'toc', title: 'Table of Contents' },
+                { page: 3, type: 'executive', title: 'Executive Summary', data: { stats, trendData, yoyComparison, aiInsight: aiInsights.executive } },
+                { page: 4, type: 'temporal', title: 'Temporal Analysis', data: { peakPatterns, dayOfWeekAnalysis, hourlyDistribution, dayHourMatrix, aiInsight: aiInsights.temporal } },
+                { page: 5, type: 'locations', title: 'High-Priority Locations', data: { locations: topLocations, collisionBreakdown, aiInsight: aiInsights.locations } },
+                { page: 6, type: 'locationmap', title: 'Crash Concentration Map', data: { topLocations, crashes } },
+                { page: 7, type: 'collision', title: 'Collision Analysis', data: { collisionBreakdown, stats } },
+                { page: 8, type: 'severity', title: 'Severity Distribution', data: { stats, trendData, yoyComparison, aiInsight: aiInsights.severity } },
+                { page: 9, type: 'factors', title: 'Contributing Factors', data: { factors, weatherImpact, lightConditions, stats } },
+                { page: 10, type: 'vulnerable', title: 'Vulnerable Road Users', data: { vulnerableUsers, aiInsight: aiInsights.focus } },
+                { page: 11, type: 'trends', title: 'Trends & Comparison', data: { monthlyTrends, trendData, yoyComparison } },
+                { page: 12, type: 'priorities', title: 'Safety Priorities', data: { topLocations, stats, collisionBreakdown } },
+                { page: 13, type: 'funding', title: 'Funding Opportunities', data: { stats, topLocations, vulnerableUsers } },
+                { page: 14, type: 'appendix', title: 'Data & Methodology', data: { crashCount: crashes.length, startDate, endDate, stats } }
+            ],
+            rawData: { stats, trendData, peakPatterns, factors, topLocations, monthlyTrends,
+                       dayOfWeekAnalysis, hourlyDistribution, weatherImpact, lightConditions,
+                       vulnerableUsers, collisionBreakdown, focusTopic, dayHourMatrix, yoyComparison, dataInsights,
+                       locationCoverage: calculateLocationCoverage(crashes) },
+            aiInsights
+        };
+
+        updateProgress(95, 'Rendering preview...');
+
+        // Render preview
+        renderComprehensivePreview(comprehensiveReportData);
+        renderComprehensiveTOC(comprehensiveReportData);
+
+        updateProgress(100, 'Report ready!');
+
+        // Show results
+        setTimeout(() => {
+            document.getElementById('comprehensiveProgress').style.display = 'none';
+            document.getElementById('comprehensivePreview').style.display = 'block';
+            document.getElementById('comprehensiveTOC').style.display = 'block';
+            document.getElementById('btnComprehensivePDF').disabled = false;
+            document.getElementById('btnComprehensiveWord').disabled = false;
+            document.getElementById('btnComprehensivePrint').disabled = false;
+        }, 500);
+
+    } catch (e) {
+        console.error('[Comprehensive Report] Error:', e);
+        updateProgress(0, 'Error generating report: ' + e.message);
+        document.getElementById('comprehensiveProgressTitle').textContent = 'Error';
+        document.getElementById('comprehensiveProgressTitle').style.color = '#dc2626';
+    }
+
+    hideLoading();
+}
   // ─── EXTRACTED CODE END ───
   window.CL = window.CL || {}; CL.reports = CL.reports || {};
   CL.reports.standardCore2 = CL.reports.standardCore2 || {};
+  window.generateComprehensiveReport = generateComprehensiveReport; CL.reports.standardCore2.generateComprehensiveReport = generateComprehensiveReport;
   window.generateExplorationDashboard = generateExplorationDashboard; CL.reports.standardCore2.generateExplorationDashboard = generateExplorationDashboard;
   window.getTopLocation = getTopLocation; CL.reports.standardCore2.getTopLocation = getTopLocation;
   window.truncateRoute = truncateRoute; CL.reports.standardCore2.truncateRoute = truncateRoute;
