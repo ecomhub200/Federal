@@ -657,6 +657,30 @@ function generateReport() {
     });
 }
 
+// CC 333 — shared gap-state renderer for report types that fundamentally need
+// per-row data (countermeasures, before/after). Populates the existing report
+// sub-elements (never overwrites #reportOutput, which would destroy the
+// template the other generators depend on) with an explanatory panel plus a
+// one-click link to the relevant live tab. All arguments are static strings
+// controlled by the caller (no user input), so innerHTML injection is safe.
+function _renderReportGapState(title, heading, body, tabId, buttonLabel, howTo) {
+    const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+    const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    setTxt('rptTitle', title);
+    setTxt('rptSubtitle', heading);
+    setTxt('rptMeta', '');
+    set('rptFindings',
+        '<div style="padding:1.5rem;color:#78350f;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;max-width:700px;margin:1rem auto;text-align:center;">' +
+        '<p style="margin:0 0 .75rem;font-weight:600;color:#92400e;">' + heading + '</p>' +
+        '<p style="margin:0 0 1rem;">' + body + '</p>' +
+        '<p style="margin:0 0 1rem;">' + howTo + '</p>' +
+        '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;padding:.4rem .9rem;font-size:.8rem;border:none;border-radius:6px;cursor:pointer" onclick="showTab(\'' + tabId + '\')">' + buttonLabel + '</button>' +
+        '</div>');
+    ['rptKPIs','rptYearlySection','rptChartsSection','rptTablesSection','rptRecommendations','rptCountermeasures'].forEach(id => set(id, ''));
+    const out = document.getElementById('reportOutput');
+    if (out) { out.style.display = 'block'; out.scrollIntoView({ behavior: 'smooth' }); }
+}
+
 // CC 330 — race matview + row-hydrate against a 25s timer so the dispatcher
 // can never sit past the 30s overlay watchdog. The MATVIEW set stays narrow
 // (only generators ported to read window._reportMatviewData); everything
@@ -762,8 +786,19 @@ async function _runReportGeneration(type, _reportT0, _reportMark) {
         // For countermeasures report, use CMF tab selection
         if (type === 'countermeasures') {
             if (!cmfState.selectedLocation || cmfState.locationCrashes.length === 0) {
+                // CC 333 — render an in-report gap-state instead of a jarring
+                // alert. Countermeasures need CMF lookups against a specific
+                // location's crash characteristics (collision type, intersection
+                // type, speed), which require a selected location with per-row
+                // data — matview aggregates can't produce them. State-agnostic.
+                _renderReportGapState(
+                    'Countermeasures Report',
+                    'Countermeasures Report requires a selected location',
+                    'The Countermeasures Report runs CMF (Crash Modification Factor) lookups against an individual location’s crash characteristics — collision type, intersection type, and speed — which require per-row data for a specific road or intersection.',
+                    'cmf', 'Open Countermeasures Tab',
+                    'Go to the Countermeasures tab, search for a road or intersection, then return here and click Generate Report again.'
+                );
                 hideLoading();
-                alert('Please select a location in the Countermeasures tab first.\n\nGo to the Countermeasures tab, search for a road or intersection, and then come back to generate the report.');
                 return;
             }
             let crashes = cmfState.locationCrashes;
@@ -782,8 +817,18 @@ async function _runReportGeneration(type, _reportT0, _reportMark) {
         // For before/after report, use BA tab data
         if (type === 'beforeafter') {
             if (!baState.selectedLocation || baState.locationCrashes.length === 0) {
+                // CC 333 — in-report gap-state. The Before/After study splits
+                // per-row crash dates into BEFORE/AFTER periods and runs a
+                // statistical comparison, which needs a location's row-level
+                // crashes — not available from matview annual aggregates.
+                _renderReportGapState(
+                    'Before / After Study Report',
+                    'Before/After Study Report requires a completed study',
+                    'The Before/After Study Report splits a location’s crashes into BEFORE and AFTER periods and runs a statistical comparison (Naïve, Comparison-Group, or Empirical-Bayes), which requires per-row crash dates for a selected location.',
+                    'beforeafter', 'Open Before/After Study Tab',
+                    'Go to the Before/After Study tab, select a location and run the study, then return here and click Generate Report again.'
+                );
                 hideLoading();
-                alert('Please select a location in the Before/After Study tab first.\n\nGo to the Before/After tab, select a location and run the study, then come back to generate the report.');
                 return;
             }
             generateBeforeAfterStudyReport(title, author);
