@@ -54405,8 +54405,15 @@ async function generateInfographic(allCrashes, title, agency, department, startD
 
     // Compute trend data — CC 330: skip on stub-array (matview hydration);
     // these helpers iterate per-row date fields and would spin on undefined.
+    // CC 332: shape the stub like computeTrendComparison()'s return so
+    // populateInfographicPage2 (reads trendData.current.total/.K/.ped) renders
+    // the matview totals instead of throwing on (0).total. previous-period and
+    // QoQ deltas aren't available in matview mode → zero/neutral badges.
     const trendData = _isStubArray
-        ? { current: 0, previous: 0, change: 0 }
+        ? { current: { total: total, K: stats.K, A: stats.A, B: stats.B, C: stats.C,
+                       O: stats.O, ped: stats.ped, bike: stats.bike },
+            previous: { total: 0, K: 0, A: 0, ped: 0, bike: 0 },
+            totalChange: 0, fatalChange: 0, pedChange: 0, bikeChange: 0 }
         : computeTrendComparison(allCrashes, startDate, endDate);
 
     // Compute Quarter-over-Quarter comparison (the main focus for quarterly reports)

@@ -659,15 +659,22 @@ function generateReport() {
 
 // CC 330 — race matview + row-hydrate against a 25s timer so the dispatcher
 // can never sit past the 30s overlay watchdog. The MATVIEW set stays narrow
-// (only generators ported to read window._reportMatviewData); everything
-// else uses the row-hydrate fallback (≤100k rows over ~10 chunks).
+// (only generators that read matview data — window._reportMatviewData or, for
+// infographic, their own _supabaseMode matview fetch); everything else uses
+// the row-hydrate fallback (≤100k rows over ~10 chunks).
+//
+// CC 332 — infographic joins the matview set: generateInfographic already has
+// a complete _supabaseMode matview path (app/index.html) but was never reached
+// because row-hydrate at aggregate tier hung the full 25s budget. Routing it
+// through the matview branch hands it a stub crash array, which triggers that
+// existing path and renders in ~2-3s like Dashboard.
 //
 // Promise.race leaks the slow promise on timeout — accept it. The
 // dispatched fetch eventually resolves into the void; the next click resets
 // window._reportMatviewData. Memory cost is negligible.
 async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) {
     const INNER_BUDGET_MS = 25000;
-    const MATVIEW_REPORT_TYPES = new Set(['dashboard', 'systemwide']);
+    const MATVIEW_REPORT_TYPES = new Set(['dashboard', 'systemwide', 'infographic']);
 
     const real = (async () => {
         let crashes = null, hydrated = false;
