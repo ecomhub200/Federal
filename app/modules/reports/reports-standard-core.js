@@ -683,8 +683,15 @@ function _renderReportGapState(title, heading, body, tabId, buttonLabel, howTo) 
 
 // CC 330 — race matview + row-hydrate against a 25s timer so the dispatcher
 // can never sit past the 30s overlay watchdog. The MATVIEW set stays narrow
-// (only generators ported to read window._reportMatviewData); everything
-// else uses the row-hydrate fallback (≤100k rows over ~10 chunks).
+// (only generators that read matview data — window._reportMatviewData or, for
+// infographic, their own _supabaseMode matview fetch); everything else uses
+// the row-hydrate fallback (≤100k rows over ~10 chunks).
+//
+// CC 332 — infographic joins the matview set: generateInfographic already has
+// a complete _supabaseMode matview path (app/index.html) but was never reached
+// because row-hydrate at aggregate tier hung the full 25s budget. Routing it
+// through the matview branch hands it a stub crash array, which triggers that
+// existing path and renders in ~2-3s like Dashboard.
 //
 // Promise.race leaks the slow promise on timeout — accept it. The
 // dispatched fetch eventually resolves into the void; the next click resets
@@ -693,11 +700,12 @@ async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) 
     const INNER_BUDGET_MS = 25000;
     // CC 333 — every report type whose generator reads window._reportMatviewData
     // (directly or via the matview-aware shared helpers computeStats /
-    // generateYearlySection / generateTopLocationsTable / generateNodeTable).
-    // Types in this set hydrate from matviews (~3s) at aggregate tiers instead
-    // of taking the slow row-hydrate fallback (which hangs / aborts at 25s).
-    // countermeasures + beforeafter are intentionally absent — they require
-    // per-row data and render a gap-state panel at aggregate tiers.
+    // generateYearlySection / generateTopLocationsTable / generateNodeTable),
+    // plus infographic + fatalspeed which run their own _supabaseMode matview
+    // fetch. Types in this set hydrate from matviews (~3s) at aggregate tiers
+    // instead of taking the slow row-hydrate fallback (which hangs / aborts at
+    // 25s). countermeasures + beforeafter are intentionally absent — they
+    // require per-row data and render a gap-state panel at aggregate tiers.
     const MATVIEW_REPORT_TYPES = new Set([
         'dashboard', 'systemwide',
         // Treatment A — stats-object templates (computeStats + shared helpers)
