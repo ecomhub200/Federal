@@ -154,6 +154,51 @@ The application **MUST NOT** be a single monolithic HTML file. All new code and 
 - Client-side API keys (Mapbox, Google Maps, Firebase, Stripe publishable key) go into `api-keys.json`
 - Server-side secrets (Stripe secret key, Firebase Admin, Brevo, Qdrant) stay as env vars
 
+### ⚠️ Backend: SELF-HOSTED Supabase (NOT Supabase Cloud)
+
+The crash/analytics backend is a **self-hosted Supabase** instance on a
+Hostinger VPS:
+
+- **Base URL**: `https://srv1503081.hstgr.cloud` (PostgREST under `/rest/v1`,
+  RPCs under `/rest/v1/rpc/`). Hardcoded as the default in
+  `assets/js/data-client.js` (`CrashLensDataClient.DEFAULTS.supabaseUrl`) and
+  mirrored in `assets/js/supabase-auth.js`; `config.json` / `api-keys.json` may
+  override `url` / `anonKey` at runtime.
+- **Auth**: the frontend uses the **anon** JWT only. There is intentionally
+  **no `service_role` key client-side** — never add one to `assets/`, `app/`,
+  or `config/`.
+- **Schema**: row table `crashes` (snake_case) + matviews (`dashboard_summary`,
+  `mv_*`) + RPCs (`get_jurisdiction_breakdown`, `map_viewport_crashes`, …).
+  Nightly `pg_cron` refresh. EPDO weights `K=883,A=94,B=21,C=11,O=1`
+  (FHWA-SA-25-021).
+
+#### 🚫 Claude Code CANNOT touch this database directly
+
+The Supabase MCP tools wired into this environment (`mcp__*__execute_sql`,
+`list_tables`, `apply_migration`, …) are bound to **unrelated hosted Supabase
+projects** and return `permission denied` / `not in accessible list` against
+the self-hosted instance. **Do NOT** assume those tools, or any `psql`/`curl`
+write path, can read or mutate the production DB. Treat all schema/RPC/matview
+changes as **out-of-band backend work**:
+
+1. **Frontend-only** changes (how `data-client.js` calls an existing
+   RPC/matview, fallback wiring, column mapping) — do these in-repo as normal.
+2. **Backend** changes (new/edited matview, RPC, index, `GRANT`, cron, column)
+   — **never attempt them yourself.** Author a **CoWork prompt** under
+   `docs/` (pattern: `docs/SUPABASE_BACKEND_COWORK_PROMPT.md` and
+   `docs/SUPABASE_*_COWORK_PROMPT.md`) that is self-contained: the operator with
+   DB access reads it, writes the SQL, ships, and reports back. Include: exact
+   object name, full SQL, indexes, `GRANT SELECT TO anon`, refresh wiring, and
+   `curl` smoke tests against `https://srv1503081.hstgr.cloud/rest/v1`.
+3. If a fix needs **both**, ship the frontend half and clearly flag the backend
+   half as blocked-on-CoWork — do not claim the bug is fixed until the backend
+   prompt is executed and verified.
+
+**Verification honesty**: because Claude Code can't reach the DB, never state
+that backend behavior was "verified against prod." Verify only what you can
+(frontend `node --check`, deployed-page Playwright) and label DB-dependent
+behavior as **unverified pending CoWork**.
+
 ### File Structure
 ```
 crash-lens/
