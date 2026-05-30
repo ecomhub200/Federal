@@ -115861,12 +115861,18 @@ async function renderMagisterialDistricts() {
     }
 
     // BLOCKED-UPSTREAM sentinel: the matview cannot compute a within-county
-    // (CCD / magisterial-district) breakdown for this state. Return false
-    // WITHOUT painting so callers fall through to the client-side TIGERweb
-    // renderer (_renderDistrictStatisticsLegacy), which computes the
-    // magisterial-district matrix locally. Returning true here would suppress
-    // that fallback and leave the widget showing a blocker / stale state.
+    // (CCD / magisterial-district) breakdown for this state. Hand off to the
+    // client-side TIGERweb renderer (_renderDistrictStatisticsLegacy), which
+    // computes the magisterial-district matrix locally — the same path the
+    // pre-RPC build always used for this widget. Painting directly here (rather
+    // than returning false) makes the fallback caller-independent: the
+    // jurisdictionChanged listener below ignores our return value, so a bare
+    // `return false` would leave the container stuck on "Loading breakdown…".
     if (Array.isArray(rows) && rows.length === 1 && rows[0].is_blocked_upstream) {
+        if (typeof _renderDistrictStatisticsLegacy === 'function') {
+            _renderDistrictStatisticsLegacy(container);
+            return true;
+        }
         return false;
     }
 
