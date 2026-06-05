@@ -866,12 +866,20 @@ function generateReport() {
 // through the matview branch hands it a stub crash array, which triggers that
 // existing path and renders in ~2-3s like Dashboard.
 //
+// CC 351 — comprehensive joins the matview set for the same reason. At aggregate
+// tiers (state/region/MPO/PD) and large counties (e.g. New Castle, Delaware) the
+// comprehensive report previously fell into the row-hydrate fallback and timed
+// out at the 25s budget before generateComprehensiveReport was ever reached.
+// Routing it through the matview branch populates window._reportMatviewData and
+// hands it a stub array; generateComprehensiveReport now has its own matview-mode
+// path (reports-standard-core2.js) that renders from those aggregates in ~2-3s.
+//
 // Promise.race leaks the slow promise on timeout — accept it. The
 // dispatched fetch eventually resolves into the void; the next click resets
 // window._reportMatviewData. Memory cost is negligible.
 async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) {
     const INNER_BUDGET_MS = 25000;
-    const MATVIEW_REPORT_TYPES = new Set(['dashboard', 'systemwide', 'infographic']);
+    const MATVIEW_REPORT_TYPES = new Set(['dashboard', 'systemwide', 'infographic', 'comprehensive']);
 
     const real = (async () => {
         let crashes = null, hydrated = false;
