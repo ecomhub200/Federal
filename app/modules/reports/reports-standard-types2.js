@@ -218,6 +218,8 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
     
     // Clear the report data after generating
     safetyState.reportData = null;
+    // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
+    if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 // Generate recommendations for Safety Focus reports

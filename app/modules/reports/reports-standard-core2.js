@@ -763,6 +763,10 @@ async function generateComprehensiveReport(allCrashes, title, agency, department
             document.getElementById('comprehensiveProgress').style.display = 'none';
             document.getElementById('comprehensivePreview').style.display = 'block';
             document.getElementById('comprehensiveTOC').style.display = 'block';
+            // CC 346 §3.1 — collapse empty sections in the comprehensive preview.
+            if (typeof autoCollapseEmptyReportSections === 'function') {
+                setTimeout(autoCollapseEmptyReportSections, 100);
+            }
             document.getElementById('btnComprehensivePDF').disabled = false;
             document.getElementById('btnComprehensiveWord').disabled = false;
             document.getElementById('btnComprehensivePrint').disabled = false;
