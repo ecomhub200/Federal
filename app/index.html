@@ -54517,22 +54517,46 @@ async function generateInfographic(allCrashes, title, agency, department, startD
                 () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: 25 }),
                 { limit: 25 });
             const merged = [...(hot?.intersections || []), ...(hot?.segments || [])];
-            const top = merged
+            const enriched = merged
                 .map(r => {
                     const intName = String(r['Intersection Name'] || r.intersection_name || '').trim();
                     const rteName = String(r['RTE Name'] || r.rte_name || '').trim();
                     const nodeId  = String(r.location_name || '').trim();
-                    let name;
-                    if (rteName && intName)      name = rteName + ' / ' + intName;
-                    else if (intName)            name = intName;
-                    else if (rteName)            name = rteName;
-                    else                          name = nodeId || 'Unknown';
+                    // Capture coords + node ID for disambiguation when two rows
+                    // share the same display label (different physical intersections
+                    // — typically two approach nodes of the same junction system).
+                    const lat = Number(r.lat_centroid);
+                    const lon = Number(r.lon_centroid);
+                    let baseName;
+                    if (rteName && intName)      baseName = rteName + ' / ' + intName;
+                    else if (intName)            baseName = intName;
+                    else if (rteName)            baseName = rteName;
+                    else                          baseName = nodeId || 'Unknown';
                     const K = r.k || 0, A = r.a || 0, B = r.b || 0, C = r.c || 0, O = r.o || 0;
-                    return { name, total: r.total_crashes || 0, K, A, B, C, O,
-                             epdo: r.epdo || 0, ka: K + A };
+                    return { baseName, name: baseName, total: r.total_crashes || 0, K, A, B, C, O,
+                             epdo: r.epdo || 0, ka: K + A, nodeId, lat, lon };
                 })
-                .sort((a, b) => b.epdo - a.epdo)
-                .slice(0, 5);
+                .sort((a, b) => b.epdo - a.epdo);
+            // CC 342 — disambiguate top-5 display labels.
+            // When two rows share the same baseName, append a stable suffix
+            // so the user can tell them apart. Do NOT merge counts — these
+            // are separate physical intersections with distinct node IDs.
+            // Strategy: among rows that share a baseName, the highest-EPDO
+            // one keeps the bare label; subsequent rows get "(approach 2)",
+            // "(approach 3)", ... appended in EPDO-descending order. This
+            // mirrors how engineers refer to multi-leg junction systems.
+            const _seenLabel = Object.create(null);
+            for (const row of enriched) {
+                const key = row.baseName.toLowerCase();
+                const seenCount = _seenLabel[key] || 0;
+                if (seenCount === 0) {
+                    row.name = row.baseName;          // first occurrence — bare
+                } else {
+                    row.name = row.baseName + ' (approach ' + (seenCount + 1) + ')';
+                }
+                _seenLabel[key] = seenCount + 1;
+            }
+            const top = enriched.slice(0, 5);
             if (top.length) topLocations = top;
         } catch (e) { /* non-fatal — leave row-based result (empty array) */ }
     }
