@@ -657,6 +657,45 @@ function generateReport() {
     });
 }
 
+// CC 341 F5 — auto-regenerate the open report when jurisdiction/tier/state changes.
+// Purely additive: wires listeners once. Only regenerates when a report output is
+// already visible — we never generate on the user's behalf before they've clicked
+// Generate (that would mask the explicit "go" gesture and waste data pulls while
+// they're just exploring jurisdictions).
+(function _wireReportsAutoUpdate() {
+    if (window._reportsAutoUpdateWired) return;
+    window._reportsAutoUpdateWired = true;
+    var DEBOUNCE_MS = 600;
+    var _debounceTimer = null;
+    function _maybeRegenerate(reason) {
+        var anyReportVisible = ['reportOutput', 'infographicOutput', 'comprehensiveReportOutput']
+            .map(function(id){ var el = document.getElementById(id); return el && el.style.display !== 'none'; })
+            .some(Boolean);
+        if (!anyReportVisible) return;
+        clearTimeout(_debounceTimer);
+        _debounceTimer = setTimeout(function() {
+            console.log('[Reports:autoUpdate] regenerating because:', reason);
+            try {
+                var fn = window.generateReport
+                      || (window.CL && window.CL.reports && window.CL.reports.standardCore && window.CL.reports.standardCore.generateReport);
+                if (typeof fn === 'function') fn();
+            } catch (e) {
+                console.warn('[Reports:autoUpdate] generateReport threw — user can click Generate manually:', e);
+            }
+        }, DEBOUNCE_MS);
+    }
+    // The app dispatches a `jurisdictionChanged` CustomEvent on `document`
+    // (app/index.html — fired after every state/tier/jurisdiction change). Listen
+    // there, plus a belt-and-suspenders `change` on the header selects in case the
+    // event path changes. Any missing element/event is simply a no-op — safe.
+    document.addEventListener('jurisdictionChanged', function() { _maybeRegenerate('jurisdictionChanged'); });
+    ['stateSelect', 'jurisdictionSelect', 'tierRegionSelect', 'tierMPOSelect', 'tierCountySelect', 'tierCitySelect']
+        .forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('change', function() { _maybeRegenerate('select:' + id); });
+        });
+})();
+
 // CC 330 — race matview + row-hydrate against a 25s timer so the dispatcher
 // can never sit past the 30s overlay watchdog. The MATVIEW set stays narrow
 // (only generators that read matview data — window._reportMatviewData or, for

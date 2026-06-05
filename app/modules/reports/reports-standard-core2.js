@@ -584,6 +584,32 @@ async function generateComprehensiveReport(allCrashes, title, agency, department
         return;
     }
 
+    // CC 341 F2 — defence-in-depth empty-array guard. The _isStubArray check
+    // above only fires for length > 0 stub arrays. When the selection yields
+    // NO rows at all (allCrashes is [] / null), execution would otherwise fall
+    // into computeStats([]) and render a report of zeros + NaN%. Surface the
+    // same graceful-degradation banner instead. (No synthetic-row fabrication:
+    // matview aggregates lack the per-row collision/weather/hour/VRU detail
+    // this report requires, so we direct the user to a row-level scope.)
+    if (!Array.isArray(allCrashes) || allCrashes.length === 0) {
+        const prog = document.getElementById('comprehensiveProgress');
+        if (prog) prog.style.display = 'none';
+        const prev = document.getElementById('comprehensivePreview');
+        if (prev) {
+            prev.innerHTML =
+                '<div style="padding:2rem;color:#6b7280;text-align:center;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;margin:1rem 0;">' +
+                '<h3 style="color:#92400e;margin:0 0 .5rem 0;">No Crash Data Available</h3>' +
+                '<p>The Comprehensive Quarterly Report needs per-crash detail and found no rows for this selection. Try:</p>' +
+                '<ul style="text-align:left;display:inline-block;color:#78350f;">' +
+                '<li>Selecting a county, route, or intersection scope (aggregate tiers have no row-level data)</li>' +
+                '<li>Removing date filters</li>' +
+                '<li>Generating a Summary Report or Infographic instead — they work from aggregate data</li>' +
+                '</ul></div>';
+            prev.style.display = 'block';
+        }
+        return;
+    }
+
     try {
         updateProgress(5, 'Filtering crash data by date range...');
 

@@ -19700,9 +19700,17 @@ function getReportDeptLabel() {
  * Get the data source label for reports (e.g., "Colorado DOT Crash Records").
  */
 function getDataSourceLabel() {
-    const state = jurisdictionContext.stateName || 'State';
-    const dotName = appConfig?.states?.[appConfig?.defaultState]?.dotName || 'DOT';
-    return `${state} ${dotName} Crash Records`;
+    // State-agnostic: read dotName from the ACTIVE state, not appConfig.defaultState.
+    // appConfig.defaultState is "colorado" (the build-time default) — using it for the
+    // dotName lookup makes every non-Colorado report show "<State> CDOT" in the footer.
+    const stateName = (jurisdictionContext && jurisdictionContext.stateName) || appConfig?.stateName || 'State';
+    // Look up the state config by key. Keys in appConfig.states use lowercase + underscore
+    // ("delaware", "new_jersey"), so derive the key from the display name.
+    const stateKey = stateName.toLowerCase().replace(/\s+/g, '_');
+    const dotName = appConfig?.states?.[stateKey]?.dotName
+                 || appConfig?.states?.[appConfig?.defaultState]?.dotName
+                 || 'DOT';
+    return `${stateName} ${dotName} Crash Records`;
 }
 
 // API availability map - which data sources work for which states
@@ -55836,6 +55844,9 @@ function renderComprehensivePreview(data) {
     const m = data.metadata;
     const r = data.rawData;
     const ai = data.aiInsights || {};
+    // CC 341 F3 — FHWA 2025 EPDO weights (FHWA-SA-25-021), sourced from the shared constants.
+    const EPDO_W = (window.CL && window.CL.core && window.CL.core.constants && window.CL.core.constants.EPDO_WEIGHTS_DEFAULT)
+                || { K: 883, A: 94, B: 21, C: 11, O: 1 };
 
     // ============================================
     // WORLD-CLASS DESIGN - COLOR PALETTE
@@ -56017,7 +56028,7 @@ function renderComprehensivePreview(data) {
 
     // Helper: Calculate and validate EPDO totals
     const validateEPDO = () => {
-        const computed = (r.stats.K * 1500) + (r.stats.A * 240) + (r.stats.B * 12) + (r.stats.C * 6) + r.stats.O;
+        const computed = (r.stats.K * EPDO_W.K) + (r.stats.A * EPDO_W.A) + (r.stats.B * EPDO_W.B) + (r.stats.C * EPDO_W.C) + (r.stats.O * EPDO_W.O);
         const stored = calcEPDO(r.stats);
         const hasDiscrepancy = Math.abs(computed - stored) > 1;
         return { computed, stored, hasDiscrepancy };
@@ -56376,6 +56387,19 @@ function renderComprehensiveTOC(data) {
     `).join('');
 }
 
+// CC 341 F4 — state-aware funding program list. Extend the map as new states
+// are onboarded; unknown states fall back to a generic DOT/HSO label pair.
+function _stateFundingPrograms() {
+    const stateName = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext && jurisdictionContext.stateName) || appConfig?.stateName || '';
+    const key = stateName.toLowerCase();
+    const map = {
+        'colorado':  ['CDOT Highway Safety Improvement Program', 'CDOT Revenue Sharing Program', 'Smart Scale (CDOT prioritization)'],
+        'virginia':  ['Virginia Highway Safety Office Grants', 'VDOT Revenue Sharing Program', 'Smart Scale (VDOT prioritization)'],
+        'delaware':  ['Delaware Office of Highway Safety Grants', 'DelDOT Capital Transportation Program', 'Strategic Highway Safety Plan (SHSP) Implementation']
+    };
+    return map[key] || [`${stateName || 'State'} Highway Safety Office Grants`, `${appConfig?.states?.[key.replace(/\s+/g, '_')]?.dotName || 'State DOT'} Programs`];
+}
+
 async function downloadComprehensivePDF() {
     if (!comprehensiveReportData) {
         alert('Please generate the report first.');
@@ -56384,6 +56408,10 @@ async function downloadComprehensivePDF() {
 
     const totalPages = comprehensiveReportData.metadata.totalPages || 14;
     showLoading(`Generating ${totalPages}-page PDF report...`);
+
+    // CC 341 F3 — FHWA 2025 EPDO weights (FHWA-SA-25-021), sourced from the shared constants.
+    const EPDO_W = (window.CL && window.CL.core && window.CL.core.constants && window.CL.core.constants.EPDO_WEIGHTS_DEFAULT)
+                || { K: 883, A: 94, B: 21, C: 11, O: 1 };
 
     try {
         const { jsPDF } = window.jspdf;
@@ -56737,11 +56765,11 @@ async function downloadComprehensivePDF() {
         addText('Detailed Severity Breakdown', 14, 'bold', PDF_COLORS.navy);
         addSpacer(3);
         const sevBreakdown = [
-            { sev: 'Fatal (K)', count: r.stats.K, weight: 1500, color: PDF_COLORS.fatal },
-            { sev: 'Serious Injury (A)', count: r.stats.A, weight: 240, color: PDF_COLORS.serious },
-            { sev: 'Moderate Injury (B)', count: r.stats.B, weight: 12, color: PDF_COLORS.moderate },
-            { sev: 'Minor Injury (C)', count: r.stats.C, weight: 6, color: '#1D4ED8' },
-            { sev: 'Property Damage Only (O)', count: r.stats.O, weight: 1, color: '#9CA3AF' }
+            { sev: 'Fatal (K)', count: r.stats.K, weight: EPDO_W.K, color: PDF_COLORS.fatal },
+            { sev: 'Serious Injury (A)', count: r.stats.A, weight: EPDO_W.A, color: PDF_COLORS.serious },
+            { sev: 'Moderate Injury (B)', count: r.stats.B, weight: EPDO_W.B, color: PDF_COLORS.moderate },
+            { sev: 'Minor Injury (C)', count: r.stats.C, weight: EPDO_W.C, color: '#1D4ED8' },
+            { sev: 'Property Damage Only (O)', count: r.stats.O, weight: EPDO_W.O, color: '#9CA3AF' }
         ];
         sevBreakdown.forEach(s => {
             const pct = ((s.count / r.stats.total) * 100).toFixed(1);
@@ -56868,9 +56896,7 @@ async function downloadComprehensivePDF() {
         addText('  - Behavioral safety programs and enforcement', 9, 'normal', PDF_COLORS.slateLight);
         addSpacer(8);
         addText('State Programs', 14, 'bold', PDF_COLORS.navy);
-        addText('✓ Virginia Highway Safety Office Grants', 10, 'normal', PDF_COLORS.slate);
-        addText('✓ VDOT Revenue Sharing Program', 10, 'normal', PDF_COLORS.slate);
-        addText('✓ Smart Scale (prioritizes safety benefits)', 10, 'normal', PDF_COLORS.slate);
+        _stateFundingPrograms().forEach(p => addText('✓ ' + p, 10, 'normal', PDF_COLORS.slate));
         addSpacer(8);
         addText('Eligibility Indicators', 14, 'bold', PDF_COLORS.navy);
         const pedEligible = r.vulnerableUsers.ped.total > 10;
@@ -56884,7 +56910,7 @@ async function downloadComprehensivePDF() {
         addText('Data & Methodology', 18, 'bold', PDF_COLORS.navy);
         addSpacer(5);
         addText('Data Source', 14, 'bold', PDF_COLORS.navy);
-        addText('Virginia Department of Motor Vehicles (DMV) Crash Records', 11, 'normal', PDF_COLORS.slate);
+        addText(getDataSourceLabel(), 11, 'normal', PDF_COLORS.slate);
         addSpacer(5);
         addText('Analysis Period', 14, 'bold', PDF_COLORS.navy);
         addText(`${m.startDate || 'All available data'} to ${m.endDate || 'Present'}`, 11, 'normal', PDF_COLORS.slate);
@@ -56894,7 +56920,7 @@ async function downloadComprehensivePDF() {
         addSpacer(8);
         addText('EPDO Weighting Methodology', 14, 'bold', PDF_COLORS.navy);
         addText('Equivalent Property Damage Only (EPDO) weights used:', 10, 'normal', PDF_COLORS.slate);
-        addText('  K (Fatal): 1500 | A (Serious): 240 | B (Moderate): 12 | C (Minor): 6 | O (PDO): 1', 10, 'normal', PDF_COLORS.slateLight);
+        addText('  K (Fatal): ' + EPDO_W.K + ' | A (Serious): ' + EPDO_W.A + ' | B (Moderate): ' + EPDO_W.B + ' | C (Minor): ' + EPDO_W.C + ' | O (PDO): ' + EPDO_W.O, 10, 'normal', PDF_COLORS.slateLight);
         addSpacer(10);
         addText('DATA NOTES', 14, 'bold', PDF_COLORS.moderate);
         // Calculate actual location coverage
@@ -56956,6 +56982,10 @@ async function downloadComprehensiveWord() {
         const m = comprehensiveReportData.metadata;
         const r = comprehensiveReportData.rawData;
         const ai = comprehensiveReportData.aiInsights || {};
+
+        // CC 341 F3 — FHWA 2025 EPDO weights (FHWA-SA-25-021), sourced from the shared constants.
+        const EPDO_W = (window.CL && window.CL.core && window.CL.core.constants && window.CL.core.constants.EPDO_WEIGHTS_DEFAULT)
+                    || { K: 883, A: 94, B: 21, C: 11, O: 1 };
 
         // Helper: Format hour for display
         const fmtHour = (h) => h === 0 ? '12 AM' : (h === 12 ? '12 PM' : (h > 12 ? `${h-12} PM` : `${h} AM`));
@@ -57047,11 +57077,11 @@ ${ai.executive ? `<p>${sanitizeTextForExport(ai.executive)}</p><div class="discl
 <h3>Crash Severity Overview</h3>
 <table>
 <tr><th>Severity</th><th>Count</th><th>Percentage</th><th>EPDO Weight</th><th>EPDO Contribution</th></tr>
-<tr><td style="color:#dc2626;font-weight:bold">Fatal (K)</td><td>${r.stats.K}</td><td>${((r.stats.K / (r.stats.total || 1)) * 100).toFixed(1)}%</td><td>1500</td><td>${(r.stats.K * 1500).toLocaleString()}</td></tr>
-<tr><td style="color:#ea580c;font-weight:bold">Serious Injury (A)</td><td>${r.stats.A}</td><td>${((r.stats.A / (r.stats.total || 1)) * 100).toFixed(1)}%</td><td>240</td><td>${(r.stats.A * 240).toLocaleString()}</td></tr>
-<tr><td>Moderate Injury (B)</td><td>${r.stats.B}</td><td>${((r.stats.B / (r.stats.total || 1)) * 100).toFixed(1)}%</td><td>12</td><td>${(r.stats.B * 12).toLocaleString()}</td></tr>
-<tr><td>Minor Injury (C)</td><td>${r.stats.C}</td><td>${((r.stats.C / (r.stats.total || 1)) * 100).toFixed(1)}%</td><td>6</td><td>${(r.stats.C * 6).toLocaleString()}</td></tr>
-<tr><td>Property Damage Only (O)</td><td>${r.stats.O}</td><td>${((r.stats.O / (r.stats.total || 1)) * 100).toFixed(1)}%</td><td>1</td><td>${r.stats.O.toLocaleString()}</td></tr>
+<tr><td style="color:#dc2626;font-weight:bold">Fatal (K)</td><td>${r.stats.K}</td><td>${((r.stats.K / (r.stats.total || 1)) * 100).toFixed(1)}%</td><td>${EPDO_W.K}</td><td>${(r.stats.K * EPDO_W.K).toLocaleString()}</td></tr>
+<tr><td style="color:#ea580c;font-weight:bold">Serious Injury (A)</td><td>${r.stats.A}</td><td>${((r.stats.A / (r.stats.total || 1)) * 100).toFixed(1)}%</td><td>${EPDO_W.A}</td><td>${(r.stats.A * EPDO_W.A).toLocaleString()}</td></tr>
+<tr><td>Moderate Injury (B)</td><td>${r.stats.B}</td><td>${((r.stats.B / (r.stats.total || 1)) * 100).toFixed(1)}%</td><td>${EPDO_W.B}</td><td>${(r.stats.B * EPDO_W.B).toLocaleString()}</td></tr>
+<tr><td>Minor Injury (C)</td><td>${r.stats.C}</td><td>${((r.stats.C / (r.stats.total || 1)) * 100).toFixed(1)}%</td><td>${EPDO_W.C}</td><td>${(r.stats.C * EPDO_W.C).toLocaleString()}</td></tr>
+<tr><td>Property Damage Only (O)</td><td>${r.stats.O}</td><td>${((r.stats.O / (r.stats.total || 1)) * 100).toFixed(1)}%</td><td>${EPDO_W.O}</td><td>${(r.stats.O * EPDO_W.O).toLocaleString()}</td></tr>
 <tr><th>Total</th><th>${r.stats.total}</th><th>100%</th><th></th><th style="color:#1e40af;font-weight:bold">${calcEPDO(r.stats).toLocaleString()}</th></tr>
 </table>
 
@@ -57202,9 +57232,7 @@ ${r.topLocations.slice(0, 5).map((loc, i) => `
 
 <h3>State Programs</h3>
 <ul>
-<li><strong>Virginia Highway Safety Office Grants</strong></li>
-<li><strong>VDOT Revenue Sharing Program</strong></li>
-<li><strong>Smart Scale</strong> - Prioritizes safety benefits</li>
+${_stateFundingPrograms().map(p => `<li><strong>${p}</strong></li>`).join('')}
 </ul>
 
 <h3>Eligibility Indicators</h3>
@@ -57217,18 +57245,18 @@ ${r.topLocations.slice(0, 5).map((loc, i) => `
 
 <!-- PAGE 12: Data & Methodology -->
 <h2>Data & Methodology</h2>
-<p><strong>Data Source:</strong> Virginia Department of Motor Vehicles (DMV) Crash Records</p>
+<p><strong>Data Source:</strong> ${getDataSourceLabel()}</p>
 <p><strong>Analysis Period:</strong> ${m.startDate || 'All available data'} to ${m.endDate || 'Present'}</p>
 <p><strong>Crash Count:</strong> ${m.crashCount.toLocaleString()} crashes analyzed</p>
 
 <h3>EPDO Weighting Methodology</h3>
 <table>
 <tr><th>Severity</th><th>Weight</th><th>Description</th></tr>
-<tr><td>Fatal (K)</td><td>1500</td><td>Highest priority - life-threatening</td></tr>
-<tr><td>Serious Injury (A)</td><td>240</td><td>Incapacitating injuries</td></tr>
-<tr><td>Moderate Injury (B)</td><td>12</td><td>Non-incapacitating injuries</td></tr>
-<tr><td>Minor Injury (C)</td><td>6</td><td>Possible injuries</td></tr>
-<tr><td>Property Damage Only (O)</td><td>1</td><td>No injuries</td></tr>
+<tr><td>Fatal (K)</td><td>${EPDO_W.K}</td><td>Highest priority - life-threatening</td></tr>
+<tr><td>Serious Injury (A)</td><td>${EPDO_W.A}</td><td>Incapacitating injuries</td></tr>
+<tr><td>Moderate Injury (B)</td><td>${EPDO_W.B}</td><td>Non-incapacitating injuries</td></tr>
+<tr><td>Minor Injury (C)</td><td>${EPDO_W.C}</td><td>Possible injuries</td></tr>
+<tr><td>Property Damage Only (O)</td><td>${EPDO_W.O}</td><td>No injuries</td></tr>
 </table>
 
 <h3>Data Quality Notes</h3>
@@ -92738,8 +92766,9 @@ function roundabout_autoPopulateCrashData() {
             pdo++;  // Only O (Property Damage Only) goes here
         }
 
-        // EPDO calculation
-        const weights = { K: 1500, A: 240, B: 12, C: 6, O: 1 };
+        // EPDO calculation — CC 341 F3: FHWA 2025 weights (FHWA-SA-25-021)
+        const weights = (window.CL && window.CL.core && window.CL.core.constants && window.CL.core.constants.EPDO_WEIGHTS_DEFAULT)
+                     || { K: 883, A: 94, B: 21, C: 11, O: 1 };
         epdoScore += weights[severity] || 1;
     });
 
@@ -102593,7 +102622,9 @@ function streetlight_loadCrashData() {
  * Analyze crashes by light condition
  */
 function streetlight_analyzeCrashesByLight(crashes) {
-    const EPDO_WEIGHTS = { K: 1500, A: 240, B: 12, C: 6, O: 1 };
+    // CC 341 F3 — FHWA 2025 EPDO weights (FHWA-SA-25-021), sourced from the shared constants.
+    const EPDO_WEIGHTS = (window.CL && window.CL.core && window.CL.core.constants && window.CL.core.constants.EPDO_WEIGHTS_DEFAULT)
+                      || { K: 883, A: 94, B: 21, C: 11, O: 1 };
     const data = {
         total: 0,
         daytime: { count: 0, K: 0, A: 0, B: 0, C: 0, O: 0, epdo: 0 },
@@ -120830,7 +120861,10 @@ function assetCalcSchoolMetrics(assetId, crashes) {
         else O++;
     });
 
-    const epdo = K * 1500 + A * 240 + B * 12 + C * 6 + O * 1;
+    // CC 341 F3 — FHWA 2025 EPDO weights (FHWA-SA-25-021), sourced from the shared constants.
+    const EPDO_W = (window.CL && window.CL.core && window.CL.core.constants && window.CL.core.constants.EPDO_WEIGHTS_DEFAULT)
+                || { K: 883, A: 94, B: 21, C: 11, O: 1 };
+    const epdo = K * EPDO_W.K + A * EPDO_W.A + B * EPDO_W.B + C * EPDO_W.C + O * EPDO_W.O;
 
     // Calculate enrollment-based metrics
     const crashRate = enrollment > 0 ? (crashes.length / enrollment) * 1000 : 0;
@@ -120996,8 +121030,10 @@ function updateSchoolSafetyMetrics() {
         collisionTypes[collision] = (collisionTypes[collision] || 0) + 1;
     });
 
-    // Calculate EPDO
-    totalEPDO = totalK * 1500 + totalA * 240 + totalB * 12 + totalC * 6 + totalO;
+    // Calculate EPDO — CC 341 F3: FHWA 2025 weights (FHWA-SA-25-021)
+    const EPDO_W = (window.CL && window.CL.core && window.CL.core.constants && window.CL.core.constants.EPDO_WEIGHTS_DEFAULT)
+                || { K: 883, A: 94, B: 21, C: 11, O: 1 };
+    totalEPDO = totalK * EPDO_W.K + totalA * EPDO_W.A + totalB * EPDO_W.B + totalC * EPDO_W.C + totalO * EPDO_W.O;
 
     // Update school type stats with crash counts
     allSchoolCrashes.forEach(crash => {
