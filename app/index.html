@@ -56390,14 +56390,53 @@ function renderComprehensiveTOC(data) {
 // CC 341 F4 — state-aware funding program list. Extend the map as new states
 // are onboarded; unknown states fall back to a generic DOT/HSO label pair.
 function _stateFundingPrograms() {
-    const stateName = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext && jurisdictionContext.stateName) || appConfig?.stateName || '';
-    const key = stateName.toLowerCase();
-    const map = {
-        'colorado':  ['CDOT Highway Safety Improvement Program', 'CDOT Revenue Sharing Program', 'Smart Scale (CDOT prioritization)'],
-        'virginia':  ['Virginia Highway Safety Office Grants', 'VDOT Revenue Sharing Program', 'Smart Scale (VDOT prioritization)'],
-        'delaware':  ['Delaware Office of Highway Safety Grants', 'DelDOT Capital Transportation Program', 'Strategic Highway Safety Plan (SHSP) Implementation']
+    const stateName = (jurisdictionContext && jurisdictionContext.stateName) || appConfig?.stateName || '';
+    // Normalize to the underscore key form (e.g. "New York" -> "new_york") so multi-word
+    // state display names match the underscore keys in stateMap and appConfig.states.
+    const key = stateName.toLowerCase().replace(/\s+/g, '_');
+    const dotName = appConfig?.states?.[key]?.dotName || 'State DOT';
+
+    // Federal programs — every state is eligible. Always shown.
+    const federal = [
+        'Highway Safety Improvement Program (HSIP) — FHWA, state allocation',
+        'Safe Streets and Roads for All (SS4A) — USDOT, discretionary',
+        'Reconnecting Communities Pilot Program — USDOT, discretionary',
+        'NHTSA Section 402 (State and Community Highway Safety) Grants',
+        'NHTSA Section 405 (National Priority Safety) Grants',
+        'Strategic Highway Safety Plan (SHSP) Implementation — FHWA, state allocation',
+        'Rural Surface Transportation Grant Program — USDOT, discretionary',
+        'Promoting Resilient Operations for Transformative, Efficient, and Cost-Saving Transportation (PROTECT) — FHWA'
+    ];
+
+    // State-specific programs. Add a new state by appending one entry.
+    const stateMap = {
+        'colorado':       ['CDOT Highway Safety Office Grants', 'CDOT Revenue Sharing Program', 'Smart Scale (CDOT prioritization)'],
+        'virginia':       ['Virginia Highway Safety Office Grants', 'VDOT Revenue Sharing Program', 'Smart Scale (VDOT prioritization)', 'Virginia DRPT Transit Capital Assistance'],
+        'delaware':       ['Delaware Office of Highway Safety Grants', 'DelDOT Capital Transportation Program', 'Statewide Highway Safety Plan (SHSP) Implementation — Delaware'],
+        'california':     ['Caltrans Highway Safety Improvement Program (HSIP-CA)', 'Active Transportation Program (ATP)', 'Office of Traffic Safety (OTS) Grants', 'Local Streets and Roads Program (SB 1)'],
+        'texas':          ['TxDOT Highway Safety Plan Grants', 'TxDOT Transportation Alternatives Set-Aside (TA Set-Aside)', 'TxDOT Texas Mobility Fund', 'TxDOT Statewide Transportation Improvement Program (STIP)'],
+        'florida':        ['FDOT Highway Safety Office Grants', 'FDOT Local Agency Program (LAP)', 'Strategic Intermodal System (SIS) Funding', 'Transportation Regional Incentive Program (TRIP)'],
+        'new_york':       ['NYSDOT Governor\'s Traffic Safety Committee Grants', 'NYSDOT Local Bridge and Highway Aid (CHIPS)', 'New York Works Capital Plan', 'Federal-Aid Local Initiatives'],
+        'pennsylvania':   ['PennDOT Pennsylvania Highway Safety Grants', 'PennDOT Multimodal Transportation Fund', 'PennDOT Automated Red Light Enforcement (ARLE)', 'Transportation Alternatives Set-Aside Program (TAP)'],
+        'illinois':       ['IDOT Illinois Traffic Safety Resource Prosecutor Program', 'IDOT Highway Safety Improvement Program', 'Illinois Bicycle Path Grant Program', 'Federal-Aid to Local Agencies'],
+        'ohio':           ['ODOT Highway Safety Improvement Program', 'ODOT Safe Routes to School', 'ODOT Local Public Agency (LPA) Program', 'Ohio Department of Public Safety (ODPS) Grants'],
+        'georgia':        ['GDOT Highway Safety Improvement Program', 'Governor\'s Office of Highway Safety (GOHS) Grants', 'GDOT Off-System Safety Program', 'GDOT Local Maintenance and Improvement Grant (LMIG)'],
+        'north_carolina': ['NCDOT Governor\'s Highway Safety Program (GHSP)', 'NCDOT Spot Safety Program', 'NCDOT Hazard Elimination Program', 'NCDOT Local Bicycle and Pedestrian Program'],
+        'maryland':       ['MDOT State Highway Administration Safety Grants', 'Maryland Highway Safety Office (MHSO) Grants', 'MDOT Transportation Alternatives Program', 'Maryland Strategic Highway Safety Plan Implementation'],
+        'new_jersey':     ['NJDOT Highway Safety Improvement Program', 'NJ Division of Highway Traffic Safety Grants', 'NJDOT Local Aid', 'NJDOT Safe Streets to Transit Program'],
+        'washington':     ['WSDOT Highway Safety Improvement Program', 'Washington Traffic Safety Commission (WTSC) Grants', 'WSDOT Pedestrian and Bicycle Program', 'WSDOT Safe Routes to School Program'],
+        'massachusetts':  ['MassDOT Highway Safety Office Grants', 'MassDOT Complete Streets Funding Program', 'Executive Office of Public Safety and Security (EOPSS) Grants', 'MassDOT Shared Streets and Spaces'],
+        'arizona':        ['ADOT Highway Safety Office Grants', 'Governor\'s Office of Highway Safety (GOHS) Grants', 'ADOT Local Public Agency Program', 'Statewide Transportation Improvement Program (STIP)'],
+        'tennessee':      ['TDOT Highway Safety Office Grants', 'Governor\'s Highway Safety Office (GHSO) Grants', 'TDOT Multimodal Access Grant Program', 'TDOT Transportation Alternatives Program']
     };
-    return map[key] || [`${stateName || 'State'} Highway Safety Office Grants`, `${appConfig?.states?.[key.replace(/\s+/g, '_')]?.dotName || 'State DOT'} Programs`];
+
+    const stateProgs = stateMap[key] || [
+        `${stateName || 'State'} Highway Safety Office Grants`,
+        `${dotName} Capital Improvement Program`,
+        `${dotName} Local Agency Program`
+    ];
+
+    return federal.concat(stateProgs);
 }
 
 async function downloadComprehensivePDF() {
