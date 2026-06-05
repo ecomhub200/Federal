@@ -75,6 +75,8 @@ function generateCorridorReport(crashes, route, title, author) {
         </div>
     `;
     document.getElementById('rptRecommendations').innerHTML = generateRecommendations(stats, crashes);
+    // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
+    if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 function generateSafetyReport(crashes, title, author) {
@@ -168,6 +170,8 @@ function generateSafetyReport(crashes, title, author) {
         ${generateTopLocationsTable(crashes, true)}
     `;
     document.getElementById('rptRecommendations').innerHTML = generateSafetyRecommendations(stats, severeCrashes);
+    // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
+    if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 function generatePedBikeReport(crashes, title, author) {
@@ -337,6 +341,8 @@ function generatePedBikeReport(crashes, title, author) {
 
     document.getElementById('rptTablesSection').innerHTML = generatePedBikeLocationTable(pedCrashes, bikeCrashes) + factorsTable;
     document.getElementById('rptRecommendations').innerHTML = generatePedBikeRecommendations(pedStats, bikeStats, pedDarkPct, bikeDarkPct);
+    // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
+    if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 function createEnhancedPedBikeCharts(pedCrashes, bikeCrashes) {
@@ -501,6 +507,8 @@ function generateTrendReport(crashes, title, author) {
         </div>
     `;
     document.getElementById('rptRecommendations').innerHTML = '';
+    // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
+    if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 // ============================================
