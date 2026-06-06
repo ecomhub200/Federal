@@ -740,8 +740,21 @@ function generateReport() {
             const target = (!hasRoute) ? routeEl : nodeEl;
             if (typeof showToast === 'function') {
                 showToast('This report type requires a ' + fld + '. Please select one before generating.', 'warning', 5000);
-            } else {
-                alert('This report type requires a ' + fld + '. Please select one before generating.');
+            }
+            // CC 361 — clear any stale report and render an inline empty-state so
+            // the user never mistakes the previous report for the new one. Covers
+            // both corridor (no Route) and intersection (no Route/Node) since both
+            // funnel through generateReport(). Replaces the old modal alert
+            // fallback — the empty-state is the visible feedback.
+            const label = (type === 'intersection') ? 'Intersection Safety Analysis'
+                                                    : 'Corridor & Segment Analysis';
+            const missing = (type === 'intersection') ? 'an Intersection (node) selection'
+                                                      : 'a Route or Corridor selection';
+            const howTo = (type === 'intersection')
+                ? 'Pick a specific intersection from the Location dropdown above, then click Generate Report again. To see top intersections county-wide, use the High-Crash Location (Hotspot) report instead.'
+                : 'Pick a specific route from the Location dropdown above, then click Generate Report again. To analyze every route, use the Safety Performance or Multi-Year Trend reports instead.';
+            if (typeof renderRequiredInputEmptyState === 'function') {
+                renderRequiredInputEmptyState(label, missing, howTo);
             }
             if (target && typeof target.focus === 'function') target.focus();
             return;
@@ -838,6 +851,33 @@ function _renderReportGapState(title, heading, body, tabId, buttonLabel, howTo) 
     const out = document.getElementById('reportOutput');
     if (out) { out.style.display = 'block'; out.scrollIntoView({ behavior: 'smooth' }); }
 }
+
+// CC 361 — render an inline empty-state inside the standard report output when a
+// report type requires a user selection that isn't set. Mirrors the known-safe
+// _renderReportGapState pattern above: writes into the rpt* sub-elements and
+// NEVER overwrites #reportOutput, so the report template survives and the next
+// valid report renders normally. All arguments are static strings controlled by
+// the caller (no user input), so innerHTML is safe.
+function renderRequiredInputEmptyState(reportLabel, missingInputName, howToFix) {
+    const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+    const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    setTxt('rptTitle', reportLabel + ' — selection required');
+    setTxt('rptSubtitle', '');
+    setTxt('rptMeta', '');
+    set('rptFindings',
+        '<div style="padding:2rem;text-align:center;background:#fef3c7;border:2px solid #f59e0b;border-radius:8px;max-width:700px;margin:1rem auto">' +
+        '<h3 style="color:#92400e;margin-top:0">' + reportLabel + ' — selection required</h3>' +
+        '<p style="color:#78350f">This report needs <strong>' + missingInputName + '</strong> before it can run.</p>' +
+        (howToFix ? '<p style="color:#78350f">' + howToFix + '</p>' : '') +
+        '</div>');
+    ['rptKPIs','rptYearlySection','rptChartsSection','rptTablesSection','rptRecommendations','rptCountermeasures']
+        .forEach(id => set(id, ''));
+    const out = document.getElementById('reportOutput');
+    if (out) { out.style.display = 'block'; out.scrollIntoView({ behavior: 'smooth' }); }
+    ['infographicOutput','comprehensiveReportOutput']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+}
+window.renderRequiredInputEmptyState = renderRequiredInputEmptyState;
 
 // CC 341 F5 — auto-regenerate the open report when jurisdiction/tier/state changes.
 // Purely additive: wires listeners once. Only regenerates when a report output is
@@ -1420,6 +1460,7 @@ function computeSystemwideCategoryData(crashes) {
   window.isUnknownBucket = isUnknownBucket; CL.reports.standardCore.isUnknownBucket = isUnknownBucket;
   window.filterUnknown = filterUnknown; CL.reports.standardCore.filterUnknown = filterUnknown;
   window.renderGapRow = renderGapRow; CL.reports.standardCore.renderGapRow = renderGapRow;
+  window.renderRequiredInputEmptyState = renderRequiredInputEmptyState; CL.reports.standardCore.renderRequiredInputEmptyState = renderRequiredInputEmptyState;
   window.autoCollapseEmptyReportSections = autoCollapseEmptyReportSections; CL.reports.standardCore.autoCollapseEmptyReportSections = autoCollapseEmptyReportSections;
   window._isReportSectionEmpty = _isReportSectionEmpty; CL.reports.standardCore._isReportSectionEmpty = _isReportSectionEmpty;
   CL._registerModule('reports/reports-standard-core');
