@@ -1,4 +1,5 @@
 # Claude Guidelines for Virginia Crash Analysis Tool
+**Status: v1.0 SHIPPED 2026-06-06. See `docs/SHIPPED_v1.0.md` for what's locked. New work goes to `docs/v1_1_backlog.md` until a paying customer complaint dictates otherwise.**
 
 ## Role & Expertise
 
