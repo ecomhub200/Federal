@@ -154,6 +154,25 @@ function generateStandardReportPDF(type, crashes, title, author, route, startDat
             .replace(/[\u2013\u2014]/g, '-')
             .replace(/[\u2026]/g, '...')
             .replace(/[\u00A0]/g, ' ')
+            // CC 345 - translate common glyph characters BEFORE the non-ASCII
+            // strip so they render as readable ASCII instead of vanishing.
+            .replace(/\u2713/g, '*')    // checkmark        -> *
+            .replace(/\u2714/g, '*')    // heavy checkmark
+            .replace(/\u2717/g, 'x')    // ballot x
+            .replace(/\u2718/g, 'x')    // heavy ballot x
+            .replace(/\u2022/g, '*')    // bullet           -> *
+            .replace(/\u25CF/g, '*')    // black circle
+            .replace(/\u25E6/g, 'o')    // white bullet
+            .replace(/\u26A0/g, '!')    // warning sign     -> !
+            .replace(/\u2192/g, '->')   // rightwards arrow -> ->
+            .replace(/\u2190/g, '<-')   // leftwards arrow
+            .replace(/\u2191/g, '^')    // upwards arrow
+            .replace(/\u2193/g, 'v')    // downwards arrow
+            .replace(/\u00B7/g, '*')    // middle dot
+            .replace(/\u00B0/g, ' deg') // degree
+            .replace(/\u00B1/g, '+/-')  // plus-minus
+            .replace(/\u00D7/g, 'x')    // multiplication
+            .replace(/\u00F7/g, '/')    // division
             .replace(/[^\x00-\x7F]/g, '')
             .replace(/\s+/g, ' ')
             .trim();
@@ -284,6 +303,12 @@ function generateStandardReportPDF(type, crashes, title, author, route, startDat
 
         doc.setFontSize(size);
         doc.setFont('helvetica', style);
+        if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);  // CC 345 - defeat inherited spacing
+        // CC 345 - one-shot dev-mode glyph assertion (logs once if a non-ASCII glyph leaked).
+        if (!window._cc345WarnedGlyph && /[^\x00-\x7F]/.test(cleanedText)) {
+            console.warn('[reports-pdf:CC345] non-ASCII glyph survived cleanText:', JSON.stringify(cleanedText.slice(0,80)));
+            window._cc345WarnedGlyph = true;
+        }
         const rgb = hexToRgb(color);
         doc.setTextColor(rgb.r, rgb.g, rgb.b);
 
@@ -308,6 +333,7 @@ function generateStandardReportPDF(type, crashes, title, author, route, startDat
 
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
+        if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);  // CC 345
         doc.setTextColor(rgb.r, rgb.g, rgb.b);
         doc.text(cleanText(sectionTitle), margin + 6, yPos + 3);
         yPos += 12;
@@ -318,6 +344,7 @@ function generateStandardReportPDF(type, crashes, title, author, route, startDat
         checkPageBreak(12);
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
+        if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);  // CC 345
         const rgb = hexToRgb(color);
         doc.setTextColor(rgb.r, rgb.g, rgb.b);
         doc.text(cleanText(subTitle), margin, yPos);

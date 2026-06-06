@@ -35,12 +35,12 @@ function generateCorridorReport(crashes, route, title, author) {
     showTableOfContents('corridor');
     
     document.getElementById('rptKPIs').innerHTML = `
-        <div class="report-kpi"><div class="value">${stats.total.toLocaleString()}</div><div class="label">Total Crashes</div></div>
-        <div class="report-kpi"><div class="value">${stats.K + stats.A}</div><div class="label">K+A Crashes</div></div>
-        <div class="report-kpi"><div class="value">${calcEPDO(stats).toLocaleString()}</div><div class="label">EPDO Score</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(stats.total)}</div><div class="label">Total Crashes</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(stats.K + stats.A)}</div><div class="label">K+A Crashes</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(calcEPDO(stats))}</div><div class="label">EPDO Score</div></div>
         <div class="report-kpi"><div class="value">${pct(stats.K + stats.A, stats.total)}%</div><div class="label">K+A Rate</div></div>
-        <div class="report-kpi"><div class="value">${stats.ped}</div><div class="label">Pedestrian</div></div>
-        <div class="report-kpi"><div class="value">${stats.intersection}</div><div class="label">At Intersection</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(stats.ped)}</div><div class="label">Pedestrian</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(stats.intersection)}</div><div class="label">At Intersection</div></div>
     `;
     
     const findings = generateFindings(stats, crashes);
@@ -61,11 +61,13 @@ function generateCorridorReport(crashes, route, title, author) {
     let weatherLightHtml = '';
     if (!_M) {
         const byWeather = {};
-        crashes.forEach(r => { const w = r[COL.WEATHER] || 'Unknown'; byWeather[w] = (byWeather[w] || 0) + 1; });
+        crashes.forEach(r => { const w = stripEnumPrefix(r[COL.WEATHER]) || 'Unknown'; byWeather[w] = (byWeather[w] || 0) + 1; });
         const byLight = {};
-        crashes.forEach(r => { const l = r[COL.LIGHT] || 'Unknown'; byLight[l] = (byLight[l] || 0) + 1; });
-        const weatherRows = Object.entries(byWeather).sort((a,b) => b[1]-a[1]).slice(0,6).map(([w,c]) => `<tr><td>${w}</td><td>${c}</td><td>${pct(c, stats.total)}%</td></tr>`).join('');
-        const lightRows = Object.entries(byLight).sort((a,b) => b[1]-a[1]).map(([l,c]) => `<tr><td>${l}</td><td>${c}</td><td>${pct(c, stats.total)}%</td></tr>`).join('');
+        crashes.forEach(r => { const l = stripEnumPrefix(r[COL.LIGHT]) || 'Unknown'; byLight[l] = (byLight[l] || 0) + 1; });
+        const weatherEntries = filterUnknown(Object.entries(byWeather).sort((a,b) => b[1]-a[1]), stats.total).slice(0, 6);
+        const weatherRows = weatherEntries.map(([w,c]) => `<tr><td>${w}</td><td>${fmtNum(c)}</td><td>${pct(c, stats.total)}%</td></tr>`).join('') || renderGapRow(3, 'weather');
+        const lightEntries = filterUnknown(Object.entries(byLight).sort((a,b) => b[1]-a[1]), stats.total);
+        const lightRows = lightEntries.map(([l,c]) => `<tr><td>${l}</td><td>${fmtNum(c)}</td><td>${pct(c, stats.total)}%</td></tr>`).join('') || renderGapRow(3, 'light condition');
         weatherLightHtml = `
         <div class="two-col" style="margin-top:1.5rem">
             <div>
@@ -84,6 +86,8 @@ function generateCorridorReport(crashes, route, title, author) {
         ${weatherLightHtml}
     `;
     document.getElementById('rptRecommendations').innerHTML = generateRecommendations(stats, crashes);
+    // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
+    if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 function generateSafetyReport(crashes, title, author) {
@@ -115,12 +119,12 @@ function generateSafetyReport(crashes, title, author) {
     showTableOfContents('safety');
     
     document.getElementById('rptKPIs').innerHTML = `
-        <div class="report-kpi"><div class="value">${stats.K}</div><div class="label">Fatal Crashes</div></div>
-        <div class="report-kpi"><div class="value">${stats.A}</div><div class="label">Serious Injury</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(stats.K)}</div><div class="label">Fatal Crashes</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(stats.A)}</div><div class="label">Serious Injury</div></div>
         <div class="report-kpi"><div class="value">${kaRate}%</div><div class="label">K+A Rate</div></div>
-        <div class="report-kpi"><div class="value">${calcEPDO(stats).toLocaleString()}</div><div class="label">EPDO Score</div></div>
-        <div class="report-kpi"><div class="value">${stats.ped}</div><div class="label">Ped Crashes</div></div>
-        <div class="report-kpi"><div class="value">${stats.bike}</div><div class="label">Bike Crashes</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(calcEPDO(stats))}</div><div class="label">EPDO Score</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(stats.ped)}</div><div class="label">Ped Crashes</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(stats.bike)}</div><div class="label">Bike Crashes</div></div>
     `;
     
     // Focus on severe crashes
@@ -131,8 +135,8 @@ function generateSafetyReport(crashes, title, author) {
     const severeByType = {};
     const severeByLight = {};
     severeCrashes.forEach(c => {
-        const type = c[COL.COLLISION] || 'Unknown';
-        const light = c[COL.LIGHT] || 'Unknown';
+        const type = stripEnumPrefix(c[COL.COLLISION]) || 'Unknown';
+        const light = stripEnumPrefix(c[COL.LIGHT]) || 'Unknown';
         severeByType[type] = (severeByType[type]||0)+1;
         severeByLight[light] = (severeByLight[light]||0)+1;
     });
@@ -160,8 +164,10 @@ function generateSafetyReport(crashes, title, author) {
     setTimeout(() => createSafetyCharts(severeCrashes), 100);
 
     // Enhanced: K+A tables + high-severity locations
-    const kaByTypeRows = Object.entries(severeByType).sort((a,b) => b[1]-a[1]).slice(0,10).map(([t,c]) => `<tr><td>${t}</td><td>${c}</td><td>${severeCrashes.length > 0 ? (c/severeCrashes.length*100).toFixed(1) : 0}%</td></tr>`).join('');
-    const kaByLightRows = Object.entries(severeByLight).sort((a,b) => b[1]-a[1]).map(([l,c]) => `<tr><td>${l}</td><td>${c}</td><td>${severeCrashes.length > 0 ? (c/severeCrashes.length*100).toFixed(1) : 0}%</td></tr>`).join('');
+    const kaByTypeEntries = filterUnknown(Object.entries(severeByType).sort((a,b) => b[1]-a[1]), severeCrashes.length).slice(0, 10);
+    const kaByTypeRows = kaByTypeEntries.map(([t,c]) => `<tr><td>${t}</td><td>${fmtNum(c)}</td><td>${severeCrashes.length > 0 ? (c/severeCrashes.length*100).toFixed(1) : 0}%</td></tr>`).join('') || renderGapRow(3, 'severe collision type');
+    const kaByLightEntries = filterUnknown(Object.entries(severeByLight).sort((a,b) => b[1]-a[1]), severeCrashes.length);
+    const kaByLightRows = kaByLightEntries.map(([l,c]) => `<tr><td>${l}</td><td>${fmtNum(c)}</td><td>${severeCrashes.length > 0 ? (c/severeCrashes.length*100).toFixed(1) : 0}%</td></tr>`).join('') || renderGapRow(3, 'severe light condition');
 
     // CC 333 — the K+A-by-collision/light tables come from per-row severeCrashes,
     // which is empty at aggregate tiers (no matview slice for K+A × collision/light
@@ -184,6 +190,8 @@ function generateSafetyReport(crashes, title, author) {
         ${generateTopLocationsTable(crashes, true)}
     `;
     document.getElementById('rptRecommendations').innerHTML = generateSafetyRecommendations(stats, severeCrashes);
+    // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
+    if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 function generatePedBikeReport(crashes, title, author) {
@@ -240,12 +248,12 @@ function generatePedBikeReport(crashes, title, author) {
     showTableOfContents('pedbike');
     
     document.getElementById('rptKPIs').innerHTML = `
-        <div class="report-kpi" style="background:#0891b2"><div class="value">${pedStats.total}</div><div class="label">🚶 Ped Crashes</div></div>
-        <div class="report-kpi" style="background:#dc2626"><div class="value">${pedStats.K}</div><div class="label">🚶 Ped Fatal</div></div>
-        <div class="report-kpi" style="background:#7c3aed"><div class="value">${pedEPDO.toLocaleString()}</div><div class="label">🚶 Ped EPDO</div></div>
-        <div class="report-kpi" style="background:#059669"><div class="value">${bikeStats.total}</div><div class="label">🚴 Bike Crashes</div></div>
-        <div class="report-kpi" style="background:#dc2626"><div class="value">${bikeStats.K}</div><div class="label">🚴 Bike Fatal</div></div>
-        <div class="report-kpi" style="background:#7c3aed"><div class="value">${bikeEPDO.toLocaleString()}</div><div class="label">🚴 Bike EPDO</div></div>
+        <div class="report-kpi" style="background:#0891b2"><div class="value">${fmtNum(pedStats.total)}</div><div class="label">🚶 Ped Crashes</div></div>
+        <div class="report-kpi" style="background:#dc2626"><div class="value">${fmtNum(pedStats.K)}</div><div class="label">🚶 Ped Fatal</div></div>
+        <div class="report-kpi" style="background:#7c3aed"><div class="value">${fmtNum(pedEPDO)}</div><div class="label">🚶 Ped EPDO</div></div>
+        <div class="report-kpi" style="background:#059669"><div class="value">${fmtNum(bikeStats.total)}</div><div class="label">🚴 Bike Crashes</div></div>
+        <div class="report-kpi" style="background:#dc2626"><div class="value">${fmtNum(bikeStats.K)}</div><div class="label">🚴 Bike Fatal</div></div>
+        <div class="report-kpi" style="background:#7c3aed"><div class="value">${fmtNum(bikeEPDO)}</div><div class="label">🚴 Bike EPDO</div></div>
     `;
     
     const findings = [];
@@ -391,6 +399,8 @@ function generatePedBikeReport(crashes, title, author) {
         document.getElementById('rptTablesSection').innerHTML = generatePedBikeLocationTable(pedCrashes, bikeCrashes) + factorsTable;
     }
     document.getElementById('rptRecommendations').innerHTML = generatePedBikeRecommendations(pedStats, bikeStats, pedDarkPct, bikeDarkPct);
+    // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
+    if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 function createEnhancedPedBikeCharts(pedCrashes, bikeCrashes) {
@@ -421,7 +431,7 @@ function createEnhancedPedBikeCharts(pedCrashes, bikeCrashes) {
     // Ped by light
     const pedLight = {};
     pedCrashes.forEach(c => {
-        const l = c[COL.LIGHT] || 'Unknown';
+        const l = stripEnumPrefix(c[COL.LIGHT]) || 'Unknown';
         pedLight[l] = (pedLight[l] || 0) + 1;
     });
     const pedLightSorted = Object.entries(pedLight).sort((a,b) => b[1]-a[1]).slice(0,5);
@@ -433,7 +443,7 @@ function createEnhancedPedBikeCharts(pedCrashes, bikeCrashes) {
     // Bike by light
     const bikeLight = {};
     bikeCrashes.forEach(c => {
-        const l = c[COL.LIGHT] || 'Unknown';
+        const l = stripEnumPrefix(c[COL.LIGHT]) || 'Unknown';
         bikeLight[l] = (bikeLight[l] || 0) + 1;
     });
     const bikeLightSorted = Object.entries(bikeLight).sort((a,b) => b[1]-a[1]).slice(0,5);
@@ -501,9 +511,9 @@ function generateTrendReport(crashes, title, author) {
     }
     
     document.getElementById('rptKPIs').innerHTML = `
-        <div class="report-kpi"><div class="value">${stats.total.toLocaleString()}</div><div class="label">Total (${yearRange})</div></div>
-        <div class="report-kpi"><div class="value">${years.length}</div><div class="label">Years Analyzed</div></div>
-        <div class="report-kpi"><div class="value">${Math.round(stats.total / years.length)}</div><div class="label">Avg per Year</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(stats.total)}</div><div class="label">Total (${yearRange})</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(years.length)}</div><div class="label">Years Analyzed</div></div>
+        <div class="report-kpi"><div class="value">${fmtNum(Math.round(stats.total / years.length))}</div><div class="label">Avg per Year</div></div>
         <div class="report-kpi"><div class="value" style="text-transform:capitalize">${trend}</div><div class="label">Overall Trend</div></div>
     `;
     
@@ -549,7 +559,7 @@ function generateTrendReport(crashes, title, author) {
     // Enhanced: Trend statistics table + forecast
     const trendRows = years.map(y => {
         const d = byYear[y];
-        return `<tr><td>${y}</td><td>${d.total}</td><td>${d.K + d.A}</td><td>${calcEPDO(d).toLocaleString()}</td></tr>`;
+        return `<tr><td>${y}</td><td>${fmtNum(d.total)}</td><td>${fmtNum(d.K + d.A)}</td><td>${fmtNum(calcEPDO(d))}</td></tr>`;
     }).join('');
 
     document.getElementById('rptTablesSection').innerHTML = `
@@ -557,7 +567,7 @@ function generateTrendReport(crashes, title, author) {
         <table class="report-table">
             <thead><tr><th>Year</th><th>Total</th><th>K+A</th><th>EPDO</th></tr></thead>
             <tbody>${trendRows}
-                <tr style="background:#eff6ff;font-weight:bold"><td>${forecastYear} (Forecast)</td><td>${forecast}</td><td>-</td><td>-</td></tr>
+                <tr style="background:#eff6ff;font-weight:bold"><td>${forecastYear} (Forecast)</td><td>${fmtNum(forecast)}</td><td>-</td><td>-</td></tr>
             </tbody>
         </table>
         <div style="margin-top:1rem;font-size:.8rem;color:#64748b">
@@ -565,6 +575,8 @@ function generateTrendReport(crashes, title, author) {
         </div>
     `;
     document.getElementById('rptRecommendations').innerHTML = '';
+    // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
+    if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 // ============================================
@@ -649,7 +661,7 @@ function buildExecutiveSummary(stats, crashes, reportType, locationName) {
     if (_M && _M.byCollision && Object.keys(_M.byCollision).length > 0) {
         Object.entries(_M.byCollision).forEach(([k, v]) => { byType[k] = (byType[k] || 0) + (Number(v) || 0); });
     } else {
-        crashes.forEach(c => { const t = c[COL.COLLISION] || 'Unknown'; byType[t] = (byType[t] || 0) + 1; });
+        crashes.forEach(c => { const t = stripEnumPrefix(c[COL.COLLISION]) || 'Unknown'; byType[t] = (byType[t] || 0) + 1; });
     }
     const topType = Object.entries(byType)
         .filter(([k]) => k && k.toLowerCase() !== 'unknown')
@@ -1024,7 +1036,7 @@ function generateFindings(stats, crashes) {
     
     // Collision type analysis
     const byType = {};
-    crashes.forEach(c => { const t = c[COL.COLLISION]||'Unknown'; byType[t]=(byType[t]||0)+1; });
+    crashes.forEach(c => { const t = stripEnumPrefix(c[COL.COLLISION])||'Unknown'; byType[t]=(byType[t]||0)+1; });
     const topType = Object.entries(byType).sort((a,b) => b[1]-a[1])[0];
     if (topType && topType[1] > stats.total * 0.2) {
         findings.push({ type: '', text: `Predominant crash type: ${topType[0]} (${pct(topType[1], stats.total)}% of crashes)` });

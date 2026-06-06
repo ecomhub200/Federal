@@ -6,6 +6,164 @@
  */
 (function(){ 'use strict';
   // ─── EXTRACTED CODE START (verbatim) ───
+
+// CC 346 §2 (was CC 340) — display polish helpers shared by every
+// standard report generator. Pure transforms — no DOM, no fetches.
+// Call sites are wired in CC 347; window-exposed at the bottom of this
+// module so sibling report modules can reach them.
+
+/**
+ * Format any integer (or numeric string) with thousands separators.
+ * Non-numeric / null / undefined → '0'. Negatives preserved. Floats
+ * are rounded (call .toFixed() yourself for decimals).
+ */
+function fmtNum(n) {
+    if (n === null || n === undefined || n === '') return '0';
+    var v = Number(n);
+    if (!isFinite(v)) return '0';
+    return Math.round(v).toLocaleString('en-US');
+}
+
+/**
+ * Strip a leading numeric code + separator from a categorical label.
+ * "1 - Daylight" → "Daylight", "05 - Sideswipe Same Direction" →
+ * "Sideswipe Same Direction", "12: Wet" → "Wet". Preserves any
+ * internal " - " (e.g. "Dark - lighted roadway" stays intact — we
+ * only strip the FIRST `\d+ [-.:]` segment). Falsy input → ''.
+ */
+function stripEnumPrefix(s) {
+    if (s === null || s === undefined) return '';
+    var str = String(s).trim();
+    if (!str) return '';
+    return str.replace(/^\s*\d+\s*[-.:]\s*/, '').trim();
+}
+
+/**
+ * True for buckets that should be treated as missing data:
+ *   '', null, undefined, 'Unknown', 'N/A', '99 - Unknown',
+ *   '0 - Not Applicable', '99 - Other', etc.
+ */
+function isUnknownBucket(label) {
+    if (label === null || label === undefined) return true;
+    var s = String(label).trim().toLowerCase();
+    if (!s) return true;
+    if (s === 'unknown' || s === 'n/a' || s === 'na' || s === 'null') return true;
+    if (/^\s*\d+\s*[-.:]\s*(unknown|not\s+applicable|other|none)\s*$/i.test(label)) return true;
+    return false;
+}
+
+/**
+ * Take a [label, count][] array and (a) drop Unknown buckets whose
+ * share < threshold (default 1%), (b) collapse remaining Unknown
+ * buckets into ONE "Other / Unknown" row at the end. Returns a NEW
+ * array — does NOT mutate input.
+ */
+function filterUnknown(entries, total, threshold) {
+    threshold = (typeof threshold === 'number') ? threshold : 0.01;
+    if (!Array.isArray(entries) || entries.length === 0) return [];
+    if (!total || total <= 0) return entries.slice();
+    var kept = [];
+    var unknownSum = 0;
+    for (var i = 0; i < entries.length; i++) {
+        var label = entries[i][0];
+        var count = Number(entries[i][1]) || 0;
+        if (isUnknownBucket(label)) {
+            unknownSum += count;
+        } else {
+            kept.push([stripEnumPrefix(label), count]);
+        }
+    }
+    if (unknownSum > 0 && (unknownSum / total) >= threshold) {
+        kept.push(['Other / Unknown', unknownSum]);
+    }
+    return kept;
+}
+
+/**
+ * Render a gap-state `<tr>` for an otherwise-empty `<tbody>`. Used by
+ * every table-render block: keep the table grid alive but say "no
+ * data" politely. The .report-gap class is the signal §3 uses to
+ * auto-collapse a section.
+ */
+function renderGapRow(colspan, category) {
+    var cat = category ? String(category) : 'data';
+    return '<tr><td colspan="' + colspan + '" class="report-gap" style="text-align:center;color:#6b7280;padding:1rem;font-style:italic">No ' + cat + ' data available for this selection.</td></tr>';
+}
+
+// CC 346 §3 (was CC 343) — collapse `.report-section` blocks whose
+// content is empty or gap-state only. Pure DOM walk. Called at the end
+// of every generator (see §3.1 call sites). Never mutates the data store.
+
+function autoCollapseEmptyReportSections() {
+    var rootIds = [
+        'reportOutput', 'rptOutput',
+        'rptYearlySection', 'rptChartsSection', 'rptTablesSection', 'rptRecommendations',
+        'comprehensiveReportOutput', 'comprehensivePreviewContent',
+        'infographicOutput'
+    ];
+    var collapsed = 0;
+    for (var i = 0; i < rootIds.length; i++) {
+        var root = document.getElementById(rootIds[i]);
+        if (!root) continue;
+        var sections = root.querySelectorAll('.report-section');
+        for (var s = 0; s < sections.length; s++) {
+            var sec = sections[s];
+            if (_isReportSectionEmpty(sec)) {
+                sec.style.display = 'none';
+                sec.setAttribute('data-cc346-collapsed', 'true');
+                collapsed += 1;
+            }
+        }
+    }
+    if (collapsed > 0) {
+        console.log('[Reports:autoCollapse] hid', collapsed, 'empty section(s).');
+    }
+}
+
+function _isReportSectionEmpty(sec) {
+    try {
+        // Tables: if EVERY tbody row is a `.report-gap` placeholder OR there
+        // are no body rows at all, count as empty. If any data row exists,
+        // the section is NOT empty.
+        var tables = sec.querySelectorAll('table');
+        if (tables.length > 0) {
+            for (var t = 0; t < tables.length; t++) {
+                var bodyRows = tables[t].querySelectorAll('tbody tr');
+                if (bodyRows.length === 0) continue;
+                var allGap = true;
+                for (var r = 0; r < bodyRows.length; r++) {
+                    if (!bodyRows[r].querySelector('.report-gap')) { allGap = false; break; }
+                }
+                if (!allGap) return false;
+            }
+            return true;  // every table empty or gap-only
+        }
+        // Canvases: a section with ONLY a canvas of width 0 (Chart.js
+        // never rendered) AND nothing else is empty.
+        var canvases = sec.querySelectorAll('canvas');
+        if (canvases.length > 0) {
+            for (var c = 0; c < canvases.length; c++) {
+                if (canvases[c].width > 0) return false;
+            }
+        }
+        // Lists / images
+        var lists = sec.querySelectorAll('ul, ol');
+        for (var l = 0; l < lists.length; l++) {
+            if (lists[l].children.length > 0) return false;
+        }
+        if (sec.querySelectorAll('img').length > 0) return false;
+        // Last-resort: 40-char text floor. A section that's just an `<h4>`
+        // + ~25 chars of helper text is empty.
+        var txt = (sec.textContent || '').trim();
+        return txt.length < 40;
+    } catch (e) {
+        // Defence-in-depth: any error means we KEEP the section visible
+        // (today's behavior). Never collapse on uncertainty.
+        console.warn('[Reports:autoCollapse] check threw — keeping section visible:', e);
+        return false;
+    }
+}
+
 function showReportSubTab(tabName) {
     // Update tab buttons
     document.querySelectorAll('#tab-reports .grant-tabs .grant-tab').forEach(btn => {
@@ -681,6 +839,45 @@ function _renderReportGapState(title, heading, body, tabId, buttonLabel, howTo) 
     if (out) { out.style.display = 'block'; out.scrollIntoView({ behavior: 'smooth' }); }
 }
 
+// CC 341 F5 — auto-regenerate the open report when jurisdiction/tier/state changes.
+// Purely additive: wires listeners once. Only regenerates when a report output is
+// already visible — we never generate on the user's behalf before they've clicked
+// Generate (that would mask the explicit "go" gesture and waste data pulls while
+// they're just exploring jurisdictions).
+(function _wireReportsAutoUpdate() {
+    if (window._reportsAutoUpdateWired) return;
+    window._reportsAutoUpdateWired = true;
+    var DEBOUNCE_MS = 600;
+    var _debounceTimer = null;
+    function _maybeRegenerate(reason) {
+        var anyReportVisible = ['reportOutput', 'infographicOutput', 'comprehensiveReportOutput']
+            .map(function(id){ var el = document.getElementById(id); return el && el.style.display !== 'none'; })
+            .some(Boolean);
+        if (!anyReportVisible) return;
+        clearTimeout(_debounceTimer);
+        _debounceTimer = setTimeout(function() {
+            console.log('[Reports:autoUpdate] regenerating because:', reason);
+            try {
+                var fn = window.generateReport
+                      || (window.CL && window.CL.reports && window.CL.reports.standardCore && window.CL.reports.standardCore.generateReport);
+                if (typeof fn === 'function') fn();
+            } catch (e) {
+                console.warn('[Reports:autoUpdate] generateReport threw — user can click Generate manually:', e);
+            }
+        }, DEBOUNCE_MS);
+    }
+    // The app dispatches a `jurisdictionChanged` CustomEvent on `document`
+    // (app/index.html — fired after every state/tier/jurisdiction change). Listen
+    // there, plus a belt-and-suspenders `change` on the header selects in case the
+    // event path changes. Any missing element/event is simply a no-op — safe.
+    document.addEventListener('jurisdictionChanged', function() { _maybeRegenerate('jurisdictionChanged'); });
+    ['stateSelect', 'jurisdictionSelect', 'tierRegionSelect', 'tierMPOSelect', 'tierCountySelect', 'tierCitySelect']
+        .forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('change', function() { _maybeRegenerate('select:' + id); });
+        });
+})();
+
 // CC 330 — race matview + row-hydrate against a 25s timer so the dispatcher
 // can never sit past the 30s overlay watchdog. The MATVIEW set stays narrow
 // (only generators that read matview data — window._reportMatviewData or, for
@@ -692,6 +889,14 @@ function _renderReportGapState(title, heading, body, tabId, buttonLabel, howTo) 
 // because row-hydrate at aggregate tier hung the full 25s budget. Routing it
 // through the matview branch hands it a stub crash array, which triggers that
 // existing path and renders in ~2-3s like Dashboard.
+//
+// CC 351 — comprehensive joins the matview set for the same reason. At aggregate
+// tiers (state/region/MPO/PD) and large counties (e.g. New Castle, Delaware) the
+// comprehensive report previously fell into the row-hydrate fallback and timed
+// out at the 25s budget before generateComprehensiveReport was ever reached.
+// Routing it through the matview branch populates window._reportMatviewData and
+// hands it a stub array; generateComprehensiveReport now has its own matview-mode
+// path (reports-standard-core2.js) that renders from those aggregates in ~2-3s.
 //
 // Promise.race leaks the slow promise on timeout — accept it. The
 // dispatched fetch eventually resolves into the void; the next click resets
@@ -1058,6 +1263,8 @@ function _legacySystemwideReport(crashes, title, author) {
 
     // Enhanced Recommendations based on category data
     document.getElementById('rptRecommendations').innerHTML = generateEnhancedRecommendations(stats, crashes, categoryData);
+    // CC 346 §3.1 — collapse empty sections (no-op when every section has data).
+    setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 /**
@@ -1161,5 +1368,15 @@ function computeSystemwideCategoryData(crashes) {
   window.generateSystemwideReport = generateSystemwideReport; CL.reports.standardCore.generateSystemwideReport = generateSystemwideReport;
   window._legacySystemwideReport = _legacySystemwideReport; CL.reports.standardCore._legacySystemwideReport = _legacySystemwideReport;
   window.computeSystemwideCategoryData = computeSystemwideCategoryData; CL.reports.standardCore.computeSystemwideCategoryData = computeSystemwideCategoryData;
+  // CC 346 §2/§3 — display-polish helpers + empty-section auto-collapse.
+  // Window-exposed so sibling report modules (types/types2/core2) can reach
+  // them — IIFE-wrapped modules share only via window.*, never lexical scope.
+  window.fmtNum = fmtNum; CL.reports.standardCore.fmtNum = fmtNum;
+  window.stripEnumPrefix = stripEnumPrefix; CL.reports.standardCore.stripEnumPrefix = stripEnumPrefix;
+  window.isUnknownBucket = isUnknownBucket; CL.reports.standardCore.isUnknownBucket = isUnknownBucket;
+  window.filterUnknown = filterUnknown; CL.reports.standardCore.filterUnknown = filterUnknown;
+  window.renderGapRow = renderGapRow; CL.reports.standardCore.renderGapRow = renderGapRow;
+  window.autoCollapseEmptyReportSections = autoCollapseEmptyReportSections; CL.reports.standardCore.autoCollapseEmptyReportSections = autoCollapseEmptyReportSections;
+  window._isReportSectionEmpty = _isReportSectionEmpty; CL.reports.standardCore._isReportSectionEmpty = _isReportSectionEmpty;
   CL._registerModule('reports/reports-standard-core');
 })();

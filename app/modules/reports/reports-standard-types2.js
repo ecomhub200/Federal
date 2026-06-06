@@ -100,7 +100,7 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
             const count = catData.crashes.length;
             totalSafetyCrashes += count;
             const catConfig = safetyCategories[cat];
-            kpiHtml += `<div class="report-kpi"><div class="value">${count.toLocaleString()}</div><div class="label">${catConfig.icon} ${catConfig.name}</div></div>`;
+            kpiHtml += `<div class="report-kpi"><div class="value">${fmtNum(count)}</div><div class="label">${catConfig.icon} ${catConfig.name}</div></div>`;
         });
 
         document.getElementById('rptKPIs').innerHTML = kpiHtml;
@@ -144,12 +144,12 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
             
             detailHtml += `<tr>
                 <td><strong>${catConfig.icon} ${catConfig.name}</strong></td>
-                <td>${catData.crashes.length}</td>
-                <td style="color:#dc2626;font-weight:600">${catData.severity.K}</td>
-                <td style="color:#ea580c;font-weight:600">${catData.severity.A}</td>
-                <td>${catData.severity.B}</td>
-                <td>${catData.severity.C}</td>
-                <td>${catData.severity.O}</td>
+                <td>${fmtNum(catData.crashes.length)}</td>
+                <td style="color:#dc2626;font-weight:600">${fmtNum(catData.severity.K)}</td>
+                <td style="color:#ea580c;font-weight:600">${fmtNum(catData.severity.A)}</td>
+                <td>${fmtNum(catData.severity.B)}</td>
+                <td>${fmtNum(catData.severity.C)}</td>
+                <td>${fmtNum(catData.severity.O)}</td>
                 <td><strong>${epdo.toLocaleString()}</strong></td>
                 <td>${topLoc.substring(0, 20)}</td>
             </tr>`;
@@ -176,12 +176,12 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
         const epdo = reportData.epdo;
         
         document.getElementById('rptKPIs').innerHTML = `
-            <div class="report-kpi"><div class="value">${crashes.length.toLocaleString()}</div><div class="label">Total Crashes</div></div>
-            <div class="report-kpi"><div class="value" style="color:#dc2626">${severity.K}</div><div class="label">Fatal (K)</div></div>
-            <div class="report-kpi"><div class="value" style="color:#ea580c">${severity.A}</div><div class="label">Serious (A)</div></div>
-            <div class="report-kpi"><div class="value">${severity.B + severity.C}</div><div class="label">Other Injury</div></div>
-            <div class="report-kpi"><div class="value">${severity.O}</div><div class="label">PDO</div></div>
-            <div class="report-kpi"><div class="value">${epdo.toLocaleString()}</div><div class="label">EPDO Score</div></div>
+            <div class="report-kpi"><div class="value">${fmtNum(crashes.length)}</div><div class="label">Total Crashes</div></div>
+            <div class="report-kpi"><div class="value" style="color:#dc2626">${fmtNum(severity.K)}</div><div class="label">Fatal (K)</div></div>
+            <div class="report-kpi"><div class="value" style="color:#ea580c">${fmtNum(severity.A)}</div><div class="label">Serious (A)</div></div>
+            <div class="report-kpi"><div class="value">${fmtNum(severity.B + severity.C)}</div><div class="label">Other Injury</div></div>
+            <div class="report-kpi"><div class="value">${fmtNum(severity.O)}</div><div class="label">PDO</div></div>
+            <div class="report-kpi"><div class="value">${fmtNum(epdo)}</div><div class="label">EPDO Score</div></div>
         `;
         
         // Generate findings for specific selection
@@ -223,6 +223,8 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
     
     // Clear the report data after generating
     safetyState.reportData = null;
+    // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
+    if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
 
 // Generate recommendations for Safety Focus reports
@@ -319,8 +321,8 @@ function generateYearlySection(crashes) {
         <thead><tr><th>Year</th><th>Total</th><th>K</th><th>A</th><th>B</th><th>C</th><th>O</th><th>EPDO</th></tr></thead>
         <tbody>${years.map(y => {
             const d = byYear[y];
-            return `<tr><td>${y}</td><td>${d.total}</td><td>${d.K}</td><td>${d.A}</td><td>${d.B}</td><td>${d.C}</td><td>${d.O}</td><td>${calcEPDO(d)}</td></tr>`;
-        }).join('')}</tbody></table></div>`;
+            return `<tr><td>${y}</td><td>${fmtNum(d.total)}</td><td>${fmtNum(d.K)}</td><td>${fmtNum(d.A)}</td><td>${fmtNum(d.B)}</td><td>${fmtNum(d.C)}</td><td>${fmtNum(d.O)}</td><td>${fmtNum(calcEPDO(d))}</td></tr>`;
+        }).join('') || renderGapRow(8, 'yearly')}</tbody></table></div>`;
 }
 
 function generateTopLocationsTable(crashes, kaOnly = false) {
@@ -344,7 +346,7 @@ function generateTopLocationsTable(crashes, kaOnly = false) {
     } else {
         crashes.forEach(c => {
             if (kaOnly && !['K','A'].includes((c[COL.SEVERITY]||'').charAt(0))) return;
-            const r = c[COL.ROUTE] || 'Unknown';
+            const r = stripEnumPrefix(c[COL.ROUTE]) || 'Unknown';
             if (!byRoute[r]) byRoute[r] = { total: 0, K: 0, A: 0 };
             byRoute[r].total++;
             const s = (c[COL.SEVERITY]||'').charAt(0);
@@ -357,7 +359,7 @@ function generateTopLocationsTable(crashes, kaOnly = false) {
     return `<h4>${kaOnly ? 'K+A' : ''} Crash Locations</h4>
         <div class="table-wrapper"><table class="data-table">
         <thead><tr><th>Route</th><th>Total</th><th>K</th><th>A</th></tr></thead>
-        <tbody>${sorted.map(([r, d]) => `<tr><td>${esc(r)}</td><td>${d.total}</td><td>${d.K}</td><td>${d.A}</td></tr>`).join('')}</tbody></table></div>`;
+        <tbody>${sorted.map(([r, d]) => `<tr><td>${esc(stripEnumPrefix(r))}</td><td>${fmtNum(d.total)}</td><td>${fmtNum(d.K)}</td><td>${fmtNum(d.A)}</td></tr>`).join('') || renderGapRow(4, 'route')}</tbody></table></div>`;
 }
 
 function generateNodeTable(crashes) {
@@ -392,7 +394,7 @@ function generateNodeTable(crashes) {
     return `<h4>Crash Frequency by Node/Intersection</h4>
         <div class="table-wrapper"><table class="data-table">
         <thead><tr><th>Node</th><th>Total</th><th>K</th><th>A</th></tr></thead>
-        <tbody>${sorted.map(([n, d]) => `<tr><td>${esc(n)}</td><td>${d.total}</td><td>${d.K}</td><td>${d.A}</td></tr>`).join('')}</tbody></table></div>`;
+        <tbody>${sorted.map(([n, d]) => `<tr><td>${esc(stripEnumPrefix(n))}</td><td>${fmtNum(d.total)}</td><td>${fmtNum(d.K)}</td><td>${fmtNum(d.A)}</td></tr>`).join('') || renderGapRow(4, 'intersection')}</tbody></table></div>`;
 }
 
 function generateRecommendations(stats, crashes) {
@@ -407,7 +409,7 @@ function generateRecommendations(stats, crashes) {
 function generateSafetyRecommendations(stats, severeCrashes) {
     const recs = ['Prioritize systemic safety improvements at high-K+A locations'];
     const byLight = {};
-    severeCrashes.forEach(c => { const l = c[COL.LIGHT]||'Unknown'; byLight[l]=(byLight[l]||0)+1; });
+    severeCrashes.forEach(c => { const l = stripEnumPrefix(c[COL.LIGHT])||'Unknown'; byLight[l]=(byLight[l]||0)+1; });
     const darkPct = Object.entries(byLight).filter(([k]) => k.toLowerCase().includes('dark')).reduce((s,e) => s+e[1], 0) / severeCrashes.length;
     if (darkPct > 0.3) recs.push('Consider roadway lighting improvements - significant portion of severe crashes occur in dark conditions');
     
@@ -454,7 +456,7 @@ function generatePedBikeYearlySection(pedCrashes, bikeCrashes) {
     return `<h4>Yearly Summary</h4>
         <div class="table-wrapper"><table class="data-table">
         <thead><tr><th>Year</th><th>Pedestrian</th><th>Bicycle</th><th>Total</th></tr></thead>
-        <tbody>${years.map(y => `<tr><td>${y}</td><td>${pedByYear[y]||0}</td><td>${bikeByYear[y]||0}</td><td>${(pedByYear[y]||0)+(bikeByYear[y]||0)}</td></tr>`).join('')}</tbody></table></div>`;
+        <tbody>${years.map(y => `<tr><td>${y}</td><td>${fmtNum(pedByYear[y]||0)}</td><td>${fmtNum(bikeByYear[y]||0)}</td><td>${fmtNum((pedByYear[y]||0)+(bikeByYear[y]||0))}</td></tr>`).join('') || renderGapRow(4, 'ped/bike yearly')}</tbody></table></div>`;
 }
 
 function generatePedBikeLocationTable(pedCrashes, bikeCrashes) {
@@ -468,9 +470,9 @@ function generatePedBikeLocationTable(pedCrashes, bikeCrashes) {
 
     return `<div class="two-col">
         <div><h4>Pedestrian Crash Locations (${pedTop.length})</h4><div class="table-wrapper"><table class="data-table"><thead><tr><th>Route</th><th>Crashes</th></tr></thead>
-        <tbody>${pedTop.map(([r,c]) => `<tr><td>${esc(r)}</td><td>${c}</td></tr>`).join('')}</tbody></table></div></div>
+        <tbody>${pedTop.map(([r,c]) => `<tr><td>${esc(stripEnumPrefix(r))}</td><td>${fmtNum(c)}</td></tr>`).join('') || renderGapRow(2, 'pedestrian route')}</tbody></table></div></div>
         <div><h4>Bicycle Crash Locations (${bikeTop.length})</h4><div class="table-wrapper"><table class="data-table"><thead><tr><th>Route</th><th>Crashes</th></tr></thead>
-        <tbody>${bikeTop.map(([r,c]) => `<tr><td>${esc(r)}</td><td>${c}</td></tr>`).join('')}</tbody></table></div></div>
+        <tbody>${bikeTop.map(([r,c]) => `<tr><td>${esc(stripEnumPrefix(r))}</td><td>${fmtNum(c)}</td></tr>`).join('') || renderGapRow(2, 'bicycle route')}</tbody></table></div></div>
     </div>`;
 }
   // ─── EXTRACTED CODE END ───

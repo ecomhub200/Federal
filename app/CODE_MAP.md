@@ -1043,6 +1043,7 @@ Before any code edit:
 | _isAggregateTier | modules/data/road-type-mapping.js | module-private | shared |
 | _isApiBackendAvailable | inline @ L30973 | inline | shared |
 | _isPointInBounds | inline @ L120145 | inline | shared |
+| _isReportSectionEmpty | modules/reports/reports-standard-core.js | window+CL | reports |
 | _isSupabaseOnlyAggregatePath | modules/spatial/aggregate-loader.js | module-private | shared |
 | _key | modules/data/matview-cache.js | module-private | shared |
 | _legacySystemwideReport | modules/reports/reports-standard-core.js | window+CL | reports |
@@ -1335,6 +1336,7 @@ Before any code edit:
 | attachSignalAutoSaveTriggers | inline @ L25844 | inline | shared |
 | attachStopSignAutoSaveTriggers | inline @ L25868 | inline | shared |
 | attemptDataReconnection | inline @ L22483 | inline | shared |
+| autoCollapseEmptyReportSections | modules/reports/reports-standard-core.js | window+CL | reports |
 | autoDetectJurisdictionFromCoordinates | inline @ L21532 | inline | shared |
 | autoDetectJurisdictionFromData | inline @ L21477 | inline | shared |
 | autoExpandDominantPath | modules/crash-tree/crash-tree-render.js | window+CL | shared |
@@ -1840,6 +1842,7 @@ Before any code edit:
 | filterMapForPedBike | modules/pedbike/pedbike-tab-jumpers.js | modules/pedbike/pedbike-tab-jumpers.js | map, pedestrian |
 | filterMapForSafety | inline @ L83852 | inline | map |
 | filterMapList | inline @ L42393 | inline | map |
+| filterUnknown | modules/reports/reports-standard-core.js | window+CL | reports |
 | filterWarrantCrashesByDate | inline @ L92958 | inline | warrants |
 | filterWarrantLocations | inline @ L92628 | inline | warrants |
 | finalizeData | inline @ L29424 | inline | shared |
@@ -1859,6 +1862,7 @@ Before any code edit:
 | finishPolygonDrawing | inline @ L44554 | inline | shared |
 | fitMapToData | inline @ L40988 | inline | map |
 | flushMapPointChunks | modules/worker/csv-worker.js | module-private | shared |
+| fmtNum | modules/reports/reports-standard-core.js | window+CL | reports |
 | forceRefreshAllData | inline @ L22017 | inline | shared |
 | forceRefreshAllData | modules/upload/upload-tab.js | module-private | upload |
 | formatAIResponse | inline @ L66906 | inline | shared |
@@ -2221,6 +2225,7 @@ Before any code edit:
 | isPointInPolygon | inline @ L44928 | inline | shared |
 | isPointNearPolyline | inline @ L44772 | inline | shared |
 | isR2Loaded | modules/data/lazy-loader.js | module-private | shared |
+| isUnknownBucket | modules/reports/reports-standard-core.js | window+CL | reports |
 | isValidEmail | modules/notifications/email-chips.js | window+CL | shared |
 | isValidLocationCode | inline @ L57515 | inline | shared |
 | isValidMapPoint | inline @ L40716 | inline | map |
@@ -2555,6 +2560,7 @@ Before any code edit:
 | renderFSSpeedFactorMatrix | inline @ L89823 | inline | intersection, pedestrian |
 | renderFSSpeedSeverityMatrix | inline @ L89720 | inline | shared |
 | renderFSYearlyMatrices | inline @ L89578 | inline | shared |
+| renderGapRow | modules/reports/reports-standard-core.js | window+CL | reports |
 | renderGrantCard | inline @ L29936 | inline | grants |
 | renderHotspotDetailContent | inline @ L50271 | inline | hotspots |
 | renderHotspots | modules/hotspots/hotspots-tab-render.js | window+CL | hotspots |
@@ -3194,6 +3200,7 @@ Before any code edit:
 | streetlight_updateAdditionalFactors | inline @ L111061 | inline | shared |
 | streetlight_updateUI | inline @ L110857 | inline | shared |
 | streetlight_updateWarrantUI | inline @ L110990 | inline | warrants |
+| stripEnumPrefix | modules/reports/reports-standard-core.js | window+CL | reports |
 | submitAadtImport | inline @ L30754 | inline | shared |
 | submitProfileCompletion | inline @ L115119 | inline | shared |
 | suffixFor | modules/data/road-type-mapping.js | module-private | shared |
