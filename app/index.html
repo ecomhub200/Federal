@@ -30900,6 +30900,22 @@ document.addEventListener('jurisdictionChanged', () => {
     if (typeof loadAadtCoverageBanner === 'function') loadAadtCoverageBanner();
 });
 
+// CC 352 — wire the Infographic agency placeholder to the active jurisdiction.
+// The two contenteditable agency-name divs default to the literal "COUNTY" until
+// a report is generated; reflect the selected jurisdiction up front instead. Only
+// overwrite the untouched default so a user's manual edit is preserved.
+document.addEventListener('jurisdictionChanged', () => {
+    if (typeof getJurisdictionLabel !== 'function') return;
+    const label = (getJurisdictionLabel() || '').toUpperCase();
+    if (!label) return;
+    ['ig1AgencyName', 'ig2AgencyName'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && (!el.textContent.trim() || el.textContent.trim().toUpperCase() === 'COUNTY')) {
+            el.textContent = label;
+        }
+    });
+});
+
 // =============================================================================
 // EMAIL NOTIFICATION SYSTEM
 // =============================================================================
@@ -54598,20 +54614,50 @@ async function generateInfographic(allCrashes, title, agency, department, startD
 }
 
 function getQuarterLabel(startDate, endDate) {
-    const now = new Date();
-    let refDate = now;
+    // CC 348 — auto-derive a sensible period label from the available
+    // inputs. Order of preference:
+    //   1. Explicit start + end → "Jan 1, 2024 – Dec 31, 2024" (or
+    //      "Q2 2024" when exact-quarter aligned, or "2024" when full-year).
+    //   2. Start-only → "Since Jan 1, 2024".
+    //   3. End-only → "Through Dec 31, 2024".
+    //   4. No filter → derive from crashState.years if available
+    //      ("All Available Data (2018–2025)"), else "Current Reporting Period".
+    const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const parseLocal = (str) => {
+        if (!str) return null;
+        const parts = String(str).split('-').map(Number);
+        if (parts.length !== 3 || parts.some(isNaN)) return null;
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    };
+    const s = parseLocal(startDate);
+    const e = parseLocal(endDate);
 
-    if (endDate) {
-        refDate = new Date(endDate);
-    } else if (startDate) {
-        refDate = new Date(startDate);
+    if (s && e) {
+        // Exact-quarter detection: start is first day of a quarter, end is last day of same quarter.
+        const sm = s.getMonth(), sd = s.getDate(), sy = s.getFullYear();
+        const em = e.getMonth(), ed = e.getDate(), ey = e.getFullYear();
+        const isQuarterStart = (sd === 1) && (sm % 3 === 0);
+        const qLastDays = [2, 5, 8, 11].map(m => new Date(sy, m + 1, 0).getDate());
+        const isQuarterEnd = (em === sm + 2) && (ed === qLastDays[Math.floor(sm / 3)]);
+        if (sy === ey && isQuarterStart && isQuarterEnd) {
+            return `Q${Math.floor(sm / 3) + 1} ${sy}`;
+        }
+        // Exact-year
+        if (sd === 1 && sm === 0 && em === 11 && ed === 31 && sy === ey) {
+            return `${sy}`;
+        }
+        return `${fmt(s)} – ${fmt(e)}`;
     }
+    if (s) return `Since ${fmt(s)}`;
+    if (e) return `Through ${fmt(e)}`;
 
-    const month = refDate.getMonth();
-    const year = refDate.getFullYear();
-    const quarter = Math.floor(month / 3) + 1;
-
-    return `Q${quarter} ${year}`;
+    // No filter — use crashState.years if available
+    if (window.crashState && Array.isArray(window.crashState.years) && window.crashState.years.length) {
+        const years = window.crashState.years.slice().sort((a, b) => a - b);
+        const first = years[0], last = years[years.length - 1];
+        return first === last ? `${first}` : `All Available Data (${first}–${last})`;
+    }
+    return 'Current Reporting Period';
 }
 
 function computePeakPatterns(crashes) {
@@ -54972,7 +55018,7 @@ function determineFocusTopic(crashes, stats) {
 
 function populateInfographicPage1(agency, department, title, quarter, total, stats, peakPatterns, factors, trendData, quarterComparison, yearTrends, heatmapData) {
     // Header
-    document.getElementById('ig1AgencyName').textContent = agency.toUpperCase();
+    document.getElementById('ig1AgencyName').textContent = (agency || (typeof getJurisdictionLabel === 'function' ? getJurisdictionLabel() : '') || 'COUNTY').toUpperCase();
     document.getElementById('ig1MainTitle').textContent = title;
     document.getElementById('ig1Subtitle').textContent = 'Quarterly Crash Analysis Summary';
     document.getElementById('ig1Quarter').textContent = quarter;
@@ -55181,7 +55227,7 @@ function populateInfographicPage1(agency, department, title, quarter, total, sta
 
 function populateInfographicPage2(agency, department, quarter, topLocations, trendData, focusTopic, riskyBehaviors) {
     // Header
-    document.getElementById('ig2AgencyName').textContent = agency.toUpperCase();
+    document.getElementById('ig2AgencyName').textContent = (agency || (typeof getJurisdictionLabel === 'function' ? getJurisdictionLabel() : '') || 'COUNTY').toUpperCase();
     document.getElementById('ig2Quarter').textContent = quarter;
 
     // Focus topic
@@ -56232,6 +56278,8 @@ function renderComprehensivePreview(data) {
                     <div style="font-size:.6rem;color:${COLORS.slateLight}">${(r.stats.O/r.stats.total*100).toFixed(1)}%</div>
                 </div>
             </div>
+            <!-- CC 349 — severity donut (rendered after innerHTML via createChart) -->
+            <div style="margin:1rem 0 0 0;height:240px"><canvas id="compChartSeverity"></canvas></div>
         </div>
 
         <!-- Two Column Layout: Locations & Temporal - WORLD-CLASS DESIGN -->
@@ -56326,6 +56374,17 @@ function renderComprehensivePreview(data) {
             ` : ''}
         </div>
 
+        <!-- CC 349 — Crash Trends chart (rendered after innerHTML via createChart) -->
+        ${(Array.isArray(r.monthlyTrends) && r.monthlyTrends.length) ? `
+        <div style="margin-bottom:1.5rem;background:${COLORS.white};padding:1.25rem;border-radius:10px;border:1px solid ${COLORS.border};box-shadow:0 2px 8px rgba(0,0,0,.03)">
+            <h3 style="color:${COLORS.navy};margin:0 0 1rem 0;font-size:1.1rem;font-weight:600;display:flex;align-items:center;gap:.5rem">
+                <svg width="20" height="20" fill="none" stroke="${COLORS.navy}" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 4 4 5-6"/></svg>
+                Crash Trends
+            </h3>
+            <div style="height:240px"><canvas id="compChartTrend"></canvas></div>
+        </div>
+        ` : ''}
+
         <!-- Executive Summary AI - WORLD-CLASS DESIGN -->
         ${ai.executive ? `
         <div style="border-left:4px solid ${COLORS.navy};margin-bottom:1.5rem;background:linear-gradient(135deg,${COLORS.lightGray},${COLORS.white});padding:1.25rem;border-radius:0 10px 10px 0;box-shadow:0 2px 8px rgba(0,0,0,.03)">
@@ -56375,6 +56434,39 @@ function renderComprehensivePreview(data) {
             </div>
         </div>
     `;
+
+    // CC 349 — render Chart.js charts into the comprehensive preview after the
+    // innerHTML (with the <canvas> slots) has attached to the DOM. Uses the
+    // shared createChart() wrapper, which destroys any prior instance on the
+    // canvas (no leak on regenerate / CC 346 autoUpdate).
+    setTimeout(() => {
+        try {
+            if (typeof window.Chart === 'undefined' || typeof createChart !== 'function') return;
+            // Severity donut
+            if (document.getElementById('compChartSeverity') && r.stats) {
+                createChart('compChartSeverity', 'doughnut', {
+                    labels: ['Fatal (K)', 'Serious (A)', 'Moderate (B)', 'Minor (C)', 'PDO (O)'],
+                    datasets: [{
+                        data: [r.stats.K || 0, r.stats.A || 0, r.stats.B || 0, r.stats.C || 0, r.stats.O || 0],
+                        backgroundColor: [COLORS.fatal, COLORS.serious, COLORS.moderate, COLORS.minor, COLORS.pdo]
+                    }]
+                }, { plugins: { legend: { position: 'right' } } });
+            }
+            // Monthly trend bars (Total + K+A)
+            const mt = Array.isArray(r.monthlyTrends) ? r.monthlyTrends.slice(-12) : [];
+            if (document.getElementById('compChartTrend') && mt.length) {
+                createChart('compChartTrend', 'bar', {
+                    labels: mt.map(m2 => m2.month),
+                    datasets: [
+                        { label: 'Total crashes', data: mt.map(m2 => m2.count || 0), backgroundColor: COLORS.navyLight },
+                        { label: 'K + A', data: mt.map(m2 => (m2.K || 0) + (m2.A || 0)), backgroundColor: COLORS.fatal }
+                    ]
+                }, { scales: { y: { beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } });
+            }
+        } catch (e) {
+            console.warn('[Report:comprehensive] CC 349 — chart render threw:', e);
+        }
+    }, 80);
 }
 
 function renderComprehensiveTOC(data) {
