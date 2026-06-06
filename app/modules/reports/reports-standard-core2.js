@@ -530,6 +530,258 @@ function generateEnhancedRecommendationsFromMatviews(stats, _M, categoryData) {
     `;
 }
 
+// ============================================================
+// CC 351 — comprehensive-report matview builders
+// ============================================================
+// At aggregate tiers (state/region/MPO/PD) and large counties the comprehensive
+// report runs with crashes = [] / stub array. generateComprehensiveReport now
+// builds its rawData object from window._reportMatviewData (populated by
+// hydrateReportFromMatviews) instead of the per-row compute* helpers, so it
+// renders in ~2-3s like the Infographic. Sections that genuinely need per-row
+// detail unavailable in any matview (day-of-week, day×hour heat-map, monthly
+// when absent, per-crash concentration map) are left empty and CC 346's
+// autoCollapseEmptyReportSections hides them. State-agnostic.
+
+// Group mv_analysis_summary raw rows (dimension/dim_value/total/k/a/b/c/o) by a
+// single dimension into { dim_value: {count,K,A,B,C,O} }. Dimension labels are
+// lowercase (year/month/severity/collision/hour/funcclass/weather/light).
+function _mvGroupByDimension(_M, dim) {
+    const rows = Array.isArray(_M.analysisSummary) ? _M.analysisSummary : [];
+    const target = String(dim).toLowerCase();
+    const out = {};
+    rows.forEach(r => {
+        if (String(r.dimension || '').toLowerCase() !== target) return;
+        const name = (r.dim_value != null && r.dim_value !== '') ? String(r.dim_value) : 'Unknown';
+        if (!out[name]) out[name] = { count: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+        out[name].count += Number(r.total) || 0;
+        out[name].K += Number(r.k) || 0;
+        out[name].A += Number(r.a) || 0;
+        out[name].B += Number(r.b) || 0;
+        out[name].C += Number(r.c) || 0;
+        out[name].O += Number(r.o) || 0;
+    });
+    return out;
+}
+
+// collisionBreakdown shape: [{name,count,K,A,B,C,O,epdo}] sorted by epdo desc
+// (matches computeCollisionBreakdown). Prefers the per-severity `collision`
+// dimension; falls back to dashboard_summary's count-only byCollision roll-up.
+function _mvCollisionBreakdown(_M) {
+    const grouped = _mvGroupByDimension(_M, 'collision');
+    let arr = Object.entries(grouped).map(([name, d]) => ({
+        name, count: d.count, K: d.K, A: d.A, B: d.B, C: d.C, O: d.O, epdo: calcEPDO(d)
+    }));
+    if (arr.length === 0 && _M.byCollision && typeof _M.byCollision === 'object') {
+        arr = Object.entries(_M.byCollision).map(([name, count]) => {
+            const cnt = Number(count) || 0;
+            // No severity split available — EPDO degrades to the raw count (O weight = 1).
+            return { name, count: cnt, K: 0, A: 0, B: 0, C: 0, O: cnt, epdo: calcEPDO({ O: cnt }) };
+        });
+    }
+    return arr.sort((a, b) => b.epdo - a.epdo);
+}
+
+// Generic [{name,count,K,A,B,C,O}] sorted by count desc, for weather / light.
+function _mvByDimensionArr(_M, dim) {
+    return Object.entries(_mvGroupByDimension(_M, dim))
+        .map(([name, d]) => ({ name, count: d.count, K: d.K, A: d.A, B: d.B, C: d.C, O: d.O }))
+        .sort((a, b) => b.count - a.count);
+}
+
+// topLocations shape: [{name,total,K,A,B,C,O,epdo,ka}] sorted by epdo desc, from
+// the raw mv_hotspots rows. Mirrors the Infographic's hotspot name normalization.
+function _mvTopLocations(_M, limit) {
+    const rows = Array.isArray(_M.topHotspots) ? _M.topHotspots : [];
+    const enriched = rows.map(r => {
+        const intName = String(r['Intersection Name'] || r.intersection_name || '').trim();
+        const rteName = String(r['RTE Name'] || r.rte_name || '').trim();
+        const nodeId  = String(r.location_name || '').trim();
+        let name;
+        if (rteName && intName) name = rteName + ' / ' + intName;
+        else if (intName)       name = intName;
+        else if (rteName)       name = rteName;
+        else                    name = nodeId || 'Unknown';
+        const K = Number(r.k) || 0, A = Number(r.a) || 0, B = Number(r.b) || 0,
+              C = Number(r.c) || 0, O = Number(r.o) || 0;
+        const epdo = Number(r.epdo) || calcEPDO({ K, A, B, C, O });
+        return { name, total: Number(r.total_crashes) || 0, K, A, B, C, O, epdo, ka: K + A };
+    }).sort((a, b) => b.epdo - a.epdo);
+    return enriched.slice(0, limit || 10);
+}
+
+// yoyComparison shape (matches computeYoYComparison) from _M.byYearDetail. At
+// aggregate tiers only year-level detail exists, so this is year-over-year (not
+// the row-mode quarter-over-quarter); periods are labeled as years for honesty.
+function _mvYoY(_M) {
+    const byYear = (_M.byYearDetail && typeof _M.byYearDetail === 'object') ? _M.byYearDetail : {};
+    const years = Object.keys(byYear).map(Number).filter(y => y > 0).sort((a, b) => a - b);
+    const zero = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, ped: 0, bike: 0 };
+    const pick = y => {
+        const d = byYear[y] || {};
+        return { total: d.total || 0, K: d.K || 0, A: d.A || 0, B: d.B || 0, C: d.C || 0, O: d.O || 0, ped: d.ped || 0, bike: d.bike || 0 };
+    };
+    const current = years.length ? pick(years[years.length - 1]) : { ...zero };
+    const previous = years.length >= 2 ? pick(years[years.length - 2]) : { ...zero };
+    const historical = { total: 0, K: 0, A: 0, ped: 0, bike: 0, startYear: years.length ? years[0] : new Date().getFullYear() };
+    years.forEach(y => {
+        const d = byYear[y] || {};
+        historical.total += d.total || 0;
+        historical.K += d.K || 0;
+        historical.A += d.A || 0;
+        historical.ped += d.ped || 0;
+        historical.bike += d.bike || 0;
+    });
+    const calcChange = (curr, prev) => prev > 0 ? Math.round(((curr - prev) / prev) * 100) : (curr > 0 ? 100 : 0);
+    const curYear = years.length ? String(years[years.length - 1]) : null;
+    const prevYear = years.length >= 2 ? String(years[years.length - 2]) : null;
+    return {
+        current, previous, historical,
+        changes: {
+            total: calcChange(current.total, previous.total),
+            KA: calcChange(current.K + current.A, previous.K + previous.A),
+            fatal: calcChange(current.K, previous.K),
+            serious: calcChange(current.A, previous.A),
+            ped: calcChange(current.ped, previous.ped),
+            bike: calcChange(current.bike, previous.bike)
+        },
+        hasPreviousData: previous.total > 0,
+        currentPeriod: curYear, previousPeriod: prevYear,
+        currentQuarter: curYear, previousQuarter: prevYear
+    };
+}
+
+// vulnerableUsers shape: { ped:{total,K,A,B,C,O,epdo,topLocations:[[name,n],…]},
+// bike:{…} }. Totals from dashboard_summary; K/A from mv_safety_categories; top
+// locations from mv_safety_focus_locations. topLocations MUST be array-of-pairs.
+function _mvVulnerable(_M) {
+    const aliasMap = { pedestrian: 'pedestrian', ped: 'pedestrian', bicycle: 'bicycle', bike: 'bicycle' };
+    const catKA = { pedestrian: { K: 0, A: 0 }, bicycle: { K: 0, A: 0 } };
+    (Array.isArray(_M.safetyCategories) ? _M.safetyCategories : []).forEach(row => {
+        const key = aliasMap[String(row.category || row.category_name || '').toLowerCase().trim()];
+        if (!key) return;
+        catKA[key].K = Number(row.k || row.K || 0) || catKA[key].K;
+        catKA[key].A = Number(row.a || row.A || 0) || catKA[key].A;
+    });
+    const topByCat = { pedestrian: {}, bicycle: {} };
+    (Array.isArray(_M.safetyFocusLocations) ? _M.safetyFocusLocations : []).forEach(row => {
+        const key = aliasMap[String(row.category || row.category_name || '').toLowerCase().trim()];
+        if (!key) return;
+        const name = row.location_name || row.rte_name || row.intersection_name || '';
+        if (!name) return;
+        topByCat[key][name] = (topByCat[key][name] || 0) + (Number(row.total || row.total_crashes || 0) || 0);
+    });
+    const build = (total, ka, locs) => {
+        const K = ka.K, A = ka.A, O = Math.max(0, total - K - A);
+        const obj = { total, K, A, B: 0, C: 0, O };
+        obj.epdo = calcEPDO(obj);
+        obj.topLocations = Object.entries(locs).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        return obj;
+    };
+    return {
+        ped: build(Number(_M.ped) || 0, catKA.pedestrian, topByCat.pedestrian),
+        bike: build(Number(_M.bike) || 0, catKA.bicycle, topByCat.bicycle)
+    };
+}
+
+// factors shape: [[label,count]] top-6 from mv_safety_categories (display only /
+// AI context — not read by the preview). Same labelMap as the Infographic.
+function _mvFactors(_M) {
+    const labelMap = {
+        speed: 'Speed-Related', impaired: 'Alcohol/Impaired', distracted: 'Distracted Driving',
+        unrestrained: 'Unrestrained', nighttime: 'Dark Conditions', weather: 'Wet Road',
+        intersection: 'Intersection', pedestrian: 'Pedestrian', bicycle: 'Bicycle', motorcycle: 'Motorcycle'
+    };
+    return (Array.isArray(_M.safetyCategories) ? _M.safetyCategories : [])
+        .map(row => {
+            const label = String(row.category || row.category_name || '').toLowerCase().trim();
+            return [labelMap[label] || label, Number(row.total || row.total_crashes || 0) || 0];
+        })
+        .filter(pair => pair[1] > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6);
+}
+
+// Up to 3 Key-Findings strings (mirrors generateDataInsight, minus the peak-cell
+// insight which needs a day×hour matrix we don't have at aggregate tier).
+function _mvDataInsights(collisionBreakdown, lightConditions, total) {
+    const insights = [];
+    if (collisionBreakdown.length > 0 && total > 0) {
+        const top = collisionBreakdown[0];
+        const pct = ((top.count / total) * 100).toFixed(0);
+        if (top.count > total * 0.25) {
+            insights.push(`${top.name} crashes represent ${pct}% of incidents - ${top.K > 0 ? 'including ' + top.K + ' fatal' : 'consider targeted countermeasures'}`);
+        }
+    }
+    if (Array.isArray(lightConditions) && total > 0) {
+        const dark = lightConditions
+            .filter(l => l.name.toLowerCase().includes('dark') || l.name.toLowerCase().includes('night'))
+            .reduce((sum, l) => sum + l.count, 0);
+        const darkPct = ((dark / total) * 100).toFixed(0);
+        if (darkPct > 35) {
+            insights.push(`${darkPct}% of crashes occur in dark conditions - lighting improvements may reduce severity`);
+        }
+    }
+    return insights.slice(0, 3);
+}
+
+// Build the full rawData object renderComprehensivePreview / the PDF+Word
+// exporters consume. Every numeric field has a 0 default so bar widths / labels
+// never become NaN/undefined (renderer's collision + location bars are unguarded).
+function _buildComprehensiveRawDataFromMatviews(_M, startDate, endDate) {
+    // computeStats([]) already returns matview-derived totals when
+    // window._reportMatviewData is populated (set by the caller before this runs).
+    const stats = computeStats([]);
+    const collisionBreakdown = _mvCollisionBreakdown(_M);
+    const weatherImpact = _mvByDimensionArr(_M, 'weather');
+    const lightConditions = _mvByDimensionArr(_M, 'light');
+    const topLocations = _mvTopLocations(_M, 10);
+    const vulnerableUsers = _mvVulnerable(_M);
+    const yoyComparison = _mvYoY(_M);
+    const factors = _mvFactors(_M);
+    const dataInsights = _mvDataInsights(collisionBreakdown, lightConditions, stats.total);
+    const monthlyTrends = Object.entries(_mvGroupByDimension(_M, 'month'))
+        .map(([month, d]) => ({ month, count: d.count, K: d.K, A: d.A }))
+        .sort((a, b) => a.month.localeCompare(b.month));
+    const hp = yoyComparison.hasPreviousData;
+    const trendData = {
+        current: { total: stats.total, K: stats.K, A: stats.A, B: stats.B, C: stats.C, O: stats.O, ped: stats.ped, bike: stats.bike },
+        previous: { total: 0, K: 0, A: 0, ped: 0, bike: 0 },
+        totalChange: hp ? (yoyComparison.changes.total || 0) : 0,
+        fatalChange: hp ? (yoyComparison.changes.fatal || 0) : 0,
+        pedChange:   hp ? (yoyComparison.changes.ped || 0)   : 0,
+        bikeChange:  hp ? (yoyComparison.changes.bike || 0)  : 0
+    };
+    return {
+        stats, trendData,
+        peakPatterns: {}, factors, topLocations, monthlyTrends,
+        dayOfWeekAnalysis: {}, hourlyDistribution: [],
+        weatherImpact, lightConditions, vulnerableUsers, collisionBreakdown,
+        focusTopic: '', dayHourMatrix: null, yoyComparison, dataInsights,
+        locationCoverage: { total: _M.total, withLocation: _M.total, percentage: '100.0' }
+    };
+}
+
+// 14-section array for the TOC + PDF page list, sourced from the matview rawData.
+function _buildComprehensiveSectionsFromMatviews(rawData, metadata, aiInsights) {
+    const r = rawData, ai = aiInsights || {};
+    return [
+        { page: 1, type: 'dashboard', title: 'Executive Dashboard', data: { stats: r.stats, trendData: r.trendData, yoyComparison: r.yoyComparison, dataInsights: r.dataInsights, topLocations: r.topLocations.slice(0, 3) } },
+        { page: 2, type: 'toc', title: 'Table of Contents' },
+        { page: 3, type: 'executive', title: 'Executive Summary', data: { stats: r.stats, trendData: r.trendData, yoyComparison: r.yoyComparison, aiInsight: ai.executive } },
+        { page: 4, type: 'temporal', title: 'Temporal Analysis', data: { peakPatterns: r.peakPatterns, dayOfWeekAnalysis: r.dayOfWeekAnalysis, hourlyDistribution: r.hourlyDistribution, dayHourMatrix: r.dayHourMatrix, aiInsight: ai.temporal } },
+        { page: 5, type: 'locations', title: 'High-Priority Locations', data: { locations: r.topLocations, collisionBreakdown: r.collisionBreakdown, aiInsight: ai.locations } },
+        { page: 6, type: 'locationmap', title: 'Crash Concentration Map', data: { topLocations: r.topLocations, crashes: [] } },
+        { page: 7, type: 'collision', title: 'Collision Analysis', data: { collisionBreakdown: r.collisionBreakdown, stats: r.stats } },
+        { page: 8, type: 'severity', title: 'Severity Distribution', data: { stats: r.stats, trendData: r.trendData, yoyComparison: r.yoyComparison, aiInsight: ai.severity } },
+        { page: 9, type: 'factors', title: 'Contributing Factors', data: { factors: r.factors, weatherImpact: r.weatherImpact, lightConditions: r.lightConditions, stats: r.stats } },
+        { page: 10, type: 'vulnerable', title: 'Vulnerable Road Users', data: { vulnerableUsers: r.vulnerableUsers, aiInsight: ai.focus } },
+        { page: 11, type: 'trends', title: 'Trends & Comparison', data: { monthlyTrends: r.monthlyTrends, trendData: r.trendData, yoyComparison: r.yoyComparison } },
+        { page: 12, type: 'priorities', title: 'Safety Priorities', data: { topLocations: r.topLocations, stats: r.stats, collisionBreakdown: r.collisionBreakdown } },
+        { page: 13, type: 'funding', title: 'Funding Opportunities', data: { stats: r.stats, topLocations: r.topLocations, vulnerableUsers: r.vulnerableUsers } },
+        { page: 14, type: 'appendix', title: 'Data & Methodology', data: { crashCount: metadata.crashCount, startDate: metadata.startDate, endDate: metadata.endDate, stats: r.stats } }
+    ];
+}
+
 // ─── CC 330 — generateComprehensiveReport extracted from app/index.html ───
 // Per CLAUDE.md extract-on-touch policy (>100 LOC + material edits during
 // the CC 330 hang fix). Three surgical changes vs the original L55349-55515:
@@ -559,39 +811,117 @@ async function generateComprehensiveReport(allCrashes, title, agency, department
         document.getElementById('comprehensiveProgressStatus').textContent = status;
     };
 
-    // CC 330 Fix 1 — stub-array detection. When the dispatcher hydrated
-    // crashes from a matview, every row is an empty {} and the per-row
-    // compute helpers below all silently return zeros, then renderer
-    // hangs on NaN axes. The comprehensive report fundamentally needs
-    // per-row data — render a clear graceful-degradation message.
+    // CC 351 — matview (aggregate-tier) mode. At state/region/MPO/PD tiers and
+    // large counties the dispatcher hands an empty / stub crash array. Rather
+    // than bail (old CC 330/341 banners) or fall into the slow row-hydrate that
+    // timed out at 25s, build the report from window._reportMatviewData (the
+    // same aggregates the Infographic uses). _isStubArray = matview-hydration
+    // stub; _noRows = genuinely empty selection.
     const _isStubArray = Array.isArray(allCrashes) && allCrashes.length > 0
         && allCrashes.every(r => !r || Object.keys(r).length === 0);
-    if (_isStubArray) {
-        updateProgress(100, 'Aggregate-tier data not available for the comprehensive report.');
-        const prog = document.getElementById('comprehensiveProgress');
-        if (prog) prog.style.display = 'none';
-        const prev = document.getElementById('comprehensivePreview');
-        if (prev) {
-            prev.innerHTML =
-                '<div style="padding:2rem;color:#6b7280;text-align:center;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;margin:1rem 0;">' +
-                '<h3 style="color:#92400e;margin:0 0 .5rem 0;">Per-Row Data Required</h3>' +
-                '<p>The Comprehensive Quarterly Report needs per-crash detail (collision type, weather, light conditions, day/hour, vulnerable-user flags). ' +
-                'It cannot be generated at aggregate tiers (state, region, MPO, planning district).</p>' +
-                '<p style="margin-top:.75rem;"><strong>Please switch to a county, route, or intersection scope to generate this report.</strong></p>' +
-                '</div>';
-            prev.style.display = 'block';
+    const _noRows = !Array.isArray(allCrashes) || allCrashes.length === 0;
+
+    // Prefer dispatcher-populated matview data; else fetch directly
+    // (Infographic-style) so a direct call to this function still works.
+    let _M = window._reportMatviewData || null;
+    if (!_M && (_isStubArray || _noRows) && window.crashLensClient
+        && window.CL && window.CL.data && window.CL.data.supabaseBridge
+        && typeof window.CL.data.supabaseBridge.resolveTier === 'function') {
+        try {
+            const t = window.CL.data.supabaseBridge.resolveTier();
+            if (t && t.tier) _M = await hydrateReportFromMatviews('comprehensive', t.tier, t.value);
+            if (_M) window._reportMatviewData = _M;
+        } catch (e) {
+            console.warn('[Comprehensive] matview hydration failed:', e && e.message);
         }
+    }
+
+    // Matview render path — aggregate tier / stub array with populated matviews.
+    if ((_isStubArray || _noRows) && _M && _M.total > 0) {
+        try {
+            updateProgress(20, 'Building report from aggregate matviews...');
+            const quarter = getQuarterLabel(startDate, endDate);
+            const rawData = _buildComprehensiveRawDataFromMatviews(_M, startDate, endDate);
+
+            updateProgress(50, 'Generating AI insights...');
+            let aiInsights = {};
+            const apiKey = getGrantApiKey();
+            if (apiKey) {
+                // Same 8s race wrapper as the row-mode path, but run the sections
+                // in parallel so total AI latency stays ~8s (not ~32s sequential)
+                // and the report keeps its ~2-3s aggregate-tier feel.
+                const aiCall = (section, ctx) => Promise.race([
+                    generateAISectionInsight(section, ctx),
+                    new Promise((_, reject) => setTimeout(
+                        () => reject(new Error(`AI ${section} timed out at 8s`)), 8000))
+                ]).catch(e => {
+                    console.warn(`[Comprehensive Report] AI ${section} skipped:`, e && e.message);
+                    return null;
+                });
+                const s = rawData.stats;
+                const [executive, severity, locations, focus] = await Promise.all([
+                    aiCall('executive', {
+                        total: s.total, K: s.K, A: s.A, B: s.B, C: s.C, O: s.O,
+                        ped: s.ped, bike: s.bike, epdo: calcEPDO(s),
+                        trend: rawData.trendData, quarter, agency
+                    }),
+                    aiCall('severity', {
+                        K: s.K, A: s.A, B: s.B, C: s.C, O: s.O, total: s.total, trend: rawData.trendData
+                    }),
+                    aiCall('locations', {
+                        topLocations: rawData.topLocations.slice(0, 5), total: s.total
+                    }),
+                    aiCall('focus', {
+                        focusTopic: rawData.focusTopic, vulnerableUsers: rawData.vulnerableUsers, factors: rawData.factors
+                    })
+                ]);
+                aiInsights = { executive, severity, locations, focus };
+            }
+
+            updateProgress(85, 'Building report sections...');
+            const metadata = {
+                title, agency, department, author, quarter, startDate, endDate,
+                generatedAt: new Date().toISOString(),
+                crashCount: _M.total, totalPages: 14
+            };
+            comprehensiveReportData = {
+                metadata,
+                sections: _buildComprehensiveSectionsFromMatviews(rawData, metadata, aiInsights),
+                rawData,
+                aiInsights
+            };
+
+            updateProgress(95, 'Rendering preview...');
+            renderComprehensivePreview(comprehensiveReportData);
+            renderComprehensiveTOC(comprehensiveReportData);
+            updateProgress(100, 'Report ready!');
+
+            setTimeout(() => {
+                document.getElementById('comprehensiveProgress').style.display = 'none';
+                document.getElementById('comprehensivePreview').style.display = 'block';
+                document.getElementById('comprehensiveTOC').style.display = 'block';
+                // CC 346 §3.1 — collapse empty sections (e.g. the day×hour matrix,
+                // which has no matview source at aggregate tiers).
+                if (typeof autoCollapseEmptyReportSections === 'function') {
+                    setTimeout(autoCollapseEmptyReportSections, 100);
+                }
+                document.getElementById('btnComprehensivePDF').disabled = false;
+                document.getElementById('btnComprehensiveWord').disabled = false;
+                document.getElementById('btnComprehensivePrint').disabled = false;
+            }, 500);
+        } catch (e) {
+            console.error('[Comprehensive Report] matview-mode error:', e);
+            updateProgress(0, 'Error generating report: ' + e.message);
+            document.getElementById('comprehensiveProgressTitle').textContent = 'Error';
+            document.getElementById('comprehensiveProgressTitle').style.color = '#dc2626';
+        }
+        hideLoading();
         return;
     }
 
-    // CC 341 F2 — defence-in-depth empty-array guard. The _isStubArray check
-    // above only fires for length > 0 stub arrays. When the selection yields
-    // NO rows at all (allCrashes is [] / null), execution would otherwise fall
-    // into computeStats([]) and render a report of zeros + NaN%. Surface the
-    // same graceful-degradation banner instead. (No synthetic-row fabrication:
-    // matview aggregates lack the per-row collision/weather/hour/VRU detail
-    // this report requires, so we direct the user to a row-level scope.)
-    if (!Array.isArray(allCrashes) || allCrashes.length === 0) {
+    // Genuine no-data — aggregate/empty selection with no matview rows (also the
+    // fallback when matview hydration failed). Preserves the CC 341 F2 banner.
+    if (_isStubArray || _noRows) {
         const prog = document.getElementById('comprehensiveProgress');
         if (prog) prog.style.display = 'none';
         const prev = document.getElementById('comprehensivePreview');
@@ -599,14 +929,15 @@ async function generateComprehensiveReport(allCrashes, title, agency, department
             prev.innerHTML =
                 '<div style="padding:2rem;color:#6b7280;text-align:center;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;margin:1rem 0;">' +
                 '<h3 style="color:#92400e;margin:0 0 .5rem 0;">No Crash Data Available</h3>' +
-                '<p>The Comprehensive Quarterly Report needs per-crash detail and found no rows for this selection. Try:</p>' +
+                '<p>The Comprehensive Quarterly Report found no crash data for this selection. Try:</p>' +
                 '<ul style="text-align:left;display:inline-block;color:#78350f;">' +
-                '<li>Selecting a county, route, or intersection scope (aggregate tiers have no row-level data)</li>' +
+                '<li>Selecting a different jurisdiction (county, region, MPO, or planning district)</li>' +
                 '<li>Removing date filters</li>' +
                 '<li>Generating a Summary Report or Infographic instead — they work from aggregate data</li>' +
                 '</ul></div>';
             prev.style.display = 'block';
         }
+        hideLoading();
         return;
     }
 
