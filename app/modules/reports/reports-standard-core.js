@@ -902,7 +902,11 @@ function _renderReportGapState(title, heading, body, tabId, buttonLabel, howTo) 
 // dispatched fetch eventually resolves into the void; the next click resets
 // window._reportMatviewData. Memory cost is negligible.
 async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) {
-    const INNER_BUDGET_MS = 25000;
+    // CC 353 — tightened 25s → 15s. The matview path resolves in ~1-3s, and
+    // the row-hydrate fallback now only runs when there is genuinely no matview
+    // rollup (matviewData === null); an aggregate-tier 0-row rollup fails fast
+    // via matviewEmpty instead of burning the full budget.
+    const INNER_BUDGET_MS = 15000;
     // CC 333 — every report type whose generator reads window._reportMatviewData
     // (directly or via the matview-aware shared helpers computeStats /
     // generateYearlySection / generateTopLocationsTable / generateNodeTable),
@@ -924,6 +928,14 @@ async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) 
 
     const real = (async () => {
         let crashes = null, hydrated = false;
+        // CC 353 — fail-fast signal. Set when the matview path runs at an
+        // aggregate tier and the rollup resolves to 0 crashes. In that case
+        // the row-hydrate fallback below would also return 0 rows (or hang the
+        // full budget on a ≤100k-row page) — so we skip it and let the caller
+        // render an instant gap-state instead of timing out. emptyScope carries
+        // the resolved {tier, value} so the caller (and DevTools) can see
+        // exactly which scope came back empty.
+        let matviewEmpty = false, emptyScope = null;
 
         // Matview path — fast (~3s) when the generator is ported to read
         // window._reportMatviewData.
@@ -946,6 +958,16 @@ async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) 
                         hydrated = true;
                         console.log('[Report] Matview hydration complete in ' + (Date.now() - t0) + 'ms (total=' + matviewData.total + ', scope=' + (matviewData._scope && matviewData._scope.tier) + ':' + ((matviewData._scope && matviewData._scope.value) || '∅') + ')');
                         _reportMark('matview-hydrate done');
+                    } else if (matviewData && matviewData.total === 0) {
+                        // CC 353 — the matviews fetched successfully but the
+                        // resolved scope has no crashes (empty jurisdiction, or
+                        // a resolveTier/dbName mismatch that doesn't exist in
+                        // the matview). Fail fast: never drop into the 25s
+                        // row-hydrate path for an aggregate-tier zero rollup.
+                        matviewEmpty = true;
+                        emptyScope = (matviewData._scope) || { tier: t.tier, value: t.value };
+                        console.warn(`[Report:${type}] CC 353 — matview rollup is 0 rows for scope ${emptyScope.tier || '?'}:${emptyScope.value || '∅'} — skipping row-hydrate, will render gap-state`);
+                        _reportMark('matview-empty fail-fast');
                     }
                 }
             } catch (e) {
@@ -955,7 +977,9 @@ async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) 
 
         // Row-hydrate fallback — slow (~30-90s) but works for any tier +
         // any unported generator. getCrashes pages internally at 10k/req.
-        if (!hydrated && window.crashLensClient &&
+        // CC 353 — skipped when the matview path already proved the scope is
+        // empty (matviewEmpty); the caller renders a gap-state instead.
+        if (!hydrated && !matviewEmpty && window.crashLensClient &&
             window.CL && window.CL.data && window.CL.data.supabaseBridge &&
             typeof window.CL.data.supabaseBridge.resolveTier === 'function') {
             console.log(`[Report:${type}] sampleRows + matview empty — entering row-hydrate fallback (≤100k rows)`);
@@ -977,7 +1001,7 @@ async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) 
             }
         }
 
-        return { crashes, hydrated, timedOut: false };
+        return { crashes, hydrated, timedOut: false, matviewEmpty, emptyScope };
     })();
 
     const timeout = new Promise(resolve =>
@@ -1065,10 +1089,30 @@ async function _runReportGeneration(type, _reportT0, _reportMark) {
             console.log(`[Report:${type}] using sampleRows fast-path (${crashes.length} rows)`);
         } else {
             const hydration = await _hydrateWithBudget(type, route, startDate, endDate, _reportMark);
-            if (hydration.timedOut) {
-                console.warn(`[Report:${type}] hydration exceeded 25s budget — aborting before overlay watchdog`);
+            // CC 353 — aggregate-tier scope resolved to 0 crashes. Render an
+            // instant gap-state (reusing the shared _renderReportGapState panel)
+            // instead of waiting out the budget on a row-hydrate that would also
+            // return nothing. Surfaces the real cause (empty / mismatched scope)
+            // rather than a generic timeout. Applies uniformly to every matview
+            // report type. State-agnostic.
+            if (hydration.matviewEmpty) {
+                const sc = hydration.emptyScope || {};
+                const scopeTxt = sc.tier ? (sc.tier + ' = ' + (sc.value || '(none)')) : 'the current selection';
+                console.warn(`[Report:${type}] CC 353 — rendering 0-row gap-state for scope ${sc.tier || '?'}:${sc.value || '∅'} (no 25s hang)`);
+                _renderReportGapState(
+                    title,
+                    'No crash data for the selected scope',
+                    'The crash matviews returned 0 rows for ' + scopeTxt + '. This usually means the selected tier or jurisdiction has no crashes in the dataset, or its name does not match the data warehouse.',
+                    'upload', 'Open Upload Tab',
+                    'Verify the State and jurisdiction selection (or widen the date range), then click Generate Report again.'
+                );
                 hideLoading();
-                alert('Report hydration took longer than 25 seconds. Try a smaller tier or a narrower date range.');
+                return;
+            }
+            if (hydration.timedOut) {
+                console.warn(`[Report:${type}] hydration exceeded 15s budget — aborting before overlay watchdog`);
+                hideLoading();
+                alert('Report hydration took longer than 15 seconds. Try a smaller tier or a narrower date range.');
                 return;
             }
             if (hydration.crashes) {
