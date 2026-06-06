@@ -56662,7 +56662,7 @@ async function downloadComprehensivePDF() {
         addText('KEY METRICS', 12, 'bold', PDF_COLORS.navy);
         addSpacer(3);
         addText(`Total Crashes: ${m.crashCount.toLocaleString()}  |  Fatal (K): ${r.stats.K}  |  Serious (A): ${r.stats.A}  |  EPDO: ${calcEPDO(r.stats).toLocaleString()}`, 11, 'normal', PDF_COLORS.slate);
-        addText(`Trend: ${r.trendData.totalChange > 0 ? '+' : ''}${r.trendData.totalChange}% vs prior period  |  Pedestrian: ${r.vulnerableUsers.ped.total}  |  Bicycle: ${r.vulnerableUsers.bike.total}`, 10, 'normal', PDF_COLORS.slateLight);
+        addText(`Trend: ${r.trendData.totalChange > 0 ? '+' : ''}${r.trendData.totalChange}% vs prior period  |  Pedestrian: ${(r.vulnerableUsers?.ped?.total ?? 0)}  |  Bicycle: ${(r.vulnerableUsers?.bike?.total ?? 0)}`, 10, 'normal', PDF_COLORS.slateLight);
         addSpacer(10);
 
         // Key Findings
@@ -56948,20 +56948,20 @@ async function downloadComprehensivePDF() {
             addSpacer(5);
         }
         addText('Pedestrian Safety', 14, 'bold', '#0891b2');
-        addText(`Total Crashes: ${r.vulnerableUsers.ped.total} | Fatal: ${r.vulnerableUsers.ped.K} | Serious: ${r.vulnerableUsers.ped.A}`, 11, 'normal', PDF_COLORS.slate);
-        addText(`EPDO Score: ${r.vulnerableUsers.ped.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers.ped).toLocaleString()}`, 10, 'normal', PDF_COLORS.slateLight);
+        addText(`Total Crashes: ${(r.vulnerableUsers?.ped?.total ?? 0)} | Fatal: ${(r.vulnerableUsers?.ped?.K ?? 0)} | Serious: ${(r.vulnerableUsers?.ped?.A ?? 0)}`, 11, 'normal', PDF_COLORS.slate);
+        addText(`EPDO Score: ${r.vulnerableUsers?.ped?.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers?.ped ?? {}).toLocaleString()}`, 10, 'normal', PDF_COLORS.slateLight);
         addSpacer(3);
         addText('Top Pedestrian Crash Locations:', 10, 'bold', PDF_COLORS.navy);
-        r.vulnerableUsers.ped.topLocations.filter(([loc]) => isValidLocationCode(loc)).slice(0, 5).forEach(([loc, count]) => {
+        (r.vulnerableUsers?.ped?.topLocations ?? []).filter(([loc]) => isValidLocationCode(loc)).slice(0, 5).forEach(([loc, count]) => {
             addText(`  ${formatRouteName(loc)}: ${count} crashes`, 9, 'normal', PDF_COLORS.slate);
         });
         addSpacer(10);
         addText('Bicycle Safety', 14, 'bold', '#059669');
-        addText(`Total Crashes: ${r.vulnerableUsers.bike.total} | Fatal: ${r.vulnerableUsers.bike.K} | Serious: ${r.vulnerableUsers.bike.A}`, 11, 'normal', PDF_COLORS.slate);
-        addText(`EPDO Score: ${r.vulnerableUsers.bike.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers.bike).toLocaleString()}`, 10, 'normal', PDF_COLORS.slateLight);
+        addText(`Total Crashes: ${(r.vulnerableUsers?.bike?.total ?? 0)} | Fatal: ${(r.vulnerableUsers?.bike?.K ?? 0)} | Serious: ${(r.vulnerableUsers?.bike?.A ?? 0)}`, 11, 'normal', PDF_COLORS.slate);
+        addText(`EPDO Score: ${r.vulnerableUsers?.bike?.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers?.bike ?? {}).toLocaleString()}`, 10, 'normal', PDF_COLORS.slateLight);
         addSpacer(3);
         addText('Top Bicycle Crash Locations:', 10, 'bold', PDF_COLORS.navy);
-        r.vulnerableUsers.bike.topLocations.filter(([loc]) => isValidLocationCode(loc)).slice(0, 5).forEach(([loc, count]) => {
+        (r.vulnerableUsers?.bike?.topLocations ?? []).filter(([loc]) => isValidLocationCode(loc)).slice(0, 5).forEach(([loc, count]) => {
             addText(`  ${formatRouteName(loc)}: ${count} crashes`, 9, 'normal', PDF_COLORS.slate);
         });
         addPageNumber(10);
@@ -57030,9 +57030,9 @@ async function downloadComprehensivePDF() {
         _stateFundingPrograms().forEach(p => addText('✓ ' + p, 10, 'normal', PDF_COLORS.slate));
         addSpacer(8);
         addText('Eligibility Indicators', 14, 'bold', PDF_COLORS.navy);
-        const pedEligible = r.vulnerableUsers.ped.total > 10;
+        const pedEligible = (r.vulnerableUsers?.ped?.total ?? 0) > 10;
         const fatalEligible = r.stats.K > 0;
-        addText(`${pedEligible ? '✓' : '○'} Pedestrian/Bicycle Safety Funding (${r.vulnerableUsers.ped.total + r.vulnerableUsers.bike.total} VRU crashes)`, 10, 'normal', pedEligible ? '#16a34a' : '#94a3b8');
+        addText(`${pedEligible ? '✓' : '○'} Pedestrian/Bicycle Safety Funding (${(r.vulnerableUsers?.ped?.total ?? 0) + (r.vulnerableUsers?.bike?.total ?? 0)} VRU crashes)`, 10, 'normal', pedEligible ? '#16a34a' : '#94a3b8');
         addText(`${fatalEligible ? '✓' : '○'} Fatal Crash Reduction Programs (${r.stats.K} fatal crashes)`, 10, 'normal', fatalEligible ? '#16a34a' : '#94a3b8');
         addPageNumber(13);
 
