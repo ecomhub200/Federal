@@ -28,9 +28,14 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
     }
 
     // Process safety data from filtered crashes if date filter was applied
-    // This allows Report tab date filters to take precedence
+    // This allows Report tab date filters to take precedence.
+    // CC 333 — at aggregate tiers the dispatcher hands a blank stub array;
+    // processing it would wipe the (matview-populated) safetyState.data, so
+    // skip the row-level reprocess and keep the Safety Focus tab's own data.
+    const _isStubArray = Array.isArray(crashes) && crashes.length > 0
+        && crashes.every(r => !r || Object.keys(r).length === 0);
     let safetyData = safetyState.data;
-    if (startDate || endDate) {
+    if ((startDate || endDate) && !_isStubArray) {
         safetyData = processSafetyDataForReport(crashes);
     }
 
@@ -289,16 +294,27 @@ function generateSafetyFocusRecommendations(categories, reportData) {
 }
 
 function generateYearlySection(crashes) {
+    // CC 333 — at aggregate tiers crashes is a blank stub array; prefer the
+    // pre-aggregated _M.byYearDetail (per-year K/A/B/C/O from dashboard_summary)
+    // so the yearly table renders real numbers. Falls back to per-row iteration
+    // at row-level tiers (_M null). State-agnostic.
+    const _M = window._reportMatviewData;
     const byYear = {};
-    crashes.forEach(c => {
-        const y = parseInt(c[COL.YEAR]);
-        if (!y) return;
-        if (!byYear[y]) byYear[y] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
-        byYear[y].total++;
-        const s = (c[COL.SEVERITY]||'').charAt(0);
-        if (byYear[y][s] !== undefined) byYear[y][s]++;
-    });
-    
+    if (_M && _M.byYearDetail && Object.keys(_M.byYearDetail).length > 0) {
+        Object.entries(_M.byYearDetail).forEach(([y, d]) => {
+            byYear[y] = { total: d.total || 0, K: d.K || 0, A: d.A || 0, B: d.B || 0, C: d.C || 0, O: d.O || 0 };
+        });
+    } else {
+        crashes.forEach(c => {
+            const y = parseInt(c[COL.YEAR]);
+            if (!y) return;
+            if (!byYear[y]) byYear[y] = { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+            byYear[y].total++;
+            const s = (c[COL.SEVERITY]||'').charAt(0);
+            if (byYear[y][s] !== undefined) byYear[y][s]++;
+        });
+    }
+
     const years = Object.keys(byYear).sort();
     return `<h4>Yearly Summary</h4>
         <div class="table-wrapper"><table class="data-table">
@@ -310,17 +326,35 @@ function generateYearlySection(crashes) {
 }
 
 function generateTopLocationsTable(crashes, kaOnly = false) {
+    // CC 333 — at aggregate tiers, build the location ranking from _M.topHotspots
+    // (mv_hotspots rows: location_name/rte_name/intersection_name, total/total_crashes,
+    // k, a) instead of iterating blank stub rows. Falls back to per-row at row tiers.
+    const _M = window._reportMatviewData;
     const byRoute = {};
-    crashes.forEach(c => {
-        if (kaOnly && !['K','A'].includes((c[COL.SEVERITY]||'').charAt(0))) return;
-        const r = stripEnumPrefix(c[COL.ROUTE]) || 'Unknown';
-        if (!byRoute[r]) byRoute[r] = { total: 0, K: 0, A: 0 };
-        byRoute[r].total++;
-        const s = (c[COL.SEVERITY]||'').charAt(0);
-        if (s === 'K') byRoute[r].K++;
-        if (s === 'A') byRoute[r].A++;
-    });
-    
+    if (_M && Array.isArray(_M.topHotspots) && _M.topHotspots.length > 0) {
+        _M.topHotspots.forEach(h => {
+            if (!h) return;
+            const name = h.location_name || h.rte_name || h.intersection_name || (h.node_id ? `Node ${h.node_id}` : 'Unknown');
+            const K = Number(h.k) || 0;
+            const A = Number(h.a) || 0;
+            if (kaOnly && (K + A) === 0) return;
+            if (!byRoute[name]) byRoute[name] = { total: 0, K: 0, A: 0 };
+            byRoute[name].total += Number(h.total || h.total_crashes) || 0;
+            byRoute[name].K += K;
+            byRoute[name].A += A;
+        });
+    } else {
+        crashes.forEach(c => {
+            if (kaOnly && !['K','A'].includes((c[COL.SEVERITY]||'').charAt(0))) return;
+            const r = stripEnumPrefix(c[COL.ROUTE]) || 'Unknown';
+            if (!byRoute[r]) byRoute[r] = { total: 0, K: 0, A: 0 };
+            byRoute[r].total++;
+            const s = (c[COL.SEVERITY]||'').charAt(0);
+            if (s === 'K') byRoute[r].K++;
+            if (s === 'A') byRoute[r].A++;
+        });
+    }
+
     const sorted = Object.entries(byRoute).sort((a,b) => b[1].total - a[1].total);
     return `<h4>${kaOnly ? 'K+A' : ''} Crash Locations</h4>
         <div class="table-wrapper"><table class="data-table">
@@ -329,17 +363,33 @@ function generateTopLocationsTable(crashes, kaOnly = false) {
 }
 
 function generateNodeTable(crashes) {
+    // CC 333 — at aggregate tiers, build the node/intersection ranking from the
+    // node-bearing _M.topHotspots rows (node_id / intersection_name). Falls back
+    // to per-row iteration at row-level tiers (_M null).
+    const _M = window._reportMatviewData;
     const byNode = {};
-    crashes.forEach(c => {
-        const n = c[COL.NODE];
-        if (!n) return;
-        if (!byNode[n]) byNode[n] = { total: 0, K: 0, A: 0 };
-        byNode[n].total++;
-        const s = (c[COL.SEVERITY]||'').charAt(0);
-        if (s === 'K') byNode[n].K++;
-        if (s === 'A') byNode[n].A++;
-    });
-    
+    if (_M && Array.isArray(_M.topHotspots) && _M.topHotspots.length > 0) {
+        _M.topHotspots.forEach(h => {
+            if (!h) return;
+            const n = h.intersection_name || (h.node_id != null ? `Node ${h.node_id}` : null);
+            if (!n) return;
+            if (!byNode[n]) byNode[n] = { total: 0, K: 0, A: 0 };
+            byNode[n].total += Number(h.total || h.total_crashes) || 0;
+            byNode[n].K += Number(h.k) || 0;
+            byNode[n].A += Number(h.a) || 0;
+        });
+    } else {
+        crashes.forEach(c => {
+            const n = c[COL.NODE];
+            if (!n) return;
+            if (!byNode[n]) byNode[n] = { total: 0, K: 0, A: 0 };
+            byNode[n].total++;
+            const s = (c[COL.SEVERITY]||'').charAt(0);
+            if (s === 'K') byNode[n].K++;
+            if (s === 'A') byNode[n].A++;
+        });
+    }
+
     const sorted = Object.entries(byNode).sort((a,b) => b[1].total - a[1].total);
     return `<h4>Crash Frequency by Node/Intersection</h4>
         <div class="table-wrapper"><table class="data-table">
