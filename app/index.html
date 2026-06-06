@@ -56331,17 +56331,17 @@ function renderComprehensivePreview(data) {
                             <svg width="24" height="24" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a3 3 0 100 6 3 3 0 000-6zM20 21l-4-4m0 4v-4m-9 4v-6l-3-3 3-3 3 3 3-3"/></svg>
                         </div>
                         <div>
-                            <div style="font-weight:700;color:#0e7490;font-size:1.75rem;letter-spacing:-.02em">${r.vulnerableUsers.ped.total}</div>
+                            <div style="font-weight:700;color:#0e7490;font-size:1.75rem;letter-spacing:-.02em">${r.vulnerableUsers?.ped?.total ?? 0}</div>
                             <div style="font-size:.75rem;color:#0891b2;text-transform:uppercase;letter-spacing:.05em">Pedestrian Crashes</div>
                         </div>
                     </div>
                     <div style="display:flex;gap:.75rem;font-size:.75rem;flex-wrap:wrap">
-                        ${r.vulnerableUsers.ped.K > 0 ? `<span style="color:${COLORS.fatal};font-weight:600;background:#fef2f2;padding:4px 10px;border-radius:4px">● ${r.vulnerableUsers.ped.K} Fatal</span>` : ''}
-                        ${r.vulnerableUsers.ped.A > 0 ? `<span style="color:${COLORS.serious};background:#fff7ed;padding:4px 10px;border-radius:4px">● ${r.vulnerableUsers.ped.A} Serious</span>` : ''}
-                        <span style="color:${COLORS.navy};background:#eff6ff;padding:4px 10px;border-radius:4px;font-weight:600">EPDO: ${r.vulnerableUsers.ped.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers.ped).toLocaleString()}</span>
+                        ${(r.vulnerableUsers?.ped?.K ?? 0) > 0 ? `<span style="color:${COLORS.fatal};font-weight:600;background:#fef2f2;padding:4px 10px;border-radius:4px">● ${r.vulnerableUsers?.ped?.K ?? 0} Fatal</span>` : ''}
+                        ${(r.vulnerableUsers?.ped?.A ?? 0) > 0 ? `<span style="color:${COLORS.serious};background:#fff7ed;padding:4px 10px;border-radius:4px">● ${r.vulnerableUsers?.ped?.A ?? 0} Serious</span>` : ''}
+                        <span style="color:${COLORS.navy};background:#eff6ff;padding:4px 10px;border-radius:4px;font-weight:600">EPDO: ${r.vulnerableUsers?.ped?.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers?.ped ?? {}).toLocaleString()}</span>
                     </div>
-                    ${r.vulnerableUsers.ped.topLocations?.length > 0 ? `<div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid #67e8f9;font-size:.7rem;color:${COLORS.slate}">
-                        <strong style="color:#0e7490">Top Locations:</strong> ${r.vulnerableUsers.ped.topLocations.slice(0,3).map(([loc]) => formatRouteName(loc)).join(', ')}
+                    ${(r.vulnerableUsers?.ped?.topLocations?.length ?? 0) > 0 ? `<div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid #67e8f9;font-size:.7rem;color:${COLORS.slate}">
+                        <strong style="color:#0e7490">Top Locations:</strong> ${(r.vulnerableUsers?.ped?.topLocations ?? []).slice(0,3).map(([loc]) => formatRouteName(loc)).join(', ')}
                     </div>` : ''}
                 </div>
                 <!-- Bicycle Card -->
@@ -56351,25 +56351,25 @@ function renderComprehensivePreview(data) {
                             <svg width="24" height="24" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><circle cx="5" cy="17" r="3"/><circle cx="19" cy="17" r="3"/><path d="M12 17V5l4 5h4M8 17l4-8"/></svg>
                         </div>
                         <div>
-                            <div style="font-weight:700;color:#047857;font-size:1.75rem;letter-spacing:-.02em">${r.vulnerableUsers.bike.total}</div>
+                            <div style="font-weight:700;color:#047857;font-size:1.75rem;letter-spacing:-.02em">${r.vulnerableUsers?.bike?.total ?? 0}</div>
                             <div style="font-size:.75rem;color:#059669;text-transform:uppercase;letter-spacing:.05em">Bicycle Crashes</div>
                         </div>
                     </div>
                     <div style="display:flex;gap:.75rem;font-size:.75rem;flex-wrap:wrap">
-                        ${r.vulnerableUsers.bike.K > 0 ? `<span style="color:${COLORS.fatal};font-weight:600;background:#fef2f2;padding:4px 10px;border-radius:4px">● ${r.vulnerableUsers.bike.K} Fatal</span>` : ''}
-                        ${r.vulnerableUsers.bike.A > 0 ? `<span style="color:${COLORS.serious};background:#fff7ed;padding:4px 10px;border-radius:4px">● ${r.vulnerableUsers.bike.A} Serious</span>` : ''}
-                        <span style="color:${COLORS.navy};background:#eff6ff;padding:4px 10px;border-radius:4px;font-weight:600">EPDO: ${r.vulnerableUsers.bike.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers.bike).toLocaleString()}</span>
+                        ${(r.vulnerableUsers?.bike?.K ?? 0) > 0 ? `<span style="color:${COLORS.fatal};font-weight:600;background:#fef2f2;padding:4px 10px;border-radius:4px">● ${r.vulnerableUsers?.bike?.K ?? 0} Fatal</span>` : ''}
+                        ${(r.vulnerableUsers?.bike?.A ?? 0) > 0 ? `<span style="color:${COLORS.serious};background:#fff7ed;padding:4px 10px;border-radius:4px">● ${r.vulnerableUsers?.bike?.A ?? 0} Serious</span>` : ''}
+                        <span style="color:${COLORS.navy};background:#eff6ff;padding:4px 10px;border-radius:4px;font-weight:600">EPDO: ${r.vulnerableUsers?.bike?.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers?.bike ?? {}).toLocaleString()}</span>
                     </div>
-                    ${r.vulnerableUsers.bike.topLocations?.length > 0 ? `<div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid #6ee7b7;font-size:.7rem;color:${COLORS.slate}">
-                        <strong style="color:#047857">Top Locations:</strong> ${r.vulnerableUsers.bike.topLocations.slice(0,3).map(([loc]) => formatRouteName(loc)).join(', ')}
+                    ${(r.vulnerableUsers?.bike?.topLocations?.length ?? 0) > 0 ? `<div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid #6ee7b7;font-size:.7rem;color:${COLORS.slate}">
+                        <strong style="color:#047857">Top Locations:</strong> ${(r.vulnerableUsers?.bike?.topLocations ?? []).slice(0,3).map(([loc]) => formatRouteName(loc)).join(', ')}
                     </div>` : ''}
                 </div>
             </div>
             ${ai.focus ? `<p style="color:${COLORS.slate};font-size:.85rem;margin-top:1rem;line-height:1.6">${ai.focus}</p>${aiDisclaimer}` : ''}
             <!-- VRU Context Note -->
-            ${(r.vulnerableUsers.ped.total + r.vulnerableUsers.bike.total) > 0 ? `
+            ${((r.vulnerableUsers?.ped?.total ?? 0) + (r.vulnerableUsers?.bike?.total ?? 0)) > 0 ? `
             <div style="margin-top:1rem;padding:.75rem;background:linear-gradient(135deg,#eff6ff,${COLORS.white});border:1px solid ${COLORS.border};border-radius:6px;font-size:.75rem;color:${COLORS.slate}">
-                <strong style="color:${COLORS.navy}">Context:</strong> Vulnerable road users represent ${((r.vulnerableUsers.ped.total + r.vulnerableUsers.bike.total) / (r.stats.total || 1) * 100).toFixed(1)}% of total crashes${r.stats.K > 0 ? ` but ${(((r.vulnerableUsers.ped.K + r.vulnerableUsers.bike.K) / r.stats.K) * 100).toFixed(0)}% of fatalities` : ''}, indicating significantly higher severity outcomes.
+                <strong style="color:${COLORS.navy}">Context:</strong> Vulnerable road users represent ${(((r.vulnerableUsers?.ped?.total ?? 0) + (r.vulnerableUsers?.bike?.total ?? 0)) / (r.stats.total || 1) * 100).toFixed(1)}% of total crashes${r.stats.K > 0 ? ` but ${((((r.vulnerableUsers?.ped?.K ?? 0) + (r.vulnerableUsers?.bike?.K ?? 0)) / r.stats.K) * 100).toFixed(0)}% of fatalities` : ''}, indicating significantly higher severity outcomes.
             </div>
             ` : ''}
         </div>
@@ -57310,17 +57310,17 @@ ${r.lightConditions.slice(0, 5).map(l =>
 ${ai.focus ? `<p>${sanitizeTextForExport(ai.focus)}</p><div class="disclaimer">AI-generated insight - requires human review</div>` : ''}
 
 <h3>Pedestrian Safety</h3>
-<p><strong>Total Crashes:</strong> ${r.vulnerableUsers.ped.total} | <strong style="color:#dc2626">Fatal:</strong> ${r.vulnerableUsers.ped.K} | <strong style="color:#ea580c">Serious:</strong> ${r.vulnerableUsers.ped.A} | <strong>EPDO:</strong> ${r.vulnerableUsers.ped.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers.ped).toLocaleString()}</p>
+<p><strong>Total Crashes:</strong> ${r.vulnerableUsers?.ped?.total ?? 0} | <strong style="color:#dc2626">Fatal:</strong> ${r.vulnerableUsers?.ped?.K ?? 0} | <strong style="color:#ea580c">Serious:</strong> ${r.vulnerableUsers?.ped?.A ?? 0} | <strong>EPDO:</strong> ${r.vulnerableUsers?.ped?.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers?.ped ?? {}).toLocaleString()}</p>
 <p><strong>Top Pedestrian Crash Locations:</strong></p>
 <ul>
-${r.vulnerableUsers.ped.topLocations.filter(([loc]) => isValidLocationCode(loc)).slice(0, 5).map(([loc, count]) => `<li>${formatRouteName(loc)}: ${count} crashes</li>`).join('\n')}
+${(r.vulnerableUsers?.ped?.topLocations ?? []).filter(([loc]) => isValidLocationCode(loc)).slice(0, 5).map(([loc, count]) => `<li>${formatRouteName(loc)}: ${count} crashes</li>`).join('\n')}
 </ul>
 
 <h3>Bicycle Safety</h3>
-<p><strong>Total Crashes:</strong> ${r.vulnerableUsers.bike.total} | <strong style="color:#dc2626">Fatal:</strong> ${r.vulnerableUsers.bike.K} | <strong style="color:#ea580c">Serious:</strong> ${r.vulnerableUsers.bike.A} | <strong>EPDO:</strong> ${r.vulnerableUsers.bike.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers.bike).toLocaleString()}</p>
+<p><strong>Total Crashes:</strong> ${r.vulnerableUsers?.bike?.total ?? 0} | <strong style="color:#dc2626">Fatal:</strong> ${r.vulnerableUsers?.bike?.K ?? 0} | <strong style="color:#ea580c">Serious:</strong> ${r.vulnerableUsers?.bike?.A ?? 0} | <strong>EPDO:</strong> ${r.vulnerableUsers?.bike?.epdo?.toLocaleString() || calcEPDO(r.vulnerableUsers?.bike ?? {}).toLocaleString()}</p>
 <p><strong>Top Bicycle Crash Locations:</strong></p>
 <ul>
-${r.vulnerableUsers.bike.topLocations.filter(([loc]) => isValidLocationCode(loc)).slice(0, 5).map(([loc, count]) => `<li>${formatRouteName(loc)}: ${count} crashes</li>`).join('\n')}
+${(r.vulnerableUsers?.bike?.topLocations ?? []).filter(([loc]) => isValidLocationCode(loc)).slice(0, 5).map(([loc, count]) => `<li>${formatRouteName(loc)}: ${count} crashes</li>`).join('\n')}
 </ul>
 
 <div class="page-break"></div>
@@ -57368,7 +57368,7 @@ ${_stateFundingPrograms().map(p => `<li><strong>${p}</strong></li>`).join('')}
 
 <h3>Eligibility Indicators</h3>
 <ul>
-<li>${r.vulnerableUsers.ped.total + r.vulnerableUsers.bike.total > 10 ? '✓' : '○'} Pedestrian/Bicycle Safety Funding (${r.vulnerableUsers.ped.total + r.vulnerableUsers.bike.total} VRU crashes)</li>
+<li>${((r.vulnerableUsers?.ped?.total ?? 0) + (r.vulnerableUsers?.bike?.total ?? 0)) > 10 ? '✓' : '○'} Pedestrian/Bicycle Safety Funding (${(r.vulnerableUsers?.ped?.total ?? 0) + (r.vulnerableUsers?.bike?.total ?? 0)} VRU crashes)</li>
 <li>${r.stats.K > 0 ? '✓' : '○'} Fatal Crash Reduction Programs (${r.stats.K} fatal crashes)</li>
 </ul>
 
