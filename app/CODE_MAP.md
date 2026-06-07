@@ -2580,6 +2580,7 @@ Before any code edit:
 | renderPedLocationTable | modules/pedbike/pedbike-tab-ped-core.js | window+CL | pedestrian |
 | renderPedMonthlyHeatmap | modules/pedbike/pedbike-tab-ped-detail-charts.js | window+CL | pedestrian |
 | renderRegionComparisonTable | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
+| renderRequiredInputEmptyState | modules/reports/reports-standard-core.js | window+CL | reports |
 | renderSafetyCountermeasures | inline @ L78064 | inline | intersection |
 | renderSafetyLocationRows | inline @ L79548 | inline | safety |
 | renderScorecardTable | modules/scorecard/scorecard.js | window+CL | scorecard |
@@ -3752,7 +3753,7 @@ Before any code edit:
 | modules/pedbike/pedbike-tab-ped-detail.js | 509 | pedbike | _fetchPedBikeDetailAggregates, updatePedDetailPanel (2 fns) | pedestrian |
 | modules/reports/reports-charts.js | 93 | reports | createReportCharts, createSafetyCharts, createPedBikeCharts, createTrendCharts (4 fns) | reports |
 | modules/reports/reports-pdf.js | 1101 | reports | printReport, downloadReportPDF, generateStandardReportPDF, copyReportText (4 fns) | reports |
-| modules/reports/reports-standard-core.js | 1157 | reports | hydrateReportFromMatviews, showReportSubTab, updateReportOptions, buildAIContext, _safeAgg … (10 fns) | reports |
+| modules/reports/reports-standard-core.js | 1467 | reports | hydrateReportFromMatviews, showReportSubTab, updateReportOptions, buildAIContext, renderRequiredInputEmptyState, _safeAgg … (11 fns) | reports |
 | modules/reports/reports-standard-core2.js | 340 | reports | generateExplorationDashboard, getTopLocation, truncateRoute, generateCategoryTopLocations, generateEnhancedFindings … (6 fns) | reports |
 | modules/reports/reports-standard-types.js | 949 | reports | generateCorridorReport, generateSafetyReport, generatePedBikeReport, createEnhancedPedBikeCharts, generateTrendReport … (18 fns) | reports |
 | modules/reports/reports-standard-types2.js | 438 | reports | generateSafetyFocusReport, generateSafetyFocusRecommendations, generateYearlySection, generateTopLocationsTable, generateNodeTable … (10 fns) | reports |
