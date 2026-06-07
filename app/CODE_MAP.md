@@ -1041,6 +1041,7 @@ Before any code edit:
 | _injectFastDashboardImpl | modules/data/supabase-bridge.js | module-private | shared |
 | _intersections_fetchMatview | inline @ L52998 | inline | intersection |
 | _invalidateScorecard | modules/scorecard/scorecard.js | module-private | scorecard |
+| _hideAllReportOutputs | modules/reports/reports-standard-core.js | window+CL | reports |
 | _isAggregateTier | modules/data/road-type-mapping.js | module-private | shared |
 | _isApiBackendAvailable | inline @ L30973 | inline | shared |
 | _isPointInBounds | inline @ L120145 | inline | shared |
@@ -1102,8 +1103,10 @@ Before any code edit:
 | _renderSafetySubKpiUnavailable | inline @ L79389 | inline | dashboard |
 | _renderStateCoverageBanner | inline @ L41733 | inline | shared |
 | _renderTierPills | modules/scorecard/scorecard.js | window+CL | scorecard |
+| _reportDateChanged | modules/reports/reports-standard-core.js | window+CL | reports |
 | _rerank | modules/scorecard/scorecard.js | window+CL | scorecard |
 | _resetRoadTypeForTierChange | inline @ L21902 | inline | shared |
+| _resetStandardReportSections | modules/reports/reports-standard-core.js | window+CL | reports |
 | _resolveActiveState | inline @ L20358 | inline | shared |
 | _resolvePlaceParentCountyFips | modules/spatial/geo-tier.js | window+CL | shared |
 | _resolveR2Url | modules/spatial/aggregate-loader.js | module-private | shared |
@@ -3754,7 +3757,7 @@ Before any code edit:
 | modules/pedbike/pedbike-tab-ped-detail.js | 509 | pedbike | _fetchPedBikeDetailAggregates, updatePedDetailPanel (2 fns) | pedestrian |
 | modules/reports/reports-charts.js | 93 | reports | createReportCharts, createSafetyCharts, createPedBikeCharts, createTrendCharts (4 fns) | reports |
 | modules/reports/reports-pdf.js | 1101 | reports | printReport, downloadReportPDF, generateStandardReportPDF, copyReportText (4 fns) | reports |
-| modules/reports/reports-standard-core.js | 1467 | reports | hydrateReportFromMatviews, showReportSubTab, updateReportOptions, buildAIContext, renderRequiredInputEmptyState, _safeAgg … (11 fns) | reports |
+| modules/reports/reports-standard-core.js | 1753 | reports | hydrateReportFromMatviews, showReportSubTab, updateReportOptions, buildAIContext, renderRequiredInputEmptyState, _safeAgg, _hideAllReportOutputs, _resetStandardReportSections, _reportDateChanged … (14 fns) | reports |
 | modules/reports/reports-standard-core2.js | 340 | reports | generateExplorationDashboard, getTopLocation, truncateRoute, generateCategoryTopLocations, generateEnhancedFindings … (6 fns) | reports |
 | modules/reports/reports-standard-types.js | 949 | reports | generateCorridorReport, generateSafetyReport, generatePedBikeReport, createEnhancedPedBikeCharts, generateTrendReport … (18 fns) | reports |
 | modules/reports/reports-standard-types2.js | 438 | reports | generateSafetyFocusReport, generateSafetyFocusRecommendations, generateYearlySection, generateTopLocationsTable, generateNodeTable … (10 fns) | reports |

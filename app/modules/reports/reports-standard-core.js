@@ -528,6 +528,10 @@ function updateReportOptions() {
         'grantsupport': 'Grant Application Support Package'
     };
     document.getElementById('reportTitle').value = titles[type] || 'Crash Analysis Report';
+
+    // Stale-report fix: switching the report type clears any previously
+    // rendered report from view so the user never mistakes it for the new one.
+    _hideAllReportOutputs();
 }
 
 /**
@@ -634,7 +638,7 @@ function _safeAgg(path, fallback) {
 // and hydrate aggregations directly from matviews. Mirrors what each tab
 // already reads from Supabase. Cuts report-generate wall time from 50-100s
 // to ~3s. State-agnostic: keys on resolved tier + stateKey.
-async function hydrateReportFromMatviews(reportType, tier, value) {
+async function hydrateReportFromMatviews(reportType, tier, value, yearRange) {
     const dc = window.crashLensClient;
     if (!dc || !window.CL || !CL.data || !CL.data.supabaseBridge) return null;
     // Route through resolveTier() so Reports applies the same silent
@@ -734,15 +738,33 @@ async function hydrateReportFromMatviews(reportType, tier, value) {
         cached('mv_analysis_summary',        () => fetchJson('mv_analysis_summary', { select: 'dimension,dim_value,total,k,a,b,c,o' })),
         cached('mv_safety_focus_locations',  () => fetchJson('mv_safety_focus_locations', { select: '*', order: 'total.desc', limit: '500' }), { limit: 500 })
     ]);
-    const dash             = arrify(dashRaw);
+    let   dash             = arrify(dashRaw);
     const hotspots         = arrify(hotspotsRaw);
     const fatal            = arrify(fatalRaw);
     const speed            = arrify(speedRaw);
     const safety           = arrify(safetyRaw);
-    const intersection     = arrify(intersectionRaw);
+    let   intersection     = arrify(intersectionRaw);
     const analysis         = arrify(analysisRaw);
     const safetyLocations  = arrify(safetyLocationsRaw);
-    console.log(`[Report] Matview hydration complete in ${Math.round(performance.now() - t0)}ms (scope=${effTier}:${effValue || '∅'})`);
+
+    // Timeframe-filter fix (year-level). dashboard_summary and
+    // mv_intersection_summary carry crash_year, so a calendar-year range can be
+    // applied client-side here. The pre-aggregated ranking matviews (hotspots /
+    // fatal / speed / safety / analysis / safety-focus locations) have no
+    // crash_year and therefore stay all-years — the report surfaces a caveat
+    // when _yearFiltered is set.
+    if (yearRange && (yearRange.startYear != null || yearRange.endYear != null)) {
+        const inYears = (y) => {
+            const yy = Number(y);
+            if (!isFinite(yy)) return false;
+            if (yearRange.startYear != null && yy < yearRange.startYear) return false;
+            if (yearRange.endYear != null && yy > yearRange.endYear) return false;
+            return true;
+        };
+        dash = dash.filter(r => inYears(r.crash_year));
+        intersection = intersection.filter(r => inYears(r.crash_year));
+    }
+    console.log(`[Report] Matview hydration complete in ${Math.round(performance.now() - t0)}ms (scope=${effTier}:${effValue || '∅'}, yearRange=${yearRange ? JSON.stringify(yearRange) : 'all'})`);
 
     const aggregated = {
         total: dash.reduce((s, r) => s + (Number(r.crash_count) || 0), 0),
@@ -774,6 +796,12 @@ async function hydrateReportFromMatviews(reportType, tier, value) {
         // generators can introspect (and the caller can log it next to the
         // total). Helps diagnose the Sussex-shows-Delaware-total leak.
         _scope: { tier: effTier, value: effValue },
+        // Timeframe-filter fix — true when totals/severity/year/collision and
+        // intersection aggregates were filtered to a calendar-year range while
+        // the ranking matviews remain all-years (no crash_year column). Lets
+        // generators render an "approximate to whole years" caveat.
+        _yearFiltered: !!(yearRange && (yearRange.startYear != null || yearRange.endYear != null)),
+        _yearRange: yearRange || null,
     };
     dash.forEach(r => {
         const sev = String(r.crash_severity || '').charAt(0).toUpperCase();
@@ -865,6 +893,51 @@ async function fetchReportDataForType(reportType, ctx) {
         console.warn('[Report] fetchReportDataForType(' + reportType + ') failed:', e && e.message);
         return null;
     }
+}
+
+// ── Report output management (stale-report fix) ──────────────────────────
+// There are three mutually-exclusive report output containers. Historically
+// each generation path showed its own container but only the comprehensive
+// path hid the other two — so switching Comprehensive → any other report left
+// the old 20-page report stranded below the new one. _hideAllReportOutputs()
+// is called at the very start of generation so exactly one report is ever
+// visible; each path re-shows only its own container afterward.
+function _hideAllReportOutputs() {
+    ['reportOutput', 'infographicOutput', 'comprehensiveReportOutput'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+}
+
+// Clear the standard-report sub-sections so a report that doesn't populate a
+// given section can't show the *previous* report's content there. Resets the
+// optional Executive Summary / Table of Contents boxes back to hidden too.
+function _resetStandardReportSections() {
+    ['rptKPIs', 'rptFindings', 'rptYearlySection', 'rptChartsSection',
+     'rptTablesSection', 'rptCountermeasures', 'rptRecommendations',
+     'rptExecContent', 'rptTOCContent'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+    ['rptExecutiveSummary', 'rptTableOfContents'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+}
+
+// Auto re-run hook for the timeframe filter. Wired to the Start/End date
+// inputs (onchange) and the 3 Mo / 6 Mo / 1 Yr / 3 Yr / 5 Yr / Clear quick
+// buttons (as their optional callback). Only regenerates when a report is
+// already on screen — never fires before the user's first Generate. Debounced
+// so typing a date or rapid button clicks collapse into one regeneration.
+function _reportDateChanged() {
+    const anyVisible = ['reportOutput', 'infographicOutput', 'comprehensiveReportOutput']
+        .some(id => { const el = document.getElementById(id); return el && el.style.display !== 'none'; });
+    if (!anyVisible) return;
+    if (window._reportDateDebounce) clearTimeout(window._reportDateDebounce);
+    window._reportDateDebounce = setTimeout(() => {
+        if (typeof generateReport === 'function') generateReport();
+    }, 250);
 }
 
 function generateReport() {
@@ -1121,6 +1194,32 @@ async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) 
         'safetyfocus', 'fatalspeed', 'hotspot', 'intersection', 'pedbike', 'crashtree'
     ]);
 
+    // Date-range classification (timeframe-filter fix). At aggregate tiers the
+    // matviews are pre-aggregated by calendar year, so:
+    //   • No dates                  → matview path, all years (unchanged).
+    //   • Span ≤ ~400 days          → force the row-hydrate path for PRECISE
+    //     (3 Mo / 6 Mo / 1 Yr)        per-row date filtering (getCrashes already
+    //                                 honors dateFrom/dateTo).
+    //   • Span > ~400 days          → matview path, filtered by whole calendar
+    //     (3 Yr / 5 Yr)               year (fast). Approximate at year grain.
+    let yearRange = null;
+    let forceRowHydrate = false;
+    if (startDate || endDate) {
+        const _sd = startDate ? new Date(startDate) : null;
+        const _ed = endDate ? new Date(endDate) : null;
+        const _spanDays = (_sd && _ed) ? (_ed - _sd) / 86400000 : Infinity;
+        if (_sd && _ed && _spanDays <= 400) {
+            forceRowHydrate = true;
+        } else {
+            yearRange = {
+                startYear: _sd ? _sd.getFullYear() : null,
+                endYear: _ed ? _ed.getFullYear() : null
+            };
+        }
+        console.log(`[Report:${type}] date range ${startDate || '∅'}→${endDate || '∅'} ` +
+            `→ ${forceRowHydrate ? 'row-hydrate (precise)' : 'matview yearRange ' + JSON.stringify(yearRange)}`);
+    }
+
     const real = (async () => {
         let crashes = null, hydrated = false;
         // CC 353 — fail-fast signal. Set when the matview path runs at an
@@ -1134,7 +1233,7 @@ async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) 
 
         // Matview path — fast (~3s) when the generator is ported to read
         // window._reportMatviewData.
-        if (MATVIEW_REPORT_TYPES.has(type) &&
+        if (!forceRowHydrate && MATVIEW_REPORT_TYPES.has(type) &&
             window.CL && CL.data && CL.data.supabaseBridge &&
             typeof CL.data.supabaseBridge.resolveTier === 'function') {
             console.log(`[Report:${type}] sampleRows empty — entering matview fallback path (aggregate tier)`);
@@ -1142,7 +1241,7 @@ async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) 
                 const t = CL.data.supabaseBridge.resolveTier();
                 if (t && t.tier) {
                     const t0 = Date.now();
-                    const matviewData = await hydrateReportFromMatviews(type, t.tier, t.value);
+                    const matviewData = await hydrateReportFromMatviews(type, t.tier, t.value, yearRange);
                     if (matviewData && matviewData.total > 0) {
                         window._reportMatviewData = matviewData;
                         // Stub crashes (length = total, capped 10k) so
@@ -1208,6 +1307,14 @@ async function _hydrateWithBudget(type, route, startDate, endDate, _reportMark) 
 
 async function _runReportGeneration(type, _reportT0, _reportMark) {
     await new Promise(r => setTimeout(r, 50));
+    // Stale-report fix: hide every output container up front so the previous
+    // report can never linger below the new one. Each path re-shows its own.
+    // Also clear the standard-template sub-sections so every path that reuses
+    // #reportOutput (main generators, countermeasures/beforeafter, gap-states)
+    // starts clean — a section the new report doesn't populate can't show the
+    // previous report's content.
+    _hideAllReportOutputs();
+    _resetStandardReportSections();
     {
         const title = document.getElementById('reportTitle').value || 'Crash Analysis Report';
         const author = document.getElementById('reportAuthor').value || 'Traffic Engineering Division';
@@ -1378,7 +1485,8 @@ async function _runReportGeneration(type, _reportT0, _reportMark) {
 
         try {
             _reportMark('generator-start');
-            // Generate based on type
+            // Generate based on type (sub-sections were cleared at the top of
+            // _runReportGeneration so no stale content can bleed through).
             if (type === 'dashboard') generateDashboardReport(crashes, title, author);
             else if (type === 'corridor') generateCorridorReport(crashes, route || 'All Routes', title, author);
             else if (type === 'safety') generateSafetyReport(crashes, title, author);
@@ -1391,6 +1499,25 @@ async function _runReportGeneration(type, _reportT0, _reportMark) {
             else if (type === 'hotspot') generateHotspotRankingReport(crashes, title, author);
             else if (type === 'grantsupport') generateGrantSupportReport(crashes, title, author);
             _reportMark('generator done');
+
+            // Timeframe-filter caveat — when the data came from a year-level
+            // matview filter (aggregate tier, multi-year range), the range is
+            // approximate to whole calendar years and ranked-location tables
+            // remain all-years. Surface that honestly so the header period and
+            // the numbers can't be misread as an exact sub-year match.
+            const _mvYF = window._reportMatviewData;
+            if (_mvYF && _mvYF._yearFiltered) {
+                const _yr = _mvYF._yearRange || {};
+                const _findings = document.getElementById('rptFindings');
+                if (_findings) {
+                    _findings.insertAdjacentHTML('afterbegin',
+                        '<div class="finding-item warning" style="margin-bottom:1rem">' +
+                        '<strong>Note:</strong> At this jurisdiction level the date range is applied at the whole–calendar-year level (' +
+                        (_yr.startYear || '…') + '–' + (_yr.endYear || '…') +
+                        '). Severity, yearly, and collision-type figures reflect these years; ranked-location tables (hot spots, top factors) reflect all available years. For exact sub-year filtering, select a county-level jurisdiction.' +
+                        '</div>');
+                }
+            }
 
             document.getElementById('reportOutput').style.display = 'block';
             document.getElementById('reportOutput').scrollIntoView({ behavior: 'smooth' });
@@ -1604,6 +1731,12 @@ function computeSystemwideCategoryData(crashes) {
   window.hydrateReportFromMatviews = hydrateReportFromMatviews; CL.reports.standardCore.hydrateReportFromMatviews = hydrateReportFromMatviews;
   window.fetchReportDataForType = fetchReportDataForType; CL.reports.standardCore.fetchReportDataForType = fetchReportDataForType;
   window.generateReport = generateReport; CL.reports.standardCore.generateReport = generateReport;
+  // Stale-report fix + timeframe auto-rerun helpers. _reportDateChanged is
+  // referenced from inline app/index.html onclick/onchange handlers, so it
+  // MUST be on window; the other two are exposed for parity.
+  window._hideAllReportOutputs = _hideAllReportOutputs; CL.reports.standardCore._hideAllReportOutputs = _hideAllReportOutputs;
+  window._resetStandardReportSections = _resetStandardReportSections; CL.reports.standardCore._resetStandardReportSections = _resetStandardReportSections;
+  window._reportDateChanged = _reportDateChanged; CL.reports.standardCore._reportDateChanged = _reportDateChanged;
   window.generateSystemwideReport = generateSystemwideReport; CL.reports.standardCore.generateSystemwideReport = generateSystemwideReport;
   window._legacySystemwideReport = _legacySystemwideReport; CL.reports.standardCore._legacySystemwideReport = _legacySystemwideReport;
   window.computeSystemwideCategoryData = computeSystemwideCategoryData; CL.reports.standardCore.computeSystemwideCategoryData = computeSystemwideCategoryData;
