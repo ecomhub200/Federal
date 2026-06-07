@@ -25,6 +25,9 @@ function generateCorridorReport(crashes, route, title, author) {
     const rptMeta = document.getElementById('rptMeta');
     if (rptMeta) rptMeta.textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
 
+    // CC 365 — cover band (visual only)
+    if (typeof _rdsRenderCoverBand === 'function') _rdsRenderCoverBand(`${title}: ${route}`, `Corridor Crash Analysis`, yearRange, author, reportId);
+
     // Update footer and report ID with crash count
     updateReportFooter(yearRange, reportId, stats.total);
 
@@ -35,20 +38,27 @@ function generateCorridorReport(crashes, route, title, author) {
     showTableOfContents('corridor');
     
     document.getElementById('rptKPIs').innerHTML = `
-        <div class="report-kpi"><div class="value">${fmtNum(stats.total)}</div><div class="label">Total Crashes</div></div>
-        <div class="report-kpi"><div class="value">${fmtNum(stats.K + stats.A)}</div><div class="label">K+A Crashes</div></div>
-        <div class="report-kpi"><div class="value">${fmtNum(calcEPDO(stats))}</div><div class="label">EPDO Score</div></div>
-        <div class="report-kpi"><div class="value">${pct(stats.K + stats.A, stats.total)}%</div><div class="label">K+A Rate</div></div>
-        <div class="report-kpi"><div class="value">${fmtNum(stats.ped)}</div><div class="label">Pedestrian</div></div>
-        <div class="report-kpi"><div class="value">${fmtNum(stats.intersection)}</div><div class="label">At Intersection</div></div>
+        <div class="rds-kpi-grid">
+            <div class="rds-kpi"><div class="rds-kpi-label">Total Crashes</div><div class="rds-kpi-value">${fmtNum(stats.total)}</div></div>
+            <div class="rds-kpi" data-tone="serious"><div class="rds-kpi-label">K+A Crashes</div><div class="rds-kpi-value">${fmtNum(stats.K + stats.A)}</div></div>
+            <div class="rds-kpi"><div class="rds-kpi-label">EPDO Score</div><div class="rds-kpi-value">${fmtNum(calcEPDO(stats))}</div></div>
+            <div class="rds-kpi" data-tone="warning"><div class="rds-kpi-label">K+A Rate</div><div class="rds-kpi-value">${pct(stats.K + stats.A, stats.total)}%</div></div>
+            <div class="rds-kpi" data-tone="minor"><div class="rds-kpi-label">Pedestrian</div><div class="rds-kpi-value">${fmtNum(stats.ped)}</div></div>
+            <div class="rds-kpi"><div class="rds-kpi-label">At Intersection</div><div class="rds-kpi-value">${fmtNum(stats.intersection)}</div></div>
+        </div>
     `;
-    
+
     const findings = generateFindings(stats, crashes);
-    document.getElementById('rptFindings').innerHTML = `<h4>Key Findings</h4>${findings.map(f => `<div class="finding-item ${f.type}">${f.text}</div>`).join('')}`;
+    document.getElementById('rptFindings').innerHTML = `<div class="rds-findings"><h4>Key Findings</h4>${findings.map(f => `<div class="rds-finding-item ${f.type ? 'is-' + f.type : ''}">${f.text}</div>`).join('')}</div>`;
     document.getElementById('rptYearlySection').innerHTML = generateYearlySection(crashes);
     document.getElementById('rptChartsSection').innerHTML = `
-        <div class="report-section"><h4>Collision Types</h4><div style="height:220px"><canvas id="rptChartCollision"></canvas></div></div>
-        <div class="report-section"><h4>Time of Day</h4><div style="height:220px"><canvas id="rptChartTime"></canvas></div></div>
+        <section class="rds-section">
+            <div class="rds-section-eyebrow">SECTION 02</div>
+            <h2 class="rds-section-title">Visual Analysis</h2>
+            <p class="rds-section-deck">Collision types and time-of-day distribution along the corridor.</p>
+            <div class="rds-chart"><div class="rds-chart-title">Collision Types</div><div class="rds-chart-canvas"><canvas id="rptChartCollision"></canvas></div></div>
+            <div class="rds-chart"><div class="rds-chart-title">Time of Day</div><div class="rds-chart-canvas"><canvas id="rptChartTime"></canvas></div></div>
+        </section>
     `;
     setTimeout(() => createReportCharts(stats, crashes), 100);
 
@@ -65,18 +75,18 @@ function generateCorridorReport(crashes, route, title, author) {
         const byLight = {};
         crashes.forEach(r => { const l = stripEnumPrefix(r[COL.LIGHT]) || 'Unknown'; byLight[l] = (byLight[l] || 0) + 1; });
         const weatherEntries = filterUnknown(Object.entries(byWeather).sort((a,b) => b[1]-a[1]), stats.total).slice(0, 6);
-        const weatherRows = weatherEntries.map(([w,c]) => `<tr><td>${w}</td><td>${fmtNum(c)}</td><td>${pct(c, stats.total)}%</td></tr>`).join('') || renderGapRow(3, 'weather');
+        const weatherRows = weatherEntries.map(([w,c]) => `<tr><td>${w}</td><td data-type="num">${fmtNum(c)}</td><td data-type="num">${pct(c, stats.total)}%</td></tr>`).join('') || renderGapRow(3, 'weather');
         const lightEntries = filterUnknown(Object.entries(byLight).sort((a,b) => b[1]-a[1]), stats.total);
-        const lightRows = lightEntries.map(([l,c]) => `<tr><td>${l}</td><td>${fmtNum(c)}</td><td>${pct(c, stats.total)}%</td></tr>`).join('') || renderGapRow(3, 'light condition');
+        const lightRows = lightEntries.map(([l,c]) => `<tr><td>${l}</td><td data-type="num">${fmtNum(c)}</td><td data-type="num">${pct(c, stats.total)}%</td></tr>`).join('') || renderGapRow(3, 'light condition');
         weatherLightHtml = `
         <div class="two-col" style="margin-top:1.5rem">
             <div>
                 <h4>Weather Conditions</h4>
-                <table class="report-table"><thead><tr><th>Weather</th><th>Count</th><th>%</th></tr></thead><tbody>${weatherRows}</tbody></table>
+                <table class="rds-table"><thead><tr><th>Weather</th><th data-type="num">Count</th><th data-type="num">%</th></tr></thead><tbody>${weatherRows}</tbody></table>
             </div>
             <div>
                 <h4>Light Conditions</h4>
-                <table class="report-table"><thead><tr><th>Light</th><th>Count</th><th>%</th></tr></thead><tbody>${lightRows}</tbody></table>
+                <table class="rds-table"><thead><tr><th>Light</th><th data-type="num">Count</th><th data-type="num">%</th></tr></thead><tbody>${lightRows}</tbody></table>
             </div>
         </div>`;
     }
@@ -86,6 +96,8 @@ function generateCorridorReport(crashes, route, title, author) {
         ${weatherLightHtml}
     `;
     document.getElementById('rptRecommendations').innerHTML = generateRecommendations(stats, crashes);
+    // CC 365 — footer credit band (visual only)
+    (function(){ var p = document.getElementById('rptOutput') || document.getElementById('reportOutput'); var f = document.getElementById('rptFooter'); if (!f) { f = document.createElement('footer'); f.id = 'rptFooter'; if (p) p.appendChild(f); } f.className = 'rds-footer'; f.innerHTML = `<span><span class="rds-footer-brand">CRASH LENS</span> · Crash Analysis Tool · ${(typeof appConfig !== 'undefined' && appConfig.version) || 'v1.0'}</span><span>${typeof getDataSourceLabel === 'function' ? getDataSourceLabel() : ''}</span><span>Generated ${getShortTimestamp()}</span>`; })();
     // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
     if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
@@ -109,6 +121,9 @@ function generateSafetyReport(crashes, title, author) {
     const rptMeta = document.getElementById('rptMeta');
     if (rptMeta) rptMeta.textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
 
+    // CC 365 — cover band (visual only)
+    if (typeof _rdsRenderCoverBand === 'function') _rdsRenderCoverBand(title, `Traffic Safety Performance Report`, yearRange, author, reportId);
+
     // Update footer and report ID with crash count
     updateReportFooter(yearRange, reportId, stats.total);
 
@@ -117,14 +132,16 @@ function generateSafetyReport(crashes, title, author) {
 
     // Show Table of Contents
     showTableOfContents('safety');
-    
+
     document.getElementById('rptKPIs').innerHTML = `
-        <div class="report-kpi"><div class="value">${fmtNum(stats.K)}</div><div class="label">Fatal Crashes</div></div>
-        <div class="report-kpi"><div class="value">${fmtNum(stats.A)}</div><div class="label">Serious Injury</div></div>
-        <div class="report-kpi"><div class="value">${kaRate}%</div><div class="label">K+A Rate</div></div>
-        <div class="report-kpi"><div class="value">${fmtNum(calcEPDO(stats))}</div><div class="label">EPDO Score</div></div>
-        <div class="report-kpi"><div class="value">${fmtNum(stats.ped)}</div><div class="label">Ped Crashes</div></div>
-        <div class="report-kpi"><div class="value">${fmtNum(stats.bike)}</div><div class="label">Bike Crashes</div></div>
+        <div class="rds-kpi-grid">
+            <div class="rds-kpi" data-tone="fatal"><div class="rds-kpi-label">Fatal Crashes</div><div class="rds-kpi-value">${fmtNum(stats.K)}</div></div>
+            <div class="rds-kpi" data-tone="serious"><div class="rds-kpi-label">Serious Injury</div><div class="rds-kpi-value">${fmtNum(stats.A)}</div></div>
+            <div class="rds-kpi" data-tone="warning"><div class="rds-kpi-label">K+A Rate</div><div class="rds-kpi-value">${kaRate}%</div></div>
+            <div class="rds-kpi"><div class="rds-kpi-label">EPDO Score</div><div class="rds-kpi-value">${fmtNum(calcEPDO(stats))}</div></div>
+            <div class="rds-kpi" data-tone="minor"><div class="rds-kpi-label">Ped Crashes</div><div class="rds-kpi-value">${fmtNum(stats.ped)}</div></div>
+            <div class="rds-kpi" data-tone="positive"><div class="rds-kpi-label">Bike Crashes</div><div class="rds-kpi-value">${fmtNum(stats.bike)}</div></div>
+        </div>
     `;
     
     // Focus on severe crashes
@@ -155,19 +172,24 @@ function generateSafetyReport(crashes, title, author) {
         severeFindings.push({ type: 'warning', text: `${pct(darkCrashes, severeCrashes.length)}% of severe crashes occurred in dark conditions - consider lighting improvements` });
     }
     
-    document.getElementById('rptFindings').innerHTML = `<h4>Safety Analysis Findings</h4>${severeFindings.concat(generateFindings(stats, crashes)).map(f => `<div class="finding-item ${f.type}">${f.text}</div>`).join('')}`;
+    document.getElementById('rptFindings').innerHTML = `<div class="rds-findings"><h4>Safety Analysis Findings</h4>${severeFindings.concat(generateFindings(stats, crashes)).map(f => `<div class="rds-finding-item ${f.type ? 'is-' + f.type : ''}">${f.text}</div>`).join('')}</div>`;
     document.getElementById('rptYearlySection').innerHTML = generateYearlySection(crashes);
     document.getElementById('rptChartsSection').innerHTML = `
-        <div class="report-section"><h4>K+A by Collision Type</h4><div style="height:220px"><canvas id="rptChartCollision"></canvas></div></div>
-        <div class="report-section"><h4>K+A by Light Condition</h4><div style="height:220px"><canvas id="rptChartLight"></canvas></div></div>
+        <section class="rds-section">
+            <div class="rds-section-eyebrow">SECTION 02</div>
+            <h2 class="rds-section-title">Severe-Crash Visuals</h2>
+            <p class="rds-section-deck">Fatal and serious-injury crashes by collision type and light condition.</p>
+            <div class="rds-chart"><div class="rds-chart-title">K+A by Collision Type</div><div class="rds-chart-canvas"><canvas id="rptChartCollision"></canvas></div></div>
+            <div class="rds-chart"><div class="rds-chart-title">K+A by Light Condition</div><div class="rds-chart-canvas"><canvas id="rptChartLight"></canvas></div></div>
+        </section>
     `;
     setTimeout(() => createSafetyCharts(severeCrashes), 100);
 
     // Enhanced: K+A tables + high-severity locations
     const kaByTypeEntries = filterUnknown(Object.entries(severeByType).sort((a,b) => b[1]-a[1]), severeCrashes.length).slice(0, 10);
-    const kaByTypeRows = kaByTypeEntries.map(([t,c]) => `<tr><td>${t}</td><td>${fmtNum(c)}</td><td>${severeCrashes.length > 0 ? (c/severeCrashes.length*100).toFixed(1) : 0}%</td></tr>`).join('') || renderGapRow(3, 'severe collision type');
+    const kaByTypeRows = kaByTypeEntries.map(([t,c]) => `<tr><td>${t}</td><td data-type="num">${fmtNum(c)}</td><td data-type="num">${severeCrashes.length > 0 ? (c/severeCrashes.length*100).toFixed(1) : 0}%</td></tr>`).join('') || renderGapRow(3, 'severe collision type');
     const kaByLightEntries = filterUnknown(Object.entries(severeByLight).sort((a,b) => b[1]-a[1]), severeCrashes.length);
-    const kaByLightRows = kaByLightEntries.map(([l,c]) => `<tr><td>${l}</td><td>${fmtNum(c)}</td><td>${severeCrashes.length > 0 ? (c/severeCrashes.length*100).toFixed(1) : 0}%</td></tr>`).join('') || renderGapRow(3, 'severe light condition');
+    const kaByLightRows = kaByLightEntries.map(([l,c]) => `<tr><td>${l}</td><td data-type="num">${fmtNum(c)}</td><td data-type="num">${severeCrashes.length > 0 ? (c/severeCrashes.length*100).toFixed(1) : 0}%</td></tr>`).join('') || renderGapRow(3, 'severe light condition');
 
     // CC 333 — the K+A-by-collision/light tables come from per-row severeCrashes,
     // which is empty at aggregate tiers (no matview slice for K+A × collision/light
@@ -178,11 +200,11 @@ function generateSafetyReport(crashes, title, author) {
         <div class="two-col" style="margin-bottom:1.5rem">
             <div>
                 <h4>K+A Crashes by Collision Type</h4>
-                <table class="report-table"><thead><tr><th>Type</th><th>K+A Count</th><th>%</th></tr></thead><tbody>${kaByTypeRows}</tbody></table>
+                <table class="rds-table"><thead><tr><th>Type</th><th data-type="num">K+A Count</th><th data-type="num">%</th></tr></thead><tbody>${kaByTypeRows}</tbody></table>
             </div>
             <div>
                 <h4>K+A Crashes by Light Condition</h4>
-                <table class="report-table"><thead><tr><th>Light</th><th>K+A Count</th><th>%</th></tr></thead><tbody>${kaByLightRows}</tbody></table>
+                <table class="rds-table"><thead><tr><th>Light</th><th data-type="num">K+A Count</th><th data-type="num">%</th></tr></thead><tbody>${kaByLightRows}</tbody></table>
             </div>
         </div>`;
     document.getElementById('rptTablesSection').innerHTML = `
@@ -190,6 +212,8 @@ function generateSafetyReport(crashes, title, author) {
         ${generateTopLocationsTable(crashes, true)}
     `;
     document.getElementById('rptRecommendations').innerHTML = generateSafetyRecommendations(stats, severeCrashes);
+    // CC 365 — footer credit band (visual only)
+    (function(){ var p = document.getElementById('rptOutput') || document.getElementById('reportOutput'); var f = document.getElementById('rptFooter'); if (!f) { f = document.createElement('footer'); f.id = 'rptFooter'; if (p) p.appendChild(f); } f.className = 'rds-footer'; f.innerHTML = `<span><span class="rds-footer-brand">CRASH LENS</span> · Crash Analysis Tool · ${(typeof appConfig !== 'undefined' && appConfig.version) || 'v1.0'}</span><span>${typeof getDataSourceLabel === 'function' ? getDataSourceLabel() : ''}</span><span>Generated ${getShortTimestamp()}</span>`; })();
     // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
     if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
@@ -237,6 +261,9 @@ function generatePedBikeReport(crashes, title, author) {
     const rptMeta = document.getElementById('rptMeta');
     if (rptMeta) rptMeta.textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
 
+    // CC 365 — cover band (visual only)
+    if (typeof _rdsRenderCoverBand === 'function') _rdsRenderCoverBand(title, `Vulnerable Road User Safety Analysis`, yearRange, author, reportId);
+
     // Update footer and report ID with VRU crash count
     updateReportFooter(yearRange, reportId, totalVRU);
 
@@ -248,12 +275,14 @@ function generatePedBikeReport(crashes, title, author) {
     showTableOfContents('pedbike');
     
     document.getElementById('rptKPIs').innerHTML = `
-        <div class="report-kpi" style="background:#0891b2"><div class="value">${fmtNum(pedStats.total)}</div><div class="label">🚶 Ped Crashes</div></div>
-        <div class="report-kpi" style="background:#dc2626"><div class="value">${fmtNum(pedStats.K)}</div><div class="label">🚶 Ped Fatal</div></div>
-        <div class="report-kpi" style="background:#7c3aed"><div class="value">${fmtNum(pedEPDO)}</div><div class="label">🚶 Ped EPDO</div></div>
-        <div class="report-kpi" style="background:#059669"><div class="value">${fmtNum(bikeStats.total)}</div><div class="label">🚴 Bike Crashes</div></div>
-        <div class="report-kpi" style="background:#dc2626"><div class="value">${fmtNum(bikeStats.K)}</div><div class="label">🚴 Bike Fatal</div></div>
-        <div class="report-kpi" style="background:#7c3aed"><div class="value">${fmtNum(bikeEPDO)}</div><div class="label">🚴 Bike EPDO</div></div>
+        <div class="rds-kpi-grid">
+            <div class="rds-kpi" data-tone="minor"><div class="rds-kpi-label">🚶 Ped Crashes</div><div class="rds-kpi-value">${fmtNum(pedStats.total)}</div></div>
+            <div class="rds-kpi" data-tone="fatal"><div class="rds-kpi-label">🚶 Ped Fatal</div><div class="rds-kpi-value">${fmtNum(pedStats.K)}</div></div>
+            <div class="rds-kpi"><div class="rds-kpi-label">🚶 Ped EPDO</div><div class="rds-kpi-value">${fmtNum(pedEPDO)}</div></div>
+            <div class="rds-kpi" data-tone="positive"><div class="rds-kpi-label">🚴 Bike Crashes</div><div class="rds-kpi-value">${fmtNum(bikeStats.total)}</div></div>
+            <div class="rds-kpi" data-tone="fatal"><div class="rds-kpi-label">🚴 Bike Fatal</div><div class="rds-kpi-value">${fmtNum(bikeStats.K)}</div></div>
+            <div class="rds-kpi"><div class="rds-kpi-label">🚴 Bike EPDO</div><div class="rds-kpi-value">${fmtNum(bikeEPDO)}</div></div>
+        </div>
     `;
     
     const findings = [];
@@ -277,12 +306,12 @@ function generatePedBikeReport(crashes, title, author) {
     const _allCrashesTotal = (_M && _M.total > 0) ? _M.total : crashes.length;
     findings.push({ type: '', text: `Total VRU crashes: ${totalVRU} (${_allCrashesTotal > 0 ? (totalVRU / _allCrashesTotal * 100).toFixed(2) : '0.00'}% of all crashes)` });
     
-    document.getElementById('rptFindings').innerHTML = `<h4>🚨 Vulnerable Road User Findings</h4>${findings.map(f => `<div class="finding-item ${f.type}">${f.text}</div>`).join('')}`;
-    
+    document.getElementById('rptFindings').innerHTML = `<div class="rds-findings"><h4>🚨 Vulnerable Road User Findings</h4>${findings.map(f => `<div class="rds-finding-item ${f.type ? 'is-' + f.type : ''}">${f.text}</div>`).join('')}</div>`;
+
     // Comparison table
     document.getElementById('rptYearlySection').innerHTML = `
         <h4>📊 Pedestrian vs Bicycle Comparison</h4>
-        <table class="data-table" style="width:100%;margin-bottom:1.5rem">
+        <table class="rds-table" style="width:100%;margin-bottom:1.5rem">
             <thead>
                 <tr style="background:linear-gradient(135deg,#1e3a5f,#1e40af);color:#fff">
                     <th style="text-align:left;padding:.75rem">Metric</th>
@@ -326,10 +355,17 @@ function generatePedBikeReport(crashes, title, author) {
     `;
 
     document.getElementById('rptChartsSection').innerHTML = `
-        <div class="report-section"><h4>🚶 Pedestrian Crashes by Year</h4><div style="height:220px"><canvas id="rptChartPedYear"></canvas></div></div>
-        <div class="report-section"><h4>🚴 Bicycle Crashes by Year</h4><div style="height:220px"><canvas id="rptChartBikeYear"></canvas></div></div>
-        <div class="report-section"><h4>💡 Pedestrian by Light Condition</h4><div style="height:220px"><canvas id="rptChartPedLight"></canvas></div></div>
-        <div class="report-section"><h4>💡 Bicycle by Light Condition</h4><div style="height:220px"><canvas id="rptChartBikeLight"></canvas></div></div>
+        <section class="rds-section">
+            <div class="rds-section-eyebrow">SECTION 02</div>
+            <h2 class="rds-section-title">Pedestrian &amp; Bicycle Visuals</h2>
+            <p class="rds-section-deck">Year-over-year and light-condition breakdowns for vulnerable road users.</p>
+            <div class="rds-cols-2">
+                <div class="rds-chart"><div class="rds-chart-title">🚶 Pedestrian Crashes by Year</div><div class="rds-chart-canvas"><canvas id="rptChartPedYear"></canvas></div></div>
+                <div class="rds-chart"><div class="rds-chart-title">🚴 Bicycle Crashes by Year</div><div class="rds-chart-canvas"><canvas id="rptChartBikeYear"></canvas></div></div>
+                <div class="rds-chart"><div class="rds-chart-title">💡 Pedestrian by Light Condition</div><div class="rds-chart-canvas"><canvas id="rptChartPedLight"></canvas></div></div>
+                <div class="rds-chart"><div class="rds-chart-title">💡 Bicycle by Light Condition</div><div class="rds-chart-canvas"><canvas id="rptChartBikeLight"></canvas></div></div>
+            </div>
+        </section>
     `;
     setTimeout(() => createEnhancedPedBikeCharts(pedCrashes, bikeCrashes), 100);
 
@@ -366,11 +402,11 @@ function generatePedBikeReport(crashes, title, author) {
                 </div>
             </div>
             <h4>People Injury Summary</h4>
-            <table class="report-table">
-                <thead><tr><th>Category</th><th>Killed</th><th>Injured</th></tr></thead>
+            <table class="rds-table">
+                <thead><tr><th>Category</th><th data-type="num">Killed</th><th data-type="num">Injured</th></tr></thead>
                 <tbody>
-                    <tr><td>Pedestrians</td><td style="color:#dc2626;font-weight:bold">${pedKilled}</td><td>${pedInjured}</td></tr>
-                    <tr><td>Bicyclists</td><td style="color:#dc2626;font-weight:bold">${bikeStats.K}</td><td>${bikeStats.A + bikeStats.B + bikeStats.C}</td></tr>
+                    <tr><td>Pedestrians</td><td data-type="num" style="color:#dc2626;font-weight:bold">${pedKilled}</td><td data-type="num">${pedInjured}</td></tr>
+                    <tr><td>Bicyclists</td><td data-type="num" style="color:#dc2626;font-weight:bold">${bikeStats.K}</td><td data-type="num">${bikeStats.A + bikeStats.B + bikeStats.C}</td></tr>
                 </tbody>
             </table>
         </div>
@@ -382,10 +418,10 @@ function generatePedBikeReport(crashes, title, author) {
     if (_M) {
         const _vruLocTable = (label, byRoute) => {
             const rows = Object.entries(byRoute || {}).sort((a, b) => b[1] - a[1]).slice(0, 15);
-            return `<div><h4>${label} (${rows.length})</h4><div class="table-wrapper"><table class="data-table">
-                <thead><tr><th>Location</th><th>Crashes</th></tr></thead>
+            return `<div><h4>${label} (${rows.length})</h4><div class="table-wrapper"><table class="rds-table">
+                <thead><tr><th>Location</th><th data-type="num">Crashes</th></tr></thead>
                 <tbody>${rows.length
-                    ? rows.map(([n, c]) => `<tr><td>${esc(n)}</td><td>${c}</td></tr>`).join('')
+                    ? rows.map(([n, c]) => `<tr><td>${esc(n)}</td><td data-type="num">${c}</td></tr>`).join('')
                     : '<tr><td colspan="2" style="text-align:center;color:#94a3b8">No ranked locations at this tier</td></tr>'}</tbody></table></div></div>`;
         };
         document.getElementById('rptTablesSection').innerHTML = `
@@ -399,6 +435,8 @@ function generatePedBikeReport(crashes, title, author) {
         document.getElementById('rptTablesSection').innerHTML = generatePedBikeLocationTable(pedCrashes, bikeCrashes) + factorsTable;
     }
     document.getElementById('rptRecommendations').innerHTML = generatePedBikeRecommendations(pedStats, bikeStats, pedDarkPct, bikeDarkPct);
+    // CC 365 — footer credit band (visual only)
+    (function(){ var p = document.getElementById('rptOutput') || document.getElementById('reportOutput'); var f = document.getElementById('rptFooter'); if (!f) { f = document.createElement('footer'); f.id = 'rptFooter'; if (p) p.appendChild(f); } f.className = 'rds-footer'; f.innerHTML = `<span><span class="rds-footer-brand">CRASH LENS</span> · Crash Analysis Tool · ${(typeof appConfig !== 'undefined' && appConfig.version) || 'v1.0'}</span><span>${typeof getDataSourceLabel === 'function' ? getDataSourceLabel() : ''}</span><span>Generated ${getShortTimestamp()}</span>`; })();
     // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
     if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
@@ -471,6 +509,9 @@ function generateTrendReport(crashes, title, author) {
     const rptMeta = document.getElementById('rptMeta');
     if (rptMeta) rptMeta.textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
 
+    // CC 365 — cover band (visual only)
+    if (typeof _rdsRenderCoverBand === 'function') _rdsRenderCoverBand(title, `Multi-Year Trend Analysis`, yearRange, author, reportId);
+
     // Update footer and report ID with crash count
     updateReportFooter(yearRange, reportId, stats.total);
 
@@ -511,10 +552,12 @@ function generateTrendReport(crashes, title, author) {
     }
     
     document.getElementById('rptKPIs').innerHTML = `
-        <div class="report-kpi"><div class="value">${fmtNum(stats.total)}</div><div class="label">Total (${yearRange})</div></div>
-        <div class="report-kpi"><div class="value">${fmtNum(years.length)}</div><div class="label">Years Analyzed</div></div>
-        <div class="report-kpi"><div class="value">${fmtNum(Math.round(stats.total / years.length))}</div><div class="label">Avg per Year</div></div>
-        <div class="report-kpi"><div class="value" style="text-transform:capitalize">${trend}</div><div class="label">Overall Trend</div></div>
+        <div class="rds-kpi-grid">
+            <div class="rds-kpi"><div class="rds-kpi-label">Total (${yearRange})</div><div class="rds-kpi-value">${fmtNum(stats.total)}</div></div>
+            <div class="rds-kpi"><div class="rds-kpi-label">Years Analyzed</div><div class="rds-kpi-value">${fmtNum(years.length)}</div></div>
+            <div class="rds-kpi"><div class="rds-kpi-label">Avg per Year</div><div class="rds-kpi-value">${fmtNum(Math.round(stats.total / years.length))}</div></div>
+            <div class="rds-kpi" data-tone="${trend === 'increasing' ? 'danger' : trend === 'decreasing' ? 'positive' : 'warning'}"><div class="rds-kpi-label">Overall Trend</div><div class="rds-kpi-value" style="text-transform:capitalize;font-size:1.25rem">${trend}</div></div>
+        </div>
     `;
     
     const findings = [];
@@ -548,26 +591,33 @@ function generateTrendReport(crashes, title, author) {
     const kaDir = kaSlope > 0.5 ? 'increasing' : kaSlope < -0.5 ? 'decreasing' : 'stable';
     findings.push({ type: kaDir === 'increasing' ? 'danger' : kaDir === 'decreasing' ? '' : '', text: `K+A trend: ${kaDir} (${kaSlope > 0 ? '+' : ''}${kaSlope.toFixed(1)} K+A crashes/year)` });
 
-    document.getElementById('rptFindings').innerHTML = `<h4>Trend Analysis Findings</h4>${findings.map(f => `<div class="finding-item ${f.type}">${f.text}</div>`).join('')}`;
+    document.getElementById('rptFindings').innerHTML = `<div class="rds-findings"><h4>Trend Analysis Findings</h4>${findings.map(f => `<div class="rds-finding-item ${f.type ? 'is-' + f.type : ''}">${f.text}</div>`).join('')}</div>`;
     document.getElementById('rptYearlySection').innerHTML = generateYearlySection(crashes);
     document.getElementById('rptChartsSection').innerHTML = `
-        <div class="report-section"><h4>Crash Trend</h4><div style="height:220px"><canvas id="rptChartTrend"></canvas></div></div>
-        <div class="report-section"><h4>K+A Trend</h4><div style="height:220px"><canvas id="rptChartKATrend"></canvas></div></div>
+        <section class="rds-section">
+            <div class="rds-section-eyebrow">SECTION 02</div>
+            <h2 class="rds-section-title">Trend Visuals</h2>
+            <p class="rds-section-deck">Total and severe-crash trajectories across the analysis window.</p>
+            <div class="rds-cols-2">
+                <div class="rds-chart"><div class="rds-chart-title">Crash Trend</div><div class="rds-chart-canvas"><canvas id="rptChartTrend"></canvas></div></div>
+                <div class="rds-chart"><div class="rds-chart-title">K+A Trend</div><div class="rds-chart-canvas"><canvas id="rptChartKATrend"></canvas></div></div>
+            </div>
+        </section>
     `;
     setTimeout(() => createTrendCharts(byYear), 100);
 
     // Enhanced: Trend statistics table + forecast
     const trendRows = years.map(y => {
         const d = byYear[y];
-        return `<tr><td>${y}</td><td>${fmtNum(d.total)}</td><td>${fmtNum(d.K + d.A)}</td><td>${fmtNum(calcEPDO(d))}</td></tr>`;
+        return `<tr><td>${y}</td><td data-type="num">${fmtNum(d.total)}</td><td data-type="num">${fmtNum(d.K + d.A)}</td><td data-type="num">${fmtNum(calcEPDO(d))}</td></tr>`;
     }).join('');
 
     document.getElementById('rptTablesSection').innerHTML = `
         <h4>Yearly Summary with EPDO</h4>
-        <table class="report-table">
-            <thead><tr><th>Year</th><th>Total</th><th>K+A</th><th>EPDO</th></tr></thead>
+        <table class="rds-table">
+            <thead><tr><th>Year</th><th data-type="num">Total</th><th data-type="num">K+A</th><th data-type="num">EPDO</th></tr></thead>
             <tbody>${trendRows}
-                <tr style="background:#eff6ff;font-weight:bold"><td>${forecastYear} (Forecast)</td><td>${fmtNum(forecast)}</td><td>-</td><td>-</td></tr>
+                <tr style="background:#eff6ff;font-weight:bold"><td>${forecastYear} (Forecast)</td><td data-type="num">${fmtNum(forecast)}</td><td data-type="num">-</td><td data-type="num">-</td></tr>
             </tbody>
         </table>
         <div style="margin-top:1rem;font-size:.8rem;color:#64748b">
@@ -575,6 +625,8 @@ function generateTrendReport(crashes, title, author) {
         </div>
     `;
     document.getElementById('rptRecommendations').innerHTML = '';
+    // CC 365 — footer credit band (visual only)
+    (function(){ var p = document.getElementById('rptOutput') || document.getElementById('reportOutput'); var f = document.getElementById('rptFooter'); if (!f) { f = document.createElement('footer'); f.id = 'rptFooter'; if (p) p.appendChild(f); } f.className = 'rds-footer'; f.innerHTML = `<span><span class="rds-footer-brand">CRASH LENS</span> · Crash Analysis Tool · ${(typeof appConfig !== 'undefined' && appConfig.version) || 'v1.0'}</span><span>${typeof getDataSourceLabel === 'function' ? getDataSourceLabel() : ''}</span><span>Generated ${getShortTimestamp()}</span>`; })();
     // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
     if (typeof autoCollapseEmptyReportSections === 'function') setTimeout(autoCollapseEmptyReportSections, 50);
 }
