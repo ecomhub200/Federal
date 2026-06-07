@@ -7,6 +7,39 @@
  */
 (function(){ 'use strict';
   // ─── EXTRACTED CODE START (verbatim) ───
+
+// CC 358 — Delaware B/C source-data gap: honest "N/A" labeling + footnote.
+// Some states' source crash data (e.g. DelDOT) only ship Fatal / Personal-Injury
+// / PDO and do not separate Moderate (B) from Minor (C); the normalizer rolls all
+// injury crashes into Serious Injury (A), so B and C are structurally always 0.
+// These helpers key off DATA SHAPE (B+C===0 while K+A+O>0), never a state literal,
+// so full-KABCO states render unchanged.
+/** Returns the source-data footnote when B/C aren't separately tracked. State-agnostic. */
+function severitySourceNote(stats) {
+    if (!stats) return '';
+    var b = Number(stats.B) || 0, c = Number(stats.C) || 0;
+    if (b > 0 || c > 0) return '';                 // full KABCO available
+    var k = Number(stats.K) || 0, a = Number(stats.A) || 0, o = Number(stats.O) || 0;
+    if (k + a + o === 0) return '';                // empty data — no footnote
+    var stateName = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext && jurisdictionContext.stateName)
+                 || (typeof appConfig !== 'undefined' && appConfig && appConfig.stateName)
+                 || 'this state';
+    return 'Note: ' + stateName + ' source data does not distinguish Moderate (B) from Minor (C) injuries; all injury crashes are reported under Serious Injury (A). See methodology footnote.';
+}
+/** Returns "N/A" when a bucket is structurally empty, else the formatted number. */
+function severityCellValue(value, isStructurallyEmpty) {
+    if (isStructurallyEmpty) return 'N/A';
+    return fmtNum(value || 0);
+}
+/** True when B/C should display as N/A (3-category source like DelDOT). State-agnostic. */
+function shouldShowNAforBC(stats) {
+    if (!stats) return false;
+    var b = Number(stats.B) || 0, c = Number(stats.C) || 0;
+    if (b > 0 || c > 0) return false;
+    var k = Number(stats.K) || 0, a = Number(stats.A) || 0, o = Number(stats.O) || 0;
+    return (k + a + o) > 0;
+}
+
 // Safety Focus Report Generator
 function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
     // Check if there's data from Safety Focus tab
@@ -147,15 +180,30 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
                 <td>${fmtNum(catData.crashes.length)}</td>
                 <td style="color:#dc2626;font-weight:600">${fmtNum(catData.severity.K)}</td>
                 <td style="color:#ea580c;font-weight:600">${fmtNum(catData.severity.A)}</td>
-                <td>${fmtNum(catData.severity.B)}</td>
-                <td>${fmtNum(catData.severity.C)}</td>
+                <td>${severityCellValue(catData.severity.B, shouldShowNAforBC(catData.severity))}</td>
+                <td>${severityCellValue(catData.severity.C, shouldShowNAforBC(catData.severity))}</td>
                 <td>${fmtNum(catData.severity.O)}</td>
                 <td><strong>${epdo.toLocaleString()}</strong></td>
                 <td>${topLoc.substring(0, 20)}</td>
             </tr>`;
         });
         detailHtml += '</tbody></table>';
-        
+        // CC 358 — footnote when this scope's source data lacks separate B/C buckets
+        (function(){
+            var rollup = { K:0, A:0, B:0, C:0, O:0 };
+            categories.forEach(function(cat){
+                var cd = safetyData[cat];
+                if (!cd || !cd.severity) return;
+                rollup.K += Number(cd.severity.K) || 0;
+                rollup.A += Number(cd.severity.A) || 0;
+                rollup.B += Number(cd.severity.B) || 0;
+                rollup.C += Number(cd.severity.C) || 0;
+                rollup.O += Number(cd.severity.O) || 0;
+            });
+            var note = severitySourceNote(rollup);
+            if (note) detailHtml += '<p style="font-size:0.8rem;color:#6b7280;margin-top:0.5rem;font-style:italic">' + note + '</p>';
+        })();
+
         // Add cross-analysis section
         detailHtml += `<h3 style="margin-bottom:.75rem">🔀 Cross-Analysis Insights</h3>`;
         detailHtml += `<div class="three-col" style="margin-bottom:1rem">`;
@@ -321,8 +369,8 @@ function generateYearlySection(crashes) {
         <thead><tr><th>Year</th><th>Total</th><th>K</th><th>A</th><th>B</th><th>C</th><th>O</th><th>EPDO</th></tr></thead>
         <tbody>${years.map(y => {
             const d = byYear[y];
-            return `<tr><td>${y}</td><td>${fmtNum(d.total)}</td><td>${fmtNum(d.K)}</td><td>${fmtNum(d.A)}</td><td>${fmtNum(d.B)}</td><td>${fmtNum(d.C)}</td><td>${fmtNum(d.O)}</td><td>${fmtNum(calcEPDO(d))}</td></tr>`;
-        }).join('') || renderGapRow(8, 'yearly')}</tbody></table></div>`;
+            return `<tr><td>${y}</td><td>${fmtNum(d.total)}</td><td>${fmtNum(d.K)}</td><td>${fmtNum(d.A)}</td><td>${severityCellValue(d.B, shouldShowNAforBC(d))}</td><td>${severityCellValue(d.C, shouldShowNAforBC(d))}</td><td>${fmtNum(d.O)}</td><td>${fmtNum(calcEPDO(d))}</td></tr>`;
+        }).join('') || renderGapRow(8, 'yearly')}</tbody></table></div>${(function(){ var agg={K:0,A:0,B:0,C:0,O:0}; years.forEach(function(y){var d=byYear[y];agg.K+=Number(d.K)||0;agg.A+=Number(d.A)||0;agg.B+=Number(d.B)||0;agg.C+=Number(d.C)||0;agg.O+=Number(d.O)||0;}); var n=severitySourceNote(agg); return n ? '<p style="font-size:0.8rem;color:#6b7280;margin-top:0.5rem;font-style:italic">'+n+'</p>' : ''; })()}`;
 }
 
 function generateTopLocationsTable(crashes, kaOnly = false) {
@@ -488,5 +536,9 @@ function generatePedBikeLocationTable(pedCrashes, bikeCrashes) {
   window.generatePedBikeRecommendations = generatePedBikeRecommendations; CL.reports.standardTypes2.generatePedBikeRecommendations = generatePedBikeRecommendations;
   window.generatePedBikeYearlySection = generatePedBikeYearlySection; CL.reports.standardTypes2.generatePedBikeYearlySection = generatePedBikeYearlySection;
   window.generatePedBikeLocationTable = generatePedBikeLocationTable; CL.reports.standardTypes2.generatePedBikeLocationTable = generatePedBikeLocationTable;
+  // CC 358 — B/C source-data-gap helpers
+  window.severitySourceNote = severitySourceNote; CL.reports.standardTypes2.severitySourceNote = severitySourceNote;
+  window.severityCellValue = severityCellValue; CL.reports.standardTypes2.severityCellValue = severityCellValue;
+  window.shouldShowNAforBC = shouldShowNAforBC; CL.reports.standardTypes2.shouldShowNAforBC = shouldShowNAforBC;
   CL._registerModule('reports/reports-standard-types2');
 })();
