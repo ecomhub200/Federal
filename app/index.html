@@ -55762,6 +55762,57 @@ function resetInfographicDefaults() {
     populateInfographicPage2(d.agency, d.department, d.quarter, d.topLocations, d.trendData, d.focusTopic, d.riskyBehaviors);
 }
 
+// CC 367 — unique, tier-stamped PDF/PNG filename so Kent vs Statewide vs
+// New Castle exports don't collide/overwrite in the user's Downloads folder.
+// Reuses the existing tier-aware _activeTierLabel() (KENT COUNTY / STATE OF
+// DELAWARE / UNITED STATES). Falls back to 'report' so the basename is never empty.
+window._cc367_filename = function (reportType, ext) {
+    var slug = function (s) {
+        return String(s || '').toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'report';
+    };
+    var tier = '';
+    try {
+        if (typeof _activeTierLabel === 'function') tier = _activeTierLabel();
+        else if (typeof jurisdictionContext !== 'undefined' && jurisdictionContext)
+            tier = jurisdictionContext.label || jurisdictionContext.stateName || '';
+    } catch (e) {}
+    var d = new Date();
+    var iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    return 'crashlens-' + slug(reportType || 'report') + '-' + slug(tier) + '-' + iso + '.' + (ext || 'pdf');
+};
+
+// CC 367 — html2canvas options that skip hidden / 0-dimension canvases and any
+// canvas/img/iframe outside the report output roots. html2canvas clones the WHOLE
+// document during capture; the Safety Focus detail panel keeps ~10 Chart.js
+// canvases mounted at width=0 height=0 that are CORS-tainted (Mapbox/R2 imagery),
+// and the clone step aborts on them ("Unable to clone canvas as it is tainted").
+// We deliberately do NOT set allowTaint:true — the infographic is consumed via
+// toDataURL()/addImage(), and allowTaint would taint the OUTPUT canvas and make
+// toDataURL() throw. ignoreElements + useCORS keeps the cloned document clean.
+var _cc367_h2cOpts = {
+    scale: 2,
+    useCORS: true,
+    logging: false,
+    backgroundColor: '#ffffff',
+    ignoreElements: function (node) {
+        try {
+            if (!node || node.nodeType !== 1) return false;
+            if (node.tagName === 'CANVAS' && (node.width === 0 || node.height === 0)) return true;
+            var doc = node.ownerDocument;
+            var view = doc && doc.defaultView;
+            var style = view ? view.getComputedStyle(node) : null;
+            if (style && (style.display === 'none' || style.visibility === 'hidden')) return true;
+            var ROOTS = ['reportOutput', 'comprehensiveReportOutput', 'comprehensivePreview',
+                         'comprehensivePreviewContent', 'infographicOutput',
+                         'infographicContainer1', 'infographicContainer2'];
+            var inReport = ROOTS.some(function (id) { var rt = doc && doc.getElementById(id); return rt && rt.contains(node); });
+            if (!inReport && (node.tagName === 'CANVAS' || node.tagName === 'IMG' || node.tagName === 'IFRAME')) return true;
+            return false;
+        } catch (e) { return false; } // fail-open to today's behavior
+    }
+};
+
 async function downloadInfographicPNG() {
     showLoading('Generating PNG images...');
 
@@ -55778,21 +55829,21 @@ async function downloadInfographicPNG() {
 
         // Capture page 1
         page1.style.display = 'block';
-        const canvas1 = await html2canvas(container1, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+        const canvas1 = await html2canvas(container1, _cc367_h2cOpts);
 
         // Download page 1
         const link1 = document.createElement('a');
-        link1.download = 'crash_infographic_page1.png';
+        link1.download = _cc367_filename('infographic-page1', 'png');
         link1.href = canvas1.toDataURL('image/png');
         link1.click();
 
         // Capture page 2
         page2.style.display = 'block';
-        const canvas2 = await html2canvas(container2, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+        const canvas2 = await html2canvas(container2, _cc367_h2cOpts);
 
         // Download page 2
         const link2 = document.createElement('a');
-        link2.download = 'crash_infographic_page2.png';
+        link2.download = _cc367_filename('infographic-page2', 'png');
         link2.href = canvas2.toDataURL('image/png');
         setTimeout(() => link2.click(), 500);
 
@@ -55803,6 +55854,7 @@ async function downloadInfographicPNG() {
         hideLoading();
     } catch (e) {
         hideLoading();
+        console.error('[CC 367] html2canvas failed →', e && e.message);
         alert('Error generating PNG: ' + e.message);
     }
 }
@@ -55823,7 +55875,7 @@ async function downloadInfographicPDF() {
         // Capture page 1
         page1.style.display = 'block';
         const container1 = document.getElementById('infographicContainer1');
-        const canvas1 = await html2canvas(container1, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+        const canvas1 = await html2canvas(container1, _cc367_h2cOpts);
 
         // Add page 1 to PDF
         const imgWidth = 200; // mm (slightly less than letter width for margins)
@@ -55833,7 +55885,7 @@ async function downloadInfographicPDF() {
         // Capture page 2
         page2.style.display = 'block';
         const container2 = document.getElementById('infographicContainer2');
-        const canvas2 = await html2canvas(container2, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+        const canvas2 = await html2canvas(container2, _cc367_h2cOpts);
 
         // Add page 2 to PDF
         pdf.addPage();
@@ -55844,13 +55896,13 @@ async function downloadInfographicPDF() {
         page1.style.display = page1Display;
         page2.style.display = page2Display;
 
-        // Generate filename with date
-        const dateStr = new Date().toISOString().split('T')[0];
-        pdf.save(`crash_infographic_${dateStr}.pdf`);
+        // CC 367 — tier-stamped filename so per-jurisdiction infographics don't collide.
+        pdf.save(_cc367_filename('infographic'));
 
         hideLoading();
     } catch (e) {
         hideLoading();
+        console.error('[CC 367] html2canvas failed →', e && e.message);
         alert('Error generating PDF: ' + e.message);
     }
 }
@@ -56990,6 +57042,19 @@ async function downloadComprehensivePDF() {
         const r = comprehensiveReportData.rawData;
         const ai = comprehensiveReportData.aiInsights || {};
 
+        // CC 367 — defensive: never let an unexpected rawData shape abort the
+        // export (e.g. .map/.slice on a non-array). Behavior-neutral for the
+        // normal, already-typed case (matview + row builders both emit these).
+        r.factors            = Array.isArray(r.factors) ? r.factors : [];
+        r.monthlyTrends      = Array.isArray(r.monthlyTrends) ? r.monthlyTrends : [];
+        r.collisionBreakdown = Array.isArray(r.collisionBreakdown) ? r.collisionBreakdown : [];
+        r.weatherImpact      = Array.isArray(r.weatherImpact) ? r.weatherImpact : [];
+        r.lightConditions    = Array.isArray(r.lightConditions) ? r.lightConditions : [];
+        r.hourlyDistribution = Array.isArray(r.hourlyDistribution) ? r.hourlyDistribution : [];
+        r.topLocations       = Array.isArray(r.topLocations) ? r.topLocations : [];
+        r.dayOfWeekAnalysis  = (r.dayOfWeekAnalysis && typeof r.dayOfWeekAnalysis === 'object') ? r.dayOfWeekAnalysis : {};
+        r.peakPatterns       = (r.peakPatterns && typeof r.peakPatterns === 'object') ? r.peakPatterns : {};
+
         let yPos = margin;
 
         const addText = (text, size, style = 'normal', color = '#1e293b') => {
@@ -57514,9 +57579,8 @@ async function downloadComprehensivePDF() {
         addText('This report contains AI-generated insights that require human review and validation. The user is responsible for final decisions based on this data. CRASH LENS and its developers are not liable for any errors or outcomes.', 10, 'italic', PDF_COLORS.slateLight);
         addPageNumber(14);
 
-        // Save PDF
-        const dateStr = new Date().toISOString().split('T')[0];
-        pdf.save(`comprehensive_quarterly_report_${dateStr}.pdf`);
+        // Save PDF — CC 367: tier-stamped filename so Kent vs Statewide don't collide.
+        pdf.save(_cc367_filename('comprehensive'));
 
         hideLoading();
     } catch (e) {

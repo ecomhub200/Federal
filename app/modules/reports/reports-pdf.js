@@ -1119,8 +1119,11 @@ function generateStandardReportPDF(type, crashes, title, author, route, startDat
         return doc;
     }
 
-    // Save PDF
-    const filename = 'crash_analysis_' + type + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+    // Save PDF — CC 367: tier-stamped filename (de-collide per-jurisdiction
+    // exports). Falls open to the legacy name if the global helper isn't loaded.
+    const filename = (typeof window !== 'undefined' && typeof window._cc367_filename === 'function')
+        ? window._cc367_filename(type)
+        : ('crash_analysis_' + type + '_' + new Date().toISOString().split('T')[0] + '.pdf');
     doc.save(filename);
     showToast('Professional PDF report downloaded: ' + filename, 'success');
 }
