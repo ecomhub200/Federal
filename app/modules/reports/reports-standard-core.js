@@ -1536,6 +1536,40 @@ function generateSystemwideReport(crashes, title, author) {
     return generateDashboardReport(crashes, title, author);
 }
 
+/**
+ * CC 365 — render the report cover band (visual only). Injects a #rptCover
+ * div at the top of the report output container and hides the legacy
+ * rptTitle/rptSubtitle/rptMeta lines. Purely additive DOM; never mutates data.
+ * Shared by every standard report generator (dual-exposed on window).
+ */
+function _rdsRenderCoverBand(title, subtitle, yearRange, author, reportId) {
+    try {
+        var parent = document.getElementById('rptOutput') || document.getElementById('reportOutput');
+        var c = document.getElementById('rptCover');
+        if (!c) {
+            c = document.createElement('div');
+            c.id = 'rptCover';
+            if (parent) parent.insertBefore(c, parent.firstChild);
+        }
+        c.className = 'rds-cover';
+        c.innerHTML = `
+            <div class="rds-cover-eyebrow">${(typeof _activeTierLabel === 'function' ? _activeTierLabel() : 'Statewide')} · Crash Analysis</div>
+            <h1 class="rds-cover-title">${title}</h1>
+            <p class="rds-cover-subtitle">${subtitle || ((typeof getJurisdictionLabel === 'function' ? getJurisdictionLabel() : '') + ' — Traffic Safety Report')}</p>
+            <div class="rds-cover-meta">
+                <span><span class="rds-cover-meta-label">Period</span><span class="rds-cover-meta-value">${yearRange}</span></span>
+                <span><span class="rds-cover-meta-label">Prepared by</span><span class="rds-cover-meta-value">${author || 'Traffic Engineering Division'}</span></span>
+                <span><span class="rds-cover-meta-label">Generated</span><span class="rds-cover-meta-value">${typeof getShortTimestamp === 'function' ? getShortTimestamp() : ''}</span></span>
+                <span><span class="rds-cover-meta-label">Report ID</span><span class="rds-cover-meta-value">${reportId || '—'}</span></span>
+            </div>
+        `;
+        ['rptTitle', 'rptSubtitle', 'rptMeta'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+    } catch (e) { /* cosmetic only — never block report rendering */ }
+}
+
 function _legacySystemwideReport(crashes, title, author) {
     const stats = computeStats(crashes);
     // Prefer the Reports tab's user-selected timeline (reportStartDate /
@@ -1554,6 +1588,9 @@ function _legacySystemwideReport(crashes, title, author) {
     const rptMeta = document.getElementById('rptMeta');
     if (rptMeta) rptMeta.textContent = `Period: ${yearRange} | Prepared by: ${author} | Generated: ${getShortTimestamp()}`;
 
+    // CC 365 — cover band (visual only; hides the legacy title/subtitle/meta lines)
+    _rdsRenderCoverBand(title, `${getJurisdictionLabel()} — Traffic Safety Report`, yearRange, author, reportId);
+
     // Update footer and report ID with crash count
     updateReportFooter(yearRange, reportId, stats.total);
 
@@ -1568,29 +1605,15 @@ function _legacySystemwideReport(crashes, title, author) {
 
     // Primary KPIs - Key safety metrics
     document.getElementById('rptKPIs').innerHTML = `
-        <div class="report-kpi" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5">
-            <div class="value" style="color:#dc2626">${stats.K}</div><div class="label">Fatal Crashes</div>
-        </div>
-        <div class="report-kpi" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1px solid #fdba74">
-            <div class="value" style="color:#ea580c">${stats.A}</div><div class="label">Serious Injury</div>
-        </div>
-        <div class="report-kpi">
-            <div class="value">${stats.total.toLocaleString()}</div><div class="label">Total Crashes</div>
-        </div>
-        <div class="report-kpi">
-            <div class="value">${pct(stats.K + stats.A, stats.total)}%</div><div class="label">K+A Rate</div>
-        </div>
-        <div class="report-kpi" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd">
-            <div class="value" style="color:#2563eb">${stats.ped}</div><div class="label">Pedestrian</div>
-        </div>
-        <div class="report-kpi" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac">
-            <div class="value" style="color:#16a34a">${stats.bike}</div><div class="label">Bicycle</div>
-        </div>
-        <div class="report-kpi">
-            <div class="value">${categoryData.speed.total}</div><div class="label">Speed-Related</div>
-        </div>
-        <div class="report-kpi">
-            <div class="value">${calcEPDO(stats).toLocaleString()}</div><div class="label">EPDO Score</div>
+        <div class="rds-kpi-grid">
+            <div class="rds-kpi" data-tone="fatal"><div class="rds-kpi-label">Fatal Crashes</div><div class="rds-kpi-value">${stats.K}</div></div>
+            <div class="rds-kpi" data-tone="serious"><div class="rds-kpi-label">Serious Injury</div><div class="rds-kpi-value">${stats.A}</div></div>
+            <div class="rds-kpi"><div class="rds-kpi-label">Total Crashes</div><div class="rds-kpi-value">${stats.total.toLocaleString()}</div></div>
+            <div class="rds-kpi" data-tone="warning"><div class="rds-kpi-label">K+A Rate</div><div class="rds-kpi-value">${pct(stats.K + stats.A, stats.total)}%</div></div>
+            <div class="rds-kpi" data-tone="minor"><div class="rds-kpi-label">Pedestrian</div><div class="rds-kpi-value">${stats.ped}</div></div>
+            <div class="rds-kpi" data-tone="positive"><div class="rds-kpi-label">Bicycle</div><div class="rds-kpi-value">${stats.bike}</div></div>
+            <div class="rds-kpi"><div class="rds-kpi-label">Speed-Related</div><div class="rds-kpi-value">${categoryData.speed.total}</div></div>
+            <div class="rds-kpi"><div class="rds-kpi-label">EPDO Score</div><div class="rds-kpi-value">${calcEPDO(stats).toLocaleString()}</div></div>
         </div>
     `;
 
@@ -1600,8 +1623,10 @@ function _legacySystemwideReport(crashes, title, author) {
     // Key Findings with enhanced insights
     const findings = generateEnhancedFindings(stats, crashes, categoryData);
     document.getElementById('rptFindings').innerHTML = `
-        <h4>Key Safety Insights</h4>
-        ${findings.map(f => `<div class="finding-item ${f.type}">${f.text}</div>`).join('')}
+        <div class="rds-findings">
+            <h4>Key Safety Insights</h4>
+            ${findings.map(f => `<div class="rds-finding-item ${f.type ? 'is-' + f.type : ''}">${f.text}</div>`).join('')}
+        </div>
     `;
 
     // Yearly section
@@ -1609,15 +1634,20 @@ function _legacySystemwideReport(crashes, title, author) {
 
     // Charts section with exploration dashboard
     document.getElementById('rptChartsSection').innerHTML = `
-        <div class="report-section" style="grid-column:1/-1">
-            <h4 style="display:flex;align-items:center;gap:.5rem">
-                <svg style="width:18px;height:18px" fill="currentColor" viewBox="0 0 20 20"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
-                Safety Focus Exploration
-            </h4>
-            ${explorationHtml}
-        </div>
-        <div class="report-section"><h4>Collision Types</h4><div style="height:220px"><canvas id="rptChartCollision"></canvas></div></div>
-        <div class="report-section"><h4>Severity Distribution</h4><div style="height:220px"><canvas id="rptChartSeverity"></canvas></div></div>
+        <section class="rds-section">
+            <div class="rds-section-eyebrow">SECTION 02</div>
+            <h2 class="rds-section-title">Visual Analysis</h2>
+            <p class="rds-section-deck">Collision-type and severity distributions for the selected period.</p>
+            <div class="report-section" style="grid-column:1/-1">
+                <h4 style="display:flex;align-items:center;gap:.5rem">
+                    <svg style="width:18px;height:18px" fill="currentColor" viewBox="0 0 20 20"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                    Safety Focus Exploration
+                </h4>
+                ${explorationHtml}
+            </div>
+            <div class="rds-chart"><div class="rds-chart-title">Collision Types</div><div class="rds-chart-canvas"><canvas id="rptChartCollision"></canvas></div></div>
+            <div class="rds-chart"><div class="rds-chart-title">Severity Distribution</div><div class="rds-chart-canvas"><canvas id="rptChartSeverity"></canvas></div></div>
+        </section>
     `;
 
     setTimeout(() => {
@@ -1629,6 +1659,23 @@ function _legacySystemwideReport(crashes, title, author) {
 
     // Enhanced Recommendations based on category data
     document.getElementById('rptRecommendations').innerHTML = generateEnhancedRecommendations(stats, crashes, categoryData);
+
+    // CC 365 — footer credit band (visual only)
+    const _rptFooterEl = document.getElementById('rptFooter') || (function(){
+        var f = document.createElement('footer');
+        f.id = 'rptFooter';
+        f.className = 'rds-footer';
+        var parent = document.getElementById('rptOutput') || document.getElementById('reportOutput');
+        if (parent) parent.appendChild(f);
+        return f;
+    })();
+    _rptFooterEl.className = 'rds-footer';
+    _rptFooterEl.innerHTML = `
+        <span><span class="rds-footer-brand">CRASH LENS</span> · Crash Analysis Tool · ${(typeof appConfig !== 'undefined' && appConfig.version) || 'v1.0'}</span>
+        <span>${typeof getDataSourceLabel === 'function' ? getDataSourceLabel() : ''}</span>
+        <span>Generated ${getShortTimestamp()}</span>
+    `;
+
     // CC 346 §3.1 — collapse empty sections (no-op when every section has data).
     setTimeout(autoCollapseEmptyReportSections, 50);
 }
@@ -1739,6 +1786,7 @@ function computeSystemwideCategoryData(crashes) {
   window._reportDateChanged = _reportDateChanged; CL.reports.standardCore._reportDateChanged = _reportDateChanged;
   window.generateSystemwideReport = generateSystemwideReport; CL.reports.standardCore.generateSystemwideReport = generateSystemwideReport;
   window._legacySystemwideReport = _legacySystemwideReport; CL.reports.standardCore._legacySystemwideReport = _legacySystemwideReport;
+  window._rdsRenderCoverBand = _rdsRenderCoverBand; CL.reports.standardCore._rdsRenderCoverBand = _rdsRenderCoverBand;
   window.computeSystemwideCategoryData = computeSystemwideCategoryData; CL.reports.standardCore.computeSystemwideCategoryData = computeSystemwideCategoryData;
   // CC 346 §2/§3 — display-polish helpers + empty-section auto-collapse.
   // Window-exposed so sibling report modules (types/types2/core2) can reach

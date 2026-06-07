@@ -103,6 +103,9 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
     const reportId = generateReportId();
     updateReportFooter(dateRange, reportId, totalSafetyCrashesForFooter);
 
+    // CC 365 — cover band (visual only)
+    if (typeof _rdsRenderCoverBand === 'function') _rdsRenderCoverBand(reportData.type === 'summary' ? 'Safety Focus Analysis Report' : title, reportData.title, dateRange, author, reportId);
+
     // Show Table of Contents
     showTableOfContents('safetyfocus');
 
@@ -133,10 +136,10 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
             const count = catData.crashes.length;
             totalSafetyCrashes += count;
             const catConfig = safetyCategories[cat];
-            kpiHtml += `<div class="report-kpi"><div class="value">${fmtNum(count)}</div><div class="label">${catConfig.icon} ${catConfig.name}</div></div>`;
+            kpiHtml += `<div class="rds-kpi"><div class="rds-kpi-label">${catConfig.icon} ${catConfig.name}</div><div class="rds-kpi-value">${fmtNum(count)}</div></div>`;
         });
 
-        document.getElementById('rptKPIs').innerHTML = kpiHtml;
+        document.getElementById('rptKPIs').innerHTML = `<div class="rds-kpi-grid">${kpiHtml}</div>`;
 
         // Generate findings
         const findings = [];
@@ -155,14 +158,14 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
             }
         });
 
-        document.getElementById('rptFindings').innerHTML = findings.length > 0
-            ? findings.map(f => `<div class="finding-item ${f.type}">${f.text}</div>`).join('')
-            : '<div class="finding-item">No critical safety findings identified</div>';
+        document.getElementById('rptFindings').innerHTML = `<div class="rds-findings"><h4>Key Safety Insights</h4>${findings.length > 0
+            ? findings.map(f => `<div class="rds-finding-item ${f.type ? 'is-' + f.type : ''}">${f.text}</div>`).join('')
+            : '<div class="rds-finding-item">No critical safety findings identified</div>'}</div>`;
 
         // Generate detailed breakdown table
         let detailHtml = `<h3 style="margin-top:1.5rem;margin-bottom:.75rem">📊 Safety Category Breakdown</h3>`;
-        detailHtml += `<table class="data-table" style="margin-bottom:1.5rem">
-            <thead><tr><th>Category</th><th>Total</th><th>K</th><th>A</th><th>B</th><th>C</th><th>O</th><th>EPDO</th><th>Top Location</th></tr></thead><tbody>`;
+        detailHtml += `<table class="rds-table" style="margin-bottom:1.5rem">
+            <thead><tr><th>Category</th><th data-type="num">Total</th><th data-type="num">K</th><th data-type="num">A</th><th data-type="num">B</th><th data-type="num">C</th><th data-type="num">O</th><th data-type="num">EPDO</th><th>Top Location</th></tr></thead><tbody>`;
 
         categories.forEach(cat => {
             const catData = safetyData[cat];
@@ -177,13 +180,13 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
             
             detailHtml += `<tr>
                 <td><strong>${catConfig.icon} ${catConfig.name}</strong></td>
-                <td>${fmtNum(catData.crashes.length)}</td>
-                <td style="color:#dc2626;font-weight:600">${fmtNum(catData.severity.K)}</td>
-                <td style="color:#ea580c;font-weight:600">${fmtNum(catData.severity.A)}</td>
-                <td>${severityCellValue(catData.severity.B, shouldShowNAforBC(catData.severity))}</td>
-                <td>${severityCellValue(catData.severity.C, shouldShowNAforBC(catData.severity))}</td>
-                <td>${fmtNum(catData.severity.O)}</td>
-                <td><strong>${epdo.toLocaleString()}</strong></td>
+                <td data-type="num">${fmtNum(catData.crashes.length)}</td>
+                <td data-type="num" style="color:#dc2626;font-weight:600">${fmtNum(catData.severity.K)}</td>
+                <td data-type="num" style="color:#ea580c;font-weight:600">${fmtNum(catData.severity.A)}</td>
+                <td data-type="num">${severityCellValue(catData.severity.B, shouldShowNAforBC(catData.severity))}</td>
+                <td data-type="num">${severityCellValue(catData.severity.C, shouldShowNAforBC(catData.severity))}</td>
+                <td data-type="num">${fmtNum(catData.severity.O)}</td>
+                <td data-type="num"><strong>${epdo.toLocaleString()}</strong></td>
                 <td>${topLoc.substring(0, 20)}</td>
             </tr>`;
         });
@@ -201,7 +204,7 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
                 rollup.O += Number(cd.severity.O) || 0;
             });
             var note = severitySourceNote(rollup);
-            if (note) detailHtml += '<p style="font-size:0.8rem;color:#6b7280;margin-top:0.5rem;font-style:italic">' + note + '</p>';
+            if (note) detailHtml += '<div class="rds-source-note">' + note + '</div>';
         })();
 
         // Add cross-analysis section
@@ -212,11 +215,11 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
         detailHtml += `<div class="stat-box"><div class="value">${document.getElementById('crossSchoolYoung')?.textContent || '0'}</div><div class="label">School + Young Driver</div></div>`;
         detailHtml += `</div>`;
         
-        document.getElementById('rptChartsSection').innerHTML = detailHtml;
+        document.getElementById('rptChartsSection').innerHTML = `<section class="rds-section"><div class="rds-section-eyebrow">SECTION 01</div><h2 class="rds-section-title">Safety Category Breakdown</h2><p class="rds-section-deck">Crash counts, severity, and EPDO across focus categories.</p>${detailHtml}</section>`;
         document.getElementById('rptYearlySection').innerHTML = '';
         document.getElementById('rptTablesSection').innerHTML = '';
         document.getElementById('rptRecommendations').innerHTML = generateSafetyFocusRecommendations(categories);
-        
+
     } else {
         // Specific selection report (from cross-analysis or location detail)
         const crashes = reportData.crashes;
@@ -224,12 +227,14 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
         const epdo = reportData.epdo;
         
         document.getElementById('rptKPIs').innerHTML = `
-            <div class="report-kpi"><div class="value">${fmtNum(crashes.length)}</div><div class="label">Total Crashes</div></div>
-            <div class="report-kpi"><div class="value" style="color:#dc2626">${fmtNum(severity.K)}</div><div class="label">Fatal (K)</div></div>
-            <div class="report-kpi"><div class="value" style="color:#ea580c">${fmtNum(severity.A)}</div><div class="label">Serious (A)</div></div>
-            <div class="report-kpi"><div class="value">${fmtNum(severity.B + severity.C)}</div><div class="label">Other Injury</div></div>
-            <div class="report-kpi"><div class="value">${fmtNum(severity.O)}</div><div class="label">PDO</div></div>
-            <div class="report-kpi"><div class="value">${fmtNum(epdo)}</div><div class="label">EPDO Score</div></div>
+            <div class="rds-kpi-grid">
+                <div class="rds-kpi"><div class="rds-kpi-label">Total Crashes</div><div class="rds-kpi-value">${fmtNum(crashes.length)}</div></div>
+                <div class="rds-kpi" data-tone="fatal"><div class="rds-kpi-label">Fatal (K)</div><div class="rds-kpi-value">${fmtNum(severity.K)}</div></div>
+                <div class="rds-kpi" data-tone="serious"><div class="rds-kpi-label">Serious (A)</div><div class="rds-kpi-value">${fmtNum(severity.A)}</div></div>
+                <div class="rds-kpi" data-tone="moderate"><div class="rds-kpi-label">Other Injury</div><div class="rds-kpi-value">${fmtNum(severity.B + severity.C)}</div></div>
+                <div class="rds-kpi" data-tone="pdo"><div class="rds-kpi-label">PDO</div><div class="rds-kpi-value">${fmtNum(severity.O)}</div></div>
+                <div class="rds-kpi"><div class="rds-kpi-label">EPDO Score</div><div class="rds-kpi-value">${fmtNum(epdo)}</div></div>
+            </div>
         `;
         
         // Generate findings for specific selection
@@ -239,13 +244,13 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
         const kaRate = crashes.length > 0 ? ((severity.K + severity.A) / crashes.length * 100) : 0;
         if (kaRate > 10) findings.push({ type: 'warning', text: `K+A rate of ${kaRate.toFixed(1)}% exceeds typical threshold` });
         
-        document.getElementById('rptFindings').innerHTML = findings.length > 0 
-            ? findings.map(f => `<div class="finding-item ${f.type}">${f.text}</div>`).join('')
-            : '<div class="finding-item">Safety analysis complete - review recommendations</div>';
-        
+        document.getElementById('rptFindings').innerHTML = `<div class="rds-findings"><h4>Key Safety Insights</h4>${findings.length > 0
+            ? findings.map(f => `<div class="rds-finding-item ${f.type ? 'is-' + f.type : ''}">${f.text}</div>`).join('')
+            : '<div class="rds-finding-item">Safety analysis complete - review recommendations</div>'}</div>`;
+
         // Generate crash list
         let detailHtml = `<h3 style="margin-top:1.5rem;margin-bottom:.75rem">📋 Crash Records (${Math.min(crashes.length, 25)} of ${crashes.length})</h3>`;
-        detailHtml += `<div class="table-wrapper"><table class="data-table"><thead><tr><th>Doc #</th><th>Date</th><th>Severity</th><th>Collision Type</th><th>Route</th></tr></thead><tbody>`;
+        detailHtml += `<div class="table-wrapper"><table class="rds-table"><thead><tr><th>Doc #</th><th>Date</th><th>Severity</th><th>Collision Type</th><th>Route</th></tr></thead><tbody>`;
         
         crashes.slice(0, 25).forEach(row => {
             const sev = extractSeverity(row);
@@ -263,12 +268,15 @@ function generateSafetyFocusReport(crashes, title, author, startDate, endDate) {
             detailHtml += `<p style="color:var(--gray);font-size:.85rem;margin-top:.5rem">Showing 25 of ${crashes.length} records. Export data for complete list.</p>`;
         }
         
-        document.getElementById('rptChartsSection').innerHTML = detailHtml;
+        document.getElementById('rptChartsSection').innerHTML = `<section class="rds-section"><div class="rds-section-eyebrow">SECTION 01</div><h2 class="rds-section-title">Crash Records</h2><p class="rds-section-deck">Selected crash records for the chosen safety-focus scope.</p>${detailHtml}</section>`;
         document.getElementById('rptYearlySection').innerHTML = '';
         document.getElementById('rptTablesSection').innerHTML = '';
         document.getElementById('rptRecommendations').innerHTML = generateSafetyFocusRecommendations(null, reportData);
     }
-    
+
+    // CC 365 — footer credit band (visual only)
+    (function(){ var p = document.getElementById('rptOutput') || document.getElementById('reportOutput'); var f = document.getElementById('rptFooter'); if (!f) { f = document.createElement('footer'); f.id = 'rptFooter'; if (p) p.appendChild(f); } f.className = 'rds-footer'; f.innerHTML = `<span><span class="rds-footer-brand">CRASH LENS</span> · Crash Analysis Tool · ${(typeof appConfig !== 'undefined' && appConfig.version) || 'v1.0'}</span><span>${typeof getDataSourceLabel === 'function' ? getDataSourceLabel() : ''}</span><span>Generated ${typeof getShortTimestamp === 'function' ? getShortTimestamp() : new Date().toLocaleDateString()}</span>`; })();
+
     // Clear the report data after generating
     safetyState.reportData = null;
     // CC 346 §3.1 — collapse empty sections (defined in reports-standard-core, window-exposed).
@@ -364,13 +372,17 @@ function generateYearlySection(crashes) {
     }
 
     const years = Object.keys(byYear).sort();
-    return `<h4>Yearly Summary</h4>
-        <div class="table-wrapper"><table class="data-table">
-        <thead><tr><th>Year</th><th>Total</th><th>K</th><th>A</th><th>B</th><th>C</th><th>O</th><th>EPDO</th></tr></thead>
+    return `<section class="rds-section">
+        <div class="rds-section-eyebrow">SECTION 01</div>
+        <h2 class="rds-section-title">Year-over-Year Summary</h2>
+        <p class="rds-section-deck">Annual crash totals by severity with EPDO scoring.</p>
+        <div class="table-wrapper"><table class="rds-table">
+        <thead><tr><th>Year</th><th data-type="num">Total</th><th data-type="num">K</th><th data-type="num">A</th><th data-type="num">B</th><th data-type="num">C</th><th data-type="num">O</th><th data-type="num">EPDO</th></tr></thead>
         <tbody>${years.map(y => {
             const d = byYear[y];
-            return `<tr><td>${y}</td><td>${fmtNum(d.total)}</td><td>${fmtNum(d.K)}</td><td>${fmtNum(d.A)}</td><td>${severityCellValue(d.B, shouldShowNAforBC(d))}</td><td>${severityCellValue(d.C, shouldShowNAforBC(d))}</td><td>${fmtNum(d.O)}</td><td>${fmtNum(calcEPDO(d))}</td></tr>`;
-        }).join('') || renderGapRow(8, 'yearly')}</tbody></table></div>${(function(){ var agg={K:0,A:0,B:0,C:0,O:0}; years.forEach(function(y){var d=byYear[y];agg.K+=Number(d.K)||0;agg.A+=Number(d.A)||0;agg.B+=Number(d.B)||0;agg.C+=Number(d.C)||0;agg.O+=Number(d.O)||0;}); var n=severitySourceNote(agg); return n ? '<p style="font-size:0.8rem;color:#6b7280;margin-top:0.5rem;font-style:italic">'+n+'</p>' : ''; })()}`;
+            return `<tr><td>${y}</td><td data-type="num">${fmtNum(d.total)}</td><td data-type="num">${fmtNum(d.K)}</td><td data-type="num">${fmtNum(d.A)}</td><td data-type="num">${severityCellValue(d.B, shouldShowNAforBC(d))}</td><td data-type="num">${severityCellValue(d.C, shouldShowNAforBC(d))}</td><td data-type="num">${fmtNum(d.O)}</td><td data-type="num">${fmtNum(calcEPDO(d))}</td></tr>`;
+        }).join('') || renderGapRow(8, 'yearly')}</tbody></table></div>${(function(){ var agg={K:0,A:0,B:0,C:0,O:0}; years.forEach(function(y){var d=byYear[y];agg.K+=Number(d.K)||0;agg.A+=Number(d.A)||0;agg.B+=Number(d.B)||0;agg.C+=Number(d.C)||0;agg.O+=Number(d.O)||0;}); var n=severitySourceNote(agg); return n ? '<div class="rds-source-note">'+n+'</div>' : ''; })()}
+    </section>`;
 }
 
 function generateTopLocationsTable(crashes, kaOnly = false) {
@@ -410,9 +422,9 @@ function generateTopLocationsTable(crashes, kaOnly = false) {
     if (typeof _fuzzyDedupeHotspots === 'function') _locRows = _fuzzyDedupeHotspots(_locRows);
     const sorted = _locRows.sort((a,b) => (b.total||0) - (a.total||0)).map(d => [d.name, d]);
     return `<h4>${kaOnly ? 'K+A' : ''} Crash Locations</h4>
-        <div class="table-wrapper"><table class="data-table">
-        <thead><tr><th>Route</th><th>Total</th><th>K</th><th>A</th></tr></thead>
-        <tbody>${sorted.map(([r, d]) => `<tr><td>${esc(stripEnumPrefix(r))}</td><td>${fmtNum(d.total)}</td><td>${fmtNum(d.K)}</td><td>${fmtNum(d.A)}</td></tr>`).join('') || renderGapRow(4, 'route')}</tbody></table></div>`;
+        <div class="table-wrapper"><table class="rds-table">
+        <thead><tr><th>Route</th><th data-type="num">Total</th><th data-type="num">K</th><th data-type="num">A</th></tr></thead>
+        <tbody>${sorted.map(([r, d]) => `<tr><td>${esc(stripEnumPrefix(r))}</td><td data-type="num">${fmtNum(d.total)}</td><td data-type="num">${fmtNum(d.K)}</td><td data-type="num">${fmtNum(d.A)}</td></tr>`).join('') || renderGapRow(4, 'route')}</tbody></table></div>`;
 }
 
 function generateNodeTable(crashes) {
@@ -450,9 +462,9 @@ function generateNodeTable(crashes) {
     if (typeof _fuzzyDedupeHotspots === 'function') _nodeRows = _fuzzyDedupeHotspots(_nodeRows);
     const sorted = _nodeRows.sort((a,b) => (b.total||0) - (a.total||0)).map(d => [d.name, d]);
     return `<h4>Crash Frequency by Node/Intersection</h4>
-        <div class="table-wrapper"><table class="data-table">
-        <thead><tr><th>Node</th><th>Total</th><th>K</th><th>A</th></tr></thead>
-        <tbody>${sorted.map(([n, d]) => `<tr><td>${esc(stripEnumPrefix(n))}</td><td>${fmtNum(d.total)}</td><td>${fmtNum(d.K)}</td><td>${fmtNum(d.A)}</td></tr>`).join('') || renderGapRow(4, 'intersection')}</tbody></table></div>`;
+        <div class="table-wrapper"><table class="rds-table">
+        <thead><tr><th>Node</th><th data-type="num">Total</th><th data-type="num">K</th><th data-type="num">A</th></tr></thead>
+        <tbody>${sorted.map(([n, d]) => `<tr><td>${esc(stripEnumPrefix(n))}</td><td data-type="num">${fmtNum(d.total)}</td><td data-type="num">${fmtNum(d.K)}</td><td data-type="num">${fmtNum(d.A)}</td></tr>`).join('') || renderGapRow(4, 'intersection')}</tbody></table></div>`;
 }
 
 function generateRecommendations(stats, crashes) {
@@ -512,9 +524,9 @@ function generatePedBikeYearlySection(pedCrashes, bikeCrashes) {
     const years = [...new Set([...Object.keys(pedByYear), ...Object.keys(bikeByYear)])].sort();
     
     return `<h4>Yearly Summary</h4>
-        <div class="table-wrapper"><table class="data-table">
-        <thead><tr><th>Year</th><th>Pedestrian</th><th>Bicycle</th><th>Total</th></tr></thead>
-        <tbody>${years.map(y => `<tr><td>${y}</td><td>${fmtNum(pedByYear[y]||0)}</td><td>${fmtNum(bikeByYear[y]||0)}</td><td>${fmtNum((pedByYear[y]||0)+(bikeByYear[y]||0))}</td></tr>`).join('') || renderGapRow(4, 'ped/bike yearly')}</tbody></table></div>`;
+        <div class="table-wrapper"><table class="rds-table">
+        <thead><tr><th>Year</th><th data-type="num">Pedestrian</th><th data-type="num">Bicycle</th><th data-type="num">Total</th></tr></thead>
+        <tbody>${years.map(y => `<tr><td>${y}</td><td data-type="num">${fmtNum(pedByYear[y]||0)}</td><td data-type="num">${fmtNum(bikeByYear[y]||0)}</td><td data-type="num">${fmtNum((pedByYear[y]||0)+(bikeByYear[y]||0))}</td></tr>`).join('') || renderGapRow(4, 'ped/bike yearly')}</tbody></table></div>`;
 }
 
 function generatePedBikeLocationTable(pedCrashes, bikeCrashes) {
@@ -527,10 +539,10 @@ function generatePedBikeLocationTable(pedCrashes, bikeCrashes) {
     const bikeTop = Object.entries(bikeByRoute).sort((a,b) => b[1]-a[1]);
 
     return `<div class="two-col">
-        <div><h4>Pedestrian Crash Locations (${pedTop.length})</h4><div class="table-wrapper"><table class="data-table"><thead><tr><th>Route</th><th>Crashes</th></tr></thead>
-        <tbody>${pedTop.map(([r,c]) => `<tr><td>${esc(stripEnumPrefix(r))}</td><td>${fmtNum(c)}</td></tr>`).join('') || renderGapRow(2, 'pedestrian route')}</tbody></table></div></div>
-        <div><h4>Bicycle Crash Locations (${bikeTop.length})</h4><div class="table-wrapper"><table class="data-table"><thead><tr><th>Route</th><th>Crashes</th></tr></thead>
-        <tbody>${bikeTop.map(([r,c]) => `<tr><td>${esc(stripEnumPrefix(r))}</td><td>${fmtNum(c)}</td></tr>`).join('') || renderGapRow(2, 'bicycle route')}</tbody></table></div></div>
+        <div><h4>Pedestrian Crash Locations (${pedTop.length})</h4><div class="table-wrapper"><table class="rds-table"><thead><tr><th>Route</th><th data-type="num">Crashes</th></tr></thead>
+        <tbody>${pedTop.map(([r,c]) => `<tr><td>${esc(stripEnumPrefix(r))}</td><td data-type="num">${fmtNum(c)}</td></tr>`).join('') || renderGapRow(2, 'pedestrian route')}</tbody></table></div></div>
+        <div><h4>Bicycle Crash Locations (${bikeTop.length})</h4><div class="table-wrapper"><table class="rds-table"><thead><tr><th>Route</th><th data-type="num">Crashes</th></tr></thead>
+        <tbody>${bikeTop.map(([r,c]) => `<tr><td>${esc(stripEnumPrefix(r))}</td><td data-type="num">${fmtNum(c)}</td></tr>`).join('') || renderGapRow(2, 'bicycle route')}</tbody></table></div></div>
     </div>`;
 }
   // ─── EXTRACTED CODE END ───

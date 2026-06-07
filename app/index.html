@@ -4492,6 +4492,355 @@ textarea:focus-visible {
 #scorecard-choropleth svg { display:block; max-width:100%; height:auto; }
 
 </style>
+<style id="cc365-report-design">
+/* ============================================================
+   CC 365 — Reports design system (visual only, no data changes)
+   Targets HTML preview + html2canvas → PDF.
+   ============================================================ */
+
+:root {
+    /* Color palette — neutral + severity */
+    --rds-ink:        #0f172a;
+    --rds-ink-2:      #1e293b;
+    --rds-muted:      #475569;
+    --rds-muted-2:    #64748b;
+    --rds-line:       #e2e8f0;
+    --rds-bg:         #f8fafc;
+    --rds-bg-2:       #f1f5f9;
+    --rds-card:       #ffffff;
+
+    /* Brand / primary */
+    --rds-primary:    #1e3a8a;    /* deep navy */
+    --rds-primary-2:  #1e40af;
+    --rds-accent:     #2563eb;
+
+    /* Severity — KABCO color system */
+    --rds-fatal:      #b91c1c;    /* K */
+    --rds-fatal-soft: #fef2f2;
+    --rds-serious:    #c2410c;    /* A */
+    --rds-serious-soft:#fff7ed;
+    --rds-moderate:   #b45309;    /* B */
+    --rds-moderate-soft:#fffbeb;
+    --rds-minor:      #1d4ed8;    /* C */
+    --rds-minor-soft: #eff6ff;
+    --rds-pdo:        #475569;    /* O */
+    --rds-pdo-soft:   #f1f5f9;
+
+    /* Status — trend & quality */
+    --rds-positive:   #15803d;
+    --rds-positive-soft:#f0fdf4;
+    --rds-warning:    #b45309;
+    --rds-warning-soft:#fffbeb;
+    --rds-danger:     #b91c1c;
+    --rds-danger-soft:#fef2f2;
+
+    /* Typography */
+    --rds-font-body:  'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif;
+    --rds-font-head:  'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif;
+    --rds-font-mono:  'JetBrains Mono','SF Mono','Menlo','Consolas',monospace;
+
+    /* Spacing scale (8pt rhythm) */
+    --rds-s-1: 4px;
+    --rds-s-2: 8px;
+    --rds-s-3: 12px;
+    --rds-s-4: 16px;
+    --rds-s-5: 24px;
+    --rds-s-6: 32px;
+    --rds-s-7: 48px;
+
+    /* Radii + shadows */
+    --rds-radius: 10px;
+    --rds-radius-sm: 6px;
+    --rds-shadow-1: 0 1px 2px rgba(15,23,42,0.06), 0 1px 3px rgba(15,23,42,0.04);
+    --rds-shadow-2: 0 4px 12px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.05);
+}
+
+/* === Root container for any report =================================== */
+.rds-report {
+    font-family: var(--rds-font-body);
+    color: var(--rds-ink);
+    line-height: 1.55;
+    background: var(--rds-card);
+}
+.rds-report *, .rds-report *::before, .rds-report *::after { box-sizing: border-box; }
+
+/* === Cover band (the agency / title / period band on page 1) ========= */
+.rds-cover {
+    position: relative;
+    padding: var(--rds-s-7) var(--rds-s-6);
+    background: linear-gradient(135deg, var(--rds-primary) 0%, var(--rds-primary-2) 100%);
+    color: #fff;
+    border-radius: var(--rds-radius) var(--rds-radius) 0 0;
+    overflow: hidden;
+}
+.rds-cover::before {
+    content: '';
+    position: absolute; inset: auto -50px -80px auto;
+    width: 360px; height: 360px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 50%;
+    pointer-events: none;
+}
+.rds-cover-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    margin-bottom: var(--rds-s-3);
+}
+.rds-cover-title {
+    font-family: var(--rds-font-head);
+    font-size: 2.25rem;
+    line-height: 1.15;
+    font-weight: 700;
+    margin: 0 0 var(--rds-s-3) 0;
+}
+.rds-cover-subtitle {
+    font-size: 1rem;
+    font-weight: 400;
+    opacity: 0.92;
+    margin-bottom: var(--rds-s-5);
+}
+.rds-cover-meta {
+    display: flex; flex-wrap: wrap; gap: var(--rds-s-5);
+    padding-top: var(--rds-s-4);
+    border-top: 1px solid rgba(255,255,255,0.2);
+    font-size: 0.78rem;
+}
+.rds-cover-meta > span { display: inline-flex; flex-direction: column; gap: 2px; }
+.rds-cover-meta-label { opacity: 0.7; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.68rem; }
+.rds-cover-meta-value { font-weight: 600; font-size: 0.92rem; }
+
+/* === Section header band (above each major section) ================== */
+.rds-section {
+    margin: var(--rds-s-7) 0 var(--rds-s-5) 0;
+    padding-top: var(--rds-s-3);
+    border-top: 3px solid var(--rds-primary);
+    page-break-inside: avoid;
+}
+.rds-section-eyebrow {
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--rds-accent);
+    margin-bottom: var(--rds-s-1);
+}
+.rds-section-title {
+    font-family: var(--rds-font-head);
+    font-size: 1.5rem;
+    line-height: 1.25;
+    font-weight: 700;
+    color: var(--rds-ink);
+    margin: 0 0 var(--rds-s-2) 0;
+}
+.rds-section-deck {
+    font-size: 0.95rem;
+    color: var(--rds-muted);
+    max-width: 640px;
+    margin-bottom: var(--rds-s-4);
+}
+
+/* === KPI tile grid =================================================== */
+.rds-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--rds-s-3);
+    margin: var(--rds-s-5) 0;
+}
+.rds-kpi {
+    position: relative;
+    background: var(--rds-card);
+    border: 1px solid var(--rds-line);
+    border-radius: var(--rds-radius);
+    padding: var(--rds-s-4);
+    box-shadow: var(--rds-shadow-1);
+    overflow: hidden;
+}
+.rds-kpi::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: var(--rds-primary);
+}
+.rds-kpi[data-tone="fatal"]::before    { background: var(--rds-fatal); }
+.rds-kpi[data-tone="serious"]::before  { background: var(--rds-serious); }
+.rds-kpi[data-tone="moderate"]::before { background: var(--rds-moderate); }
+.rds-kpi[data-tone="minor"]::before    { background: var(--rds-minor); }
+.rds-kpi[data-tone="pdo"]::before      { background: var(--rds-pdo); }
+.rds-kpi[data-tone="positive"]::before { background: var(--rds-positive); }
+.rds-kpi[data-tone="warning"]::before  { background: var(--rds-warning); }
+.rds-kpi[data-tone="danger"]::before   { background: var(--rds-danger); }
+.rds-kpi-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--rds-muted);
+    margin-bottom: var(--rds-s-1);
+}
+.rds-kpi-value {
+    font-family: var(--rds-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 1.85rem;
+    line-height: 1.05;
+    font-weight: 700;
+    color: var(--rds-ink);
+}
+.rds-kpi-sub {
+    margin-top: var(--rds-s-1);
+    font-size: 0.78rem;
+    color: var(--rds-muted-2);
+}
+.rds-kpi-trend { display: inline-flex; align-items: center; gap: 2px; font-weight: 600; }
+.rds-kpi-trend[data-dir="up"]   { color: var(--rds-danger); }
+.rds-kpi-trend[data-dir="down"] { color: var(--rds-positive); }
+.rds-kpi-trend[data-dir="flat"] { color: var(--rds-muted); }
+
+/* === Findings band (key bullets above the body) ====================== */
+.rds-findings {
+    background: var(--rds-bg);
+    border: 1px solid var(--rds-line);
+    border-left: 4px solid var(--rds-accent);
+    border-radius: var(--rds-radius);
+    padding: var(--rds-s-4) var(--rds-s-5);
+    margin: var(--rds-s-5) 0;
+}
+.rds-findings h4 {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--rds-primary);
+    margin: 0 0 var(--rds-s-3) 0;
+}
+.rds-finding-item {
+    display: flex; gap: var(--rds-s-3);
+    padding: var(--rds-s-2) 0;
+    border-bottom: 1px dashed var(--rds-line);
+    font-size: 0.95rem;
+    color: var(--rds-ink-2);
+}
+.rds-finding-item:last-child { border-bottom: 0; }
+.rds-finding-item::before {
+    content: '▸';
+    color: var(--rds-accent);
+    font-weight: 700;
+}
+.rds-finding-item.is-danger  { color: var(--rds-danger); }
+.rds-finding-item.is-warning { color: var(--rds-warning); }
+.rds-finding-item.is-positive{ color: var(--rds-positive); }
+
+/* === Tables — zebra, banded header, mono numerics ==================== */
+.rds-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+    box-shadow: var(--rds-shadow-1);
+    border-radius: var(--rds-radius-sm);
+    overflow: hidden;
+    margin: var(--rds-s-3) 0 var(--rds-s-5) 0;
+}
+.rds-table thead th {
+    background: var(--rds-primary);
+    color: #fff;
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: var(--rds-s-2) var(--rds-s-3);
+}
+.rds-table tbody td {
+    padding: var(--rds-s-2) var(--rds-s-3);
+    border-bottom: 1px solid var(--rds-line);
+    color: var(--rds-ink-2);
+}
+.rds-table tbody tr:nth-child(even) td { background: var(--rds-bg); }
+.rds-table tbody tr:hover td { background: var(--rds-bg-2); }
+.rds-table .num,
+.rds-table td[data-type="num"],
+.rds-table th[data-type="num"] {
+    text-align: right;
+    font-family: var(--rds-font-mono);
+    font-variant-numeric: tabular-nums;
+}
+.rds-table tr.is-fatal td { color: var(--rds-fatal); font-weight: 600; }
+.rds-table tr.is-serious td { color: var(--rds-serious); }
+.rds-table .report-gap td {
+    text-align: center;
+    color: var(--rds-muted);
+    font-style: italic;
+    padding: var(--rds-s-5);
+    background: var(--rds-bg);
+}
+
+/* === Charts wrapper — consistent height + label ====================== */
+.rds-chart {
+    background: var(--rds-card);
+    border: 1px solid var(--rds-line);
+    border-radius: var(--rds-radius-sm);
+    padding: var(--rds-s-4);
+    margin: var(--rds-s-3) 0;
+    box-shadow: var(--rds-shadow-1);
+}
+.rds-chart-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--rds-ink);
+    margin-bottom: var(--rds-s-2);
+    letter-spacing: 0.02em;
+}
+.rds-chart-canvas { height: 240px; position: relative; }
+
+/* === Two-column / grid for side-by-side blocks ======================= */
+.rds-cols-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--rds-s-4);
+    margin: var(--rds-s-4) 0;
+}
+.rds-cols-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--rds-s-3);
+    margin: var(--rds-s-4) 0;
+}
+
+/* === Footer band — page-bottom credit line ========================== */
+.rds-footer {
+    margin-top: var(--rds-s-7);
+    padding-top: var(--rds-s-3);
+    border-top: 2px solid var(--rds-primary);
+    display: flex; justify-content: space-between; flex-wrap: wrap;
+    font-size: 0.72rem;
+    color: var(--rds-muted);
+}
+.rds-footer-brand { font-weight: 700; color: var(--rds-primary); letter-spacing: 0.08em; }
+
+/* === Source-data limitation footnote (CC 358 surface) ================ */
+.rds-source-note {
+    margin-top: var(--rds-s-3);
+    padding: var(--rds-s-2) var(--rds-s-3);
+    background: var(--rds-bg);
+    border-left: 3px solid var(--rds-warning);
+    font-size: 0.78rem;
+    color: var(--rds-muted);
+    font-style: italic;
+    border-radius: 0 var(--rds-radius-sm) var(--rds-radius-sm) 0;
+}
+
+/* === Print rules — keep cards intact across pages =================== */
+@media print {
+    .rds-kpi, .rds-section, .rds-table, .rds-chart, .rds-findings {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+    .rds-section { page-break-before: auto; }
+    .rds-cover  { page-break-after: avoid; }
+}
+</style>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -9731,7 +10080,7 @@ Schools with <strong>documented pedestrian/bicycle crashes</strong> and supporti
 </div>
 </div>
 
-<div id="reportOutput" style="display:none">
+<div id="reportOutput" class="rds-report" style="display:none">
 <div class="report-container" id="reportContainer">
 <!-- Report Header with Branding -->
 <div class="report-header" style="position:relative">
@@ -9810,7 +10159,7 @@ Analysis is prepared for planning and informational purposes. The user is respon
 </div>
 
 <!-- INFOGRAPHIC OUTPUT -->
-<div id="infographicOutput" style="display:none">
+<div id="infographicOutput" class="rds-report" style="display:none">
 <div class="card" style="background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border:2px solid #f59e0b;margin-bottom:1rem">
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
 <div>
@@ -10220,7 +10569,7 @@ THIS QUARTER'S FOCUS
 <h4 style="margin:0;color:#1e293b">Report Preview</h4>
 <span style="font-size:.8rem;color:#64748b" id="comprehensivePageCount">20 pages</span>
 </div>
-<div id="comprehensivePreviewContent" style="font-size:.9rem;line-height:1.6">
+<div id="comprehensivePreviewContent" class="rds-report" style="font-size:.9rem;line-height:1.6">
 <!-- Preview content will be populated here -->
 </div>
 </div>
