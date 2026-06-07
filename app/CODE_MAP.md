@@ -968,6 +968,7 @@ Before any code edit:
 | _activeStateKey | modules/data/supabase-bridge.js | module-private | shared |
 | _activeTier | modules/data/tab-loaders.js | module-private | shared |
 | _activeTierValue | modules/data/tab-loaders.js | module-private | shared |
+| _activeTierLabel | inline @ L55028 (CC 360: infographic hero band tier label) | inline | reports/infographic |
 | _aggregateRolling | modules/scorecard/scorecard.js | window+CL | scorecard |
 | _analysisCanUseSupabase | modules/analysis/analysis-tab.js | window+CL | analysis |
 | _analysisFetchPage | modules/analysis/analysis-tab.js | window+CL | analysis |
@@ -1906,7 +1907,7 @@ Before any code edit:
 | generateGrantSupportReport | inline @ L60222 | inline | reports, grants |
 | generateHotspotRankingReport | inline @ L58256 (CC 330 stub guard + CC 333 matview ranking from _M.topHotspots) | inline | hotspots, reports |
 | generateHotspotReport | inline @ L59400 | inline | hotspots, reports |
-| generateInfographic | inline @ L54327 (CC 330: stub-array guard) | inline | intersection, pedestrian |
+| generateInfographic | inline @ L54355 (CC 330: stub-array guard) | inline | intersection, pedestrian |
 | generateIntersectionReport | inline @ L59396 | inline | intersection, reports |
 | generateKML | inline @ L52055 | inline | shared |
 | generateLocationReport | inline @ L43655 | inline | reports |
@@ -2421,8 +2422,8 @@ Before any code edit:
 | populateDKLocationDropdown | modules/ai/ai-domain-knowledge-location.js | window+CL | ai, domain-knowledge |
 | populateGeoTierDropdown | modules/spatial/geo-tier.js | window+CL | shared |
 | populateGrantProgramDropdown | modules/grants/grants-ui.js | window+CL | grants |
-| populateInfographicPage1 | inline @ L56574 | inline | shared |
-| populateInfographicPage2 | inline @ L56783 | inline | shared |
+| populateInfographicPage1 | inline @ L55066 (CC 360: band uses _activeTierLabel) | inline | shared |
+| populateInfographicPage2 | inline @ L55277 (CC 360: band uses _activeTierLabel) | inline | shared |
 | populateJurisdictionDropdown | inline @ L20983 | inline | shared |
 | populateLocationDropdown | inline @ L70888 | inline | intersection |
 | populateLocationDropdowns | inline @ L33937 | inline | shared |
