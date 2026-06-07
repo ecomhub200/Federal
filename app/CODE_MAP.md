@@ -968,8 +968,10 @@ Before any code edit:
 | _activeStateKey | modules/data/supabase-bridge.js | module-private | shared |
 | _activeTier | modules/data/tab-loaders.js | module-private | shared |
 | _activeTierValue | modules/data/tab-loaders.js | module-private | shared |
-| _activeTierLabel | inline @ L55028 (CC 360: infographic hero band tier label) | inline | reports/infographic |
+| _activeTierLabel | inline @ L55412 (CC 360: infographic hero band tier label) | inline | reports/infographic |
 | _aggregateRolling | modules/scorecard/scorecard.js | window+CL | scorecard |
+| _cc367_filename | inline @ L55769 (CC 367: tier-stamped PDF/PNG filename builder) | window | reports/infographic |
+| _cc367_h2cOpts | inline @ L55794 (CC 367: html2canvas opts w/ tainted-canvas ignoreElements) | inline | reports/infographic |
 | _analysisCanUseSupabase | modules/analysis/analysis-tab.js | window+CL | analysis |
 | _analysisFetchPage | modules/analysis/analysis-tab.js | window+CL | analysis |
 | _analysisReadFilters | modules/analysis/analysis-tab.js | window+CL | analysis |
@@ -1692,7 +1694,7 @@ Before any code edit:
 | download4AgentApplicationWord | modules/grants/grants-ui.js | window+CL | grants |
 | downloadBAPDF | inline @ L62549 | inline | cmf |
 | downloadCMFAIChatPDF | inline @ L38079 | inline | cmf, ai |
-| downloadComprehensivePDF | inline @ L58152 | inline | shared |
+| downloadComprehensivePDF | inline @ L57020 (CC 367: tier filename + fail-open rawData guards) | inline | shared |
 | downloadComprehensiveWord | inline @ L58720 | inline | shared |
 | downloadCrashAnalysisPDF | inline @ L38770 | inline | analysis |
 | downloadFile | inline @ L64193 | inline | shared |
@@ -1700,8 +1702,8 @@ Before any code edit:
 | downloadFullApplicationWord | inline @ L34891 | inline | shared |
 | downloadGrantSearchPDF | inline @ L38366 | inline | grants |
 | downloadGrantWritingPDF | inline @ L38409 | inline | grants |
-| downloadInfographicPDF | inline @ L56931 | inline | shared |
-| downloadInfographicPNG | inline @ L56886 | inline | shared |
+| downloadInfographicPDF | inline @ L55862 (CC 367: html2canvas ignoreElements + tier filename) | inline | shared |
+| downloadInfographicPNG | inline @ L55816 (CC 367: html2canvas ignoreElements + tier filename) | inline | shared |
 | downloadKML | inline @ L52242 | inline | shared |
 | downloadReportPDF | modules/reports/reports-pdf.js | window+CL | reports |
 | downloadReportWord | inline @ L60347 | inline | reports |
