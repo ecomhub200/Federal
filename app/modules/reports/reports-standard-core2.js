@@ -832,7 +832,20 @@ async function generateComprehensiveReport(allCrashes, title, agency, department
         && typeof window.CL.data.supabaseBridge.resolveTier === 'function') {
         try {
             const t = window.CL.data.supabaseBridge.resolveTier();
-            if (t && t.tier) _M = await hydrateReportFromMatviews('comprehensive', t.tier, t.value);
+            // CC 366 — year-bound the self-hydration fallback so it can never
+            // refetch the full unfiltered dataset when a date filter is active.
+            // (The dispatcher skips its own matview path for sub-year ranges
+            // [forceRowHydrate], leaving window._reportMatviewData null. If the
+            // precise row-hydrate then returned 0 rows for an empty/future
+            // window, an UNBOUNDED fetch here leaked every year's crashes —
+            // e.g. Kent County's full 2009–2025 total of 98,201 for a "3 Mo"
+            // 2026 range. Bounding to the spanning years makes that fetch
+            // return 0 rows -> the honest "No Crash Data Available" state.)
+            const _yrFallback = (startDate || endDate) ? {
+                startYear: startDate ? parseInt(String(startDate).split('-')[0], 10) : null,
+                endYear:   endDate   ? parseInt(String(endDate).split('-')[0], 10)   : null
+            } : null;
+            if (t && t.tier) _M = await hydrateReportFromMatviews('comprehensive', t.tier, t.value, _yrFallback);
             if (_M) window._reportMatviewData = _M;
         } catch (e) {
             console.warn('[Comprehensive] matview hydration failed:', e && e.message);
