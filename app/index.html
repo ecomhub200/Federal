@@ -9812,7 +9812,7 @@ Analysis is prepared for planning and informational purposes. The user is respon
 <div style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 100%);padding:2rem;color:#fff">
 <div style="display:flex;justify-content:space-between;align-items:flex-start">
 <div>
-<div contenteditable="true" id="ig1AgencyName" class="ig-editable" style="font-size:1rem;opacity:.9;margin-bottom:.25rem">COUNTY</div>
+<div contenteditable="true" id="ig1AgencyName" class="ig-editable" style="font-size:1rem;opacity:.9;margin-bottom:.25rem">JURISDICTION</div>
 <div contenteditable="true" id="ig1MainTitle" class="ig-editable" style="font-size:2rem;font-weight:700;line-height:1.2">Traffic Safety Report</div>
 <div contenteditable="true" id="ig1Subtitle" class="ig-editable" style="font-size:1rem;opacity:.85;margin-top:.5rem">Quarterly Crash Analysis Summary</div>
 </div>
@@ -10027,7 +10027,7 @@ Analysis is prepared for planning and informational purposes. The user is respon
 <div style="padding:1.75rem 2rem">
 <div style="display:flex;justify-content:space-between;align-items:flex-start">
 <div>
-<div contenteditable="true" id="ig2AgencyName" class="ig-editable" style="font-size:1rem;opacity:.9;margin-bottom:.25rem">COUNTY</div>
+<div contenteditable="true" id="ig2AgencyName" class="ig-editable" style="font-size:1rem;opacity:.9;margin-bottom:.25rem">JURISDICTION</div>
 <div contenteditable="true" id="ig2MainTitle" class="ig-editable" style="font-size:2rem;font-weight:700;line-height:1.2">Safety Focus</div>
 <div contenteditable="true" id="ig2Subtitle" class="ig-editable" style="font-size:1rem;opacity:.85;margin-top:.5rem">Priority Safety Concerns This Quarter</div>
 </div>
@@ -30900,17 +30900,22 @@ document.addEventListener('jurisdictionChanged', () => {
     if (typeof loadAadtCoverageBanner === 'function') loadAadtCoverageBanner();
 });
 
-// CC 352 — wire the Infographic agency placeholder to the active jurisdiction.
-// The two contenteditable agency-name divs default to the literal "COUNTY" until
-// a report is generated; reflect the selected jurisdiction up front instead. Only
-// overwrite the untouched default so a user's manual edit is preserved.
+// CC 352 / CC 360 — wire the Infographic agency placeholder to the active
+// jurisdiction. The two contenteditable agency-name divs default to the neutral
+// literal "JURISDICTION" until a report is generated; reflect the selected
+// jurisdiction up front instead. Only overwrite the untouched default so a
+// user's manual edit is preserved.
 document.addEventListener('jurisdictionChanged', () => {
-    if (typeof getJurisdictionLabel !== 'function') return;
-    const label = (getJurisdictionLabel() || '').toUpperCase();
+    // CC 360 — reflect the active tier (county/PD/state/…) up front, not the
+    // hardcoded "COUNTY" lie. Only overwrite an untouched default so a user's
+    // manual edit is preserved.
+    const label = (typeof _activeTierLabel === 'function') ? _activeTierLabel() : '';
     if (!label) return;
     ['ig1AgencyName', 'ig2AgencyName'].forEach(id => {
         const el = document.getElementById(id);
-        if (el && (!el.textContent.trim() || el.textContent.trim().toUpperCase() === 'COUNTY')) {
+        if (!el) return;
+        const cur = el.textContent.trim().toUpperCase();
+        if (!cur || cur === 'COUNTY' || cur === 'JURISDICTION') {
             el.textContent = label;
         }
     });
@@ -55016,9 +55021,54 @@ function determineFocusTopic(crashes, stats) {
     };
 }
 
+// CC 360 — tier-correct text for the infographic hero band. Replaces the
+// hardcoded "COUNTY" lie that showed at Planning District / State / MPO tiers.
+// Based on the user-selected view tier (immune to the county→planning_district
+// DATA rollup in resolveTier) + getJurisdictionLabel()'s tier-aware base name,
+// then the proper per-tier suffix. Never throws; ultimate fallback "JURISDICTION".
+function _activeTierLabel() {
+    var ctx = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext) ? jurisdictionContext : null;
+    var tier = ctx && ctx.viewTier ? ctx.viewTier : null;
+    // Secondary tier source only if viewTier is unset.
+    if (!tier) {
+        try {
+            if (window.CL && CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.resolveTier) {
+                var t = CL.data.supabaseBridge.resolveTier();
+                tier = (t && (t.rolledUpFrom || t.tier)) || null;
+            }
+        } catch (e) {}
+    }
+    // Base display value per the SELECTED tier (getJurisdictionLabel is already
+    // tier-aware: county/PD/MPO/region/city name, or state/federal label).
+    var base = (typeof getJurisdictionLabel === 'function') ? (getJurisdictionLabel() || '') : '';
+    if (!base && ctx) base = ctx.stateName || ctx.jurisdictionName || '';
+    var v = String(base).trim();
+    var up = v.toUpperCase();
+    switch (tier) {
+        case 'county':
+            return (v.replace(/\s+county\s*$/i, '') + ' COUNTY').toUpperCase();
+        case 'planning_district':
+            return (v.replace(/\s+(planning\s+)?district\s*$/i, '') + ' PLANNING DISTRICT').toUpperCase();
+        case 'mpo':
+            return /\bMPO\b/i.test(v) ? up : (up + ' MPO');
+        case 'region':
+            return /\bregion\b/i.test(v) ? up : (up + ' REGION');
+        case 'city':
+            return (v.replace(/\s+(city|town)\s*$/i, '') + ' CITY').toUpperCase();
+        case 'state':
+            return ('STATE OF ' + ((ctx && ctx.stateName) ? ctx.stateName : v)).toUpperCase();
+        case 'federal':
+            return 'UNITED STATES';
+        default:
+            return up || 'JURISDICTION';
+    }
+}
+
 function populateInfographicPage1(agency, department, title, quarter, total, stats, peakPatterns, factors, trendData, quarterComparison, yearTrends, heatmapData) {
-    // Header
-    document.getElementById('ig1AgencyName').textContent = (agency || (typeof getJurisdictionLabel === 'function' ? getJurisdictionLabel() : '') || 'COUNTY').toUpperCase();
+    // Header — CC 360: always render the active-tier label (the stale #reportAgency
+    // auto-fill is no longer trusted for the band). The div stays contenteditable
+    // so a user can still hand-edit a custom agency name after generation.
+    document.getElementById('ig1AgencyName').textContent = _activeTierLabel();
     document.getElementById('ig1MainTitle').textContent = title;
     document.getElementById('ig1Subtitle').textContent = 'Quarterly Crash Analysis Summary';
     document.getElementById('ig1Quarter').textContent = quarter;
@@ -55227,7 +55277,8 @@ function populateInfographicPage1(agency, department, title, quarter, total, sta
 
 function populateInfographicPage2(agency, department, quarter, topLocations, trendData, focusTopic, riskyBehaviors) {
     // Header
-    document.getElementById('ig2AgencyName').textContent = (agency || (typeof getJurisdictionLabel === 'function' ? getJurisdictionLabel() : '') || 'COUNTY').toUpperCase();
+    // CC 360 — active-tier label (see populateInfographicPage1 for rationale).
+    document.getElementById('ig2AgencyName').textContent = _activeTierLabel();
     document.getElementById('ig2Quarter').textContent = quarter;
 
     // Focus topic
