@@ -606,7 +606,10 @@ function _mvTopLocations(_M, limit) {
         const epdo = Number(r.epdo) || calcEPDO({ K, A, B, C, O });
         return { name, total: Number(r.total_crashes) || 0, K, A, B, C, O, epdo, ka: K + A };
     }).sort((a, b) => b.epdo - a.epdo);
-    return enriched.slice(0, limit || 10);
+    // CC 363 — collapse spelling variants before slicing so the comprehensive
+    // report's top-N doesn't list the same physical road as two rows.
+    const deduped = (typeof _fuzzyDedupeHotspots === 'function') ? _fuzzyDedupeHotspots(enriched) : enriched;
+    return deduped.slice(0, limit || 10);
 }
 
 // yoyComparison shape (matches computeYoYComparison) from _M.byYearDetail. At

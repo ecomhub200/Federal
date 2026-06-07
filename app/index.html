@@ -54574,18 +54574,25 @@ async function generateInfographic(allCrashes, title, agency, department, startD
             // one keeps the bare label; subsequent rows get "(approach 2)",
             // "(approach 3)", ... appended in EPDO-descending order. This
             // mirrors how engineers refer to multi-leg junction systems.
+            // CC 363 — collapse spelling variants BEFORE the exact-match
+            // disambiguation, so "...VETERANS MEM. HIGHWAY" and "...VETS MEM
+            // HIGHWAY" merge into one summed row. The "(approach N)" suffix
+            // below then only disambiguates genuinely-separate physical
+            // locations (different coords) that still share a normalized name.
+            const deduped = (typeof _fuzzyDedupeHotspots === 'function') ? _fuzzyDedupeHotspots(enriched) : enriched;
             const _seenLabel = Object.create(null);
-            for (const row of enriched) {
-                const key = row.baseName.toLowerCase();
+            for (const row of deduped) {
+                const baseName = row.baseName || row.name || '';
+                const key = baseName.toLowerCase();
                 const seenCount = _seenLabel[key] || 0;
                 if (seenCount === 0) {
-                    row.name = row.baseName;          // first occurrence — bare
+                    row.name = baseName;              // first occurrence — bare
                 } else {
-                    row.name = row.baseName + ' (approach ' + (seenCount + 1) + ')';
+                    row.name = baseName + ' (approach ' + (seenCount + 1) + ')';
                 }
                 _seenLabel[key] = seenCount + 1;
             }
-            const top = enriched.slice(0, 5);
+            const top = deduped.slice(0, 5);
             if (top.length) topLocations = top;
         } catch (e) { /* non-fatal — leave row-based result (empty array) */ }
     }
@@ -58593,8 +58600,12 @@ function generateHotspotRankingReport(crashes, title, author) {
         });
     }
 
-    const routeRanking = Object.entries(byRoute).map(([name, d]) => ({ name, ...d, epdo: d._mvEpdo || calcEPDO(d), type: 'Route' })).sort((a,b) => b.epdo - a.epdo);
-    const nodeRanking = Object.entries(byNode).map(([name, d]) => ({ name, ...d, epdo: d._mvEpdo || calcEPDO(d), type: 'Intersection' })).sort((a,b) => b.epdo - a.epdo);
+    // CC 363 — collapse spelling variants (e.g. "...VETERANS MEM. HIGHWAY" vs
+    // "...VETS MEM HIGHWAY") into one summed row before ranking, so the New
+    // Castle Hotspot Report no longer lists the same physical road twice.
+    const _maybeFuzzy = (arr) => (typeof _fuzzyDedupeHotspots === 'function') ? _fuzzyDedupeHotspots(arr) : arr;
+    const routeRanking = _maybeFuzzy(Object.entries(byRoute).map(([name, d]) => ({ name, ...d, epdo: d._mvEpdo || calcEPDO(d), type: 'Route' })).sort((a,b) => b.epdo - a.epdo));
+    const nodeRanking = _maybeFuzzy(Object.entries(byNode).map(([name, d]) => ({ name, ...d, epdo: d._mvEpdo || calcEPDO(d), type: 'Intersection' })).sort((a,b) => b.epdo - a.epdo));
     const combined = [...routeRanking, ...nodeRanking].sort((a,b) => b.epdo - a.epdo).slice(0, 25);
 
     // KPIs
