@@ -90,6 +90,153 @@ function renderGapRow(colspan, category) {
     return '<tr><td colspan="' + colspan + '" class="report-gap" style="text-align:center;color:#6b7280;padding:1rem;font-style:italic">No ' + cat + ' data available for this selection.</td></tr>';
 }
 
+/**
+ * CC 363 — Normalize a route / intersection / location label so spelling
+ * variants collapse to the same canonical key. Examples:
+ *   "KOREAN WAR VETERANS MEM. HIGHWAY"  → "KOREAN WAR VETERANS MEMORIAL HIGHWAY"
+ *   "KOREAN WAR VETS MEM HIGHWAY"        → "KOREAN WAR VETERANS MEMORIAL HIGHWAY"
+ *   "US 13 / College Road & North Dupont Highway"
+ *                                         → "US 13 / COLLEGE ROAD & N DUPONT HIGHWAY"
+ *   "I-95 N"                              → "I 95 N"
+ *
+ * Used as the DEDUP KEY only — never displayed. The display name is kept
+ * as-is from the matview row (so the user sees the source spelling).
+ * State-agnostic: the abbreviation table is universal.
+ */
+function _normalizeRouteLabel(label) {
+    if (label === null || label === undefined) return '';
+    var s = String(label).toUpperCase();
+    // 1. Strip periods, commas, double-quotes — keep `/`, `&`, `-` as semantic separators
+    s = s.replace(/[.,"']/g, '');
+    // 2. Expand common road-name abbreviations (longest first to avoid partial matches)
+    var ABBREV = [
+        [/\bMEMORIAL\b/g, 'MEMORIAL'],
+        [/\bMEM\b/g,      'MEMORIAL'],
+        [/\bVETERANS?\b/g,'VETERANS'],   // VETERAN or VETERANS → VETERANS
+        [/\bVETS\b/g,     'VETERANS'],
+        [/\bHIGHWAY\b/g,  'HIGHWAY'],
+        [/\bHWY\b/g,      'HIGHWAY'],
+        [/\bROAD\b/g,     'ROAD'],
+        [/\bRD\b/g,       'ROAD'],
+        [/\bSTREET\b/g,   'STREET'],
+        [/\bST\b/g,       'STREET'],
+        [/\bAVENUE\b/g,   'AVENUE'],
+        [/\bAVE\b/g,      'AVENUE'],
+        [/\bBOULEVARD\b/g,'BOULEVARD'],
+        [/\bBLVD\b/g,     'BOULEVARD'],
+        [/\bDRIVE\b/g,    'DRIVE'],
+        [/\bDR\b/g,       'DRIVE'],
+        [/\bLANE\b/g,     'LANE'],
+        [/\bLN\b/g,       'LANE'],
+        [/\bPARKWAY\b/g,  'PARKWAY'],
+        [/\bPKWY\b/g,     'PARKWAY'],
+        [/\bPLACE\b/g,    'PLACE'],
+        [/\bPL\b/g,       'PLACE'],
+        [/\bCOURT\b/g,    'COURT'],
+        [/\bCT\b/g,       'COURT'],
+        [/\bTURNPIKE\b/g, 'TURNPIKE'],
+        [/\bTPKE\b/g,     'TURNPIKE'],
+        [/\bEXPRESSWAY\b/g,'EXPRESSWAY'],
+        [/\bEXPY\b/g,     'EXPRESSWAY'],
+        [/\bBRIDGE\b/g,   'BRIDGE'],
+        [/\bBR\b/g,       'BRIDGE'],
+        // Directional
+        [/\bN\b/g,        'N'],
+        [/\bNORTH\b/g,    'N'],
+        [/\bS\b/g,        'S'],
+        [/\bSOUTH\b/g,    'S'],
+        [/\bE\b/g,        'E'],
+        [/\bEAST\b/g,     'E'],
+        [/\bW\b/g,        'W'],
+        [/\bWEST\b/g,     'W'],
+        // Interstate / state-route prefix variants
+        [/\bI-(\d+)\b/g,  'I $1'],
+        [/\bUS-(\d+)\b/g, 'US $1'],
+        [/\bDE-(\d+)\b/g, 'DE $1'],
+        [/\bVA-(\d+)\b/g, 'VA $1'],
+        [/\bCO-(\d+)\b/g, 'CO $1']
+    ];
+    ABBREV.forEach(function (p) { s = s.replace(p[0], p[1]); });
+    // 3. Collapse whitespace to single space, trim
+    s = s.replace(/\s+/g, ' ').trim();
+    return s;
+}
+
+/**
+ * CC 363 — Group hotspot rows by normalized label and SUM their counts.
+ * Input: array of rows shaped like `{name, total, K, A, B, C, O, epdo, ka, nodeId, lat, lon}`.
+ * Output: same shape, but rows whose `_normalizeRouteLabel(name)` matches are merged.
+ *   - `name` keeps the LONGEST source spelling (most descriptive).
+ *   - `total / K / A / B / C / O / epdo / ka` are summed.
+ *   - other fields (e.g. `nodeId`, `type`) are kept from the first row in the group.
+ *
+ * The disambiguation suffix CC 342 adds ("(approach N)") is applied AFTER this
+ * fuzzy dedup, so a row whose normalized key collides with another but at a
+ * DIFFERENT physical location (different coords) still gets the suffix.
+ *
+ * Distance-threshold rule for location collision: if two rows share a
+ * normalized name AND lat/lon are within ~120 m (≈0.0015°), treat as
+ * SAME physical location and merge. Beyond that, they're different
+ * approaches of the same road system — keep both. Rows without coords
+ * (e.g. matview spelling variants) merge by name alone, which is the
+ * desired behavior here.
+ */
+function _fuzzyDedupeHotspots(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    // Build groups keyed by normalized name
+    var groups = {};
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var rawName = r.name || r.baseName || '';
+        var key = _normalizeRouteLabel(rawName);
+        if (!key) key = '__unnamed_' + i;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+    }
+    // Merge each group
+    var out = [];
+    Object.keys(groups).forEach(function (k) {
+        var group = groups[k];
+        if (group.length === 1) { out.push(group[0]); return; }
+        // Multiple rows in this group — decide if same location or different approaches
+        var subGroups = [[group[0]]];  // start with first row in its own sub-group
+        for (var i = 1; i < group.length; i++) {
+            var r = group[i];
+            var placed = false;
+            for (var j = 0; j < subGroups.length; j++) {
+                var ref = subGroups[j][0];
+                var dlat = Math.abs((r.lat || 0) - (ref.lat || 0));
+                var dlon = Math.abs((r.lon || 0) - (ref.lon || 0));
+                // 120 m ≈ 0.001° lat, slightly less in lon at mid-latitudes — use 0.0015 to be generous
+                if (dlat < 0.0015 && dlon < 0.0015) { subGroups[j].push(r); placed = true; break; }
+            }
+            if (!placed) subGroups.push([r]);
+        }
+        // Each sub-group is "same physical place, different spellings" — sum counts
+        subGroups.forEach(function (sg) {
+            if (sg.length === 1) { out.push(sg[0]); return; }
+            // Pick the LONGEST spelling as display name
+            sg.sort(function (a, b) { return (b.name || '').length - (a.name || '').length; });
+            var merged = Object.assign({}, sg[0]);
+            merged.total = sg.reduce(function (s, r) { return s + (Number(r.total) || 0); }, 0);
+            merged.K = sg.reduce(function (s, r) { return s + (Number(r.K) || 0); }, 0);
+            merged.A = sg.reduce(function (s, r) { return s + (Number(r.A) || 0); }, 0);
+            merged.B = sg.reduce(function (s, r) { return s + (Number(r.B) || 0); }, 0);
+            merged.C = sg.reduce(function (s, r) { return s + (Number(r.C) || 0); }, 0);
+            merged.O = sg.reduce(function (s, r) { return s + (Number(r.O) || 0); }, 0);
+            merged.epdo = sg.reduce(function (s, r) { return s + (Number(r.epdo) || 0); }, 0);
+            merged.ka = merged.K + merged.A;
+            out.push(merged);
+        });
+    });
+    // Re-sort by EPDO descending (preserving CC 342's ordering)
+    out.sort(function (a, b) { return (b.epdo || 0) - (a.epdo || 0); });
+    return out;
+}
+
+window._normalizeRouteLabel = _normalizeRouteLabel;
+window._fuzzyDedupeHotspots = _fuzzyDedupeHotspots;
+
 // CC 346 §3 (was CC 343) — collapse `.report-section` blocks whose
 // content is empty or gap-state only. Pure DOM walk. Called at the end
 // of every generator (see §3.1 call sites). Never mutates the data store.

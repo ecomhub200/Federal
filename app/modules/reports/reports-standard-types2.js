@@ -403,7 +403,12 @@ function generateTopLocationsTable(crashes, kaOnly = false) {
         });
     }
 
-    const sorted = Object.entries(byRoute).sort((a,b) => b[1].total - a[1].total);
+    // CC 363 — collapse spelling variants (VETS↔VETERANS, MEM↔MEMORIAL, …)
+    // into one summed row, then re-sort by total (the helper re-sorts by epdo,
+    // which is 0 here, so restore the frequency ranking explicitly).
+    let _locRows = Object.entries(byRoute).map(([name, d]) => ({ name, total: d.total, K: d.K, A: d.A }));
+    if (typeof _fuzzyDedupeHotspots === 'function') _locRows = _fuzzyDedupeHotspots(_locRows);
+    const sorted = _locRows.sort((a,b) => (b.total||0) - (a.total||0)).map(d => [d.name, d]);
     return `<h4>${kaOnly ? 'K+A' : ''} Crash Locations</h4>
         <div class="table-wrapper"><table class="data-table">
         <thead><tr><th>Route</th><th>Total</th><th>K</th><th>A</th></tr></thead>
@@ -438,7 +443,12 @@ function generateNodeTable(crashes) {
         });
     }
 
-    const sorted = Object.entries(byNode).sort((a,b) => b[1].total - a[1].total);
+    // CC 363 — collapse spelling variants for intersection names (e.g.
+    // "Main St & Elm Ave" vs "Main Street & Elm Avenue") into one summed row,
+    // then re-sort by total (helper re-sorts by epdo=0, so restore freq order).
+    let _nodeRows = Object.entries(byNode).map(([name, d]) => ({ name, total: d.total, K: d.K, A: d.A }));
+    if (typeof _fuzzyDedupeHotspots === 'function') _nodeRows = _fuzzyDedupeHotspots(_nodeRows);
+    const sorted = _nodeRows.sort((a,b) => (b.total||0) - (a.total||0)).map(d => [d.name, d]);
     return `<h4>Crash Frequency by Node/Intersection</h4>
         <div class="table-wrapper"><table class="data-table">
         <thead><tr><th>Node</th><th>Total</th><th>K</th><th>A</th></tr></thead>
