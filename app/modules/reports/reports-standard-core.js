@@ -911,7 +911,15 @@ window.renderRequiredInputEmptyState = renderRequiredInputEmptyState;
     // there, plus a belt-and-suspenders `change` on the header selects in case the
     // event path changes. Any missing element/event is simply a no-op — safe.
     document.addEventListener('jurisdictionChanged', function() { _maybeRegenerate('jurisdictionChanged'); });
-    ['stateSelect', 'jurisdictionSelect', 'tierRegionSelect', 'tierMPOSelect', 'tierCountySelect', 'tierCitySelect']
+    // CC 359 — the View-Level / tier switch (county↔state↔region↔MPO↔planning
+    // district↔city) dispatches `tierChanged` on `document` (core/tier.js,
+    // spatial/geo-tier.js) without firing a `change` on any wired <select>, so
+    // the listeners below alone never caught it. Listen for the real event on
+    // its real target. (The app emits `tierChanged`, NOT `TierEvent` — that
+    // string is only a transit-tab console prefix — and dispatches on
+    // `document`, not `window`.)
+    document.addEventListener('tierChanged', function() { _maybeRegenerate('tierChanged'); });
+    ['stateSelect', 'jurisdictionSelect', 'tierRegionSelect', 'tierMPOSelect', 'tierPlanningDistrictSelect', 'tierCountySelect', 'tierCitySelect']
         .forEach(function(id) {
             var el = document.getElementById(id);
             if (el) el.addEventListener('change', function() { _maybeRegenerate('select:' + id); });
