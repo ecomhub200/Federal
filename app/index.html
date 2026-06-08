@@ -10036,15 +10036,6 @@ Schools with <strong>documented pedestrian/bicycle crashes</strong> and supporti
 <option value="intersection">🚦 Intersection Safety Analysis</option>
 <option value="pedbike">🚶 Vulnerable Road User (Ped/Bike) Report</option>
 </optgroup>
-<optgroup label="SOLUTIONS REPORTS">
-<option value="countermeasures">💡 Countermeasures Effectiveness Report</option>
-<option value="beforeafter">📋 Before/After Study Report</option>
-<option value="grantsupport">💰 Grant Application Support Package</option>
-</optgroup>
-<optgroup label="PERFORMANCE REPORTS">
-<option value="safety">⚠️ Safety Performance Report</option>
-<option value="trend">📈 Multi-Year Trend Analysis</option>
-</optgroup>
 </select>
 </div>
 <div class="filter-group" id="reportLocationGroup" style="flex:2">
@@ -31873,12 +31864,7 @@ function openEmailNotificationModal(context = 'reports') {
         { value: 'fatalspeed', label: 'Fatal & Speed-Related Analysis', icon: '☠️', group: 'Explore' },
         { value: 'hotspot', label: 'High-Crash Location (Hotspot) Report', icon: '🔥', group: 'Explore' },
         { value: 'intersection', label: 'Intersection Safety Analysis', icon: '🚦', group: 'Explore' },
-        { value: 'pedbike', label: 'Vulnerable Road User (Ped/Bike) Report', icon: '🚶', group: 'Explore' },
-        { value: 'countermeasures', label: 'Countermeasures Effectiveness Report', icon: '💡', group: 'Solutions' },
-        { value: 'beforeafter', label: 'Before/After Study Report', icon: '📋', group: 'Solutions' },
-        { value: 'grantsupport', label: 'Grant Application Support Package', icon: '💰', group: 'Solutions' },
-        { value: 'safety', label: 'Safety Performance Report', icon: '⚠️', group: 'Performance' },
-        { value: 'trend', label: 'Multi-Year Trend Analysis', icon: '📈', group: 'Performance' }
+        { value: 'pedbike', label: 'Vulnerable Road User (Ped/Bike) Report', icon: '🚶', group: 'Explore' }
     ];
     const reportTypeOptions = allReportTypes.map(rt =>
         `<option value="${rt.value}" ${(rpt.reportType || 'comprehensive') === rt.value ? 'selected' : ''}>${rt.icon} ${rt.label}</option>`
