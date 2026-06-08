@@ -866,7 +866,8 @@ async function fetchReportDataForType(reportType, ctx) {
                 return Promise.all([
                     c.getPedBikeLocations(t.tier, t.value, 'pedestrian', { limit: 25 }),
                     c.getPedBikeLocations(t.tier, t.value, 'bicycle',    { limit: 25 }),
-                ]).then(([ped, bike]) => ({ ped, bike }));
+                    c.getPedBikeBreakdowns(t.tier, t.value, { roadType }),   // CC 369 — true per-mode totals
+                ]).then(([ped, bike, breakdowns]) => ({ ped, bike, breakdowns }));
             default:
                 return null;
         }
