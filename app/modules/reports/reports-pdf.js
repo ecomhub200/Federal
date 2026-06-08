@@ -41,58 +41,82 @@ function storeReportData(type, crashes, stats, title, author, route, categoryDat
 }
 
 /**
- * Professional text-based PDF export for standard reports
- * Similar to Fatal & Speed PDF export with clean formatting
+ * PDF export for standard reports — DOM-capture approach.
+ *
+ * CC: previously this re-read crashState.sampleRows and re-computed everything
+ * from scratch via generateStandardReportPDF(). At aggregate tiers
+ * (state/MPO/planning-district/region/federal/county-rollup) sampleRows is
+ * EMPTY by design — the on-screen report is hydrated from Supabase matviews —
+ * so the recompute produced 0 crashes and aborted with
+ * "No crash data available for the current report."
+ *
+ * Fix: capture the already-rendered #reportContainer with html2canvas and
+ * slice it across letter-size PDF pages, exactly like downloadInfographicPDF().
+ * This always matches what's on screen and works at every tier. The rich
+ * text-based generateStandardReportPDF() is preserved untouched because the
+ * scheduled-email attachment path still calls it with { returnDoc:true }.
  */
-function downloadReportPDF() {
+async function downloadReportPDF() {
+    const container = document.getElementById('reportContainer');
+    if (!container || !container.innerText.trim()) {
+        alert('Please generate the report first.');
+        return;
+    }
+
     showLoading('Generating professional PDF report...');
 
     try {
-        // Get current report settings
-        let type = document.getElementById('reportType').value;
-        // Backward compatibility: map systemwide to dashboard
-        if (type === 'systemwide') type = 'dashboard';
-        const title = document.getElementById('reportTitle').value || 'Crash Analysis Report';
-        const author = document.getElementById('reportAuthor').value || 'Traffic Engineering Division';
-        const route = document.getElementById('reportRoute')?.value || '';
-        const startDate = document.getElementById('reportStartDate')?.value;
-        const endDate = document.getElementById('reportEndDate')?.value;
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'letter');
+        const pageWidth = 215.9;   // Letter width  (mm)
+        const pageHeight = 279.4;  // Letter height (mm)
+        const margin = 5;
+        const imgWidth = pageWidth - (margin * 2);
 
-        // Filter crashes based on current settings
-        let crashes = crashState.sampleRows || [];
-        if (route) crashes = crashes.filter(r => r[COL.ROUTE] === route);
-        if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
-        if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
+        // Reuse the shared html2canvas options (whitelists canvases inside the
+        // report output roots so the on-screen Chart.js charts are captured).
+        const h2cOpts = (typeof window !== 'undefined' && window._cc367_h2cOpts)
+            ? window._cc367_h2cOpts
+            : { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' };
 
-        // For countermeasures report, use CMF tab data
-        if (type === 'countermeasures' && cmfState.locationCrashes.length > 0) {
-            crashes = cmfState.locationCrashes;
-            if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
-            if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
+        const canvas = await html2canvas(container, h2cOpts);
+
+        // Slice the (tall) capture into page-height chunks.
+        const pxPerMm = canvas.width / imgWidth;
+        const sliceHeightPx = (pageHeight - (margin * 2)) * pxPerMm;
+        const totalSlices = Math.max(1, Math.ceil(canvas.height / sliceHeightPx));
+
+        for (let i = 0; i < totalSlices; i++) {
+            const srcY = i * sliceHeightPx;
+            const srcH = Math.min(sliceHeightPx, canvas.height - srcY);
+            if (srcH <= 0) break;
+
+            const sliceCanvas = document.createElement('canvas');
+            sliceCanvas.width = canvas.width;
+            sliceCanvas.height = srcH;
+            const ctx = sliceCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+            ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+            const sliceImgHeight = srcH / pxPerMm;
+            if (i > 0) pdf.addPage();
+            pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgWidth, sliceImgHeight);
         }
 
-        // For before/after report, use BA tab data
-        if (type === 'beforeafter' && baState.locationCrashes.length > 0) {
-            crashes = baState.locationCrashes;
-        }
+        // Tier-stamped filename (de-collide per-jurisdiction exports); falls
+        // open to the legacy name if the global helper isn't loaded.
+        const reportType = document.getElementById('reportType')?.value || 'report';
+        const filename = (typeof window !== 'undefined' && typeof window._cc367_filename === 'function')
+            ? window._cc367_filename(reportType)
+            : ('crash_analysis_' + reportType + '_' + new Date().toISOString().split('T')[0] + '.pdf');
+        pdf.save(filename);
 
-        // For grant support report, use grant state ranked locations data
-        if (type === 'grantsupport') {
-            crashes = crashState.sampleRows || [];
-        }
-
-        if (crashes.length === 0) {
-            hideLoading();
-            alert('No crash data available for the current report. Please generate the report first.');
-            return;
-        }
-
-        // Generate professional PDF
-        generateStandardReportPDF(type, crashes, title, author, route, startDate, endDate);
         hideLoading();
+        if (typeof showToast === 'function') showToast('PDF report downloaded: ' + filename, 'success');
     } catch (e) {
         hideLoading();
-        console.error('[PDF Export Error]', e);
+        console.error('[Report PDF Export Error]', e);
         alert('Error generating PDF: ' + e.message);
     }
 }

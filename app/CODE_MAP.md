@@ -3758,7 +3758,7 @@ Before any code edit:
 | modules/pedbike/pedbike-tab-ped-detail-charts.js | 254 | pedbike | initPedDetailCharts, renderPedMonthlyHeatmap, resetPedFilters, updatePedLocationTypeChart (4 fns) | pedestrian |
 | modules/pedbike/pedbike-tab-ped-detail.js | 509 | pedbike | _fetchPedBikeDetailAggregates, updatePedDetailPanel (2 fns) | pedestrian |
 | modules/reports/reports-charts.js | 93 | reports | createReportCharts, createSafetyCharts, createPedBikeCharts, createTrendCharts (4 fns) | reports |
-| modules/reports/reports-pdf.js | 1101 | reports | printReport, downloadReportPDF, generateStandardReportPDF, copyReportText (4 fns) | reports |
+| modules/reports/reports-pdf.js | 1169 | reports | printReport, downloadReportPDF, generateStandardReportPDF, copyReportText (4 fns) | reports |
 | modules/reports/reports-standard-core.js | 1753 | reports | hydrateReportFromMatviews, showReportSubTab, updateReportOptions, buildAIContext, renderRequiredInputEmptyState, _safeAgg, _hideAllReportOutputs, _resetStandardReportSections, _reportDateChanged … (14 fns) | reports |
 | modules/reports/reports-standard-core2.js | 340 | reports | generateExplorationDashboard, getTopLocation, truncateRoute, generateCategoryTopLocations, generateEnhancedFindings … (6 fns) | reports |
 | modules/reports/reports-standard-types.js | 949 | reports | generateCorridorReport, generateSafetyReport, generatePedBikeReport, createEnhancedPedBikeCharts, generateTrendReport … (18 fns) | reports |
