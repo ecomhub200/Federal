@@ -839,15 +839,6 @@ function getDefaultTOCSections(reportType) {
                 { title: 'Weather & Light Conditions', icon: '🌤️', page: 3 },
                 { title: 'Recommendations', icon: '💡', page: 3 }
             ];
-        case 'safety':
-            return [
-                ...commonSections,
-                { title: 'Yearly Breakdown', icon: '📅', page: 2 },
-                { title: 'K+A by Collision Type', icon: '💥', page: 2 },
-                { title: 'K+A by Light Condition', icon: '💡', page: 2 },
-                { title: 'High-Severity Locations', icon: '📍', page: 3 },
-                { title: 'Safety Recommendations', icon: '🛡️', page: 3 }
-            ];
         case 'pedbike':
             return [
                 ...commonSections,
@@ -859,27 +850,12 @@ function getDefaultTOCSections(reportType) {
                 { title: 'VRU Hotspot Locations', icon: '📍', page: 3 },
                 { title: 'VRU Safety Recommendations', icon: '🛡️', page: 4 }
             ];
-        case 'trend':
-            return [
-                ...commonSections,
-                { title: 'Yearly Breakdown', icon: '📅', page: 2 },
-                { title: 'Crash Trend Analysis', icon: '📈', page: 2 },
-                { title: 'K+A Trend Analysis', icon: '⚠️', page: 2 }
-            ];
         case 'safetyfocus':
             return [
                 ...commonSections,
                 { title: 'Safety Category Breakdown', icon: '🛡️', page: 2 },
                 { title: 'Category Details', icon: '📋', page: 2 },
                 { title: 'Recommendations', icon: '💡', page: 3 }
-            ];
-        case 'countermeasures':
-            return [
-                ...commonSections,
-                { title: 'Location Overview', icon: '📍', page: 2 },
-                { title: 'Crash Profile', icon: '💥', page: 2 },
-                { title: 'Recommended Countermeasures', icon: '🔧', page: 3 },
-                { title: 'Implementation Priority', icon: '⭐', page: 3 }
             ];
         case 'crashtree':
             return [
@@ -908,24 +884,6 @@ function getDefaultTOCSections(reportType) {
                 { title: 'Detailed Location Profiles', icon: '📍', page: 3 },
                 { title: 'Route-Level Summary', icon: '🛣️', page: 4 },
                 { title: 'Prioritized Recommendations', icon: '💡', page: 4 }
-            ];
-        case 'beforeafter':
-            return [
-                ...commonSections,
-                { title: 'Study Design', icon: '📐', page: 2 },
-                { title: 'Before Period Statistics', icon: '📊', page: 2 },
-                { title: 'After Period Statistics', icon: '📊', page: 3 },
-                { title: 'Statistical Comparison', icon: '📈', page: 3 },
-                { title: 'Conclusions & Recommendations', icon: '💡', page: 4 }
-            ];
-        case 'grantsupport':
-            return [
-                ...commonSections,
-                { title: 'Project Justification', icon: '📋', page: 2 },
-                { title: 'Location Rankings', icon: '🏆', page: 2 },
-                { title: 'Benefit-Cost Analysis Data', icon: '💰', page: 3 },
-                { title: 'Supporting Data Tables', icon: '📊', page: 3 },
-                { title: 'Data Source Citations', icon: '📚', page: 4 }
             ];
         default:
             return commonSections;
