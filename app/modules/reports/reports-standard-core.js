@@ -849,8 +849,6 @@ async function fetchReportDataForType(reportType, ctx) {
             case 'crashtree':
             case 'systemic':
                 return c.getCrashTree(t.tier, t.value, { roadType });
-            case 'safety':
-            case 'safety_focus':
             case 'safetyfocus':
                 return c.getSafetyCategories(t.tier, t.value, { roadType });
             case 'fatal_speed':
@@ -869,23 +867,6 @@ async function fetchReportDataForType(reportType, ctx) {
                     c.getPedBikeLocations(t.tier, t.value, 'pedestrian', { limit: 25 }),
                     c.getPedBikeLocations(t.tier, t.value, 'bicycle',    { limit: 25 }),
                 ]).then(([ped, bike]) => ({ ped, bike }));
-            case 'countermeasures':
-                // Countermeasures uses the in-memory cmfLibrary; no matview wiring needed.
-                return null;
-            case 'beforeafter':
-                if (!ctx.locationName || !ctx.installDate) return { error: 'Provide Treatment Date and Location.' };
-                return c.runBeforeAfterStudy({
-                    state: stateKey,
-                    locationName: ctx.locationName,
-                    locationType: ctx.locationType || 'segment',
-                    installDate: ctx.installDate,
-                });
-            case 'grant':
-            case 'grantsupport':
-                return c.getGrantReadyLocations({ roadType, limit: 50 });
-            case 'performance':
-            case 'trend':
-                return c.getSafetyCategories(t.tier, t.value, { roadType });
             default:
                 return null;
         }

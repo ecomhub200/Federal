@@ -59391,14 +59391,8 @@ async function downloadReportWord() {
             case 'intersection':
                 await generateCorridorWordMemo(title, author, route, startDate, endDate, type);
                 break;
-            case 'safety':
-                await generateSafetyWordMemo(title, author, startDate, endDate);
-                break;
             case 'pedbike':
                 await generatePedBikeWordMemo(title, author, startDate, endDate);
-                break;
-            case 'trend':
-                await generateTrendWordMemo(title, author, startDate, endDate);
                 break;
             default:
                 await generateSystemwideWordMemo(title, author, startDate, endDate);
