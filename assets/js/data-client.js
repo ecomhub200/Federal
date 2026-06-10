@@ -45,7 +45,38 @@ class CrashLensDataClient {
   // against those two matviews return HTTP 400 (which the data-client
   // catches and logs as "matview missing?"). Default to the
   // dashboard_summary names; override only where the alias differs.
+  // Tier-column map per matview.
+  //
+  // Two distinct naming conventions exist in the Supabase matviews; the wrong
+  // entry here sends PostgREST a column filter that doesn't exist and returns
+  // HTTP 400 (or silent zero rows). When adding a new matview, check its
+  // columns with `pg_attribute` and register the right convention.
+  //
+  //   Convention A (jurisdictional facts):
+  //     region            → dot_district
+  //     mpo               → mpo_name
+  //     county / city     → physical_juris_name
+  //     planning_district → planning_district
+  //   Matviews: dashboard_summary, mv_crash_tree, mv_intersection_summary,
+  //     mv_safety_categories, mv_safety_focus_locations, mv_pedbike_locations,
+  //     mv_pedbike_breakdowns, mv_fatal_factors, mv_speed_summary.
+  //   Used by the `default` map.
+  //
+  //   Convention B (location/hotspot tables — shorter names):
+  //     region            → region
+  //     mpo               → mpo
+  //     county / city     → county
+  //     planning_district → planning_district
+  //   Matviews: mv_hotspots, mv_hotspots_with_rates, mv_grant_ready_locations,
+  //     mv_grants_baseline.
+  //   Each gets its own named entry below.
+  //
+  // Rule when adding a matview: pick the entry whose `region` / `mpo` /
+  // `county` column names match the matview's `pg_attribute` list, or add
+  // a new entry. NEVER let it fall through to `default` if the matview uses
+  // Convention B — the silent-zero-rows mode is hard to detect downstream.
   static TIER_COLUMNS_BY_MATVIEW = {
+    // Convention A (default)
     default: {
       federal:           null,
       state:             'state',
@@ -55,7 +86,26 @@ class CrashLensDataClient {
       county:            'physical_juris_name',
       city:              'physical_juris_name',
     },
+    // Convention B
     mv_hotspots: {
+      federal:           null,
+      state:             'state',
+      region:            'region',
+      planning_district: 'planning_district',
+      mpo:               'mpo',
+      county:            'county',
+      city:              'county',
+    },
+    mv_hotspots_with_rates: {
+      federal:           null,
+      state:             'state',
+      region:            'region',
+      planning_district: 'planning_district',
+      mpo:               'mpo',
+      county:            'county',
+      city:              'county',
+    },
+    mv_grant_ready_locations: {
       federal:           null,
       state:             'state',
       region:            'region',
@@ -73,10 +123,9 @@ class CrashLensDataClient {
       county:            'county',
       city:              'county',
     },
-    // mv_safety_categories_yearly has no dot_district column — only
-    // jurisdiction_county / physical_juris_name / mpo_name /
-    // planning_district. Null out region tier so we don't send a
-    // non-existent column filter and PostgREST 400s.
+    // mv_safety_categories_yearly: Convention A but no dot_district column.
+    // Null out region tier so we don't send a non-existent column filter and
+    // PostgREST 400s.
     mv_safety_categories_yearly: {
       federal:           null,
       state:             'state',
@@ -1936,11 +1985,27 @@ class CrashLensDataClient {
     }
     if (opts.locationType) params.set('location_type', 'eq.' + opts.locationType);
     if (opts.minCrashes) params.set('total_crashes', 'gte.' + opts.minCrashes);
-    if (opts.county) {
-      params.set('jurisdiction_county', 'eq.' + String(opts.county).replace(/ County$/, ''));
+
+    // Tier-aware filter (new). Reports + tabs that pass {tier, value} get
+    // jurisdiction-scoped rows; older callers passing {county, mpo, pd}
+    // still work via the explicit branches below.
+    if (opts.tier && opts.value && opts.tier !== 'state' && opts.tier !== 'federal') {
+      const tf = this._tierFilter(opts.tier, opts.value, 'mv_grant_ready_locations');
+      // _tierFilter already injected state=eq.<this.state>; let opts.state win.
+      Object.keys(tf).forEach(k => {
+        if (k === 'state') return;
+        params.set(k, tf[k]);
+      });
+    } else {
+      // mv_grant_ready_locations uses Convention B columns:
+      //   county / mpo / planning_district (no `jurisdiction_` prefix and no
+      //   ` County` suffix in stored values).
+      if (opts.county) {
+        params.set('county', 'eq.' + String(opts.county).replace(/ County$/, ''));
+      }
+      if (opts.mpo) params.set('mpo', 'eq.' + opts.mpo);
+      if (opts.pd)  params.set('planning_district',  'eq.' + opts.pd);
     }
-    if (opts.mpo) params.set('jurisdiction_mpo', 'eq.' + opts.mpo);
-    if (opts.pd)  params.set('jurisdiction_pd',  'eq.' + opts.pd);
 
     const url = `${this.supabaseUrl}/mv_grant_ready_locations?${params.toString()}`;
     const headers = {
@@ -2329,9 +2394,19 @@ class CrashLensDataClient {
       params.set('road_type', 'eq.' + rt);
     }
     if (opts.locationType) params.set('location_type', 'eq.' + opts.locationType);
-    if (opts.county) {
-      const canonical = String(opts.county).endsWith(' County') ? opts.county : opts.county + ' County';
-      params.set('jurisdiction_county', 'eq.' + canonical);
+
+    // Tier-aware filter (new). Reports + tabs that pass {tier, value} get
+    // jurisdiction-scoped rows.
+    if (opts.tier && opts.value && opts.tier !== 'state' && opts.tier !== 'federal') {
+      const tf = this._tierFilter(opts.tier, opts.value, 'mv_hotspots_with_rates');
+      Object.keys(tf).forEach(k => {
+        if (k === 'state') return;
+        params.set(k, tf[k]);
+      });
+    } else if (opts.county) {
+      // mv_hotspots_with_rates uses Convention B (`county` column, bare value,
+      // no ` County` suffix). Strip suffix consistently.
+      params.set('county', 'eq.' + String(opts.county).replace(/ County$/, ''));
     }
     if (opts.minRate) params.set('crash_rate_mvmt', 'gte.' + opts.minRate);
     if (opts.requireAadt) params.set('aadt', 'not.is.null');
