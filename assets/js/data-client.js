@@ -2114,10 +2114,15 @@ class CrashLensDataClient {
         } else {
           filters = this._tierFilter(tier, value);
         }
-        if (opts.roadType === 'all_no_interstate') {
-          filters.is_interstate = 'eq.false';
-        } else if (opts.roadType && opts.roadType !== 'all') {
-          filters.road_type = `eq.${opts.roadType}`;
+        // mv_fatal_factors aggregates across road_type / is_interstate (the
+        // matview has neither column). Applying those filters previously
+        // produced HTTP 400 and an empty Fatal & Speeding panel whenever the
+        // user picked anything other than "All Roads". Skipping the filter
+        // returns totals aggregated across road types, which is the only
+        // useful answer this matview can give. Note this in the response so
+        // UI can disclose the rollup if it wants.
+        if (opts && (opts.roadType || opts.roadTypes)) {
+          this._roadTypeNotApplicable = 'mv_fatal_factors aggregates across road types';
         }
         const data = await this._supabaseQuery('mv_fatal_factors', { filters });
         this._source = 'supabase';
@@ -2151,10 +2156,11 @@ class CrashLensDataClient {
         } else {
           filters = this._tierFilter(tier, value);
         }
-        if (opts.roadType === 'all_no_interstate') {
-          filters.is_interstate = 'eq.false';
-        } else if (opts.roadType && opts.roadType !== 'all') {
-          filters.road_type = `eq.${opts.roadType}`;
+        // Same constraint as getFatalFactors: mv_speed_summary aggregates
+        // across road_type / is_interstate and has neither column. Filtering
+        // 400s with column-does-not-exist; skip so the panel always renders.
+        if (opts && (opts.roadType || opts.roadTypes)) {
+          this._roadTypeNotApplicable = 'mv_speed_summary aggregates across road types';
         }
         const data = await this._supabaseQuery('mv_speed_summary', { filters });
         this._source = 'supabase';
@@ -3929,7 +3935,14 @@ class CrashLensDataClient {
     opts = opts || {};
     const params = new URLSearchParams({
       state: 'eq.' + ((opts.state || this.state || '').toLowerCase()),
-      select: 'location_type,location_name,crash_year,total_crashes,k,a,b,c,o,epdo,ped_count,bike_count,lat,lon,jurisdiction_county,jurisdiction_mpo,dot_district',
+      // mv_hotspots_yearly columns (Convention A subset):
+      //   state, jurisdiction_county, physical_juris_name, mpo_name,
+      //   planning_district, crash_year, location_type, location_name,
+      //   total_crashes, k, a, epdo, ped_count, bike_count.
+      // Earlier select asked for b/c/o/lat/lon/jurisdiction_mpo/dot_district —
+      // none of which exist; PostgREST returned 400 and the catch silently
+      // null-ed the result, leaving Hot Spots tab on its fallback analyzer.
+      select: 'location_type,location_name,crash_year,total_crashes,k,a,epdo,ped_count,bike_count,jurisdiction_county,physical_juris_name,mpo_name,planning_district',
       order: 'total_crashes.desc',
       limit: String(opts.limit || 5000),
     });
@@ -3942,8 +3955,12 @@ class CrashLensDataClient {
       const canonical = String(opts.county).endsWith(' County') ? opts.county : opts.county + ' County';
       params.set('jurisdiction_county', 'eq.' + canonical);
     }
-    if (opts.mpo)               params.set('jurisdiction_mpo', 'eq.' + opts.mpo);
-    if (opts.region)            params.set('dot_district', 'eq.' + opts.region);
+    if (opts.mpo)               params.set('mpo_name', 'eq.' + opts.mpo);
+    // mv_hotspots_yearly has no dot_district column; planning_district is the
+    // closest geographic tier and stores the same Delaware values
+    // (Central / North / South District). Frontend region-tier callers pass
+    // the planning-district value, so this match is exact.
+    if (opts.region)            params.set('planning_district', 'eq.' + opts.region);
 
     const url = `${this.supabaseUrl}/mv_hotspots_yearly?${params.toString()}`;
     const headers = {
