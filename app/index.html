@@ -4893,6 +4893,7 @@ textarea:focus-visible {
 <script src="modules/map/map-safe-helpers.js"></script>
 <script src="modules/map/map-layers.js"></script>
 <script src="modules/app/tab-dispatcher.js"></script>
+<script src="modules/app/state-banner.js"></script>
 <script src="modules/ai/ai-mode-toggle.js"></script>
 <script src="modules/ai/ai-domain-knowledge-core.js"></script>
 <script src="modules/ai/ai-domain-knowledge-rag.js"></script>
@@ -59391,8 +59392,14 @@ async function downloadReportWord() {
             case 'intersection':
                 await generateCorridorWordMemo(title, author, route, startDate, endDate, type);
                 break;
+            case 'safety':
+                await generateSafetyWordMemo(title, author, startDate, endDate);
+                break;
             case 'pedbike':
                 await generatePedBikeWordMemo(title, author, startDate, endDate);
+                break;
+            case 'trend':
+                await generateTrendWordMemo(title, author, startDate, endDate);
                 break;
             default:
                 await generateSystemwideWordMemo(title, author, startDate, endDate);

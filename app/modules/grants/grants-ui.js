@@ -992,7 +992,10 @@ function getGrantSearchSystemPrompt() {
     const fips = jurisdictionContext?.stateFips || '08';
     const stateInfo = (typeof FIPSDatabase !== 'undefined') ? FIPSDatabase.getState(fips) : null;
     const dotName = stateInfo?.dotName || 'State DOT';
-    const hso = getStateHSO(fips);
+    // Defensive: getStateHSO is defined inline in app/index.html and not all
+    // load orders guarantee it's available at module top-level eval time.
+    // L1178 in this file already uses this pattern; mirror it here.
+    const hso = (typeof getStateHSO === 'function') ? getStateHSO(fips) : {};
     const hsoAgency = hso.agency || dotName;
     const stateName = jurisdictionContext?.stateName || 'the state';
 
