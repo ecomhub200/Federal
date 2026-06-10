@@ -2844,6 +2844,17 @@ class CrashLensDataClient {
     if (!opts) return;
     if (Array.isArray(opts.roadTypes) && opts.roadTypes.length > 0) {
       target.road_type = `in.(${opts.roadTypes.join(',')})`;
+    } else if (opts.roadType === 'all_no_interstate') {
+      // 'all_no_interstate' is a UI sentinel meaning "every road_type
+      // bucket EXCEPT interstate". The Reports module + some tabs emit
+      // it as a STRING (not as `noInterstate: true`), so the helper has
+      // to recognize it here. Without this branch, the old `else if`
+      // fired and sent `road_type=eq.all_no_interstate` against a column
+      // that only holds dot_roads / county_roads / city_roads / other_roads
+      // — returning zero rows at every tier on every tab that uses this
+      // helper (Hot Spots, Intersections, Grants baseline, Ped/Bike
+      // breakdowns, dashboard summary).
+      target.is_interstate = 'eq.false';
     } else if (opts.roadType && opts.roadType !== 'all_roads' && opts.roadType !== 'allRoads') {
       // 'all_roads' / 'allRoads' are UI sentinels meaning "no filter".
       // The matview's road_type column only has the four bucket values
