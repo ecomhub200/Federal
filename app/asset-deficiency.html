@@ -333,6 +333,7 @@ CRASH LENS v20.0 — <a href="https://mutcd.fhwa.dot.gov/kno_11th_Edition.htm" t
 <script>
 const $=id=>document.getElementById(id);
 let CRASH=[],INV=[],DEFS=[],SCHOOLS=[],HPMS=[],RAIL_X=[],TRANSIT=[],NBI=[],SPD_MAP={},map,clGrp;
+let _invFromParent=false;   // true once the parent (Inventory Manager bridge) supplies inventory
 let totalValidCrashes=0;
 let filters={};let sortCol='epdo',sortAsc=false;
 const PM={signal:'signal',stop:'stop',streetlight:'light',crosswalk:'ped',ped:'ped',school:'ped',bike:'ped',animal:'ped',railroad:'ped',bridge:'sys',speed:'sys',headon:'sys',rearend:'sys',departure:'sys'};
@@ -1553,11 +1554,12 @@ document.addEventListener('DOMContentLoaded',()=>{initMap()});
       }
     }
 
-    // ── Receive traffic inventory rows ──
+    // ── Receive traffic inventory rows (merged + edited, from Inventory Manager) ──
     if(evt.data.type==='ad-inventory-data'&&evt.data.rows){
       INV=evt.data.rows;
-      procData(null,'inv','Parent App');
-      log('Received '+INV.length+' inventory records from app','ok');
+      _invFromParent=true;   // the parent supplied inventory — skip the R2 auto-load fallback
+      procData(null,'inv','Inventory Manager');
+      log('Received '+INV.length+' inventory records from Inventory Manager','ok');
     }
 
     // ── Receive jurisdiction config ──
@@ -1569,6 +1571,10 @@ document.addEventListener('DOMContentLoaded',()=>{initMap()});
       if(cfg.r2BaseUrl&&cfg.r2Path){
         const crEl=$('uCr');if(crEl)crEl.value=cfg.r2BaseUrl+'/'+cfg.r2Path+'/all_roads.csv';
         const inEl=$('uIn');if(inEl)inEl.value=cfg.r2BaseUrl+'/'+cfg.r2Path+'/traffic-inventory.parquet.gz';
+        // Auto-load the inventory from R2 so the tab populates without a manual
+        // "Load" click. Deferred ~1.5s so the parent's Inventory-Manager bridge
+        // (ad-inventory-data, which carries user edits) wins if it arrives first.
+        setTimeout(function(){ if(!_invFromParent && (!INV||!INV.length)){ try{ loadUrl('inv'); }catch(e){} } }, 1500);
       }
       // Update map center to jurisdiction
       if(cfg.mapCenter&&map){

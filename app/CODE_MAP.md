@@ -993,6 +993,7 @@ Before any code edit:
 | _compHexToRgb | modules/dashboard/dashboard-tab-matview.js | window+CL | dashboard |
 | _computeMultiCountyBounds | modules/spatial/geo-tier.js | window+CL | shared |
 | _computeYoyDelta | modules/scorecard/scorecard.js | module-private | scorecard |
+| _countyFipsFromName | modules/data/supabase-bridge.js | module-private | shared |
 | _countyRollupTarget | modules/data/supabase-bridge.js | module-private | shared |
 | _createPointMarker | modules/data/supabase-map-bridge.js | module-private | shared |
 | _dashCanUseSupabase | inline @ L40452 | inline | shared |
