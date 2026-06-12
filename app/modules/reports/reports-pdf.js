@@ -82,6 +82,28 @@ function downloadReportPDF() {
         }
 
         if (crashes.length === 0) {
+            // Matview-fallback path. When the user is on an aggregate tier
+            // (region / MPO / planning_district / county-rollup), crashState
+            // .sampleRows is empty by design — the report renderer hydrated
+            // straight from matviews and the DOM in #reportOutput is the
+            // finished report. Use html2canvas → PDF here so the user gets
+            // the same PDF they'd get if sampleRows had been populated. This
+            // mirrors the flagship Infographic/Comprehensive paths that
+            // already render via html2canvas.
+            const reportOut = document.getElementById('reportOutput');
+            const hasRenderedReport = !!(reportOut
+                && reportOut.offsetParent !== null
+                && reportOut.innerHTML.trim().length > 200);
+            if (hasRenderedReport && typeof html2canvas === 'function' && window.jspdf) {
+                _matviewFallbackDownloadPDF(reportOut, title)
+                    .then(() => hideLoading())
+                    .catch(err => {
+                        hideLoading();
+                        console.error('[PDF matview-fallback]', err);
+                        alert('PDF export failed: ' + (err && err.message ? err.message : err));
+                    });
+                return;
+            }
             hideLoading();
             alert('No crash data available for the current report. Please generate the report first.');
             return;
@@ -95,6 +117,54 @@ function downloadReportPDF() {
         console.error('[PDF Export Error]', e);
         alert('Error generating PDF: ' + e.message);
     }
+}
+
+/**
+ * Matview-fallback PDF — renders the on-screen report (#reportOutput) into
+ * a multi-page PDF via html2canvas. Used when crashState.sampleRows is empty
+ * (aggregate-tier path) but the report itself has rendered from matview data.
+ *
+ * Mirrors the html2canvas opts + slicing pattern used by the existing
+ * infographic / comprehensive PDF paths in app/index.html (CC 367), so the
+ * tainted-canvas guards are consistent across all PDF download flows.
+ *
+ * Jurisdiction-agnostic — the helper captures whatever's in #reportOutput.
+ */
+async function _matviewFallbackDownloadPDF(container, title) {
+    const { jsPDF } = window.jspdf;
+    const h2cOpts = (typeof window._cc367_h2cOpts === 'object' && window._cc367_h2cOpts)
+        ? window._cc367_h2cOpts
+        : { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' };
+    const canvas = await html2canvas(container, h2cOpts);
+    const imgData = canvas.toDataURL('image/png');
+
+    // Letter, mm. Match the infographic layout's 200mm content width / 5mm
+    // top margin so the on-page report aligns visually.
+    const pdf = new jsPDF('p', 'mm', 'letter');
+    const imgWidth = 200;
+    const imgHeight = canvas.height * imgWidth / canvas.width;
+    const pageHeight = 270;      // 279.4 page height - 5 top - ~4 bottom safety
+    let heightLeft = imgHeight;
+    let yPos = 5;
+    pdf.addImage(imgData, 'PNG', 5, yPos, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+    while (heightLeft > 0) {
+        // Negative y shifts the image up so the next slice lands at the top
+        // of the new page. jsPDF clips to page bounds, so this gives the
+        // multi-page effect with a single addImage source.
+        yPos = -(imgHeight - heightLeft) + 5;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 5, yPos, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+    }
+    const filename = (typeof window._cc367_filename === 'function')
+        ? window._cc367_filename(_safeFileBase(title))
+        : _safeFileBase(title) + '.pdf';
+    pdf.save(filename);
+}
+
+function _safeFileBase(s) {
+    return String(s || 'crash-report').replace(/[^a-z0-9_\-]+/gi, '_').replace(/^_+|_+$/g, '') || 'crash-report';
 }
 
 /**
