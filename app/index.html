@@ -51970,7 +51970,30 @@ function sendCrashDataToAssetDeficiency() {
 function sendInventoryToAssetDeficiency() {
     const frame = document.getElementById('assetDeficiencyFrame');
     if (!frame || !frame.contentWindow || frame.src === 'about:blank') return;
+    // Pull the current merged + edited inventory from the Inventory Manager
+    // iframe (if it's loaded) and forward it so Asset Deficiency reflects user
+    // edits, not just the base R2 parquet. The IM replies with
+    // 'im-inventory-data' (handled below). If IM isn't loaded / has no data,
+    // Asset Deficiency auto-loads the base inventory from R2 (see the ad-config
+    // handler in asset-deficiency.html).
+    const im = document.getElementById('inventoryManagerFrame');
+    if (!im || !im.contentWindow || im.src === 'about:blank') return;
+    try { im.contentWindow.postMessage({ type: 'im-get-inventory' }, '*'); } catch (e) { /* non-fatal */ }
 }
+
+// Inventory Manager → parent → Asset Deficiency relay: forward the merged +
+// edited inventory so the deficiency analysis uses the user's current asset
+// inventory. Only forwards a non-empty list (an empty/late IM lets Asset
+// Deficiency's R2 auto-load fallback stand).
+window.addEventListener('message', function(evt) {
+    if (!evt.data || evt.data.type !== 'im-inventory-data') return;
+    const rows = Array.isArray(evt.data.rows) ? evt.data.rows : [];
+    if (!rows.length) return;
+    const ad = document.getElementById('assetDeficiencyFrame');
+    if (!ad || !ad.contentWindow || ad.src === 'about:blank') return;
+    try { ad.contentWindow.postMessage({ type: 'ad-inventory-data', rows: rows }, '*'); } catch (e) { /* non-fatal */ }
+    console.log('[AssetDef] Forwarded', rows.length, 'inventory rows from Inventory Manager');
+});
 
 function sendConfigToAssetDeficiency() {
     const frame = document.getElementById('assetDeficiencyFrame');
@@ -52036,6 +52059,7 @@ document.addEventListener('jurisdictionChanged', function() {
     // Asset Deficiency iframe
     sendConfigToAssetDeficiency();
     sendCrashDataToAssetDeficiency();
+    sendInventoryToAssetDeficiency();
 
     console.log('[Analysis] jurisdictionChanged → synced all iframe tabs');
 });

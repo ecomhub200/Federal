@@ -473,6 +473,12 @@ let imR2BasePath='';
 // Listen for messages from parent (jurisdiction sync)
 window.addEventListener('message',function(evt){
   if(!evt.data)return;
+  // Parent asks for the current merged + edited inventory (base parquet with the
+  // edits ledger applied) to forward to the Asset Deficiency tab.
+  if(evt.data.type==='im-get-inventory'){
+    try{var rows=(typeof assets!=='undefined'&&Array.isArray(assets))?assets:[];(window.parent||window).postMessage({type:'im-inventory-data',rows:rows},'*');}catch(e){}
+    return;
+  }
   if(evt.data.type==='im-set-jurisdictions'){populateJurisdictions(evt.data.jurisdictions)}
   if(evt.data.type==='im-set-jurisdiction'){
     const prevKey=imR2BasePath||($('stSel').value+'/'+$('coSel').value);
