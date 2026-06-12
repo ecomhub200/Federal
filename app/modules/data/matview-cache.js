@@ -164,7 +164,29 @@ CL.data = CL.data || {};
         if (hit && (Date.now() - hit.ts) < TTL_MS) {
             return Promise.resolve(hit.data);
         }
-        if (hit) _cache.delete(key);   // expired
+
+        // Stale-while-revalidate for the in-memory (non-persisted) path: when an
+        // entry is expired but still present, serve it immediately and refresh
+        // in the background, so revisiting a tab never shows a spinner for a
+        // value we already have. The background promise is registered as the
+        // in-flight entry (resolving to fresh data, or the stale value on error)
+        // so concurrent callers still get a usable result. Persisted callers
+        // keep using the IDB SWR path below.
+        if (hit && !persist && !_inflight.has(key)) {
+            var bgFetch = Promise.resolve()
+                .then(function () { return fetcher(signal ? { signal: signal } : undefined); })
+                .then(function (fresh) {
+                    _inflight.delete(key);
+                    if (signal && signal.aborted) return hit.data;
+                    _cache.set(key, { ts: Date.now(), data: fresh });
+                    _evictOldest();
+                    return fresh;
+                })
+                .catch(function () { _inflight.delete(key); return hit.data; });
+            _inflight.set(key, bgFetch);
+            return Promise.resolve(hit.data);
+        }
+        if (hit) _cache.delete(key);   // expired (persist path, or refresh already in flight)
 
         if (_inflight.has(key)) {
             return _inflight.get(key);

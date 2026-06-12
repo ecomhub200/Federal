@@ -1590,7 +1590,7 @@ class CrashLensDataClient {
     // ── Build query ──
     const params = new URLSearchParams({
       tier: `eq.${mvTier}`,
-      select: 'state,tier,jurisdiction_id,jurisdiction_name,crash_year,crashes,fatals,serious,injuries,ped,bike,speed,alcohol,night,epdo',
+      select: 'state,tier,jurisdiction_id,jurisdiction_name,crash_year,road_type,is_interstate,crashes,fatals,serious,injuries,ped,bike,speed,alcohol,night,epdo',
     });
     if (mvState === null) {
       params.append('state', 'is.null');          // federal tier filter
@@ -1599,6 +1599,31 @@ class CrashLensDataClient {
     }
     if (mvJurisdictionId) params.append('jurisdiction_id', `eq.${mvJurisdictionId}`);
     if (year != null)     params.append('crash_year', `eq.${year}`);
+
+    // ── Road-type rollup selection (matview built with GROUPING SETS on
+    // (road_type),(is_interstate),() — see 2026-06-11 migration). Pick the row
+    // that matches the active road-type spec so each road-type rotation is an
+    // indexed single-row read instead of a dashboard_summary fallback:
+    //   all roads        → road_type IS NULL  AND is_interstate IS NULL
+    //   road_type = X     → road_type = X      AND is_interstate IS NULL
+    //   road_type ∈ [..]  → road_type IN (..)  AND is_interstate IS NULL  (summed)
+    //   no interstate     → road_type IS NULL  AND is_interstate = false
+    const _rt   = (opts && opts.roadType) || null;
+    const _rts  = (opts && Array.isArray(opts.roadTypes) && opts.roadTypes.length) ? opts.roadTypes : null;
+    const _noInt = !!(opts && opts.noInterstate);
+    if (_rt) {
+      params.append('road_type', `eq.${_rt}`);
+      params.append('is_interstate', 'is.null');
+    } else if (_rts) {
+      params.append('road_type', `in.(${_rts.join(',')})`);
+      params.append('is_interstate', 'is.null');
+    } else if (_noInt) {
+      params.append('road_type', 'is.null');
+      params.append('is_interstate', 'eq.false');
+    } else {
+      params.append('road_type', 'is.null');
+      params.append('is_interstate', 'is.null');
+    }
     const url = `${this.supabaseUrl}/mv_dashboard_tier_kpi?${params}`;
 
     // ── Standard timeout + external-signal fetch (mirrors getHotspots/getMapPoints) ──

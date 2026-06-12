@@ -901,21 +901,29 @@ CL.data.supabaseBridge = (function () {
             // the existing fetch unchanged.
             //
             // Skipped when any filter requires a dimension the matview lacks
-            // (severity / fc / area / road-type) — those fall straight through
-            // to the existing path. State-agnostic; no state literals.
+            // (severity / fc / area). Road-type IS now a matview dimension
+            // (2026-06-11 — GROUPING SETS on road_type/is_interstate), so the
+            // fast-path serves road-type rotations too. State-agnostic.
             var _canFastPath = !summaryFilters.severity && !summaryFilters.fc &&
-                               !summaryFilters.areaType && !summaryFilters.roadType &&
-                               !Array.isArray(summaryFilters.roadTypes) &&
-                               !summaryFilters.noInterstate;
+                               !summaryFilters.areaType;
             if (_canFastPath && CL.data && typeof CL.data.cachedMatview === 'function') {
                 try {
+                    // Road-type spec threaded into both the fetcher AND the cache
+                    // key so each road-type selection gets its own cache slot
+                    // (and the prewarm keyExtra in prewarm.js must match).
+                    var _rtKey = {
+                        roadType: spec.roadType || null,
+                        roadTypes: spec.roadTypes || null,
+                        noInterstate: !!spec.noInterstate
+                    };
                     var _tkpiRows = await CL.data.cachedMatview(
                         'mv_dashboard_tier_kpi', t.tier, t.value || '',
                         function (callOpts) {
                             return window.crashLensClient.getDashboardTierKpi(
-                                t.tier, t.value || null, null, callOpts || {});
+                                t.tier, t.value || null, null,
+                                Object.assign({}, callOpts || {}, _rtKey));
                         },
-                        { year: 'all' }
+                        { year: 'all', rt: _rtKey.roadType, rts: _rtKey.roadTypes, ni: _rtKey.noInterstate }
                     );
                     if (Array.isArray(_tkpiRows) && _tkpiRows.length) {
                         var _tkpiMs = Date.now() - startTime;
