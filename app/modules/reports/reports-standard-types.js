@@ -227,10 +227,29 @@ function generatePedBikeReport(crashes, title, author) {
     // (dark conditions, contributing factors, yearly, location tables) show an
     // "aggregate view" note. Falls back to full per-row analysis at row tiers.
     const _M = window._reportMatviewData;
+    // CC 369 — Prefer per-mode totals from mv_pedbike_breakdowns when available.
+    // _M.breakdowns shape: { pedestrian: {byYear, byLight, byLocation}, bicycle: same }
+    // Each bucket value is { K, A, O, total }. Sum byYear for the headline KPI.
+    const _bd = _M && _M.breakdowns;
+    function _cc369SumBucket(modeObj, dim) {
+        if (!modeObj || !modeObj[dim]) return null;
+        let total = 0, K = 0, A = 0, O = 0;
+        for (const dv of Object.keys(modeObj[dim])) {
+            const b = modeObj[dim][dv] || {};
+            total += b.total || 0;
+            K += b.K || 0;
+            A += b.A || 0;
+            O += b.O || 0;
+        }
+        return { total, K, A, O };
+    }
+    const _bdPedTotals  = _bd ? _cc369SumBucket(_bd.pedestrian, 'byYear') : null;
+    const _bdBikeTotals = _bd ? _cc369SumBucket(_bd.bicycle,    'byYear') : null;
     const _vruCats = (_M && typeof computeSystemwideCategoryDataFromMatviews === 'function')
         ? computeSystemwideCategoryDataFromMatviews(_M) : null;
-    const pedCrashes = _vruCats ? [] : crashes.filter(c => isYes(c[COL.PED]));
-    const bikeCrashes = _vruCats ? [] : crashes.filter(c => isYes(c[COL.BIKE]));
+    const _haveAggregate = !!(_bdPedTotals || _bdBikeTotals || _vruCats);
+    const pedCrashes = _haveAggregate ? [] : crashes.filter(c => isYes(c[COL.PED]));
+    const bikeCrashes = _haveAggregate ? [] : crashes.filter(c => isYes(c[COL.BIKE]));
     // Prefer the Reports tab's user-selected timeline (reportStartDate /
     // reportEndDate) so the rendered HTML preview and the Word memo both
     // show the same period the user asked for. Fall back to the crash
@@ -240,12 +259,16 @@ function generatePedBikeReport(crashes, title, author) {
         : getDateRange(crashes);
     const reportId = generateReportId();
 
-    const pedStats = _vruCats
-        ? { total: _vruCats.pedestrian.total || 0, K: _vruCats.pedestrian.K || 0, A: _vruCats.pedestrian.A || 0, B: 0, C: 0, O: 0, ped: _vruCats.pedestrian.total || 0, bike: 0, intersection: 0 }
-        : computeStats(pedCrashes);
-    const bikeStats = _vruCats
-        ? { total: _vruCats.bicycle.total || 0, K: _vruCats.bicycle.K || 0, A: _vruCats.bicycle.A || 0, B: 0, C: 0, O: 0, ped: 0, bike: _vruCats.bicycle.total || 0, intersection: 0 }
-        : computeStats(bikeCrashes);
+    const pedStats = _bdPedTotals
+        ? { total: _bdPedTotals.total, K: _bdPedTotals.K, A: _bdPedTotals.A, B: 0, C: 0, O: _bdPedTotals.O, ped: _bdPedTotals.total, bike: 0, intersection: 0 }
+        : (_vruCats
+            ? { total: _vruCats.pedestrian.total || 0, K: _vruCats.pedestrian.K || 0, A: _vruCats.pedestrian.A || 0, B: 0, C: 0, O: 0, ped: _vruCats.pedestrian.total || 0, bike: 0, intersection: 0 }
+            : computeStats(pedCrashes));
+    const bikeStats = _bdBikeTotals
+        ? { total: _bdBikeTotals.total, K: _bdBikeTotals.K, A: _bdBikeTotals.A, B: 0, C: 0, O: _bdBikeTotals.O, ped: 0, bike: _bdBikeTotals.total, intersection: 0 }
+        : (_vruCats
+            ? { total: _vruCats.bicycle.total || 0, K: _vruCats.bicycle.K || 0, A: _vruCats.bicycle.A || 0, B: 0, C: 0, O: 0, ped: 0, bike: _vruCats.bicycle.total || 0, intersection: 0 }
+            : computeStats(bikeCrashes));
 
     const pedEPDO = calcEPDO(pedStats);
     const bikeEPDO = calcEPDO(bikeStats);
