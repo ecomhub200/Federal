@@ -60982,7 +60982,7 @@ function resetBAStudy() {
 }
 
 // Run Before & After Analysis
-function runBeforeAfterAnalysis() {
+async function runBeforeAfterAnalysis() {
     // Validate inputs
     if (!baState.selectedLocation && baState.locationCrashes.length === 0) {
         alert('Please select a location for the study.');
@@ -61013,78 +61013,142 @@ function runBeforeAfterAnalysis() {
 
     showLoading('Running Before & After Analysis...');
 
-    setTimeout(() => {
-        try {
-            // Filter crashes for before and after periods
-            const beforeCrashes = filterCrashesByPeriod(baState.locationCrashes, beforeStart, beforeEnd);
-            const afterCrashes = filterCrashesByPeriod(baState.locationCrashes, afterStart, afterEnd);
+    // Yield once so the spinner paints before any synchronous work.
+    await new Promise(res => setTimeout(res, 30));
 
-            // Calculate statistics (use mapPoints-compatible function)
-            const beforeStats = computeStatsFromMapPoints(beforeCrashes);
-            const afterStats = computeStatsFromMapPoints(afterCrashes);
+    try {
+        const confidenceLevel = parseFloat(document.getElementById('baConfidenceLevel').value);
 
-            // Calculate period lengths in years
-            const beforeYears = (beforeEnd - beforeStart) / (1000 * 60 * 60 * 24 * 365);
-            const afterYears = (afterEnd - afterStart) / (1000 * 60 * 60 * 24 * 365);
+        // Client-side per-row stats (full K/A/B/C/O + crashes for the monthly
+        // trend). Empty at aggregate tiers where mapPoints isn't loaded — that's
+        // fine; the RPC supplies the headline numbers there.
+        const beforeCrashes = filterCrashesByPeriod(baState.locationCrashes, beforeStart, beforeEnd);
+        const afterCrashes = filterCrashesByPeriod(baState.locationCrashes, afterStart, afterEnd);
+        const beforeStatsLocal = computeStatsFromMapPoints(beforeCrashes);
+        const afterStatsLocal = computeStatsFromMapPoints(afterCrashes);
+        const hasLocal = Array.isArray(baState.locationCrashes) && baState.locationCrashes.length > 0;
+        const beforeYears = (beforeEnd - beforeStart) / (1000 * 60 * 60 * 24 * 365);
+        const afterYears = (afterEnd - afterStart) / (1000 * 60 * 60 * 24 * 365);
 
-            // Calculate annualized rates
-            const beforeRate = beforeStats.total / beforeYears;
-            const afterRate = afterStats.total / afterYears;
-
-            // Calculate CMF and CRF
-            let cmf, crf, expectedAfter, variance, stdError, pValue, isSignificant;
-
-            if (baState.analysisMethod === 'eb') {
-                // Empirical Bayes calculation (simplified)
-                const adjustmentFactor = afterYears / beforeYears;
-                expectedAfter = beforeStats.total * adjustmentFactor;
-                cmf = afterStats.total / expectedAfter;
-                crf = (1 - cmf) * 100;
-
-                // Calculate statistical significance
-                variance = expectedAfter; // Poisson variance approximation
-                stdError = Math.sqrt(variance);
-                const zScore = (expectedAfter - afterStats.total) / stdError;
-                pValue = 2 * (1 - normalCDF(Math.abs(zScore)));
-                isSignificant = pValue < (1 - parseFloat(document.getElementById('baConfidenceLevel').value));
-            } else {
-                // Naive calculation
-                cmf = afterRate / beforeRate;
-                crf = (1 - cmf) * 100;
-                expectedAfter = beforeRate * afterYears;
-                variance = afterStats.total;
-                stdError = Math.sqrt(variance);
-                pValue = 0.5; // Naive method doesn't provide reliable p-value
-                isSignificant = false;
+        // ── Prefer the Supabase run_before_after_study RPC (state-agnostic) ──
+        // p_state defaults to the data client's current state, so any state
+        // loaded into Supabase is used automatically; states without server
+        // data (or map-drawn selections) fall through to the client-side math.
+        let rpc = null;
+        const loc = baState.selectedLocation;
+        const rpcType = loc && loc.type === 'node' ? 'intersection'
+                      : (loc && loc.type === 'route' ? 'route' : null);
+        if (rpcType && window.CL && CL.data && CL.data.client && CL.data.client.preferSupabase) {
+            try {
+                rpc = await CL.data.client.runBeforeAfterStudy({
+                    state: CL.data.client.state,
+                    locationType: rpcType,
+                    locationName: String(loc.value),
+                    installDate: treatmentDate,
+                    beforeMonths: Math.round((baState.studyPeriodYears || 3) * 12),
+                    afterMonths: Math.round((baState.studyPeriodYears || 3) * 12),
+                    constructionMonths: baState.constructionDuration
+                });
+            } catch (e) {
+                console.warn('[BA] run_before_after_study RPC failed — using client-side:', e && e.message);
             }
+        }
+        const rpcUsable = rpc && rpc.observed_before && rpc.observed_after &&
+            (((rpc.observed_before.total || 0) + (rpc.observed_after.total || 0)) > 0);
 
-            // Store results
+        if (rpcUsable) {
+            // Headline effect metrics: authoritative server Empirical-Bayes.
+            const ob = rpc.observed_before, oa = rpc.observed_after;
+            const cmf = (rpc.cmf_observed != null) ? rpc.cmf_observed
+                      : (ob.total > 0 ? (oa.total / (ob.total * (afterYears / beforeYears))) : NaN);
+            const crf = (rpc.pct_change != null) ? rpc.pct_change : (1 - cmf) * 100;
+            const expectedAfter = (rpc.predicted_after_no_treatment != null) ? rpc.predicted_after_no_treatment
+                                : (rpc.eb_estimate != null ? rpc.eb_estimate : (ob.total || 0));
+            // The RPC returns no p-value — derive significance with a Poisson
+            // z-test (reusing the existing normalCDF), matching the client EB path.
+            const variance = expectedAfter > 0 ? expectedAfter : 1;
+            const zScore = (expectedAfter - (oa.total || 0)) / Math.sqrt(variance);
+            const pValue = 2 * (1 - normalCDF(Math.abs(zScore)));
+            const isSignificant = pValue < (1 - confidenceLevel);
+
+            // Hybrid: full local severity split + trend when available; otherwise
+            // synthesise coherent stats from RPC totals (lump non-K/A into O so
+            // Total and EPDO stay self-consistent). RPC gives no B/C breakdown.
+            const _statsFromRpc = (o) => {
+                const total = o.total || 0, K = o.k || 0, A = o.a || 0;
+                return { total: total, K: K, A: A, B: 0, C: 0, O: Math.max(0, total - K - A), ped: 0, bike: 0 };
+            };
+            const bStats = hasLocal ? beforeStatsLocal : _statsFromRpc(ob);
+            const aStats = hasLocal ? afterStatsLocal : _statsFromRpc(oa);
+            const bYears = hasLocal ? beforeYears : ((ob.months || 36) / 12);
+            const aYears = hasLocal ? afterYears : ((oa.months || 36) / 12);
+
             baState.results = {
-                before: { crashes: beforeCrashes, stats: beforeStats, years: beforeYears, rate: beforeRate },
-                after: { crashes: afterCrashes, stats: afterStats, years: afterYears, rate: afterRate },
+                before: { crashes: hasLocal ? beforeCrashes : [], stats: bStats, years: bYears, rate: bYears ? bStats.total / bYears : 0 },
+                after: { crashes: hasLocal ? afterCrashes : [], stats: aStats, years: aYears, rate: aYears ? aStats.total / aYears : 0 },
                 cmf: cmf,
                 crf: crf,
                 expectedAfter: expectedAfter,
                 pValue: pValue,
                 isSignificant: isSignificant,
-                confidenceLevel: parseFloat(document.getElementById('baConfidenceLevel').value)
+                confidenceLevel: confidenceLevel,
+                source: 'supabase'
             };
+            console.log('[BA] Server RPC (run_before_after_study) used:', { state: CL.data.client.state, type: rpcType, location: loc.value, cmf: cmf, crf: crf, localSeverity: hasLocal });
+        } else {
+            // ── Client-side fallback (original math, unchanged behaviour) ──
+            const beforeRate = beforeStatsLocal.total / beforeYears;
+            const afterRate = afterStatsLocal.total / afterYears;
+            let cmf, crf, expectedAfter, variance, stdError, pValue, isSignificant;
 
-            // Display results
-            displayBAResults();
+            if (baState.analysisMethod === 'eb') {
+                // Empirical Bayes calculation (simplified)
+                const adjustmentFactor = afterYears / beforeYears;
+                expectedAfter = beforeStatsLocal.total * adjustmentFactor;
+                cmf = afterStatsLocal.total / expectedAfter;
+                crf = (1 - cmf) * 100;
+                variance = expectedAfter; // Poisson variance approximation
+                stdError = Math.sqrt(variance);
+                const zScore = (expectedAfter - afterStatsLocal.total) / stdError;
+                pValue = 2 * (1 - normalCDF(Math.abs(zScore)));
+                isSignificant = pValue < (1 - confidenceLevel);
+            } else {
+                // Naive calculation
+                cmf = afterRate / beforeRate;
+                crf = (1 - cmf) * 100;
+                expectedAfter = beforeRate * afterYears;
+                variance = afterStatsLocal.total;
+                stdError = Math.sqrt(variance);
+                pValue = 0.5; // Naive method doesn't provide reliable p-value
+                isSignificant = false;
+            }
 
-            hideLoading();
-            document.getElementById('beforeAfterResults').style.display = 'block';
-            document.getElementById('beforeAfterResults').scrollIntoView({ behavior: 'smooth' });
-
-            // Evaluate monitoring alert conditions after analysis completes
-            checkBAMonitoringOnDataLoad();
-        } catch (err) {
-            hideLoading();
-            console.error('BA Analysis Error:', err);
-            alert('Error running analysis: ' + err.message);
+            baState.results = {
+                before: { crashes: beforeCrashes, stats: beforeStatsLocal, years: beforeYears, rate: beforeRate },
+                after: { crashes: afterCrashes, stats: afterStatsLocal, years: afterYears, rate: afterRate },
+                cmf: cmf,
+                crf: crf,
+                expectedAfter: expectedAfter,
+                pValue: pValue,
+                isSignificant: isSignificant,
+                confidenceLevel: confidenceLevel,
+                source: 'client'
+            };
         }
-    }, 100);
+
+        // Display results
+        displayBAResults();
+        document.getElementById('beforeAfterResults').style.display = 'block';
+        document.getElementById('beforeAfterResults').scrollIntoView({ behavior: 'smooth' });
+
+        // Evaluate monitoring alert conditions after analysis completes
+        checkBAMonitoringOnDataLoad();
+    } catch (err) {
+        console.error('BA Analysis Error:', err);
+        alert('Error running analysis: ' + err.message);
+    } finally {
+        hideLoading();
+    }
 }
 
 // Filter crashes by date period
