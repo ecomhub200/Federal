@@ -1706,7 +1706,8 @@ Before any code edit:
 | downloadInfographicPDF | inline @ L55862 (CC 367: html2canvas ignoreElements + tier filename) | inline | shared |
 | downloadInfographicPNG | inline @ L55816 (CC 367: html2canvas ignoreElements + tier filename) | inline | shared |
 | downloadKML | inline @ L52242 | inline | shared |
-| downloadReportPDF | modules/reports/reports-pdf.js | window+CL | reports |
+| downloadReportPDF | modules/reports/reports-pdf.js | window+CL | reports | (legacy text PDF; standard-report Download PDF button now calls exportReportPDF) |
+| exportReportPDF | inline near downloadInfographicPDF (html2canvas→jsPDF, per-page JPEG snapshot of #reportOutput rds theme) | inline | reports |
 | downloadReportWord | inline @ L60347 | inline | reports |
 | drawKPI | modules/hotspots/hotspots-tab-modal.js | module-private | hotspots |
 | drawKPI | modules/intersection/intersection-tab-charts.js | module-private | intersection |

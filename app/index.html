@@ -4840,6 +4840,64 @@ textarea:focus-visible {
     .rds-section { page-break-before: auto; }
     .rds-cover  { page-break-after: avoid; }
 }
+
+/* === Professional skin: map the legacy .report-* report markup onto the ===
+   === rds design system (scoped to .rds-report so nothing else changes). === */
+.rds-report .report-container { background: var(--rds-card); padding: 0 28px 28px; }
+.rds-report .report-header { margin: 18px 0 8px; }
+.rds-report #rptMeta { color: var(--rds-muted); font-size: 0.8rem; margin-top: 4px; }
+
+.rds-report .report-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--rds-s-3); margin: var(--rds-s-5) 0;
+}
+.rds-report .report-kpi {
+    position: relative; background: var(--rds-card);
+    border: 1px solid var(--rds-line); border-top: 3px solid var(--rds-primary);
+    border-radius: var(--rds-radius); padding: var(--rds-s-4);
+    box-shadow: var(--rds-shadow-1); overflow: hidden;
+}
+.rds-report .report-kpi .value {
+    font-family: var(--rds-font-mono, monospace); font-variant-numeric: tabular-nums;
+    font-size: 1.7rem; line-height: 1.05; font-weight: 700; color: var(--rds-ink);
+}
+.rds-report .report-kpi .label {
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--rds-muted); margin-top: var(--rds-s-1);
+}
+.rds-report .report-kpi:nth-child(1) { border-top-color: var(--rds-fatal); }
+.rds-report .report-kpi:nth-child(1) .value { color: var(--rds-fatal); }
+.rds-report .report-kpi:nth-child(2) { border-top-color: var(--rds-serious); }
+.rds-report .report-kpi:nth-child(2) .value { color: var(--rds-serious); }
+
+.rds-report .report-section {
+    margin: var(--rds-s-6) 0 var(--rds-s-5); padding-top: var(--rds-s-3);
+    border-top: 3px solid var(--rds-primary); page-break-inside: avoid; break-inside: avoid;
+}
+.rds-report .report-section > h4 {
+    font-family: var(--rds-font-head, inherit); font-size: 1.2rem; font-weight: 700;
+    color: var(--rds-ink); margin: 0 0 var(--rds-s-3);
+    display: flex; align-items: center; gap: 8px;
+}
+.rds-report .report-section > h4 svg { color: var(--rds-primary); width: 18px; height: 18px; }
+
+.rds-report .report-table {
+    width: 100%; border-collapse: collapse; font-size: 0.9rem;
+    box-shadow: var(--rds-shadow-1); border-radius: var(--rds-radius-sm); overflow: hidden;
+    margin: var(--rds-s-3) 0 var(--rds-s-5);
+}
+.rds-report .report-table thead th {
+    background: var(--rds-primary); color: #fff; text-align: left;
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+    padding: var(--rds-s-2) var(--rds-s-3);
+}
+.rds-report .report-table tbody td {
+    padding: var(--rds-s-2) var(--rds-s-3); border-bottom: 1px solid var(--rds-line);
+    color: var(--rds-ink-2);
+}
+.rds-report .report-table tbody tr:nth-child(even) td { background: var(--rds-bg); }
+.rds-report .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--rds-s-4); }
 </style>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -10144,7 +10202,7 @@ Analysis is prepared for planning and informational purposes. The user is respon
 </div>
 <div class="btn-group" style="margin-top:1rem">
 <button class="btn-soft btn-soft-warning" onclick="printReport()">🖨️ Print Report</button>
-<button class="btn-soft btn-soft-success" onclick="downloadReportPDF()">📥 Download PDF</button>
+<button class="btn-soft btn-soft-success" onclick="exportReportPDF()">📥 Download PDF</button>
 <button class="btn-soft btn-soft-primary" onclick="downloadReportWord()">📝 Download Word</button>
 <button class="btn-soft btn-soft-secondary" onclick="copyReportText()">📋 Copy Text</button>
 </div>
@@ -55867,6 +55925,61 @@ async function downloadInfographicPNG() {
         hideLoading();
         console.error('[CC 367] html2canvas failed →', e && e.message);
         alert('Error generating PNG: ' + e.message);
+    }
+}
+
+// Professional standard-report PDF — snapshots the on-screen #reportOutput
+// (branded rds theme) into a multi-page PDF via html2canvas → jsPDF, so the
+// downloaded PDF matches the on-screen report exactly. Replaces the legacy
+// text-only generateStandardReportPDF path for the standard-report band.
+async function exportReportPDF() {
+    const el = document.getElementById('reportOutput');
+    if (!el || el.style.display === 'none' || el.offsetHeight < 100) {
+        alert('Please click "Generate Report" first, then download the PDF.');
+        return;
+    }
+    showLoading('Generating professional PDF report...');
+    try {
+        const { jsPDF } = window.jspdf;
+        const canvas = await html2canvas(el, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            windowWidth: el.scrollWidth,
+            // Don't rasterize the action toolbar (Print / Download / Copy buttons).
+            ignoreElements: (node) => node.tagName === 'BUTTON' ||
+                (node.classList && node.classList.contains('btn-group'))
+        });
+        const pdf = new jsPDF('p', 'mm', 'letter');
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        // Slice the tall canvas into one JPEG per page. A single full-length PNG
+        // would balloon to tens of MB; per-page JPEG keeps the report emailable.
+        const pxPerPage = Math.floor(canvas.width * (pageH / pageW));
+        let rendered = 0, pageNum = 0;
+        while (rendered < canvas.height) {
+            const sliceH = Math.min(pxPerPage, canvas.height - rendered);
+            const slice = document.createElement('canvas');
+            slice.width = canvas.width;
+            slice.height = sliceH;
+            slice.getContext('2d').drawImage(canvas, 0, rendered, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+            const img = slice.toDataURL('image/jpeg', 0.92);
+            if (pageNum > 0) pdf.addPage();
+            pdf.addImage(img, 'JPEG', 0, 0, pageW, sliceH * pageW / canvas.width);
+            rendered += sliceH;
+            pageNum++;
+        }
+        const type = (document.getElementById('reportType') || {}).value || 'report';
+        const filename = (typeof window._cc367_filename === 'function')
+            ? window._cc367_filename(type)
+            : ('crashlens-' + type + '-' + new Date().toISOString().split('T')[0] + '.pdf');
+        pdf.save(filename);
+        if (typeof showToast === 'function') showToast('Professional PDF report downloaded: ' + filename, 'success');
+    } catch (e) {
+        console.error('[Report PDF] html2canvas export failed:', e);
+        alert('Error generating PDF: ' + (e && e.message ? e.message : e));
+    } finally {
+        hideLoading();
     }
 }
 
