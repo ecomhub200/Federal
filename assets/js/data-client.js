@@ -1910,7 +1910,28 @@ class CrashLensDataClient {
       const data = await resp.json();
       if (!Array.isArray(data)) return null;
       this._source = 'supabase';
-      return data;
+      // Normalize the rebuilt mv_location_picker shape (location_name=human
+      // label, location_id=numeric node id) to the contract the picker UI
+      // (buildOption / resolveValue) and the report builder expect:
+      // location_name = the value key, display_name = the human label, node_id.
+      // For intersections the option value/node MUST be the numeric node id —
+      // crashes.node stores location_id, NOT the human name — otherwise the
+      // location-crash query returns 0 rows (empty Warrants/CMF). For segments
+      // location_name is already the route name (matches crashes.rte_name).
+      return data.map(function (r) {
+        if (!r) return r;
+        if (r.location_type === 'intersection') {
+          return Object.assign({}, r, {
+            node_id: r.location_id,
+            display_name: r.location_name,
+            location_name: (r.location_id != null) ? String(r.location_id) : r.location_name,
+          });
+        }
+        return Object.assign({}, r, {
+          node_id: (r.location_id != null) ? r.location_id : null,
+          display_name: r.location_name,
+        });
+      });
     } catch (e) {
       clearTimeout(timer);
       console.warn('[DataClient] mv_location_picker failed, falling back to RPC:', e && e.message);
