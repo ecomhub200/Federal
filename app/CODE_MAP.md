@@ -1695,7 +1695,7 @@ Before any code edit:
 | download4AgentApplicationWord | modules/grants/grants-ui.js | window+CL | grants |
 | downloadBAPDF | inline @ L62549 | inline | cmf |
 | downloadCMFAIChatPDF | inline @ L38079 | inline | cmf, ai |
-| downloadComprehensivePDF | inline @ L57020 (CC 367: tier filename + fail-open rawData guards) | inline | shared |
+| downloadComprehensivePDF | inline @ L57135 (CC 367: tier filename + fail-open rawData guards) | inline | shared |
 | downloadComprehensiveWord | inline @ L58720 | inline | shared |
 | downloadCrashAnalysisPDF | inline @ L38770 | inline | analysis |
 | downloadFile | inline @ L64193 | inline | shared |
@@ -2548,8 +2548,8 @@ Before any code edit:
 | renderComparisonHeatmap | modules/dashboard/dashboard-tab-matview.js | window+CL | dashboard |
 | renderComparisonRows | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | renderComparisonTable | modules/scorecard/scorecard.js | window+CL | scorecard |
-| renderComprehensivePreview | inline @ L57607 | inline | shared |
-| renderComprehensiveTOC | inline @ L58142 | inline | shared |
+| renderComprehensivePreview | inline @ L56360 (CC 370: preview parity — Contributing Factors/Weather/Light, Safety Priorities, Funding sections) | inline | shared |
+| renderComprehensiveTOC | inline @ L57073 | inline | shared |
 | renderCountyComparisonTable | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | renderCrashTree | modules/crash-tree/crash-tree-render.js | window+CL | crashtree |
 | renderCuratedCountermeasures | inline @ L78046 | inline | shared |
