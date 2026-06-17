@@ -81428,11 +81428,11 @@ function processFSData() {
                 const sd = document.getElementById('fsStartDate')?.value;
                 const ed = document.getElementById('fsEndDate')?.value;
                 if (sd) {
-                    const sy = new Date(sd).getFullYear();
+                    const sy = parseInt(String(sd).slice(0, 4), 10); // ISO year, not UTC new Date() (off-by-one in western tz)
                     if (Number.isFinite(sy)) spec.yearStart = sy;
                 }
                 if (ed) {
-                    const ey = new Date(ed).getFullYear();
+                    const ey = parseInt(String(ed).slice(0, 4), 10); // ISO year, not UTC new Date() (off-by-one in western tz)
                     if (Number.isFinite(ey)) spec.yearEnd = ey;
                 }
             } catch (e) { /* non-fatal */ }
