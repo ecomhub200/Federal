@@ -13,7 +13,7 @@
  * Bump CACHE_NAME on every release so old caches get evicted on activate.
  */
 
-const CACHE_NAME = 'crashlens-v20260613-r11';
+const CACHE_NAME = 'crashlens-v20260616-r12';
 
 // Pre-cache the critical app shell. Other modules will be lazy-cached on
 // first fetch via the stale-while-revalidate handler below — listing every
@@ -22,6 +22,7 @@ const CACHE_NAME = 'crashlens-v20260613-r11';
 const STATIC_PRECACHE = [
     '/Federal/app/',                  // directory URL — most users land here
     '/Federal/app/index.html',
+    '/Federal/app/css/app.css',       // main stylesheet — first-paint critical
     '/Federal/app/modules/loader.js',
     '/Federal/app/modules/ui/skeletons.js',
     '/Federal/app/modules/data/road-type-mapping.js',
