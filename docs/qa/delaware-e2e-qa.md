@@ -15,7 +15,17 @@
 
 ---
 
-## 🔴 BUG-1 (HIGH) — Dashboard date filter returns an extra prior year (~2× counts)
+## ✅ BUG-1 (HIGH) — FIXED & verified — Dashboard date filter returned an extra prior year (~2× counts)
+
+**Status: FIXED on this branch.** Root cause: `new Date('2024-01-01').getFullYear()`
+= **2023** in western time zones (UTC parse), so a single-year filter resolved
+`year_start=2023`. Fixed by reading the 4-digit year from the ISO string at 4
+sites: `_readGlobalFilterSpec` (Dashboard), Intersections matview re-fetch,
+Infographic/report hydration, CMF date label. **Verified against live data:**
+`updateDashboardFromMatview({yearStart:2024,yearEnd:2024})` → **37,177** (correct);
+old `{yearStart:2023}` → 74,446 (the bug). App boots clean (0 console errors).
+
+### Original finding (for the record)
 
 **Reproduced cleanly on the live deployed app**, Delaware / State tier / All Roads:
 
