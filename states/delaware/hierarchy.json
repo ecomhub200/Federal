@@ -224,21 +224,6 @@
         ]
       }
     },
-    "dover_kent_county_mpo": {
-      "name": "Dover / Kent County MPO",
-      "shortName": "Dover / Kent County",
-      "dbName": "Dover / Kent County MPO",
-      "type": "mpo",
-      "btsMpoId": "10199000",
-      "source": "BTS/USDOT NTAD",
-      "counties": [],
-      "countyNames": {},
-      "center": [
-        -75.493095,
-        39.109793
-      ],
-      "zoom": 10
-    },
     "dvrpc": {
       "name": "Delaware Valley Regional Planning Commission",
       "shortName": "DVRPC",
