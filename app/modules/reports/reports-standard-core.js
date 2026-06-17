@@ -689,6 +689,28 @@ async function hydrateReportFromMatviews(reportType, tier, value, yearRange) {
         }
     };
 
+    // Road-type filter — the report previously ignored the road-type radio, so
+    // its numbers always reflected ALL roads. Apply the active spec
+    // (roadTypeSpec(): {roadType} | {roadTypes} | {noInterstate}) to the
+    // matviews that actually carry road_type / is_interstate columns. Matviews
+    // without those columns (mv_fatal_factors, mv_speed_summary) stay
+    // unfiltered. The signature is also folded into the cache key below so a
+    // road-type change doesn't serve the prior road-type's cached result.
+    let _rtSpec = {};
+    try { _rtSpec = (CL.data.supabaseBridge && CL.data.supabaseBridge.roadTypeSpec && CL.data.supabaseBridge.roadTypeSpec()) || {}; } catch (e) { _rtSpec = {}; }
+    const _rtSig = JSON.stringify(_rtSpec || {});
+    const rtParams = (hasRoadType, hasInterstate) => {
+        const p = {};
+        if (hasRoadType && _rtSpec.roadType) {
+            p.road_type = 'eq.' + _rtSpec.roadType;
+        } else if (hasRoadType && Array.isArray(_rtSpec.roadTypes) && _rtSpec.roadTypes.length) {
+            p.road_type = 'in.(' + _rtSpec.roadTypes.join(',') + ')';
+        } else if (hasInterstate && _rtSpec.noInterstate) {
+            p.is_interstate = 'eq.false';
+        }
+        return p;
+    };
+
     // CC 324 BUGs E/H — fetch mv_safety_focus_locations alongside the existing
     // matviews so the dashboard report's Top Locations section can render real
     // top-N per category at aggregate tiers (same matview the Safety Focus
@@ -707,7 +729,12 @@ async function hydrateReportFromMatviews(reportType, tier, value, yearRange) {
     // hit the in-memory cache. If any preHit is false on a second generate
     // within ~60s of the first, the cache-key drifted between calls.
     const cached = (mvName, fetcher, keyExtra) => {
-        const cacheKey = `${mvName}:${effTier || ''}:${effValue || ''}` + (keyExtra != null ? ':' + JSON.stringify(keyExtra) : '');
+        // Fold the active road-type signature into the cache key so a road-type
+        // change invalidates the slot (only when a road-type filter is active —
+        // all-roads keeps the original key shape so prewarm slots still align).
+        const _rtKE = (_rtSig && _rtSig !== '{}') ? { _rt: _rtSig } : null;
+        const _ke = (keyExtra != null || _rtKE) ? Object.assign({}, keyExtra || {}, _rtKE || {}) : null;
+        const cacheKey = `${mvName}:${effTier || ''}:${effValue || ''}` + (_ke != null ? ':' + JSON.stringify(_ke) : '');
         let preHit = false;
         try {
             const stats = CL.data.matviewCacheStats && CL.data.matviewCacheStats();
@@ -716,7 +743,7 @@ async function hydrateReportFromMatviews(reportType, tier, value, yearRange) {
             }
         } catch (e) { /* non-fatal */ }
         console.log(`[Report cache] ${mvName} key=${cacheKey} preHit=${preHit}`);
-        return CL.data.cachedMatview(mvName, effTier, effValue, fetcher, keyExtra);
+        return CL.data.cachedMatview(mvName, effTier, effValue, fetcher, _ke);
     };
     // CC 329 — defense-in-depth arrify. cachedMatview returns the fetcher's
     // resolved value unchanged; if for any reason a downstream caller stored
@@ -729,14 +756,14 @@ async function hydrateReportFromMatviews(reportType, tier, value, yearRange) {
                         : [];
     const t0 = performance.now();
     const [dashRaw, hotspotsRaw, fatalRaw, speedRaw, safetyRaw, intersectionRaw, analysisRaw, safetyLocationsRaw] = await Promise.all([
-        cached('dashboard_summary',          () => fetchJson('dashboard_summary', { select: 'crash_count,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,night_crashes,alcohol_crashes,animal_crashes,crash_severity,crash_year,collision_type,functional_class,road_type,is_interstate' })),
-        cached('mv_hotspots',                () => fetchJson('mv_hotspots', { select: '*', order: 'total_crashes.desc', limit: '100' }), { limit: 100 }),
+        cached('dashboard_summary',          () => fetchJson('dashboard_summary', Object.assign({ select: 'crash_count,fatals,serious_injuries,total_injured,ped_crashes,bike_crashes,speed_crashes,night_crashes,alcohol_crashes,animal_crashes,crash_severity,crash_year,collision_type,functional_class,road_type,is_interstate' }, rtParams(true, true)))),
+        cached('mv_hotspots',                () => fetchJson('mv_hotspots', Object.assign({ select: '*', order: 'total_crashes.desc', limit: '100' }, rtParams(true, true))), { limit: 100 }),
         cached('mv_fatal_factors',           () => fetchJson('mv_fatal_factors', { select: '*' })),
         cached('mv_speed_summary',           () => fetchJson('mv_speed_summary', { select: '*' })),
-        cached('mv_safety_categories',       () => fetchJson('mv_safety_categories', { select: '*' })),
-        cached('mv_intersection_summary',    () => fetchJson('mv_intersection_summary', { select: 'intersection_type,traffic_control_type,collision_type,total,k,a,b,c,o,crash_year' })),
-        cached('mv_analysis_summary',        () => fetchJson('mv_analysis_summary', { select: 'dimension,dim_value,total,k,a,b,c,o' })),
-        cached('mv_safety_focus_locations',  () => fetchJson('mv_safety_focus_locations', { select: '*', order: 'total.desc', limit: '500' }), { limit: 500 })
+        cached('mv_safety_categories',       () => fetchJson('mv_safety_categories', Object.assign({ select: '*' }, rtParams(true, true)))),
+        cached('mv_intersection_summary',    () => fetchJson('mv_intersection_summary', Object.assign({ select: 'intersection_type,traffic_control_type,collision_type,total,k,a,b,c,o,crash_year' }, rtParams(true, true)))),
+        cached('mv_analysis_summary',        () => fetchJson('mv_analysis_summary', Object.assign({ select: 'dimension,dim_value,total,k,a,b,c,o' }, rtParams(true, true)))),
+        cached('mv_safety_focus_locations',  () => fetchJson('mv_safety_focus_locations', Object.assign({ select: '*', order: 'total.desc', limit: '500' }, rtParams(true, false))), { limit: 500 })
     ]);
     let   dash             = arrify(dashRaw);
     const hotspots         = arrify(hotspotsRaw);
