@@ -11,7 +11,60 @@
 | 2 — Accuracy reconciliation | 🟡 baseline + date-filter verified; **date-filter bug found** |
 | 3 — Backend gap development | ⏳ not started (sequenced after sweep) |
 | 4 — Frontend filter wiring + fixes | ⏳ not started |
-| 5 — Report + PR | ⏳ in progress (this doc) |
+| 5 — Report + PR | 🟢 PR #274 + per-tab date-filter audit (this doc) |
+
+---
+
+## Per-tab DATE-filter audit (all 16 tabs)
+
+Method: code audit of every date→query conversion + Phase-0 matview-column facts
+(a tab's date filter can only narrow aggregate-tier numbers if its matview carries
+`crash_year`). The **HIGH-severity year-doubling bug class** (`new Date('YYYY-MM-DD')
+.getFullYear()` → prior year in western time zones) was found at **6 sites** and
+**all are now fixed** (slice/ISO-string parse). Exhaustive grep confirms **0**
+remaining `new Date(<dateInput>).getFullYear()` filter sites.
+
+| # | Tab | Date input | Backing data | Date-filter status |
+|---|---|---|---|---|
+| 1 | Dashboard | filterStart/End | dashboard_summary (`crash_year`✓) | ✅ works — **year-doubling FIXED** (`_readGlobalFilterSpec`) |
+| 2 | Map | mapStart/End | mv_map_points (`crash_year`✓) / sampleRows | ✅ works (no `getFullYear` path; sampleRows compare has the minor 1-day issue below) |
+| 3 | Crash Tree | ctStart/End | mv_crash_tree (**no `crash_year`**) + sampleRows | ⚠️ county/city only; **silently ignored at aggregate tiers** (backend gap) |
+| 4 | Safety Scorecard | — | dashboard_summary | N/A (display-only, no date input) |
+| 5 | Safety Focus | safetyStart/End | mv_safety_categories (**no `crash_year`**) + sampleRows | ⚠️ county/city only (sampleRows uses a **correct local parse**); ignored at aggregate (backend gap) |
+| 6 | Fatal & Speeding | fsStart/End | mv_fatal_factors + mv_speed_summary (`crash_year`✓) | ✅ works — **year-doubling FIXED** (`fsStartDate`/`fsEndDate`) |
+| 7 | Hot Spots | hsStart/End | mv_hotspots (**no `crash_year`**) + sampleRows | ⚠️ county/city only; ignored at aggregate (backend gap) |
+| 8 | Intersections | intFilterStart/End | mv_intersection_summary (`crash_year`✓) | ✅ works — **year-doubling FIXED** (matview re-fetch) |
+| 9 | Ped/Bike | ped/bikeStart/End | mv_pedbike_* (**no `crash_year`**) + sampleRows | ⚠️ county/city only; ignored at aggregate (backend gap) |
+| 10 | Analysis | (dashboard filter) | mv_analysis_summary (**no `crash_year`**) + sampleRows | ⚠️ county/city only; ignored at aggregate (backend gap) |
+| 11 | Countermeasures (CMF) | cmfStart/End | sampleRows (location-selected) | ✅ county/city only by design (date **label** off-by-one FIXED) |
+| 12 | Warrant Analyzer | (auto per study) | sampleRows (location-selected) | ✅ county/city only by design |
+| 13 | MUTCD AI / Domain Knowledge | dkStart/End | RAG context (`dkState.dateRange`) | ✅ scopes the crash context only; no matview aggregate to mis-count |
+| 14 | Grants | grantStart/End | mv_grants_baseline (`crash_year`✓) + sampleRows scoring | ✅ works (no `getFullYear`; sampleRows scoring has the minor 1-day issue below) |
+| 15 | Reports — Standard | reportStart/End | sampleRows / aggregates; Infographic path | ✅ Infographic matview hydration **year-doubling FIXED** |
+| 16 | Reports — Before/After | baBefore*/baAfter* | `run_before_after_study` RPC | ✅ date periods are the core input (RPC-side) |
+
+### The 6 year-doubling sites fixed (HIGH)
+`_readGlobalFilterSpec` (Dashboard) · Intersections matview re-fetch · Infographic
+hydration · CMF date label · **Fatal & Speeding** (`fsStartDate`/`fsEndDate`).
+Verified live: corrected Dashboard 2024 filter → 37,177 (was 74,446).
+
+### Remaining LOW-severity issue (documented, not yet fixed)
+~12 **sampleRows date-comparison** sites parse the ISO input via `new Date(str)`
+then `setHours(...)` (e.g. Grants [app/index.html] L30640/30645; Analysis
+[app/modules/analysis/filter-aggregation.js] L59/64; Dashboard county
+[app/modules/dashboard/dashboard-tab-kpi.js] L212/217; Warrants, etc.). In
+western time zones this shifts the **county/city** filter window by ~1 day
+(includes prior Dec-31, excludes final Dec-31) — ~0.1% error, county/city tier
+only. Recommended follow-up: a shared `parseLocalDate('YYYY-MM-DD')` →
+`new Date(y, m-1, d)` helper applied at these sites. Not mass-edited here because
+`app/index.html` was being concurrently reverted during this session (see note).
+
+### Aggregate-tier "date silently ignored" (Crash Tree / Safety Focus / Hot Spots / Ped/Bike / Analysis)
+Not a frontend bug — these matviews have **no `crash_year` column** (Phase 0), so
+the date input cannot narrow aggregate-tier numbers. This is the **Phase 3 backend
+gap**: add `crash_year` (or wire the existing `*_yearly` companion matviews). Until
+then, the honest UX would grey/label the date filter as county/city-only on these
+tabs.
 
 ---
 
