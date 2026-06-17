@@ -19,7 +19,7 @@ const fx = loadState(activeStateKey());
 
 test.describe(`visual regression @ ${fx.state_name} / county`, () => {
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
+        await page.goto('./');
         await selectFixture(page, {
             stateName:    fx.state_name,
             tier:         'county',

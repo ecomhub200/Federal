@@ -40577,8 +40577,10 @@ window._readGlobalFilterSpec = function _readGlobalFilterSpec() {
     const endEl   = document.getElementById('filterEndDate');
     const parseYear = el => {
         if (!el || !el.value) return null;
-        const d = new Date(el.value);
-        const y = d.getFullYear();
+        // Year from the ISO date STRING (YYYY-MM-DD). NOT new Date().getFullYear():
+        // UTC parse rolls '2024-01-01' to 2023-12-31 in western zones, so a
+        // single-year filter pulled in the whole prior year (~2x counts).
+        const y = parseInt(String(el.value).slice(0, 4), 10);
         return Number.isFinite(y) ? y : null;
     };
     const yearStart = parseYear(startEl);
@@ -53033,8 +53035,8 @@ function applyIntersectionFilters() {
             const baseSpec = (typeof window._readGlobalFilterSpec === 'function')
                 ? window._readGlobalFilterSpec()
                 : { yearStart: null, yearEnd: null, severities: null };
-            const yStart = intFilters.startDate ? new Date(intFilters.startDate).getFullYear() : baseSpec.yearStart;
-            const yEnd   = intFilters.endDate   ? new Date(intFilters.endDate).getFullYear()   : baseSpec.yearEnd;
+            const yStart = intFilters.startDate ? parseInt(String(intFilters.startDate).slice(0, 4), 10) : baseSpec.yearStart;
+            const yEnd   = intFilters.endDate   ? parseInt(String(intFilters.endDate).slice(0, 4), 10)   : baseSpec.yearEnd;
             updateIntersectionTabFromMatview({
                 yearStart: Number.isFinite(yStart) ? yStart : null,
                 yearEnd:   Number.isFinite(yEnd)   ? yEnd   : null,
@@ -54822,8 +54824,12 @@ async function generateInfographic(allCrashes, title, agency, department, startD
     if (_supabaseMode) {
         try {
             const t = window.CL.data.supabaseBridge.resolveTier();
-            const yearFrom = startDate ? new Date(startDate).getFullYear() : null;
-            const yearTo   = endDate   ? new Date(endDate).getFullYear()   : null;
+            // Year from the ISO date STRING (local), not new Date().getFullYear()
+            // — the UTC parse rolls '2024-01-01' back to 2023 in western zones,
+            // inflating the report's matview totals by the adjacent prior year.
+            const _isoYr = s => { const m = /^(\d{4})/.exec(String(s || '')); return m ? parseInt(m[1], 10) : null; };
+            const yearFrom = startDate ? _isoYr(startDate) : null;
+            const yearTo   = endDate   ? _isoYr(endDate)   : null;
             const sumOpts = {};
             if (yearFrom) sumOpts.yearFrom = yearFrom;
             if (yearTo)   sumOpts.yearTo   = yearTo;
@@ -71708,8 +71714,9 @@ function buildDataSourceIndicators() {
     // Crash data
     const crashCount = cmfState.filteredCrashes?.length || cmfState.locationCrashes?.length || 0;
     if (crashCount > 0) {
+        const _isoYr = s => { const m = /^(\d{4})/.exec(String(s || '')); return m ? m[1] : new Date(s).getFullYear(); };
         const dateInfo = cmfState.dateFilter?.startDate ?
-            ` (${new Date(cmfState.dateFilter.startDate).getFullYear()}-${new Date(cmfState.dateFilter.endDate || Date.now()).getFullYear()})` : '';
+            ` (${_isoYr(cmfState.dateFilter.startDate)}-${cmfState.dateFilter.endDate ? _isoYr(cmfState.dateFilter.endDate) : new Date().getFullYear()})` : '';
         sources.push({
             icon: '✅',
             label: `Crash Records`,

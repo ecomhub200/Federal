@@ -23,7 +23,7 @@ const AUTH_FILE = path.resolve(__dirname, '..', 'playwright', '.auth', 'user.jso
 setup('authenticate manually', async ({ page }) => {
     setup.setTimeout(5 * 60_000);
 
-    await page.goto('/');
+    await page.goto('./');
     console.log('\n\n*** Sign in manually in the browser window. ***');
     console.log('*** Test will detect successful auth and save state. ***\n');
 

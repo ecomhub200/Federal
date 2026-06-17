@@ -15,8 +15,8 @@ delaware:
     default_jurisdiction: Sussex County
     counties: [Kent County, New Castle County, Sussex County]
     expected:
-        total_crashes_state: 569829
-        total_crashes_default_county: 134123
+        total_crashes_state: 569829          # live Supabase truth (all-years, all-roads)
+        total_crashes_default_county: 134159 # Sussex County = South District rollup
         # K-only severity (Delaware has no B/C in source)
         fatal_K_state_min: 1500
         fatal_K_default_county_min: 400
