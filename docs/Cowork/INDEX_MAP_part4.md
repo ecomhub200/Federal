@@ -1,8 +1,8 @@
 # index.html function inventory — PART 4 (L120001–end)
 
-Snapshot: 2026-05-20 · source `app/index.html` (120144 lines)
+Snapshot: 2026-05-20 · source `app/index.html` (117385 lines)
 
-Declarations in this part: **1**
+Declarations in this part: **0**
 
 > **End L is a heuristic** (next declaration start − 1). **Used by** = approximate whole-file substring fan-out (coarse risk signal). **Depends on** is filled only for deep-trace targets — see `MODULAR_PLAN.md` §5. Tab/module are prefix/line-band heuristics.
 >
@@ -12,4 +12,3 @@ Declarations in this part: **1**
 
 | Start L | End L | True End L | LOC | True LOC | Name | Type | Depends on | Used by | Tab/feature | Proposed module |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 120030 | 120144 | 120036 | 115 | 7 | `_earlySkel` | fn | — | refs:2 | Unassigned | `app/modules/app/unassigned.js` |
