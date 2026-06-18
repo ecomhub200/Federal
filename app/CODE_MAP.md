@@ -10,19 +10,27 @@
 > ---
 > **⚠️ STRUCTURAL CHANGE 2026-06-16 (branch `modularize/config-layer`) — line numbers below are STALE, re-grep before editing:**
 > The three top-of-document inline `<style>` blocks were extracted to external
-> stylesheets. **All JS line numbers below original L172 shifted upward** (by
-> ~4,812 lines net; the shift is larger below the former report-design block at
-> ~L4901 and the former Domain-Knowledge block at ~L13181). `app/index.html` is
-> now **122,598 lines**. Always confirm a function's location with
-> `grep -n 'function X'` — do not trust a recorded line number across this change.
+> stylesheets. **All JS line numbers below original L172 shifted upward.**
 > Extracted CSS now lives in:
 > - `app/css/app.css` — main stylesheet (was inline L172–4494)
 > - `app/css/report-design.css` — CC365 report design system (was `<style id="cc365-report-design">` L4495–4901)
 > - `app/css/domain-knowledge.css` — Domain Knowledge tab styles (was inline L13097–13181)
 >
 > Two tiny critical-path blocks remain inline by design: the app-loading overlay
-> (top of `<head>`) and the one-line `dashboardSpin` keyframe. CSS is not indexed
-> by this map. A full regen via `queue/000-generate-code-map.md` is pending.
+> (top of `<head>`) and the one-line `dashboardSpin` keyframe. CSS is not indexed by this map.
+>
+> **⚠️ STRUCTURAL CHANGE 2026-06-17 (branch `modularize/safe-batch`) — re-grep before trusting any line number below:**
+> 6 more modules extracted from the reports/assets bands. After both changes
+> `app/index.html` is ~**120K lines** (re-verify with `wc -l`). New modules — moved
+> functions are now `extracted`, not `inline`:
+> - `reports/reports-recommend.js` — buildCollisionTypeBreakdown, buildSevereCrashPatterns, generate{Memo,SafetyMemo,VRU}Recommendations, generateTrendAnalysis
+> - `reports/reports-countermeasures-{cm,cm2,cm3}.js` — the 8 `generate*Report` generators
+> - `reports/reports-memo.js` — buildMemo{Header,StatsTable,Findings,LocationsTable,Footer}, createWordDocumentWithHeaderFooter
+> - `assets/assets-arcgis.js` + `assets/assets-arcgis-import.js` — the 12 `arcgis*` fns
+>
+> `MEMO_STYLES`, the 4 `generate*WordMemo` orchestrators, and the entire BA band
+> (`switchBAMode`…) remain INLINE. `docs/Cowork/INDEX_MAP*.md` regenerated via
+> `scripts/gen_index_map.py`; a full CODE_MAP regen is pending.
 > ---
 
 ## How to use this map (instructions for Claude Code)

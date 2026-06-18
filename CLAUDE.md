@@ -899,6 +899,20 @@ risk register.
   tags wired after `data/supabase-map-bridge.js` (Phase R after
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
+- **Round X extracted (Session 2026-06-17 safe-batch, off-limits):**
+  `reports/reports-recommend` (6 memo recommendation + trend-analysis builders);
+  `reports/reports-countermeasures-cm` + `-cm2` + `-cm3` (the 8 report generators
+  `generateCountermeasuresReport`/`generateIntersectionReport`/`generateHotspotReport`/
+  `generateDashboardReport` | `generateCrashTreeSystemicReport` | `generateHotspotRankingReport`/
+  `generateBeforeAfterStudyReport`/`generateGrantSupportReport` — prompt 42d-a, size-split 3-way);
+  `reports/reports-memo` (6 Word-memo builders `buildMemoHeader`..`createWordDocumentWithHeaderFooter`
+  — prompt 42d-b; `MEMO_STYLES` + the 4 `generate*WordMemo` orchestrators deliberately LEFT inline);
+  `assets/assets-arcgis` + `assets/assets-arcgis-import` (12 `arcgis*` feature-service
+  import fns, size-split 2-way). All verbatim, dual-exposed `window.<fn>` +
+  `CL.<root>.<sub>.<fn>`, LATE cluster. Pending the single deployed smoke test for
+  the batch PR. NOTE the BA band (`switchBAMode`..`refreshBAMonitorSubscriberChips` +
+  the 2 `*BAMonitoring*Server` fns) remains INLINE — deferred to a supervised
+  42c1/2/3 session (64 fns / ~2.7k lines / 6-way split, `baState` read outside the band).
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
