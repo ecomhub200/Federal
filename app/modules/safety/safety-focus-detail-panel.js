@@ -210,7 +210,7 @@ async function aggregateSfDetailData() {
                         const _yrCol = { region: 'planning_district', mpo: 'mpo_name',
                             planning_district: 'planning_district', county: 'physical_juris_name',
                             city: 'physical_juris_name', city_town: 'physical_juris_name' }[t.tier] || null;
-                        const _matCat = ({ alcoholonly: 'alcohol' })[category] || category;
+                        const _matCat = ({ alcoholonly: 'alcohol', impaired: 'alcohol', workzone: 'work_zone', school: 'school_zone' })[category] || category;
                         const _yp = new URLSearchParams({
                             state: 'eq.' + String(dc.state || '').toLowerCase(),
                             category: 'eq.' + _matCat,
