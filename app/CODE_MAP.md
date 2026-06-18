@@ -1363,7 +1363,7 @@ Before any code edit:
 | buildCMFAgent1Input | inline @ L36950 | inline | cmf |
 | buildCMFCrashProfile | inline @ L71510 | inline | cmf |
 | buildCMFSearchData | modules/cmf/cmf-search.js | window+CL | cmf |
-| buildCollisionTypeBreakdown | inline @ L61180 | inline | shared |
+| buildCollisionTypeBreakdown | module @ reports/reports-recommend.js | extracted | shared |
 | buildComparisonSparkline | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | buildComparisonTrend | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | buildConsensusResult | inline @ L69377 | inline | shared |
@@ -1412,7 +1412,7 @@ Before any code edit:
 | buildRegionComparison | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | buildReverseLookup | modules/upload/road-defaults.js | module-private | upload |
 | buildSecondaryTreeAnalysis | modules/crash-tree/crash-tree-analysis.js | window+CL | analysis |
-| buildSevereCrashPatterns | inline @ L61202 | inline | shared |
+| buildSevereCrashPatterns | module @ reports/reports-recommend.js | extracted | shared |
 | buildSystemPrompt | inline @ L66265 | inline | shared |
 | buildTIAssetPanelHTML | inline @ L118801 | inline | shared |
 | buildTierComparison | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
@@ -1919,7 +1919,7 @@ Before any code edit:
 | generateKML | inline @ L52055 | inline | shared |
 | generateLocationReport | inline @ L43655 | inline | reports |
 | generateMCPApiKey | inline @ L114741 | inline | shared |
-| generateMemoRecommendations | inline @ L61241 | inline | shared |
+| generateMemoRecommendations | module @ reports/reports-recommend.js | extracted | shared |
 | generateNodeTable | modules/reports/reports-standard-types2.js | window+CL | reports |
 | generatePedBikeLocationTable | modules/reports/reports-standard-types2.js | window+CL | reports |
 | generatePedBikeRecommendations | modules/reports/reports-standard-types2.js | window+CL | reports |
@@ -1936,7 +1936,7 @@ Before any code edit:
 | generateSafetyCategoryReport | inline @ L92225 | inline | safety, reports |
 | generateSafetyFocusRecommendations | modules/reports/reports-standard-types2.js | window+CL | reports |
 | generateSafetyFocusReport | modules/reports/reports-standard-types2.js | window+CL | reports |
-| generateSafetyMemoRecommendations | inline @ L61289 | inline | shared |
+| generateSafetyMemoRecommendations | module @ reports/reports-recommend.js | extracted | shared |
 | generateSafetyRecommendations | modules/reports/reports-standard-types2.js | window+CL | reports |
 | generateSafetyReport | modules/reports/reports-standard-types.js | window+CL | reports |
 | generateSafetyWordMemo | inline @ L60868 | inline | shared |
@@ -1944,10 +1944,10 @@ Before any code edit:
 | generateSystemwideReport | modules/reports/reports-standard-core.js | window+CL | reports |
 | generateSystemwideWordMemo | inline @ L60686 | inline | shared |
 | generateTopLocationsTable | modules/reports/reports-standard-types2.js | window+CL | reports |
-| generateTrendAnalysis | inline @ L61384 | inline | analysis |
+| generateTrendAnalysis | module @ reports/reports-recommend.js | extracted | analysis |
 | generateTrendReport | modules/reports/reports-standard-types.js | window+CL | reports |
 | generateTrendWordMemo | inline @ L61055 | inline | shared |
-| generateVRURecommendations | inline @ L61342 | inline | shared |
+| generateVRURecommendations | module @ reports/reports-recommend.js | extracted | shared |
 | generateYearlySection | modules/reports/reports-standard-types2.js | window+CL | reports |
 | geocodeIntersectionName | inline @ L102075 | inline | map, intersection |
 | get | modules/data/road-type-mapping.js | module-private | shared |
