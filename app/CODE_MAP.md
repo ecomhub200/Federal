@@ -28,9 +28,14 @@
 > - `reports/reports-memo.js` — buildMemo{Header,StatsTable,Findings,LocationsTable,Footer}, createWordDocumentWithHeaderFooter
 > - `assets/assets-arcgis.js` + `assets/assets-arcgis-import.js` — the 12 `arcgis*` fns
 >
-> `MEMO_STYLES`, the 4 `generate*WordMemo` orchestrators, and the entire BA band
-> (`switchBAMode`…) remain INLINE. `docs/Cowork/INDEX_MAP*.md` regenerated via
-> `scripts/gen_index_map.py`; a full CODE_MAP regen is pending.
+> `MEMO_STYLES` and the 4 `generate*WordMemo` orchestrators remain INLINE.
+> `docs/Cowork/INDEX_MAP*.md` regenerated via `scripts/gen_index_map.py`; a full
+> CODE_MAP regen is pending.
+>
+> **⚠️ STRUCTURAL CHANGE 2026-06-17 (branch `modularize/ba-band`):** the entire
+> Reports-tab Before/After band (59 fns `switchBAMode`…`deleteBAMonitoringFromServer`)
+> was extracted into `reports/report-ba-{setup,setup2,run,run2,export,email,monitor,monitor2,monitor3}.js`
+> (CL.reports.ba.*). `const baState` remains INLINE. `app/index.html` now ~**117K lines**.
 > ---
 
 ## How to use this map (instructions for Claude Code)

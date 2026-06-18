@@ -910,9 +910,17 @@ risk register.
   `assets/assets-arcgis` + `assets/assets-arcgis-import` (12 `arcgis*` feature-service
   import fns, size-split 2-way). All verbatim, dual-exposed `window.<fn>` +
   `CL.<root>.<sub>.<fn>`, LATE cluster. Pending the single deployed smoke test for
-  the batch PR. NOTE the BA band (`switchBAMode`..`refreshBAMonitorSubscriberChips` +
-  the 2 `*BAMonitoring*Server` fns) remains INLINE — deferred to a supervised
-  42c1/2/3 session (64 fns / ~2.7k lines / 6-way split, `baState` read outside the band).
+  the batch PR.
+- **Round X extracted (Session 2026-06-17 ba-band, off-limits):**
+  `reports/report-ba-{setup,setup2,run,run2,export,email,monitor,monitor2,monitor3}`
+  — the full Reports-tab Before/After band (59 fns `switchBAMode`..`deleteBAMonitoringFromServer`,
+  was a contiguous ~2.7k-line block, size-split 9-way at fn boundaries; prompts
+  42c1+42c3+42c2). `const baState` deliberately LEFT INLINE (read by remaining
+  inline code: L56 window pre-decl, onclick handlers, the `typeof baState` guard,
+  plus all 9 modules via global scope). All 59 fns dual-exposed `window.<fn>` +
+  `CL.reports.ba.<fn>` (7 onclick bindings + cross-file calls). Band was pure
+  functions (no module-private state). These are the Reports-tab BA functions —
+  distinct from the off-limits `batch-ba/*` engine.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
