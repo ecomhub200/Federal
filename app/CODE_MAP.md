@@ -36,6 +36,15 @@
 > Reports-tab Before/After band (59 fns `switchBAMode`…`deleteBAMonitoringFromServer`)
 > was extracted into `reports/report-ba-{setup,setup2,run,run2,export,email,monitor,monitor2,monitor3}.js`
 > (CL.reports.ba.*). `const baState` remains INLINE. `app/index.html` now ~**117K lines**.
+>
+> **⚠️ STRUCTURAL CHANGE 2026-06-18 (branch `modularize/warrants-studies`, Wave A):**
+> the 6 warrant/study tabs were extracted as single cohesive modules:
+> `studies/traffic-data.js`, `studies/speed-study.js`, `warrants/streetlight.js`,
+> `warrants/signal-tab.js` (distinct from the `warrants/signal*` math modules),
+> `warrants/stopsign.js`, `warrants/ped-crossing.js`. Their `prefix_*` functions,
+> module-private state, and `PED_*` consts moved into the modules. Generic
+> `analyzeWarrantsFromMap`/`evaluateStopWarrant` stay INLINE. `app/index.html` now
+> ~**102K lines**. Re-grep before trusting any line number.
 > ---
 
 ## How to use this map (instructions for Claude Code)

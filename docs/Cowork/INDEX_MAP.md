@@ -2,9 +2,9 @@
 
 Snapshot: 2026-05-20
 
-- Total file size: **117385** lines
-- Total declarations inventoried: **2528** (named fns **1805**, window fns **8**, const-arrow **715**)
-- Top-level globals: **252** · Top-level event listeners: **56**
+- Total file size: **101803** lines
+- Total declarations inventoried: **2186** (named fns **1526**, window fns **8**, const-arrow **652**)
+- Top-level globals: **233** · Top-level event listeners: **56**
 
 ## Function inventory parts (by start line)
 
@@ -21,316 +21,297 @@ Snapshot: 2026-05-20
 
 | L | Name | Type | Mutated/Read | Proposed module |
 |---|---|---|---|---|
-| 14805 | `EPDO_WEIGHTS` | var | (coarse — see PLAN §5) | `app/modules/core/epdo-presets.js` |
-| 14806 | `EPDO_ACTIVE_PRESET` | var | (coarse — see PLAN §5) | `app/modules/core/epdo-presets.js` |
-| 14807 | `EPDO_PRESETS` | var | (coarse — see PLAN §5) | `app/modules/core/epdo-presets.js` |
-| 14814 | `_stateCenterCache` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 14865 | `STATE_EPDO_WEIGHTS` | var | (coarse — see PLAN §5) | `app/modules/core/epdo-presets.js` |
-| 14928 | `_TIER_EXTENSIONS` | var | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 14943 | `TIER_TAB_VISIBILITY` | var | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 14989 | `APP_VERSION` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15042 | `APP_PATHS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15101 | `R2_BASE_URL` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15103 | `r2State` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15111 | `appConfig` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15112 | `appSettings` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15114 | `MAP_CENTER` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15115 | `MAP_ZOOM` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15122 | `jurisdictionContext` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15140 | `_jurisdictionChangedDebounce` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15342 | `API_AVAILABILITY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15368 | `CONFIG_RETRY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15376 | `CONFIG_CACHE_KEY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 15377 | `CONFIG_CACHE_VERSION_KEY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 17480 | `_filterRefreshTimer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 17804 | `HENRICO_CENTER` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 17807 | `COL` | var | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 17810 | `roadProperties` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 17813 | `crashState` | const | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
-| 17852 | `geocodeState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 17863 | `crashTreeState` | const | (coarse — see PLAN §5) | `app/modules/crash-tree/crash-tree.js` |
-| 17968 | `connectionState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 18159 | `_reconnectTargetJurisdiction` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 18160 | `_reconnectTargetState` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 18342 | `originalResetState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 18383 | `grantState` | const | (coarse — see PLAN §5) | `app/modules/grants/grants.js` |
-| 18420 | `districtState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 18437 | `GRANT_SCORING_PROFILES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 18551 | `mutcdState` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
-| 18562 | `selectionState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 18583 | `warrantsState` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
-| 19170 | `WARRANT_DB_CONSTANTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 19189 | `warrantDbState` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
-| 19218 | `CRASH_CACHE_CONSTANTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 19226 | `crashCacheState` | const | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
-| 21605 | `SIGNAL_WARRANT7_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21613 | `SIGNAL_PAGONES_FACTORS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21624 | `SIGNAL_TMC_APPROACHES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21625 | `SIGNAL_TMC_MOVEMENTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21636 | `ROUNDABOUT_CONVERSION_CMFS` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 21683 | `ROUNDABOUT_SPF_COEFFICIENTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21709 | `ROUNDABOUT_ICD_CMF` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 21720 | `ROUNDABOUT_LEG_CMF` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 21729 | `ROUNDABOUT_CAPACITY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21748 | `ICE_SCORING_WEIGHTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21759 | `ROUNDABOUT_CRASH_PATTERNS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21789 | `STOPSIGN_VOLUME_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21808 | `STOPSIGN_CRASH_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21814 | `STOPSIGN_SUSCEPTIBLE_CRASH_TYPES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21827 | `STOPSIGN_SPEED_THRESHOLD` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21830 | `STOPSIGN_REQUIRED_HOURS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 21835 | `ApiKeySecurity` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 22395 | `STATE_HSO_REGISTRY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 22461 | `VIRGINIA_GRANTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 22517 | `currentFilters` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 22526 | `charts` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 22527 | `crashMap` | let | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
-| 22528 | `streetTileLayer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 22529 | `currentMapMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 22530 | `PAGE_SIZE` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 22539 | `calcEPDO` | var | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 22558 | `paginationState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 22876 | `ORG_SETTINGS_KEYS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 23648 | `_autoLoadGeneration` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 25605 | `displayVirginiaGrants` | const | (coarse — see PLAN §5) | `app/modules/grants/grants.js` |
-| 26554 | `notificationState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 28074 | `tempEmailList` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 29813 | `CRASH_COST_PRESETS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 29821 | `STATE_CRASH_COSTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 29912 | `API_KEY_LINKS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 31388 | `COUNTERMEASURE_AI_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 31499 | `cmfAIState` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 31510 | `CMF_SEARCH_TOOL` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 31718 | `AI_CMF_LOOKUP_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 31809 | `cmfAgentState` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 31826 | `VDOT_CRASH_COSTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 31840 | `CMF_AGENT1_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 31968 | `CMF_AGENT2_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 32048 | `CMF_AGENT3_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 32187 | `CMF_AGENT4_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 32961 | `grantSearchAttachments` | let | (coarse — see PLAN §5) | `app/modules/grants/grants.js` |
-| 34005 | `cmfAIAttachments` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 35414 | `originalDisplayCrashProfile` | const | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
-| 35419 | `grantWritingAttachments` | let | (coarse — see PLAN §5) | `app/modules/grants/grants.js` |
-| 36153 | `dashSearchResults` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 36154 | `dashSearchTotal` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 36155 | `dashCurrentSearchPage` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 36156 | `dashSearchFilters` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 36157 | `dashSearchMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 36158 | `dashSearchInFlight` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37159 | `FILTER_TO_COLUMN` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37325 | `_stateCapabilities` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37326 | `_stateCapabilitiesStateKey` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37358 | `_SAFETY_CARD_CAPABILITY_MAP` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37496 | `_MAP_FACTOR_DISPLAY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37518 | `_FACTOR_CAPABILITY_MAP` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37638 | `isMapFullscreen` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37717 | `mapSnapState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37927 | `mapSelectionMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37928 | `selectedMapLocations` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37929 | `selectedMapLocation` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 37930 | `routePolylines` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 38414 | `mapSearchData` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 38415 | `mapSearchDebounceTimer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 38416 | `currentAddressMarker` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 39961 | `originalInitMap` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 39985 | `drawingMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 39986 | `isDrawing` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 39987 | `currentDrawingLayer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 39988 | `drawingPoints` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 39989 | `tempDrawingLayer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 39990 | `selectedCrashesFromDrawing` | let | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
-| 39991 | `selectedTIFromDrawing` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 39992 | `selectedBTSFromDrawing` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 39993 | `drawingStartPoint` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 39994 | `drawingHighlightGroup` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 40001 | `currentDrawingShape` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 40004 | `_refreshingDrawingSelection` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 40007 | `MEASURE_BUFFER_METERS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 40008 | `measureVertexMarkers` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 40009 | `measureLengthDisplay` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 40012 | `layerStatesBeforeDrawing` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 42098 | `SELECTION_PDF_STYLES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 43691 | `hotspotFilters` | let | (coarse — see PLAN §5) | `app/modules/hotspots/hotspots.js` |
-| 43694 | `hotspotDetailState` | const | (coarse — see PLAN §5) | `app/modules/hotspots/hotspots.js` |
-| 43712 | `segmentAnalysisState` | const | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
-| 43862 | `FHWA_FUNC_CLASS_MAP` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 43886 | `FUNC_CLASS_FILTER_MAP` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 43900 | `MIN_SEGMENT_LENGTH_MILES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 43906 | `SEGMENT_OVERPASS_ENDPOINTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 43915 | `segmentCurrentEndpointIndex` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 43920 | `OSM_CACHE_KEY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 43921 | `OSM_CACHE_EXPIRY_MS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 48222 | `intFilters` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 48758 | `pedAnalysisState` | const | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
-| 48768 | `bikeAnalysisState` | const | (coarse — see PLAN §5) | `app/modules/pedbike/pedbike.js` |
-| 49607 | `quickLocationData` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 49741 | `globalSelectedLocation` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 50000 | `infographicDefaults` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 51067 | `_cc367_h2cOpts` | var | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 51247 | `comprehensiveReportData` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 53523 | `MEMO_STYLES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 53998 | `baState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 54064 | `aiState` | const | (coarse — see PLAN §5) | `app/modules/ai/ai.js` |
-| 54529 | `PINECONE_CONFIG` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 54650 | `mutcdAgentState` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
-| 54665 | `MUTCD_WARRANT_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
-| 54890 | `AGENT1_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 54998 | `AGENT2_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 55869 | `WARRANT_7_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 56789 | `MUTCD_SECTION_DATA` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
-| 56920 | `CMF_EMBEDDED_DATA` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 56922 | `cmfState` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 56956 | `assetDeficiencyState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 57033 | `DEFICIENCY_SEVERITY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 57041 | `DEFICIENCY_RULES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 60143 | `AD_CACHE_KEY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 60144 | `AD_CACHE_EXPIRY_DAYS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 61138 | `_ctFilterToastLastShown` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 61149 | `_fsFilterToastLastShown` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 63101 | `CMF_COLLISION_MAP` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 63111 | `CMF_COST_KEYWORDS` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 67297 | `safetyState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 67344 | `sfDetailState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 67355 | `fatalSpeedingState` | const | (coarse — see PLAN §5) | `app/modules/fatal-speeding/fatal-speeding.js` |
-| 67394 | `fsFactorConfig` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 67418 | `safetyCategories` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 67654 | `safetyCategoryToCMFQuery` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
-| 67853 | `SAFETY_CURATED_COUNTERMEASURES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 68413 | `SAFETY_MATVIEW_PENDING` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 73164 | `_fsHideBCCache` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 75720 | `safetyInitAttempts` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 77496 | `PED_SSD_TABLE` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 77793 | `PED_TIER_TABLE_UNDIVIDED` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 77833 | `PED_TIER_TABLE_DIVIDED` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 77868 | `PED_COUNTERMEASURE_CODES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 78790 | `stopsignManualTotals` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 82985 | `roundaboutAADTConverterState` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
-| 83325 | `AADT_REGIONAL_FACTORS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 83944 | `ROUNDABOUT_INDICATOR_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 83951 | `roundaboutIndicatorOverrides` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
-| 85524 | `geocodeDebounceTimer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 85525 | `GEOCODE_DEBOUNCE_MS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 89812 | `signalPendingExtractions` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 89813 | `signalReviewQueue` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 89814 | `signalCurrentReviewIndex` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 89815 | `signalIsReviewMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 89816 | `signalUploadedFiles` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 89817 | `signalAllValidationResults` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 89818 | `signalExpectedHourCount` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 91432 | `speedstudyPendingExtractions` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 91433 | `speedstudyUploadedFiles` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 91434 | `speedstudyAllValidationResults` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 91435 | `speedstudyIsReviewMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 91436 | `speedstudyReviewQueue` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 91437 | `speedstudyCurrentReviewIndex` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 94038 | `speedstudyAutoSaveTimer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 96325 | `trafficdataPendingExtractions` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 96326 | `trafficdataAllValidationResults` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 96327 | `trafficdataUploadedFiles` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 96328 | `trafficdataReviewQueue` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 96329 | `trafficdataCurrentReviewIndex` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 96330 | `trafficdataIsReviewMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 98621 | `ASSET_MODULE_VERSION` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 98628 | `ASSET_CONSTANTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 98699 | `ASSET_ICONS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 98728 | `assetState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 98743 | `builtInLayersState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 98926 | `BTS_ENDPOINTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 99479 | `overtureStacState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 99590 | `OvertureVTDecoder` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 99811 | `OVERTURE_ENDPOINTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 100430 | `MAPILLARY_SIGN_CATEGORIES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 100457 | `SIGN_FILTER_CATEGORIES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 100527 | `MAPILLARY_FEATURE_CATEGORIES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 100575 | `TI_SIGN_SVG` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 100662 | `TI_PARENT_GROUPS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 100674 | `TI_PARENT_ORDER` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 100679 | `TI_MAP_CATEGORIES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 101028 | `TI_LEGACY_KEY_MAP` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 101041 | `trafficInventoryLayerState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 101054 | `TI_SIGNAL_CONSOLIDATION` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 103906 | `assetTableHasSchoolHeaders` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 103907 | `assetTableAdditionalLabels` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 104223 | `assetMapLayers` | let | (coarse — see PLAN §5) | `app/modules/map/map.js` |
-| 104426 | `mapAssetVisibility` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 107836 | `districtMatrixExpanded` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 109321 | `presentationState` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 110284 | `MAPILLARY_INLINE_ICONS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 111029 | `mapillaryGraphAPIState` | const | (coarse — see PLAN §5) | `app/modules/map/map.js` |
-| 111526 | `originalComputeAggregates` | const | (coarse — see PLAN §5) | `app/modules/spatial/spatial.js` |
-| 111545 | `arcgisState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 111609 | `VA_SCHOOL_JURISDICTIONS` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 111613 | `schoolsDataCache` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 111622 | `vaSchoolsCache` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 111681 | `SCHOOL_GRADE_WEIGHTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 113293 | `schoolsState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 113871 | `TRANSIT_CONFIG` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 113921 | `transitState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 115125 | `schoolTabState` | const | (coarse — see PLAN §5) | `app/modules/assets/school-tab.js` |
-| 115421 | `schoolTabTableState` | const | (coarse — see PLAN §5) | `app/modules/assets/school-tab.js` |
-| 115474 | `transitTabState` | const | (coarse — see PLAN §5) | `app/modules/assets/transit-tab.js` |
-| 115554 | `signDefState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
-| 115584 | `SIGNDEF_MUTCD_CONFIG` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
-| 115659 | `SIGNDEF_EPDO` | const | (coarse — see PLAN §5) | `app/modules/core/epdo-presets.js` |
+| 14811 | `EPDO_WEIGHTS` | var | (coarse — see PLAN §5) | `app/modules/core/epdo-presets.js` |
+| 14812 | `EPDO_ACTIVE_PRESET` | var | (coarse — see PLAN §5) | `app/modules/core/epdo-presets.js` |
+| 14813 | `EPDO_PRESETS` | var | (coarse — see PLAN §5) | `app/modules/core/epdo-presets.js` |
+| 14820 | `_stateCenterCache` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 14871 | `STATE_EPDO_WEIGHTS` | var | (coarse — see PLAN §5) | `app/modules/core/epdo-presets.js` |
+| 14934 | `_TIER_EXTENSIONS` | var | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 14949 | `TIER_TAB_VISIBILITY` | var | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 14995 | `APP_VERSION` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15048 | `APP_PATHS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15107 | `R2_BASE_URL` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15109 | `r2State` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15117 | `appConfig` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15118 | `appSettings` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15120 | `MAP_CENTER` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15121 | `MAP_ZOOM` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15128 | `jurisdictionContext` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15146 | `_jurisdictionChangedDebounce` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15348 | `API_AVAILABILITY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15374 | `CONFIG_RETRY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15382 | `CONFIG_CACHE_KEY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 15383 | `CONFIG_CACHE_VERSION_KEY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 17486 | `_filterRefreshTimer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 17810 | `HENRICO_CENTER` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 17813 | `COL` | var | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 17816 | `roadProperties` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 17819 | `crashState` | const | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
+| 17858 | `geocodeState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 17869 | `crashTreeState` | const | (coarse — see PLAN §5) | `app/modules/crash-tree/crash-tree.js` |
+| 17974 | `connectionState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 18165 | `_reconnectTargetJurisdiction` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 18166 | `_reconnectTargetState` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 18348 | `originalResetState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 18389 | `grantState` | const | (coarse — see PLAN §5) | `app/modules/grants/grants.js` |
+| 18426 | `districtState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 18443 | `GRANT_SCORING_PROFILES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 18557 | `mutcdState` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
+| 18568 | `selectionState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 18589 | `warrantsState` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
+| 19176 | `WARRANT_DB_CONSTANTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 19195 | `warrantDbState` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
+| 19224 | `CRASH_CACHE_CONSTANTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 19232 | `crashCacheState` | const | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
+| 21611 | `SIGNAL_WARRANT7_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21619 | `SIGNAL_PAGONES_FACTORS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21630 | `SIGNAL_TMC_APPROACHES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21631 | `SIGNAL_TMC_MOVEMENTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21642 | `ROUNDABOUT_CONVERSION_CMFS` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 21689 | `ROUNDABOUT_SPF_COEFFICIENTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21715 | `ROUNDABOUT_ICD_CMF` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 21726 | `ROUNDABOUT_LEG_CMF` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 21735 | `ROUNDABOUT_CAPACITY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21754 | `ICE_SCORING_WEIGHTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21765 | `ROUNDABOUT_CRASH_PATTERNS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21795 | `STOPSIGN_VOLUME_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21814 | `STOPSIGN_CRASH_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21820 | `STOPSIGN_SUSCEPTIBLE_CRASH_TYPES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21833 | `STOPSIGN_SPEED_THRESHOLD` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21836 | `STOPSIGN_REQUIRED_HOURS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 21841 | `ApiKeySecurity` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 22401 | `STATE_HSO_REGISTRY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 22467 | `VIRGINIA_GRANTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 22523 | `currentFilters` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 22532 | `charts` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 22533 | `crashMap` | let | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
+| 22534 | `streetTileLayer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 22535 | `currentMapMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 22536 | `PAGE_SIZE` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 22545 | `calcEPDO` | var | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 22564 | `paginationState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 22882 | `ORG_SETTINGS_KEYS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 23654 | `_autoLoadGeneration` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 25611 | `displayVirginiaGrants` | const | (coarse — see PLAN §5) | `app/modules/grants/grants.js` |
+| 26560 | `notificationState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 28080 | `tempEmailList` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 29819 | `CRASH_COST_PRESETS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 29827 | `STATE_CRASH_COSTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 29918 | `API_KEY_LINKS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 31394 | `COUNTERMEASURE_AI_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 31505 | `cmfAIState` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 31516 | `CMF_SEARCH_TOOL` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 31724 | `AI_CMF_LOOKUP_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 31815 | `cmfAgentState` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 31832 | `VDOT_CRASH_COSTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 31846 | `CMF_AGENT1_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 31974 | `CMF_AGENT2_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 32054 | `CMF_AGENT3_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 32193 | `CMF_AGENT4_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 32967 | `grantSearchAttachments` | let | (coarse — see PLAN §5) | `app/modules/grants/grants.js` |
+| 34011 | `cmfAIAttachments` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 35420 | `originalDisplayCrashProfile` | const | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
+| 35425 | `grantWritingAttachments` | let | (coarse — see PLAN §5) | `app/modules/grants/grants.js` |
+| 36159 | `dashSearchResults` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 36160 | `dashSearchTotal` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 36161 | `dashCurrentSearchPage` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 36162 | `dashSearchFilters` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 36163 | `dashSearchMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 36164 | `dashSearchInFlight` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37165 | `FILTER_TO_COLUMN` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37331 | `_stateCapabilities` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37332 | `_stateCapabilitiesStateKey` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37364 | `_SAFETY_CARD_CAPABILITY_MAP` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37502 | `_MAP_FACTOR_DISPLAY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37524 | `_FACTOR_CAPABILITY_MAP` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37644 | `isMapFullscreen` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37723 | `mapSnapState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37933 | `mapSelectionMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37934 | `selectedMapLocations` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37935 | `selectedMapLocation` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 37936 | `routePolylines` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 38420 | `mapSearchData` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 38421 | `mapSearchDebounceTimer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 38422 | `currentAddressMarker` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 39967 | `originalInitMap` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 39991 | `drawingMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 39992 | `isDrawing` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 39993 | `currentDrawingLayer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 39994 | `drawingPoints` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 39995 | `tempDrawingLayer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 39996 | `selectedCrashesFromDrawing` | let | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
+| 39997 | `selectedTIFromDrawing` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 39998 | `selectedBTSFromDrawing` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 39999 | `drawingStartPoint` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 40000 | `drawingHighlightGroup` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 40007 | `currentDrawingShape` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 40010 | `_refreshingDrawingSelection` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 40013 | `MEASURE_BUFFER_METERS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 40014 | `measureVertexMarkers` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 40015 | `measureLengthDisplay` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 40018 | `layerStatesBeforeDrawing` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 42104 | `SELECTION_PDF_STYLES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 43697 | `hotspotFilters` | let | (coarse — see PLAN §5) | `app/modules/hotspots/hotspots.js` |
+| 43700 | `hotspotDetailState` | const | (coarse — see PLAN §5) | `app/modules/hotspots/hotspots.js` |
+| 43718 | `segmentAnalysisState` | const | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
+| 43868 | `FHWA_FUNC_CLASS_MAP` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 43892 | `FUNC_CLASS_FILTER_MAP` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 43906 | `MIN_SEGMENT_LENGTH_MILES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 43912 | `SEGMENT_OVERPASS_ENDPOINTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 43921 | `segmentCurrentEndpointIndex` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 43926 | `OSM_CACHE_KEY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 43927 | `OSM_CACHE_EXPIRY_MS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 48228 | `intFilters` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 48764 | `pedAnalysisState` | const | (coarse — see PLAN §5) | `app/modules/analysis/analysis.js` |
+| 48774 | `bikeAnalysisState` | const | (coarse — see PLAN §5) | `app/modules/pedbike/pedbike.js` |
+| 49613 | `quickLocationData` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 49747 | `globalSelectedLocation` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 50006 | `infographicDefaults` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 51073 | `_cc367_h2cOpts` | var | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 51253 | `comprehensiveReportData` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 53529 | `MEMO_STYLES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 54004 | `baState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 54070 | `aiState` | const | (coarse — see PLAN §5) | `app/modules/ai/ai.js` |
+| 54535 | `PINECONE_CONFIG` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 54656 | `mutcdAgentState` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
+| 54671 | `MUTCD_WARRANT_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
+| 54896 | `AGENT1_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 55004 | `AGENT2_SYSTEM_PROMPT` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 55875 | `WARRANT_7_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 56795 | `MUTCD_SECTION_DATA` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
+| 56926 | `CMF_EMBEDDED_DATA` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 56928 | `cmfState` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 56962 | `assetDeficiencyState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 57039 | `DEFICIENCY_SEVERITY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 57047 | `DEFICIENCY_RULES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 60149 | `AD_CACHE_KEY` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 60150 | `AD_CACHE_EXPIRY_DAYS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 61144 | `_ctFilterToastLastShown` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 61155 | `_fsFilterToastLastShown` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 63107 | `CMF_COLLISION_MAP` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 63117 | `CMF_COST_KEYWORDS` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 67303 | `safetyState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 67350 | `sfDetailState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 67361 | `fatalSpeedingState` | const | (coarse — see PLAN §5) | `app/modules/fatal-speeding/fatal-speeding.js` |
+| 67400 | `fsFactorConfig` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 67424 | `safetyCategories` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 67660 | `safetyCategoryToCMFQuery` | const | (coarse — see PLAN §5) | `app/modules/cmf/cmf.js` |
+| 67859 | `SAFETY_CURATED_COUNTERMEASURES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 68419 | `SAFETY_MATVIEW_PENDING` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 73170 | `_fsHideBCCache` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 75726 | `safetyInitAttempts` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 77890 | `roundaboutAADTConverterState` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
+| 78230 | `AADT_REGIONAL_FACTORS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 78849 | `ROUNDABOUT_INDICATOR_THRESHOLDS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 78856 | `roundaboutIndicatorOverrides` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
+| 80429 | `geocodeDebounceTimer` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 80430 | `GEOCODE_DEBOUNCE_MS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 81392 | `speedstudyPendingExtractions` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 81393 | `speedstudyUploadedFiles` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 81394 | `speedstudyAllValidationResults` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 81395 | `speedstudyIsReviewMode` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 81396 | `speedstudyReviewQueue` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 81397 | `speedstudyCurrentReviewIndex` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 83039 | `ASSET_MODULE_VERSION` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 83046 | `ASSET_CONSTANTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 83117 | `ASSET_ICONS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 83146 | `assetState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 83161 | `builtInLayersState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 83344 | `BTS_ENDPOINTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 83897 | `overtureStacState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 84008 | `OvertureVTDecoder` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 84229 | `OVERTURE_ENDPOINTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 84848 | `MAPILLARY_SIGN_CATEGORIES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 84875 | `SIGN_FILTER_CATEGORIES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 84945 | `MAPILLARY_FEATURE_CATEGORIES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 84993 | `TI_SIGN_SVG` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 85080 | `TI_PARENT_GROUPS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 85092 | `TI_PARENT_ORDER` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 85097 | `TI_MAP_CATEGORIES` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 85446 | `TI_LEGACY_KEY_MAP` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 85459 | `trafficInventoryLayerState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 85472 | `TI_SIGNAL_CONSOLIDATION` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 88324 | `assetTableHasSchoolHeaders` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 88325 | `assetTableAdditionalLabels` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 88641 | `assetMapLayers` | let | (coarse — see PLAN §5) | `app/modules/map/map.js` |
+| 88844 | `mapAssetVisibility` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 92254 | `districtMatrixExpanded` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 93739 | `presentationState` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 94702 | `MAPILLARY_INLINE_ICONS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 95447 | `mapillaryGraphAPIState` | const | (coarse — see PLAN §5) | `app/modules/map/map.js` |
+| 95944 | `originalComputeAggregates` | const | (coarse — see PLAN §5) | `app/modules/spatial/spatial.js` |
+| 95963 | `arcgisState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 96027 | `VA_SCHOOL_JURISDICTIONS` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 96031 | `schoolsDataCache` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 96040 | `vaSchoolsCache` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 96099 | `SCHOOL_GRADE_WEIGHTS` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 97711 | `schoolsState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 98289 | `TRANSIT_CONFIG` | let | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 98339 | `transitState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 99543 | `schoolTabState` | const | (coarse — see PLAN §5) | `app/modules/assets/school-tab.js` |
+| 99839 | `schoolTabTableState` | const | (coarse — see PLAN §5) | `app/modules/assets/school-tab.js` |
+| 99892 | `transitTabState` | const | (coarse — see PLAN §5) | `app/modules/assets/transit-tab.js` |
+| 99972 | `signDefState` | const | (coarse — see PLAN §5) | `app/modules/app/unassigned.js` |
+| 100002 | `SIGNDEF_MUTCD_CONFIG` | const | (coarse — see PLAN §5) | `app/modules/warrants/warrants.js` |
+| 100077 | `SIGNDEF_EPDO` | const | (coarse — see PLAN §5) | `app/modules/core/epdo-presets.js` |
 
 ## Event listeners attached at module top-level
 
 | L | Event | Selector / target | Handler | Proposed module |
 |---|---|---|---|---|
-| 15006 | `load` | `window` | inline | `app/modules/app/unassigned.js` |
-| 18326 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 18332 | `beforeunload` | `window` | inline | `app/modules/app/unassigned.js` |
-| 21413 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 21461 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 21594 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 23058 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 26507 | `crashtab:hotspots:shown` | `window` | inline | `app/modules/app/unassigned.js` |
-| 26512 | `crashtab:dashboard:shown` | `window` | inline | `app/modules/app/unassigned.js` |
-| 26524 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 26533 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 29071 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 35696 | `crashDataLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 37373 | `crashtab:safety:shown` | `window` | inline | `app/modules/app/unassigned.js` |
-| 37427 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 37428 | `crashtab:dashboard:shown` | `window` | inline | `app/modules/app/unassigned.js` |
-| 37455 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 37456 | `crashtab:dashboard:shown` | `window` | inline | `app/modules/app/unassigned.js` |
-| 37492 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 37493 | `crashtab:dashboard:shown` | `window` | inline | `app/modules/app/unassigned.js` |
-| 37626 | `CL:tierChanged` | `document` | inline | `app/modules/core/tier.js` |
-| 37664 | `keydown` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 38000 | `tierChanged` | `document` | inline | `app/modules/core/tier.js` |
-| 38001 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 15012 | `load` | `window` | inline | `app/modules/app/unassigned.js` |
+| 18332 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 18338 | `beforeunload` | `window` | inline | `app/modules/app/unassigned.js` |
+| 21419 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 21467 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 21600 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 23064 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 26513 | `crashtab:hotspots:shown` | `window` | inline | `app/modules/app/unassigned.js` |
+| 26518 | `crashtab:dashboard:shown` | `window` | inline | `app/modules/app/unassigned.js` |
+| 26530 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 26539 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 29077 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 35702 | `crashDataLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 37379 | `crashtab:safety:shown` | `window` | inline | `app/modules/app/unassigned.js` |
+| 37433 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 37434 | `crashtab:dashboard:shown` | `window` | inline | `app/modules/app/unassigned.js` |
+| 37461 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 37462 | `crashtab:dashboard:shown` | `window` | inline | `app/modules/app/unassigned.js` |
+| 37498 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 37499 | `crashtab:dashboard:shown` | `window` | inline | `app/modules/app/unassigned.js` |
+| 37632 | `CL:tierChanged` | `document` | inline | `app/modules/core/tier.js` |
+| 37670 | `keydown` | `document` | inline | `app/modules/data/filter-wiring.js` |
 | 38006 | `tierChanged` | `document` | inline | `app/modules/core/tier.js` |
-| 38025 | `tierChanged` | `document` | inline | `app/modules/core/tier.js` |
-| 38038 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 39188 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 47037 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 47127 | `message` | `window` | inline | `app/modules/app/unassigned.js` |
-| 47197 | `message` | `window` | inline | `app/modules/app/unassigned.js` |
-| 47247 | `message` | `window` | inline | `app/modules/app/unassigned.js` |
-| 47295 | `message` | `window` | inline | `app/modules/app/unassigned.js` |
-| 47309 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 47461 | `message` | `window` | inline | `app/modules/app/unassigned.js` |
-| 48892 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 49975 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 56901 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 60264 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 67152 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 71319 | `crashtab:fatalspeeding:shown` | `window` | inline | `app/modules/app/unassigned.js` |
-| 73175 | `jurisdictionChanged` | `window` | inline | `app/modules/data/filter-wiring.js` |
-| 75736 | `crashDataLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 75755 | `crashDataLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 75837 | `crashDataLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 97865 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 98456 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 98464 | `keydown` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 99446 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 100407 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 107617 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 111520 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
-| 111791 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 114041 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 114052 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
-| 115190 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 38007 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 38012 | `tierChanged` | `document` | inline | `app/modules/core/tier.js` |
+| 38031 | `tierChanged` | `document` | inline | `app/modules/core/tier.js` |
+| 38044 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 39194 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 47043 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 47133 | `message` | `window` | inline | `app/modules/app/unassigned.js` |
+| 47203 | `message` | `window` | inline | `app/modules/app/unassigned.js` |
+| 47253 | `message` | `window` | inline | `app/modules/app/unassigned.js` |
+| 47301 | `message` | `window` | inline | `app/modules/app/unassigned.js` |
+| 47315 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 47467 | `message` | `window` | inline | `app/modules/app/unassigned.js` |
+| 48898 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 49981 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 56907 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 60270 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 67158 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 71325 | `crashtab:fatalspeeding:shown` | `window` | inline | `app/modules/app/unassigned.js` |
+| 73181 | `jurisdictionChanged` | `window` | inline | `app/modules/data/filter-wiring.js` |
+| 75742 | `crashDataLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 75761 | `crashDataLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 75843 | `crashDataLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 82283 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 82874 | `click` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 82882 | `keydown` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 83864 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 84825 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 92035 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 95938 | `DOMContentLoaded` | `document` | inline | `app/modules/app/bootstrap.js` |
+| 96209 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 98459 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 98470 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
+| 99608 | `jurisdictionChanged` | `document` | inline | `app/modules/data/filter-wiring.js` |
