@@ -154,18 +154,10 @@ async function aggregateSfDetailData() {
                                 data.byLocation[name].severity[s.toUpperCase()] += Number(r[s]) || 0;
                             });
                         }
-                        // Synthesize byYear from first_year..last_year (distributes evenly).
-                        // This is a rough approximation — mv_safety_focus_locations doesn't
-                        // carry per-year breakdowns — but it lets the Yearly Trend chart
-                        // render rather than showing "No data available".
-                        if (r.first_year && r.last_year) {
-                            const span = Math.max(1, r.last_year - r.first_year + 1);
-                            const perYear = Math.round(rowTotal / span);
-                            for (let y = r.first_year; y <= r.last_year; y++) {
-                                data.byYear[y] = data.byYear[y] || { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
-                                data.byYear[y].total += perYear;
-                            }
-                        }
+                        // (Yearly Trend is fetched once below from
+                        // mv_safety_categories_yearly with REAL year-over-year
+                        // counts. We no longer synthesize a flat even-distribution
+                        // here — that rendered identical bars for every year.)
                         // The matview exposes two crosstab counts per location:
                         // night_count (Dark Condition Crashes card) and
                         // at_intersection (Intersection-type breakdown chart).
@@ -208,18 +200,50 @@ async function aggregateSfDetailData() {
                         data.demographics.senior = catData.senior_count     || 0;
                         data.demographics.young  = catData.young_count      || 0;
                     }
-                    // CC 213 SF4 — replace the synthesized first_year..
-                    // last_year byYear estimate with real per-year totals
-                    // from mv_safety_categories_yearly (hydrated by
-                    // _hydrateSafetyCategoryYearly when the category was
-                    // selected). Falls back to the synthesized values if
-                    // the per-year hydration hasn't completed.
-                    if (catData && catData.byYear && Object.keys(catData.byYear).length > 0) {
-                        data.byYear = {};
-                        Object.keys(catData.byYear).forEach(y => {
-                            data.byYear[y] = { total: catData.byYear[y] || 0,
-                                K: 0, A: 0, B: 0, C: 0, O: 0 };
+                    // Real per-year Yearly Trend from mv_safety_categories_yearly
+                    // (category-specific). Replaces the old flat even-distribution
+                    // so the chart shows real year-over-year variation. This is
+                    // jurisdiction-wide for the category (not per-selected-location);
+                    // a true per-location/per-year breakdown needs per-row data
+                    // (county/city tier) — documented as a follow-up.
+                    try {
+                        const _yrCol = { region: 'planning_district', mpo: 'mpo_name',
+                            planning_district: 'planning_district', county: 'physical_juris_name',
+                            city: 'physical_juris_name', city_town: 'physical_juris_name' }[t.tier] || null;
+                        const _matCat = ({ alcoholonly: 'alcohol', impaired: 'alcohol', workzone: 'work_zone', school: 'school_zone' })[category] || category;
+                        const _yp = new URLSearchParams({
+                            state: 'eq.' + String(dc.state || '').toLowerCase(),
+                            category: 'eq.' + _matCat,
+                            select: 'crash_year,crash_count,k,a'
                         });
+                        if (_yrCol && t.value) _yp.set(_yrCol, 'eq.' + t.value);
+                        const _yresp = await fetch(`${dc.supabaseUrl}/mv_safety_categories_yearly?${_yp.toString()}`, {
+                            headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
+                        });
+                        if (_yresp.ok) {
+                            const _yrows = await _yresp.json();
+                            if (Array.isArray(_yrows) && _yrows.length) {
+                                const _by = {};
+                                _yrows.forEach(yr => {
+                                    const y = Number(yr.crash_year);
+                                    if (!Number.isFinite(y) || y === 0) return;
+                                    _by[y] = _by[y] || { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+                                    _by[y].total += Number(yr.crash_count) || 0;
+                                    _by[y].K += Number(yr.k) || 0;
+                                    _by[y].A += Number(yr.a) || 0;
+                                });
+                                if (Object.keys(_by).length) data.byYear = _by;
+                            }
+                        }
+                    } catch (_yerr) {
+                        // Fall back to category yearly hydrated elsewhere, if any;
+                        // otherwise leave byYear empty (honest 'no data', not fake).
+                        if (catData && catData.byYear && Object.keys(catData.byYear).length > 0) {
+                            data.byYear = {};
+                            Object.keys(catData.byYear).forEach(y => {
+                                data.byYear[y] = { total: catData.byYear[y] || 0, K: 0, A: 0, B: 0, C: 0, O: 0 };
+                            });
+                        }
                     }
                     // CC 208 — flag matview-only aggregates so renderers can
                     // surface gap state on sub-KPIs that the matview cannot
