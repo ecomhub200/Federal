@@ -32,6 +32,7 @@ CL.intersection = CL.intersection || {};
 CL.crashTree = CL.crashTree || {};
 CL.pedbike = CL.pedbike || {};
 CL.notifications = CL.notifications || {};
+CL.studies = CL.studies || {};
 
 // Module loading tracker (for debugging)
 CL._loaded = [];
