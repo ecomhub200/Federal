@@ -252,6 +252,82 @@ async function aggregateSfDetailData() {
                     // byCollision, byWeather, bySurface, byTrafficControl).
                     // Nighttime + intersection breakdowns are populated via
                     // byLight['Dark'] and byIntType['At Intersection'].
+                    // ── Per-row dimensional hydration (fills the Collision/Weather/Light/
+                    // Road-Surface/Traffic-Control/Day-of-Week/Hour/Month charts that the
+                    // matview cannot carry, at aggregate tiers). Lazy-fetch the selected
+                    // location(s)' crash rows (rte_name + tier + the category predicate),
+                    // keep only the SEGMENT rows (node null/0 — matches the matview's
+                    // segment totals), and use them ONLY if the count reconciles with the
+                    // matview total (self-validation). Wrong/uncertain cases (curves,
+                    // "Unknown", intersection-only locations) safely fall back to empty.
+                    // Category→column predicates validated by exact reconciliation vs
+                    // mv_safety_focus_locations (82=82, 2026-06-20).
+                    try {
+                        const SF_PRED = {
+                            pedestrian:['pedestrian','eq.Yes'], bicycle:['bike','eq.Yes'],
+                            motorcycle:['motorcycle','eq.Yes'], alcohol:['alcohol','eq.Yes'],
+                            impaired:['alcohol','eq.Yes'], speed:['speed','eq.Yes'],
+                            distracted:['distracted','eq.Yes'], unrestrained:['unrestrained','eq.Yes'],
+                            nighttime:['night','eq.Yes'], animal:['animal_related','eq.Yes'],
+                            guardrail:['guardrail_related','eq.Yes'], intersection:['is_intersection','eq.Yes'],
+                            school:['school_zone','eq.Yes'], drug:['drug_related','eq.Yes'],
+                            hitrun:['hitrun','eq.Yes'], drowsy:['drowsy','eq.Yes']
+                        };
+                        const pred = SF_PRED[category];
+                        const names = (sfDetailState.selectedLocations || [])
+                            .map(n => String(n).trim())
+                            .filter(n => n && n.toLowerCase() !== 'unknown');
+                        if (pred && names.length && data.total > 0) {
+                            const p2 = new URLSearchParams({
+                                state: 'eq.' + String(dc.state || '').toLowerCase(),
+                                select: 'crash_year,crash_date_parsed,crash_military_time,collision_type,weather_condition,light_condition,roadway_surface_cond,traffic_control_type,crash_severity,node',
+                                limit: '20000'
+                            });
+                            p2.set(pred[0], pred[1]);
+                            if (tierCol && t.value) p2.set(tierCol, 'eq.' + t.value);
+                            p2.set('rte_name', 'in.(' + names.map(n => '"' + n.replace(/"/g,'') + '"').join(',') + ')');
+                            const r2 = await fetch(dc.supabaseUrl + '/crashes?' + p2.toString(), {
+                                headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
+                            });
+                            if (r2.ok) {
+                                const rows = await r2.json();
+                                const isSeg = rr => { const nd = String(rr.node == null ? '' : rr.node).trim(); return nd === '' || nd === '0'; };
+                                const seg = Array.isArray(rows) ? rows.filter(isSeg) : [];
+                                const tol = Math.max(5, data.total * 0.1);
+                                const use = (Math.abs(seg.length - data.total) <= tol) ? seg
+                                          : (Array.isArray(rows) && Math.abs(rows.length - data.total) <= tol) ? rows
+                                          : null;
+                                if (use && use.length) {
+                                    // real per-row breakdowns replace the matview placeholders
+                                    data.byCollision = {}; data.byWeather = {}; data.byLight = {};
+                                    data.bySurface = {}; data.byTrafficControl = {};
+                                    data.byMonth = {}; data.byHour = {};
+                                    data.byDOW = {0:0,1:0,2:0,3:0,4:0,5:0,6:0};
+                                    data.byPeakPeriod = { amPeak:0, midday:0, pmPeak:0, night:0 };
+                                    data.byYear = {};
+                                    const inc = (o, k) => { const kk = (k == null || k === '') ? 'Unknown' : k; o[kk] = (o[kk] || 0) + 1; };
+                                    use.forEach(rr => {
+                                        const sev = (rr.crash_severity || '').trim().toUpperCase().charAt(0);
+                                        const y = rr.crash_year;
+                                        if (y) { data.byYear[y] = data.byYear[y] || { total:0,K:0,A:0,B:0,C:0,O:0 }; data.byYear[y].total++; if (['K','A','B','C','O'].includes(sev)) data.byYear[y][sev]++; }
+                                        inc(data.byCollision, rr.collision_type);
+                                        inc(data.byWeather, rr.weather_condition);
+                                        inc(data.byLight, rr.light_condition);
+                                        inc(data.bySurface, rr.roadway_surface_cond);
+                                        inc(data.byTrafficControl, rr.traffic_control_type);
+                                        if (rr.crash_date_parsed) {
+                                            const d = new Date(rr.crash_date_parsed + 'T00:00:00');
+                                            if (!isNaN(d.getTime())) { data.byDOW[d.getDay()]++; const mk = String(rr.crash_date_parsed).slice(0,7); data.byMonth[mk] = (data.byMonth[mk] || 0) + 1; }
+                                        }
+                                        const tm = parseInt(String(rr.crash_military_time == null ? '' : rr.crash_military_time).trim(), 10);
+                                        if (Number.isFinite(tm)) { const h = Math.floor(tm / 100); if (h >= 0 && h < 24) { data.byHour[h] = (data.byHour[h] || 0) + 1; if (h >= 6 && h < 9) data.byPeakPeriod.amPeak++; else if (h >= 9 && h < 15) data.byPeakPeriod.midday++; else if (h >= 15 && h < 19) data.byPeakPeriod.pmPeak++; else data.byPeakPeriod.night++; } }
+                                    });
+                                    data._perRowHydrated = true;
+                                    console.log('[SafetyDetail] per-row dimensional hydration: ' + use.length + ' rows (matview total ' + data.total + ') for ' + category);
+                                }
+                            }
+                        }
+                    } catch (_e) { /* non-fatal — dimensional charts stay empty */ }
                     data._matviewMode = true;
                     sfDetailState.aggregatedData = data;
                     return;   // skip the per-row loop below
