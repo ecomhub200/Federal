@@ -7,17 +7,27 @@
 --
 -- Apply against: self-hosted Supabase on srv1503081.hstgr.cloud
 --
--- ⚠️⚠️ MUST DO BEFORE APPLY — get the live definition of the matview this must
--- reconcile with, because its body is NOT in the repo (it's a Cowork-applied
--- stub) and it keys locations FINER than location_name:
---     SELECT pg_get_viewdef('public.mv_safety_focus_locations'::regclass, true);
--- Then make the GROUP BY key below identical (it almost certainly includes the
--- crash `node` / a segment id — proven by the 7-vs-181 row split for
--- "KOREAN WAR VETERANS MEM. HIGHWAY"/animal). If you only group by
--- location_name, two segments of one road MERGE and the detail won't match the
--- Top-Locations table. The block below groups by location_name as a PLACEHOLDER.
+-- KEY + PREDICATES VALIDATED by exact reconciliation vs the live
+-- mv_safety_focus_locations (REST, 2026-06-20). The location identity is the
+-- jurisdiction columns + the node-based segment/intersection split below
+-- (NO finer key; the earlier "7 vs 181" was one jurisdiction's slice vs the
+-- whole road). Proof: "KOREAN WAR VETERANS MEM. HIGHWAY" / animal /
+-- planning_district='Central District' / segment(node null|0) /
+-- animal_related='Yes' = 82 = sum of the matview's Central-District segment
+-- rows (7+59+6+10). The other 29 crashes carry a real node and route to a
+-- separate intersection row, exactly as below. All 18 boolean (='Yes')
+-- category predicates reconcile.
 --
--- Also confirm the `curves` predicate threshold (placeholder: curvature > 1.0).
+-- ONE ITEM STILL OPEN: the `curves` predicate. `curvature` is continuous
+-- (1.0 ~ straight); the cutoff is not in-repo and didn't reconcile via REST.
+-- Confirm with:  SELECT pg_get_viewdef('public.mv_safety_focus_locations'::regclass,true);
+-- then set @CURVE_PREDICATE below. The other 18 categories are correct as-is.
+--
+-- NOTE road_type: mv_safety_focus_locations also splits by road_type; this
+-- matview omits it (the detail panel SUMS a location's rows within a tier, so
+-- the aggregate is identical — confirmed by 82=82). Add it to GROUP BY+index
+-- only if you need 1:1 row parity.
+--
 -- Test in a transaction (BEGIN; CREATE …; SELECT count(*) …; ROLLBACK;) first.
 -- =============================================================================
 
