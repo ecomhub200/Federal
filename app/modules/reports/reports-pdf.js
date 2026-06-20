@@ -41,84 +41,130 @@ function storeReportData(type, crashes, stats, title, author, route, categoryDat
 }
 
 /**
- * PDF export for standard reports — DOM-capture approach.
- *
- * CC: previously this re-read crashState.sampleRows and re-computed everything
- * from scratch via generateStandardReportPDF(). At aggregate tiers
- * (state/MPO/planning-district/region/federal/county-rollup) sampleRows is
- * EMPTY by design — the on-screen report is hydrated from Supabase matviews —
- * so the recompute produced 0 crashes and aborted with
- * "No crash data available for the current report."
- *
- * Fix: capture the already-rendered #reportContainer with html2canvas and
- * slice it across letter-size PDF pages, exactly like downloadInfographicPDF().
- * This always matches what's on screen and works at every tier. The rich
- * text-based generateStandardReportPDF() is preserved untouched because the
- * scheduled-email attachment path still calls it with { returnDoc:true }.
+ * Professional text-based PDF export for standard reports
+ * Similar to Fatal & Speed PDF export with clean formatting
  */
-async function downloadReportPDF() {
-    const container = document.getElementById('reportContainer');
-    if (!container || !container.innerText.trim()) {
-        alert('Please generate the report first.');
-        return;
-    }
-
+function downloadReportPDF() {
     showLoading('Generating professional PDF report...');
 
     try {
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'mm', 'letter');
-        const pageWidth = 215.9;   // Letter width  (mm)
-        const pageHeight = 279.4;  // Letter height (mm)
-        const margin = 5;
-        const imgWidth = pageWidth - (margin * 2);
+        // Get current report settings
+        let type = document.getElementById('reportType').value;
+        // Backward compatibility: map systemwide to dashboard
+        if (type === 'systemwide') type = 'dashboard';
+        const title = document.getElementById('reportTitle').value || 'Crash Analysis Report';
+        const author = document.getElementById('reportAuthor').value || 'Traffic Engineering Division';
+        const route = document.getElementById('reportRoute')?.value || '';
+        const startDate = document.getElementById('reportStartDate')?.value;
+        const endDate = document.getElementById('reportEndDate')?.value;
 
-        // Reuse the shared html2canvas options (whitelists canvases inside the
-        // report output roots so the on-screen Chart.js charts are captured).
-        const h2cOpts = (typeof window !== 'undefined' && window._cc367_h2cOpts)
-            ? window._cc367_h2cOpts
-            : { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' };
+        // Filter crashes based on current settings
+        let crashes = crashState.sampleRows || [];
+        if (route) crashes = crashes.filter(r => r[COL.ROUTE] === route);
+        if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
+        if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
 
-        const canvas = await html2canvas(container, h2cOpts);
-
-        // Slice the (tall) capture into page-height chunks.
-        const pxPerMm = canvas.width / imgWidth;
-        const sliceHeightPx = (pageHeight - (margin * 2)) * pxPerMm;
-        const totalSlices = Math.max(1, Math.ceil(canvas.height / sliceHeightPx));
-
-        for (let i = 0; i < totalSlices; i++) {
-            const srcY = i * sliceHeightPx;
-            const srcH = Math.min(sliceHeightPx, canvas.height - srcY);
-            if (srcH <= 0) break;
-
-            const sliceCanvas = document.createElement('canvas');
-            sliceCanvas.width = canvas.width;
-            sliceCanvas.height = srcH;
-            const ctx = sliceCanvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-            ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
-
-            const sliceImgHeight = srcH / pxPerMm;
-            if (i > 0) pdf.addPage();
-            pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgWidth, sliceImgHeight);
+        // For countermeasures report, use CMF tab data
+        if (type === 'countermeasures' && cmfState.locationCrashes.length > 0) {
+            crashes = cmfState.locationCrashes;
+            if (startDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) >= new Date(startDate));
+            if (endDate) crashes = crashes.filter(r => r[COL.DATE] && new Date(Number(r[COL.DATE])) <= new Date(endDate));
         }
 
-        // Tier-stamped filename (de-collide per-jurisdiction exports); falls
-        // open to the legacy name if the global helper isn't loaded.
-        const reportType = document.getElementById('reportType')?.value || 'report';
-        const filename = (typeof window !== 'undefined' && typeof window._cc367_filename === 'function')
-            ? window._cc367_filename(reportType)
-            : ('crash_analysis_' + reportType + '_' + new Date().toISOString().split('T')[0] + '.pdf');
-        pdf.save(filename);
+        // For before/after report, use BA tab data
+        if (type === 'beforeafter' && baState.locationCrashes.length > 0) {
+            crashes = baState.locationCrashes;
+        }
 
+        // For grant support report, use grant state ranked locations data
+        if (type === 'grantsupport') {
+            crashes = crashState.sampleRows || [];
+        }
+
+        if (crashes.length === 0) {
+            // Matview-fallback path. When the user is on an aggregate tier
+            // (region / MPO / planning_district / county-rollup), crashState
+            // .sampleRows is empty by design — the report renderer hydrated
+            // straight from matviews and the DOM in #reportOutput is the
+            // finished report. Use html2canvas → PDF here so the user gets
+            // the same PDF they'd get if sampleRows had been populated. This
+            // mirrors the flagship Infographic/Comprehensive paths that
+            // already render via html2canvas.
+            const reportOut = document.getElementById('reportOutput');
+            const hasRenderedReport = !!(reportOut
+                && reportOut.offsetParent !== null
+                && reportOut.innerHTML.trim().length > 200);
+            if (hasRenderedReport && typeof html2canvas === 'function' && window.jspdf) {
+                _matviewFallbackDownloadPDF(reportOut, title)
+                    .then(() => hideLoading())
+                    .catch(err => {
+                        hideLoading();
+                        console.error('[PDF matview-fallback]', err);
+                        alert('PDF export failed: ' + (err && err.message ? err.message : err));
+                    });
+                return;
+            }
+            hideLoading();
+            alert('No crash data available for the current report. Please generate the report first.');
+            return;
+        }
+
+        // Generate professional PDF
+        generateStandardReportPDF(type, crashes, title, author, route, startDate, endDate);
         hideLoading();
-        if (typeof showToast === 'function') showToast('PDF report downloaded: ' + filename, 'success');
     } catch (e) {
         hideLoading();
-        console.error('[Report PDF Export Error]', e);
+        console.error('[PDF Export Error]', e);
         alert('Error generating PDF: ' + e.message);
     }
+}
+
+/**
+ * Matview-fallback PDF — renders the on-screen report (#reportOutput) into
+ * a multi-page PDF via html2canvas. Used when crashState.sampleRows is empty
+ * (aggregate-tier path) but the report itself has rendered from matview data.
+ *
+ * Mirrors the html2canvas opts + slicing pattern used by the existing
+ * infographic / comprehensive PDF paths in app/index.html (CC 367), so the
+ * tainted-canvas guards are consistent across all PDF download flows.
+ *
+ * Jurisdiction-agnostic — the helper captures whatever's in #reportOutput.
+ */
+async function _matviewFallbackDownloadPDF(container, title) {
+    const { jsPDF } = window.jspdf;
+    const h2cOpts = (typeof window._cc367_h2cOpts === 'object' && window._cc367_h2cOpts)
+        ? window._cc367_h2cOpts
+        : { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' };
+    const canvas = await html2canvas(container, h2cOpts);
+    const imgData = canvas.toDataURL('image/png');
+
+    // Letter, mm. Match the infographic layout's 200mm content width / 5mm
+    // top margin so the on-page report aligns visually.
+    const pdf = new jsPDF('p', 'mm', 'letter');
+    const imgWidth = 200;
+    const imgHeight = canvas.height * imgWidth / canvas.width;
+    const pageHeight = 270;      // 279.4 page height - 5 top - ~4 bottom safety
+    let heightLeft = imgHeight;
+    let yPos = 5;
+    pdf.addImage(imgData, 'PNG', 5, yPos, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+    while (heightLeft > 0) {
+        // Negative y shifts the image up so the next slice lands at the top
+        // of the new page. jsPDF clips to page bounds, so this gives the
+        // multi-page effect with a single addImage source.
+        yPos = -(imgHeight - heightLeft) + 5;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 5, yPos, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+    }
+    const filename = (typeof window._cc367_filename === 'function')
+        ? window._cc367_filename(_safeFileBase(title))
+        : _safeFileBase(title) + '.pdf';
+    pdf.save(filename);
+}
+
+function _safeFileBase(s) {
+    return String(s || 'crash-report').replace(/[^a-z0-9_\-]+/gi, '_').replace(/^_+|_+$/g, '') || 'crash-report';
 }
 
 /**

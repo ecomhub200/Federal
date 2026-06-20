@@ -45,7 +45,38 @@ class CrashLensDataClient {
   // against those two matviews return HTTP 400 (which the data-client
   // catches and logs as "matview missing?"). Default to the
   // dashboard_summary names; override only where the alias differs.
+  // Tier-column map per matview.
+  //
+  // Two distinct naming conventions exist in the Supabase matviews; the wrong
+  // entry here sends PostgREST a column filter that doesn't exist and returns
+  // HTTP 400 (or silent zero rows). When adding a new matview, check its
+  // columns with `pg_attribute` and register the right convention.
+  //
+  //   Convention A (jurisdictional facts):
+  //     region            → dot_district
+  //     mpo               → mpo_name
+  //     county / city     → physical_juris_name
+  //     planning_district → planning_district
+  //   Matviews: dashboard_summary, mv_crash_tree, mv_intersection_summary,
+  //     mv_safety_categories, mv_safety_focus_locations, mv_pedbike_locations,
+  //     mv_pedbike_breakdowns, mv_fatal_factors, mv_speed_summary.
+  //   Used by the `default` map.
+  //
+  //   Convention B (location/hotspot tables — shorter names):
+  //     region            → region
+  //     mpo               → mpo
+  //     county / city     → county
+  //     planning_district → planning_district
+  //   Matviews: mv_hotspots, mv_hotspots_with_rates, mv_grant_ready_locations,
+  //     mv_grants_baseline.
+  //   Each gets its own named entry below.
+  //
+  // Rule when adding a matview: pick the entry whose `region` / `mpo` /
+  // `county` column names match the matview's `pg_attribute` list, or add
+  // a new entry. NEVER let it fall through to `default` if the matview uses
+  // Convention B — the silent-zero-rows mode is hard to detect downstream.
   static TIER_COLUMNS_BY_MATVIEW = {
+    // Convention A (default)
     default: {
       federal:           null,
       state:             'state',
@@ -55,7 +86,26 @@ class CrashLensDataClient {
       county:            'physical_juris_name',
       city:              'physical_juris_name',
     },
+    // Convention B
     mv_hotspots: {
+      federal:           null,
+      state:             'state',
+      region:            'region',
+      planning_district: 'planning_district',
+      mpo:               'mpo',
+      county:            'county',
+      city:              'county',
+    },
+    mv_hotspots_with_rates: {
+      federal:           null,
+      state:             'state',
+      region:            'region',
+      planning_district: 'planning_district',
+      mpo:               'mpo',
+      county:            'county',
+      city:              'county',
+    },
+    mv_grant_ready_locations: {
       federal:           null,
       state:             'state',
       region:            'region',
@@ -73,10 +123,9 @@ class CrashLensDataClient {
       county:            'county',
       city:              'county',
     },
-    // mv_safety_categories_yearly has no dot_district column — only
-    // jurisdiction_county / physical_juris_name / mpo_name /
-    // planning_district. Null out region tier so we don't send a
-    // non-existent column filter and PostgREST 400s.
+    // mv_safety_categories_yearly: Convention A but no dot_district column.
+    // Null out region tier so we don't send a non-existent column filter and
+    // PostgREST 400s.
     mv_safety_categories_yearly: {
       federal:           null,
       state:             'state',
@@ -1541,7 +1590,7 @@ class CrashLensDataClient {
     // ── Build query ──
     const params = new URLSearchParams({
       tier: `eq.${mvTier}`,
-      select: 'state,tier,jurisdiction_id,jurisdiction_name,crash_year,crashes,fatals,serious,injuries,ped,bike,speed,alcohol,night,epdo',
+      select: 'state,tier,jurisdiction_id,jurisdiction_name,crash_year,road_type,is_interstate,crashes,fatals,serious,injuries,ped,bike,speed,alcohol,night,epdo',
     });
     if (mvState === null) {
       params.append('state', 'is.null');          // federal tier filter
@@ -1550,6 +1599,31 @@ class CrashLensDataClient {
     }
     if (mvJurisdictionId) params.append('jurisdiction_id', `eq.${mvJurisdictionId}`);
     if (year != null)     params.append('crash_year', `eq.${year}`);
+
+    // ── Road-type rollup selection (matview built with GROUPING SETS on
+    // (road_type),(is_interstate),() — see 2026-06-11 migration). Pick the row
+    // that matches the active road-type spec so each road-type rotation is an
+    // indexed single-row read instead of a dashboard_summary fallback:
+    //   all roads        → road_type IS NULL  AND is_interstate IS NULL
+    //   road_type = X     → road_type = X      AND is_interstate IS NULL
+    //   road_type ∈ [..]  → road_type IN (..)  AND is_interstate IS NULL  (summed)
+    //   no interstate     → road_type IS NULL  AND is_interstate = false
+    const _rt   = (opts && opts.roadType) || null;
+    const _rts  = (opts && Array.isArray(opts.roadTypes) && opts.roadTypes.length) ? opts.roadTypes : null;
+    const _noInt = !!(opts && opts.noInterstate);
+    if (_rt) {
+      params.append('road_type', `eq.${_rt}`);
+      params.append('is_interstate', 'is.null');
+    } else if (_rts) {
+      params.append('road_type', `in.(${_rts.join(',')})`);
+      params.append('is_interstate', 'is.null');
+    } else if (_noInt) {
+      params.append('road_type', 'is.null');
+      params.append('is_interstate', 'eq.false');
+    } else {
+      params.append('road_type', 'is.null');
+      params.append('is_interstate', 'is.null');
+    }
     const url = `${this.supabaseUrl}/mv_dashboard_tier_kpi?${params}`;
 
     // ── Standard timeout + external-signal fetch (mirrors getHotspots/getMapPoints) ──
@@ -1861,7 +1935,28 @@ class CrashLensDataClient {
       const data = await resp.json();
       if (!Array.isArray(data)) return null;
       this._source = 'supabase';
-      return data;
+      // Normalize the rebuilt mv_location_picker shape (location_name=human
+      // label, location_id=numeric node id) to the contract the picker UI
+      // (buildOption / resolveValue) and the report builder expect:
+      // location_name = the value key, display_name = the human label, node_id.
+      // For intersections the option value/node MUST be the numeric node id —
+      // crashes.node stores location_id, NOT the human name — otherwise the
+      // location-crash query returns 0 rows (empty Warrants/CMF). For segments
+      // location_name is already the route name (matches crashes.rte_name).
+      return data.map(function (r) {
+        if (!r) return r;
+        if (r.location_type === 'intersection') {
+          return Object.assign({}, r, {
+            node_id: r.location_id,
+            display_name: r.location_name,
+            location_name: (r.location_id != null) ? String(r.location_id) : r.location_name,
+          });
+        }
+        return Object.assign({}, r, {
+          node_id: (r.location_id != null) ? r.location_id : null,
+          display_name: r.location_name,
+        });
+      });
     } catch (e) {
       clearTimeout(timer);
       console.warn('[DataClient] mv_location_picker failed, falling back to RPC:', e && e.message);
@@ -1936,11 +2031,27 @@ class CrashLensDataClient {
     }
     if (opts.locationType) params.set('location_type', 'eq.' + opts.locationType);
     if (opts.minCrashes) params.set('total_crashes', 'gte.' + opts.minCrashes);
-    if (opts.county) {
-      params.set('jurisdiction_county', 'eq.' + String(opts.county).replace(/ County$/, ''));
+
+    // Tier-aware filter (new). Reports + tabs that pass {tier, value} get
+    // jurisdiction-scoped rows; older callers passing {county, mpo, pd}
+    // still work via the explicit branches below.
+    if (opts.tier && opts.value && opts.tier !== 'state' && opts.tier !== 'federal') {
+      const tf = this._tierFilter(opts.tier, opts.value, 'mv_grant_ready_locations');
+      // _tierFilter already injected state=eq.<this.state>; let opts.state win.
+      Object.keys(tf).forEach(k => {
+        if (k === 'state') return;
+        params.set(k, tf[k]);
+      });
+    } else {
+      // mv_grant_ready_locations uses Convention B columns:
+      //   county / mpo / planning_district (no `jurisdiction_` prefix and no
+      //   ` County` suffix in stored values).
+      if (opts.county) {
+        params.set('county', 'eq.' + String(opts.county).replace(/ County$/, ''));
+      }
+      if (opts.mpo) params.set('mpo', 'eq.' + opts.mpo);
+      if (opts.pd)  params.set('planning_district',  'eq.' + opts.pd);
     }
-    if (opts.mpo) params.set('jurisdiction_mpo', 'eq.' + opts.mpo);
-    if (opts.pd)  params.set('jurisdiction_pd',  'eq.' + opts.pd);
 
     const url = `${this.supabaseUrl}/mv_grant_ready_locations?${params.toString()}`;
     const headers = {
@@ -2049,10 +2160,15 @@ class CrashLensDataClient {
         } else {
           filters = this._tierFilter(tier, value);
         }
-        if (opts.roadType === 'all_no_interstate') {
-          filters.is_interstate = 'eq.false';
-        } else if (opts.roadType && opts.roadType !== 'all') {
-          filters.road_type = `eq.${opts.roadType}`;
+        // mv_fatal_factors aggregates across road_type / is_interstate (the
+        // matview has neither column). Applying those filters previously
+        // produced HTTP 400 and an empty Fatal & Speeding panel whenever the
+        // user picked anything other than "All Roads". Skipping the filter
+        // returns totals aggregated across road types, which is the only
+        // useful answer this matview can give. Note this in the response so
+        // UI can disclose the rollup if it wants.
+        if (opts && (opts.roadType || opts.roadTypes)) {
+          this._roadTypeNotApplicable = 'mv_fatal_factors aggregates across road types';
         }
         const data = await this._supabaseQuery('mv_fatal_factors', { filters });
         this._source = 'supabase';
@@ -2086,10 +2202,11 @@ class CrashLensDataClient {
         } else {
           filters = this._tierFilter(tier, value);
         }
-        if (opts.roadType === 'all_no_interstate') {
-          filters.is_interstate = 'eq.false';
-        } else if (opts.roadType && opts.roadType !== 'all') {
-          filters.road_type = `eq.${opts.roadType}`;
+        // Same constraint as getFatalFactors: mv_speed_summary aggregates
+        // across road_type / is_interstate and has neither column. Filtering
+        // 400s with column-does-not-exist; skip so the panel always renders.
+        if (opts && (opts.roadType || opts.roadTypes)) {
+          this._roadTypeNotApplicable = 'mv_speed_summary aggregates across road types';
         }
         const data = await this._supabaseQuery('mv_speed_summary', { filters });
         this._source = 'supabase';
@@ -2329,9 +2446,19 @@ class CrashLensDataClient {
       params.set('road_type', 'eq.' + rt);
     }
     if (opts.locationType) params.set('location_type', 'eq.' + opts.locationType);
-    if (opts.county) {
-      const canonical = String(opts.county).endsWith(' County') ? opts.county : opts.county + ' County';
-      params.set('jurisdiction_county', 'eq.' + canonical);
+
+    // Tier-aware filter (new). Reports + tabs that pass {tier, value} get
+    // jurisdiction-scoped rows.
+    if (opts.tier && opts.value && opts.tier !== 'state' && opts.tier !== 'federal') {
+      const tf = this._tierFilter(opts.tier, opts.value, 'mv_hotspots_with_rates');
+      Object.keys(tf).forEach(k => {
+        if (k === 'state') return;
+        params.set(k, tf[k]);
+      });
+    } else if (opts.county) {
+      // mv_hotspots_with_rates uses Convention B (`county` column, bare value,
+      // no ` County` suffix). Strip suffix consistently.
+      params.set('county', 'eq.' + String(opts.county).replace(/ County$/, ''));
     }
     if (opts.minRate) params.set('crash_rate_mvmt', 'gte.' + opts.minRate);
     if (opts.requireAadt) params.set('aadt', 'not.is.null');
@@ -2763,6 +2890,17 @@ class CrashLensDataClient {
     if (!opts) return;
     if (Array.isArray(opts.roadTypes) && opts.roadTypes.length > 0) {
       target.road_type = `in.(${opts.roadTypes.join(',')})`;
+    } else if (opts.roadType === 'all_no_interstate') {
+      // 'all_no_interstate' is a UI sentinel meaning "every road_type
+      // bucket EXCEPT interstate". The Reports module + some tabs emit
+      // it as a STRING (not as `noInterstate: true`), so the helper has
+      // to recognize it here. Without this branch, the old `else if`
+      // fired and sent `road_type=eq.all_no_interstate` against a column
+      // that only holds dot_roads / county_roads / city_roads / other_roads
+      // — returning zero rows at every tier on every tab that uses this
+      // helper (Hot Spots, Intersections, Grants baseline, Ped/Bike
+      // breakdowns, dashboard summary).
+      target.is_interstate = 'eq.false';
     } else if (opts.roadType && opts.roadType !== 'all_roads' && opts.roadType !== 'allRoads') {
       // 'all_roads' / 'allRoads' are UI sentinels meaning "no filter".
       // The matview's road_type column only has the four bucket values
@@ -3854,7 +3992,14 @@ class CrashLensDataClient {
     opts = opts || {};
     const params = new URLSearchParams({
       state: 'eq.' + ((opts.state || this.state || '').toLowerCase()),
-      select: 'location_type,location_name,crash_year,total_crashes,k,a,b,c,o,epdo,ped_count,bike_count,lat,lon,jurisdiction_county,jurisdiction_mpo,dot_district',
+      // mv_hotspots_yearly columns (Convention A subset):
+      //   state, jurisdiction_county, physical_juris_name, mpo_name,
+      //   planning_district, crash_year, location_type, location_name,
+      //   total_crashes, k, a, epdo, ped_count, bike_count.
+      // Earlier select asked for b/c/o/lat/lon/jurisdiction_mpo/dot_district —
+      // none of which exist; PostgREST returned 400 and the catch silently
+      // null-ed the result, leaving Hot Spots tab on its fallback analyzer.
+      select: 'location_type,location_name,crash_year,total_crashes,k,a,epdo,ped_count,bike_count,jurisdiction_county,physical_juris_name,mpo_name,planning_district',
       order: 'total_crashes.desc',
       limit: String(opts.limit || 5000),
     });
@@ -3867,8 +4012,12 @@ class CrashLensDataClient {
       const canonical = String(opts.county).endsWith(' County') ? opts.county : opts.county + ' County';
       params.set('jurisdiction_county', 'eq.' + canonical);
     }
-    if (opts.mpo)               params.set('jurisdiction_mpo', 'eq.' + opts.mpo);
-    if (opts.region)            params.set('dot_district', 'eq.' + opts.region);
+    if (opts.mpo)               params.set('mpo_name', 'eq.' + opts.mpo);
+    // mv_hotspots_yearly has no dot_district column; planning_district is the
+    // closest geographic tier and stores the same Delaware values
+    // (Central / North / South District). Frontend region-tier callers pass
+    // the planning-district value, so this match is exact.
+    if (opts.region)            params.set('planning_district', 'eq.' + opts.region);
 
     const url = `${this.supabaseUrl}/mv_hotspots_yearly?${params.toString()}`;
     const headers = {

@@ -32,7 +32,7 @@ const ROAD_TYPES: RoadType[] = ['allRoads', 'countyOnly', 'cityOnly', 'countyPlu
 
 test.describe(`tier × road-type sweep @ ${fx.state_name}`, () => {
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
+        await page.goto('./');
     });
 
     for (const tier of TIERS) {

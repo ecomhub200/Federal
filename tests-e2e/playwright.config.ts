@@ -49,9 +49,16 @@ export default defineConfig({
             use: { storageState: undefined }, // setup runs without storageState
         },
         {
+            // Non-interactive auth for unattended sweeps. Enabled with
+            // E2E_AUTO_AUTH=1 + E2E_EMAIL/E2E_PASSWORD (see auth-auto.setup.ts).
+            name: 'setup-auto',
+            testMatch: /auth-auto\.setup\.ts/,
+            use: { storageState: undefined },
+        },
+        {
             name: 'chromium',
             use: { ...devices['Desktop Chrome'] },
-            dependencies: ['setup'],
+            dependencies: [process.env.E2E_AUTO_AUTH ? 'setup-auto' : 'setup'],
         },
     ],
 });

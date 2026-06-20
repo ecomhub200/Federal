@@ -24,7 +24,7 @@ const fx = loadState(stateKey);
 
 test.describe(`empty-matrix scan @ ${fx.state_name} / county / Sussex`, () => {
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
+        await page.goto('./');
         await selectFixture(page, {
             stateName:    fx.state_name,
             tier:         'county',

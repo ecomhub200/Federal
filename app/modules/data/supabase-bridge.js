@@ -243,13 +243,62 @@ CL.data.supabaseBridge = (function () {
      * remainder. Where a planning_district covers exactly one county we can
      * substitute `planning_district=eq.<dbName>` and pick up the cities too.
      */
+    // Reverse-look-up a county's 3-digit FIPS from its name using the active
+    // hierarchy. Tries allCounties ({ "001":"Kent", ... }) first, then the
+    // per-region / per-PD / per-MPO countyNames maps. The trailing " County"
+    // suffix is stripped before matching. State-agnostic.
+    function _countyFipsFromName(ctx, hier) {
+        if (!ctx || !hier) return null;
+        var raw = ctx.jurisdictionName || ctx.physicalJurisName ||
+                  (ctx.tierCounty && ctx.tierCounty.name) ||
+                  (ctx.tierCity && ctx.tierCity.name) || '';
+        var name = String(raw).replace(/\s+County$/i, '').trim().toLowerCase();
+        if (!name) return null;
+        function scan(map) {
+            if (!map) return null;
+            var keys = Object.keys(map);
+            for (var i = 0; i < keys.length; i++) {
+                var v = map[keys[i]];
+                if (v && String(v).replace(/\s+County$/i, '').trim().toLowerCase() === name) return keys[i];
+            }
+            return null;
+        }
+        var hit = scan(hier.allCounties);
+        if (hit) return String(hit).padStart(3, '0');
+        var groups = [hier.planningDistricts, hier.regions, hier.tprs];
+        for (var g = 0; g < groups.length; g++) {
+            var gmap = groups[g];
+            if (!gmap) continue;
+            var ks = Object.keys(gmap);
+            for (var j = 0; j < ks.length; j++) {
+                var entry = gmap[ks[j]];
+                if (entry && entry.countyNames) { var h = scan(entry.countyNames); if (h) return String(h).padStart(3, '0'); }
+            }
+        }
+        return null;
+    }
+
     function _countyRollupTarget(ctx) {
         try {
             if (typeof HierarchyRegistry === 'undefined') return null;
             var hier = HierarchyRegistry.getData();
             if (!hier) return null;
-            var fips3 = (ctx && ctx.fullFips) ? String(ctx.fullFips).slice(-3) : null;
-            if (!fips3) return null;
+
+            // FIPS3 (county) — prefer explicit context fields, then fall back to
+            // a name-based reverse lookup. ctx.fullFips is only set on the
+            // geo-tier selection path (geo-tier.js); when a county is selected/
+            // restored through another path it can be absent, which previously
+            // made this rollup bail SILENTLY → the matview query fell back to
+            // physical_juris_name=<county> → 0 rows (empty Safety Focus and any
+            // other tier-filtered tab at county tier). Derive it robustly.
+            var fips3 = null;
+            if (ctx && ctx.fullFips) fips3 = String(ctx.fullFips).slice(-3).padStart(3, '0');
+            else if (ctx && ctx.countyFips) fips3 = String(ctx.countyFips).padStart(3, '0');
+            else fips3 = _countyFipsFromName(ctx, hier);
+            if (!fips3) {
+                try { console.warn('[resolveTier] county rollup unresolved — no FIPS3 from ctx (fullFips/countyFips/name); falling back to physical_juris_name (may return 0 rows).', ctx && { name: ctx.jurisdictionName, key: ctx.jurisdictionKey }); } catch (e) { /* non-fatal */ }
+                return null;
+            }
 
             // Prefer planning_district (most stable across states); fall back
             // to dot_district. If multiple PDs/regions cover the same county,
@@ -277,6 +326,7 @@ CL.data.supabaseBridge = (function () {
             var region = find1to1(hier.regions);
             if (region && region.dbName) return { column: 'dot_district', value: region.dbName, source: 'regions', id: region.id };
 
+            try { console.warn('[resolveTier] county rollup: FIPS3=' + fips3 + ' has no 1:1 planning_district/region with dbName in hierarchy — falling back to physical_juris_name.'); } catch (e) { /* non-fatal */ }
             return null;
         } catch (e) {
             return null;
@@ -901,21 +951,29 @@ CL.data.supabaseBridge = (function () {
             // the existing fetch unchanged.
             //
             // Skipped when any filter requires a dimension the matview lacks
-            // (severity / fc / area / road-type) — those fall straight through
-            // to the existing path. State-agnostic; no state literals.
+            // (severity / fc / area). Road-type IS now a matview dimension
+            // (2026-06-11 — GROUPING SETS on road_type/is_interstate), so the
+            // fast-path serves road-type rotations too. State-agnostic.
             var _canFastPath = !summaryFilters.severity && !summaryFilters.fc &&
-                               !summaryFilters.areaType && !summaryFilters.roadType &&
-                               !Array.isArray(summaryFilters.roadTypes) &&
-                               !summaryFilters.noInterstate;
+                               !summaryFilters.areaType;
             if (_canFastPath && CL.data && typeof CL.data.cachedMatview === 'function') {
                 try {
+                    // Road-type spec threaded into both the fetcher AND the cache
+                    // key so each road-type selection gets its own cache slot
+                    // (and the prewarm keyExtra in prewarm.js must match).
+                    var _rtKey = {
+                        roadType: spec.roadType || null,
+                        roadTypes: spec.roadTypes || null,
+                        noInterstate: !!spec.noInterstate
+                    };
                     var _tkpiRows = await CL.data.cachedMatview(
                         'mv_dashboard_tier_kpi', t.tier, t.value || '',
                         function (callOpts) {
                             return window.crashLensClient.getDashboardTierKpi(
-                                t.tier, t.value || null, null, callOpts || {});
+                                t.tier, t.value || null, null,
+                                Object.assign({}, callOpts || {}, _rtKey));
                         },
-                        { year: 'all' }
+                        { year: 'all', rt: _rtKey.roadType, rts: _rtKey.roadTypes, ni: _rtKey.noInterstate }
                     );
                     if (Array.isArray(_tkpiRows) && _tkpiRows.length) {
                         var _tkpiMs = Date.now() - startTime;

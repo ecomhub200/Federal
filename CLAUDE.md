@@ -899,6 +899,42 @@ risk register.
   tags wired after `data/supabase-map-bridge.js` (Phase R after
   `ai-mode-toggle`); 3 phase commits + this CLAUDE.md commit (Sessions R+S+T,
   2026-05-17).
+- **Round X extracted (Session 2026-06-17 safe-batch, off-limits):**
+  `reports/reports-recommend` (6 memo recommendation + trend-analysis builders);
+  `reports/reports-countermeasures-cm` + `-cm2` + `-cm3` (the 8 report generators
+  `generateCountermeasuresReport`/`generateIntersectionReport`/`generateHotspotReport`/
+  `generateDashboardReport` | `generateCrashTreeSystemicReport` | `generateHotspotRankingReport`/
+  `generateBeforeAfterStudyReport`/`generateGrantSupportReport` — prompt 42d-a, size-split 3-way);
+  `reports/reports-memo` (6 Word-memo builders `buildMemoHeader`..`createWordDocumentWithHeaderFooter`
+  — prompt 42d-b; `MEMO_STYLES` + the 4 `generate*WordMemo` orchestrators deliberately LEFT inline);
+  `assets/assets-arcgis` + `assets/assets-arcgis-import` (12 `arcgis*` feature-service
+  import fns, size-split 2-way). All verbatim, dual-exposed `window.<fn>` +
+  `CL.<root>.<sub>.<fn>`, LATE cluster. Pending the single deployed smoke test for
+  the batch PR.
+- **Round X extracted (Session 2026-06-17 ba-band, off-limits):**
+  `reports/report-ba-{setup,setup2,run,run2,export,email,monitor,monitor2,monitor3}`
+  — the full Reports-tab Before/After band (59 fns `switchBAMode`..`deleteBAMonitoringFromServer`,
+  was a contiguous ~2.7k-line block, size-split 9-way at fn boundaries; prompts
+  42c1+42c3+42c2). `const baState` deliberately LEFT INLINE (read by remaining
+  inline code: L56 window pre-decl, onclick handlers, the `typeof baState` guard,
+  plus all 9 modules via global scope). All 59 fns dual-exposed `window.<fn>` +
+  `CL.reports.ba.<fn>` (7 onclick bindings + cross-file calls). Band was pure
+  functions (no module-private state). These are the Reports-tab BA functions —
+  distinct from the off-limits `batch-ba/*` engine.
+- **Round X extracted (Session 2026-06-18 warrants-studies / Wave A, off-limits):**
+  `studies/traffic-data` (53 fns), `studies/speed-study` (43 fns incl. band-internal
+  `findMatchingRoute`), `warrants/streetlight` (16 fns), `warrants/signal-tab`
+  (76 fns — DISTINCT from off-limits `warrants/signal{,-tmc,-thresholds}` math),
+  `warrants/stopsign` (78 fns), `warrants/ped-crossing` (12 fns + `PED_*` consts +
+  band-internal `getRequiredSSD`). Each extracted as a **single cohesive IIFE
+  module** (documented size-exceptions for the big ones: signal ~4.9k, stop-sign
+  ~4k, speed-study ~2.7k, traffic-data ~2k lines) because each band carries
+  module-private mutable state shared/reassigned across its functions — kept in
+  one IIFE to avoid a non-verbatim state-mirrored split. All fns dual-exposed
+  `window.<fn>` + `CL.{warrants,studies}.<sub>.<fn>`; module-private state +
+  `PED_*` consts stay inside their IIFE (no external refs, verified). New
+  `CL.studies` root in `loader.js`. Generic neighbors `analyzeWarrantsFromMap` /
+  `evaluateStopWarrant` left INLINE. LATE cluster. `app/index.html` 117,385 → 101,803.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
