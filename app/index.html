@@ -50039,13 +50039,26 @@ async function generateInfographic(allCrashes, title, agency, department, startD
             const sumOpts = {};
             if (yearFrom) sumOpts.yearFrom = yearFrom;
             if (yearTo)   sumOpts.yearTo   = yearTo;
+            // Road-type filter parity with the standard-report path (PR #275).
+            // The infographic hydrates its OWN matviews, so without this it
+            // always shows ALL roads regardless of the road-type radio. Fold
+            // the spec into the fetch opts AND the cachedMatview keyExtra so a
+            // road-type change can't serve the prior road-type's cached slot.
+            let _rtSpec = {};
+            try { _rtSpec = (CL.data.supabaseBridge.roadTypeSpec && CL.data.supabaseBridge.roadTypeSpec()) || {}; } catch (e) { _rtSpec = {}; }
+            const rtOpts = {};
+            if (_rtSpec.roadType) rtOpts.roadType = _rtSpec.roadType;
+            else if (Array.isArray(_rtSpec.roadTypes) && _rtSpec.roadTypes.length) rtOpts.roadTypes = _rtSpec.roadTypes;
+            else if (_rtSpec.noInterstate) rtOpts.noInterstate = true;
+            Object.assign(sumOpts, rtOpts);
+            const _catKE = Object.keys(rtOpts).length ? rtOpts : undefined;
             [_supaSummary, _supaAnalysis, _supaCats] = await Promise.all([
                 CL.data.cachedMatview('dashboard_summary', t.tier, t.value,
                     () => window.crashLensClient.getSummary(t.tier, t.value, sumOpts), sumOpts),
                 CL.data.cachedMatview('mv_analysis_summary', t.tier, t.value,
-                    () => window.crashLensClient.getAnalysisBreakdown(t.tier, t.value, {})),
+                    () => window.crashLensClient.getAnalysisBreakdown(t.tier, t.value, rtOpts), _catKE),
                 CL.data.cachedMatview('mv_safety_categories', t.tier, t.value,
-                    () => window.crashLensClient.getSafetyCategories(t.tier, t.value, {})),
+                    () => window.crashLensClient.getSafetyCategories(t.tier, t.value, rtOpts), _catKE),
             ]);
             console.log('[Infographic] matview hydration: summary=' +
                 (Array.isArray(_supaSummary) ? _supaSummary.length : 0) + ' rows.');
