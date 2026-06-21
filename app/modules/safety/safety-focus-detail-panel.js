@@ -245,6 +245,57 @@ async function aggregateSfDetailData() {
                             });
                         }
                     }
+                    // CC 217 — REAL per-location dimensional breakdowns from
+                    // mv_safety_focus_detail (category x location JSONB:
+                    // by_year/by_dow/by_hour/by_collision/by_weather/by_light/
+                    // by_roadsurface/by_trafficctrl + factor/VRU/demographic
+                    // counts). Keyed identically to mv_safety_focus_locations so
+                    // it reconciles with the totals above. Fills the charts that
+                    // were blank at aggregate tiers; overrides the category-wide
+                    // co-factor approximations only when it matches.
+                    try {
+                        const _dp = new URLSearchParams({
+                            state: 'eq.' + String(dc.state || '').toLowerCase(),
+                            category: 'eq.' + category,
+                            select: 'location_name,location_type,total,alcohol_count,speed_count,distracted_count,drowsy_count,drug_count,hitrun_count,ped_count,bike_count,moto_count,senior_count,young_count,unrestrained_count,by_year,by_dow,by_hour,by_collision,by_weather,by_light,by_roadsurface,by_trafficctrl'
+                        });
+                        if (tierCol && t.value) _dp.set(tierCol, 'eq.' + t.value);
+                        const _dresp = await fetch(`${dc.supabaseUrl}/mv_safety_focus_detail?${_dp.toString()}`, {
+                            headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
+                        });
+                        if (_dresp.ok) {
+                            const _drows = await _dresp.json();
+                            const _sel = new Set(sfDetailState.selectedLocations.map(r => String(r).trim()));
+                            const _merge = (tgt, src) => { if (src) for (const k in src) { const v = src[k]; if (typeof v === 'number') tgt[k] = (tgt[k] || 0) + v; } };
+                            const T = { fac:{alcohol:0,speed:0,distracted:0,drowsy:0,drug:0,hitrun:0}, demo:{senior:0,young:0,unrestrained:0}, vru:{ped:0,bike:0,moto:0}, coll:{}, weat:{}, lite:{}, surf:{}, traf:{}, year:{}, dow:{}, hour:{}, intx:{} };
+                            let _matched = 0;
+                            (Array.isArray(_drows) ? _drows : []).forEach(r => {
+                                if (!_sel.has(String(r.location_name || '').trim())) return;
+                                _matched++;
+                                T.fac.alcohol+=+r.alcohol_count||0; T.fac.speed+=+r.speed_count||0; T.fac.distracted+=+r.distracted_count||0;
+                                T.fac.drowsy+=+r.drowsy_count||0; T.fac.drug+=+r.drug_count||0; T.fac.hitrun+=+r.hitrun_count||0;
+                                T.demo.senior+=+r.senior_count||0; T.demo.young+=+r.young_count||0; T.demo.unrestrained+=+r.unrestrained_count||0;
+                                T.vru.ped+=+r.ped_count||0; T.vru.bike+=+r.bike_count||0; T.vru.moto+=+r.moto_count||0;
+                                _merge(T.coll,r.by_collision); _merge(T.weat,r.by_weather); _merge(T.lite,r.by_light);
+                                _merge(T.surf,r.by_roadsurface); _merge(T.traf,r.by_trafficctrl); _merge(T.dow,r.by_dow); _merge(T.hour,r.by_hour);
+                                const _it = r.location_type === 'intersection' ? 'At Intersection' : 'Segment';
+                                T.intx[_it] = (T.intx[_it]||0) + (+r.total||0);
+                                if (r.by_year) for (const y in r.by_year) { const o=r.by_year[y]||{}; T.year[y]=T.year[y]||{total:0,K:0,A:0,B:0,C:0,O:0}; T.year[y].total+=o.total||0; T.year[y].K+=o.K||0; T.year[y].A+=o.A||0; T.year[y].B+=o.B||0; T.year[y].C+=o.C||0; T.year[y].O+=o.O||0; }
+                            });
+                            if (_matched > 0) {
+                                data.factors.alcohol=T.fac.alcohol; data.factors.speed=T.fac.speed; data.factors.distracted=T.fac.distracted;
+                                data.factors.drowsy=T.fac.drowsy; data.factors.drug=T.fac.drug; data.factors.hitrun=T.fac.hitrun;
+                                data.demographics.senior=T.demo.senior; data.demographics.young=T.demo.young; data.demographics.unrestrained=T.demo.unrestrained;
+                                data.vru.pedestrian.total=T.vru.ped; data.vru.bicycle.total=T.vru.bike; data.vru.motorcycle.total=T.vru.moto;
+                                data.byCollision=T.coll; data.byWeather=T.weat; data.byLight=T.lite; data.bySurface=T.surf; data.byTrafficControl=T.traf; data.byIntType=T.intx;
+                                if (Object.keys(T.year).length) data.byYear=T.year;
+                                data.byDOW={0:0,1:0,2:0,3:0,4:0,5:0,6:0}; Object.keys(T.dow).forEach(k=>{const n=Number(k); if(Number.isFinite(n)) data.byDOW[n]=T.dow[k];});
+                                data.byHour={}; data.byPeakPeriod={amPeak:0,midday:0,pmPeak:0,night:0};
+                                Object.keys(T.hour).forEach(k=>{const h=Number(k); if(!Number.isFinite(h))return; data.byHour[h]=T.hour[k]; const cc=T.hour[k]; if(h>=6&&h<9)data.byPeakPeriod.amPeak+=cc; else if(h>=9&&h<15)data.byPeakPeriod.midday+=cc; else if(h>=15&&h<19)data.byPeakPeriod.pmPeak+=cc; else data.byPeakPeriod.night+=cc;});
+                                console.log('[SafetyDetail] mv_safety_focus_detail: dimensional charts populated ('+_matched+' rows)');
+                            }
+                        }
+                    } catch (_derr) { console.warn('[SafetyDetail] mv_safety_focus_detail failed:', _derr && _derr.message); }
                     // CC 208 — flag matview-only aggregates so renderers can
                     // surface gap state on sub-KPIs that the matview cannot
                     // populate (factors.drowsy/drug/hitrun,

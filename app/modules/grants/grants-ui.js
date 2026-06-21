@@ -1143,7 +1143,13 @@ Generate a complete, professional grant application with clean formatting:
 - Professional, confident tone throughout - this application will be scored competitively
 - Never use "accident," "may," "might," "could," or "possibly"`;
 }
-const FULL_APPLICATION_SYSTEM_PROMPT = getFullApplicationSystemPrompt();
+// NOTE: getFullApplicationSystemPrompt() must be called LAZILY (on demand) via
+// window.getFullApplicationSystemPrompt — never at module-load time. This module's
+// <script> loads from the <head> (index.html), before the inline body script that
+// defines the EPDO_WEIGHTS global. An eager call here threw "EPDO_WEIGHTS is not
+// defined", which aborted this whole IIFE and left every grants-ui function
+// unexposed (window.* / CL.grants.* assignments below never ran). The pre-computed
+// constant was unused anyway. (Removed: const FULL_APPLICATION_SYSTEM_PROMPT = …)
 
 // ============================================================
 // GRANT 4-AGENT ORCHESTRATION SYSTEM
