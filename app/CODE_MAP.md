@@ -3777,7 +3777,7 @@ Before any code edit:
 | modules/grants/grants-controls.js | 82 | grants | applyLocationLimit, changeLocationLimit, changeGrantAggregation, changeGrantScoringProfile, hideScoringProfileBanner … (6 fns) | grants |
 | modules/grants/grants-rank-init.js | 158 | grants | (0 — internal) | grants |
 | modules/grants/grants-rank-score.js | 836 | grants | (0 — internal) | grants |
-| modules/grants/grants-ui.js | 2268 | grants | runFullAnalysis, scrollToGrantSearch, scrollToWritingAssistant, populateGrantProgramDropdown, buildGrantWritingContext … (36 fns) | grants |
+| modules/grants/grants-ui.js | 2276 | grants | runFullAnalysis, scrollToGrantSearch, scrollToWritingAssistant, populateGrantProgramDropdown, buildGrantWritingContext … (36 fns) | grants |
 | modules/grants/ranking.js | 148 | grants | (0 — internal) | grants |
 | modules/hotspots/hotspots-tab-core.js | 493 | hotspots | analyzeHotspots, _loadHotspotsFromMatview, _hotspots_fetchMatview, _renderHotspotsTableFromMatview, autoSelectTopHotspot, bindHotspotsRoadTypeChange … (7 fns) | hotspots |
 | modules/hotspots/hotspots-tab-modal.js | 342 | hotspots | showLocationModal, zoomToLocation, filterMapForLocation, exportHotspotsCSV, exportHotspotsPDF (5 fns) | hotspots |
