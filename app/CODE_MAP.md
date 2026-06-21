@@ -1924,7 +1924,7 @@ Before any code edit:
 | formatRouteName | inline @ L70596 | inline | shared |
 | generateAISectionInsight | inline @ L57555 | inline | shared |
 | generateAllDistrictsReport | inline @ L126281 | inline | reports |
-| generateAppPreview | inline @ L33999 | inline | shared |
+| generateAppPreview | inline @ L28167 | inline | shared |
 | generateBAPDFForEmail | inline @ L63018 | inline | shared |
 | generateBeforeAfterStudyReport | inline @ L60086 | inline | reports |
 | generateCategoryTopLocations | modules/reports/reports-standard-core2.js | window+CL | reports |
@@ -2015,7 +2015,7 @@ Before any code edit:
 | getCMFAIApiKey | inline @ L37504 | inline | cmf |
 | getCMFContext | inline @ L37550 | inline | cmf |
 | getCMFReductionPercent | inline @ L73202 | inline | cmf |
-| getCombinedSelectionStats | inline @ L33682 | inline | shared |
+| getCombinedSelectionStats | inline @ L27849 | inline | shared |
 | getComparisonRowColor | modules/dashboard/dashboard-tab-comparison.js | window+CL | dashboard |
 | getConnectionDiagnostics | inline @ L22666 | inline | shared |
 | getCorridors | modules/spatial/hierarchy-registry.js | module-private | shared |

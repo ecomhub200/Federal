@@ -27857,6 +27857,7 @@ function getCombinedSelectionStats() {
     };
     grantState.selectedLocationIndices.forEach(idx => {
         const loc = grantState.rankedLocations[idx];
+        if (!loc) return; // skip stale indices (list may have been re-ranked/re-sorted)
         combined.crashes += loc.crashes;
         combined.K += loc.K;
         combined.A += loc.A;
@@ -28168,11 +28169,11 @@ function generateAppPreview() {
     let location = null;
     let locationNames = [];
     let isMulti = false;
-    
+
     if (grantState.selectedLocationIndices.length > 1) {
         isMulti = true;
         location = getCombinedSelectionStats();
-        locationNames = grantState.selectedLocationIndices.map(idx => grantState.rankedLocations[idx].name);
+        locationNames = grantState.selectedLocationIndices.map(idx => grantState.rankedLocations[idx]?.name).filter(Boolean);
     } else if (grantState.selectedLocationIndices.length === 1) {
         location = grantState.rankedLocations[grantState.selectedLocationIndices[0]];
         locationNames = [location.name];
@@ -28187,6 +28188,13 @@ function generateAppPreview() {
         locationNames = [location.name];
     }
     
+    // Guard a zero-crash selection — the sections below divide by location.crashes
+    // and would render NaN%/Infinity bars. Show a friendly notice instead.
+    if (!location || !(location.crashes > 0)) {
+        preview.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--gray)"><div style="font-size:3rem;margin-bottom:1rem">📋</div><h3 style="margin-bottom:.5rem;color:var(--dark)">No crashes for this selection</h3><p>This location has no crashes in the selected analysis period. Pick a location with crash history, or widen the Grants date filter.</p></div>`;
+        return;
+    }
+
     const projectTitle = document.getElementById('appProjectTitle').value || 'Safety Improvement Project';
     const grantProgram = document.getElementById('appGrantProgram').value || 'ss4a';
     const projectCost = parseFloat(document.getElementById('appProjectCost').value) || 500000;
