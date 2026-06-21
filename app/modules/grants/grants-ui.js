@@ -408,7 +408,7 @@ function showHowTo(guideType) {
         'epdo': {
             title: 'Understand EPDO Scores',
             steps: [
-                { num: 1, text: '<strong>What is EPDO?</strong> - Equivalent Property Damage Only score weights crashes by severity: K=462, A=62, B=12, C=5, O=1' },
+                { num: 1, text: '<strong>What is EPDO?</strong> - Equivalent Property Damage Only score weights crashes by severity (FHWA 2025): K=883, A=94, B=21, C=11, O=1' },
                 { num: 2, text: '<strong>Why it matters</strong> - 2 fatal crashes (EPDO=924) rank higher than 100 PDO crashes (EPDO=100)' },
                 { num: 3, text: '<strong>Find EPDO in Hotspots</strong> - Sort by EPDO Score to rank locations by true danger level' },
                 { num: 4, text: '<strong>EPDO on Dashboard</strong> - The total EPDO KPI card shows the weighted severity across all crashes' },
@@ -938,6 +938,9 @@ function getGrantAISystemPrompt() {
     const fips = jurisdictionContext?.stateFips || '08';
     const stateInfo = (typeof FIPSDatabase !== 'undefined') ? FIPSDatabase.getState(fips) : null;
     const dotName = stateInfo?.dotName || 'State DOT';
+    // window.EPDO_WEIGHTS may be unset at module-load (this fn is also called by a dead eager const);
+    // the optional read + fallback keeps load safe and uses the active jurisdiction weights at runtime.
+    const w = window.EPDO_WEIGHTS || { K: 883, A: 94, B: 21, C: 11, O: 1 };
 
     return `You are a world-class transportation safety grant writer with 20+ years winning competitive federal and state highway safety grants. You have served as both an applicant (90%+ win rate) and a federal grant reviewer for USDOT. You specialize in SS4A, HSIP, NHTSA 402/405, RAISE, and INFRA programs.
 
@@ -973,7 +976,7 @@ You work for a traffic engineering division in ${stateName}, preparing applicati
 - RAISE/INFRA: Multi-modal, economic competitiveness, environmental sustainability. Larger projects ($5M+)
 
 === WHEN ANALYZING CRASH DATA ===
-- Calculate and interpret EPDO scores: K×462 + A×62 + B×12 + C×5 + O×1
+- Calculate and interpret EPDO scores: K×${w.K} + A×${w.A} + B×${w.B} + C×${w.C} + O×${w.O}
 - Identify dominant crash PATTERNS (collision types, temporal, contributing factors) — these drive countermeasure selection
 - Compare K+A rates to state averages (~5%) to establish severity context
 - Flag VRU involvement and calculate VRU crash rates
@@ -1235,7 +1238,7 @@ const GRANT_AGENT1_SYSTEM_PROMPT = `You are Grant Agent 1: Data Synthesizer & Fa
 
 RESPONSIBILITIES:
 1. VALIDATE crash data consistency (total = K+A+B+C+O)
-2. CALCULATE EPDO: K×462 + A×62 + B×12 + C×5 + O×1
+2. EPDO: USE the authoritative EPDO value and the severity weights provided in the input. Never assume or substitute weights, and never recompute with different weights — the provided value is the official jurisdiction EPDO.
 3. CALCULATE B/C ratio with full step-by-step methodology
 4. COMPILE VRU statistics and VRU crash rate
 5. ANALYZE crash patterns — collision types, behavioral factors, temporal patterns
@@ -1252,7 +1255,7 @@ OUTPUT FORMAT: Return ONLY valid JSON:
         "severityCheck": "VALID",
         "yearRange": "2020-2024",
         "annualized": 9.0,
-        "epdo": {"value": 1464, "calculation": "(2×462)+(5×62)+(12×12)+(15×5)+(11×1)"},
+        "epdo": {"value": 2664, "calculation": "(2×883)+(5×94)+(12×21)+(15×11)+(11×1)"},
         "kaCount": 7,
         "kaPercentage": 15.6,
         "kaContext": "3x the state average of 5%"
@@ -1657,6 +1660,7 @@ async function runGrant4AgentAnalysis(crashData, grantProgram, projectParams, ap
  * Build input for Grant Agent 1
  */
 function buildGrantAgent1Input(crashData, projectParams) {
+    const w = window.EPDO_WEIGHTS || { K: 883, A: 94, B: 21, C: 11, O: 1 }; // active jurisdiction EPDO weights (FHWA 2025 default)
     let input = `Validate crash data and calculate B/C.
 
 LOCATION: ${crashData.locationName || 'Selected Location'}
@@ -1664,6 +1668,7 @@ TYPE: ${crashData.locationType || 'Intersection'}
 JURISDICTION: ${jurisdictionContext?.jurisdictionName || 'Unknown'}, ${jurisdictionContext?.stateName || 'Unknown'}
 
 CRASHES: Total=${crashData.total}, K=${crashData.K||0}, A=${crashData.A||0}, B=${crashData.B||0}, C=${crashData.C||0}, O=${crashData.O||0}
+EPDO (AUTHORITATIVE — already computed with this jurisdiction's official weights K=${w.K}, A=${w.A}, B=${w.B}, C=${w.C}, O=${w.O}): ${crashData.epdo || 0}. Use this exact EPDO value. When showing the EPDO formula, use ONLY these weights — never substitute other weights.
 K+A RATE: ${crashData.total > 0 ? (((crashData.K||0) + (crashData.A||0)) / crashData.total * 100).toFixed(1) : 0}%
 YEARS: ${crashData.yearRange || '5-year'}
 ANNUALIZED: ${crashData.yearRange ? (crashData.total / (parseInt(crashData.yearRange.split('-').pop()) - parseInt(crashData.yearRange.split('-')[0]) + 1 || 1)).toFixed(1) : crashData.total} crashes/year
@@ -1801,6 +1806,7 @@ async function download4AgentApplicationPDF() {
         locationName: isMulti ? locationNames.join(', ') : location.name,
         locationType: isMulti ? 'Multi-Corridor' : (location.type === 'intersection' ? 'Intersection' : 'Segment'),
         total: location.crashes || 0,
+        epdo: Math.round(location.epdo || 0), // authoritative EPDO from the app (official jurisdiction weights) — agents must use this, not recompute
         K: location.K || 0,
         A: location.A || 0,
         B: location.B || 0,
@@ -1930,6 +1936,7 @@ async function download4AgentApplicationWord() {
         locationName: isMulti ? locationNames.join(', ') : location.name,
         locationType: isMulti ? 'Multi-Corridor' : (location.type === 'intersection' ? 'Intersection' : 'Segment'),
         total: location.crashes || 0,
+        epdo: Math.round(location.epdo || 0), // authoritative EPDO from the app (official jurisdiction weights) — agents must use this, not recompute
         K: location.K || 0, A: location.A || 0, B: location.B || 0, C: location.C || 0, O: location.O || 0,
         yearRange: crashState.years?.length > 0 ? `${crashState.years[0]}-${crashState.years[crashState.years.length-1]}` : '5-year',
         pedestrian: location.ped || 0,
