@@ -1530,16 +1530,19 @@ async function callGrantAgentWithRetry(agentNum, systemPrompt, userInput, apiKey
                     await new Promise(resolve => setTimeout(resolve, waitTime));
                     continue;
                 }
-                throw new Error('Rate limit exceeded. Please try again later.');
+                throw new Error(`Agent ${agentNum}: Anthropic rate limit hit and still limited after ${maxRetries + 1} attempts. Wait a minute and try again.`);
             }
 
             if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error(`Agent ${agentNum}: API key rejected (HTTP ${response.status}). Check your Anthropic API key in the 🔑 field at the top of the page.`);
+                }
                 if (response.status >= 500 && attempt < maxRetries) {
                     const waitTime = Math.pow(2, attempt) * baseDelay;
                     await new Promise(resolve => setTimeout(resolve, waitTime));
                     continue;
                 }
-                throw new Error(`API error ${response.status}`);
+                throw new Error(`Agent ${agentNum}: Anthropic API error (HTTP ${response.status}).`);
             }
 
             const data = await response.json();
@@ -1563,6 +1566,9 @@ async function callGrantAgentWithRetry(agentNum, systemPrompt, userInput, apiKey
             if (error.name === 'TypeError' && attempt < maxRetries) {
                 await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * baseDelay));
                 continue;
+            }
+            if (error.name === 'TypeError') {
+                throw new Error(`Agent ${agentNum}: Network error reaching the Anthropic API. Check your internet connection and try again.`);
             }
             throw error;
         }
@@ -1761,7 +1767,12 @@ async function download4AgentApplicationPDF() {
 
     const apiKey = getCMFAIApiKey?.() || getGrantApiKey?.();
     if (!apiKey) {
-        alert('Please configure your API key in the AI settings.');
+        // Reveal the centralized header API-key bar so the user can act immediately.
+        const keyContainer = document.getElementById('headerApiKeyContainer');
+        if (keyContainer) keyContainer.classList.remove('hidden');
+        alert('No AI API key found. Enter your Anthropic (Claude) API key in the 🔑 field at the top of the page and click 💾 Save, then try generating again. Need a key? Use the "🔑 Get key" link in that bar.');
+        const keyField = document.getElementById('headerApiKey');
+        if (keyField) { keyField.scrollIntoView({ behavior: 'smooth', block: 'center' }); keyField.focus(); }
         return;
     }
 
@@ -1770,7 +1781,7 @@ async function download4AgentApplicationPDF() {
     if (grantState.selectedLocationIndices.length > 1) {
         isMulti = true;
         location = getCombinedSelectionStats();
-        locationNames = grantState.selectedLocationIndices.map(idx => grantState.rankedLocations[idx].name);
+        locationNames = grantState.selectedLocationIndices.map(idx => grantState.rankedLocations[idx]?.name).filter(Boolean);
     } else if (grantState.selectedLocationIndices.length === 1) {
         location = grantState.rankedLocations[grantState.selectedLocationIndices[0]];
         locationNames = [location.name];
@@ -1804,7 +1815,7 @@ async function download4AgentApplicationPDF() {
             const agg = {};
             grantState.selectedLocationIndices.forEach(idx => {
                 const loc = grantState.rankedLocations[idx];
-                if (loc.patterns) {
+                if (loc && loc.patterns) {
                     Object.entries(loc.patterns).forEach(([k, v]) => {
                         if (typeof v === 'number') agg[k] = (agg[k] || 0) + v;
                         else if (typeof v === 'object' && v !== null) {
@@ -1817,6 +1828,18 @@ async function download4AgentApplicationPDF() {
             return agg;
         })() : {})
     };
+
+    // Pre-flight data validation — don't spend four Claude calls on empty or
+    // self-inconsistent data. (Severity sum < total is normal: some states have
+    // unknown-severity crashes, so only the clearly-wrong cases below abort/warn.)
+    if (!(crashData.total > 0)) {
+        alert('This location has no crashes in the selected analysis period. Choose a location with crash history, or widen the Grants date filter, before generating an application.');
+        return;
+    }
+    const sevSum = crashData.K + crashData.A + crashData.B + crashData.C + crashData.O;
+    if (sevSum > crashData.total) {
+        if (!confirm(`Data check: the severity counts (K+A+B+C+O = ${sevSum}) exceed the total crash count (${crashData.total}) for this selection — the generated application may contain inconsistent numbers. Generate anyway?`)) return;
+    }
 
     // Build project params
     const projectParams = {
@@ -1873,7 +1896,12 @@ async function download4AgentApplicationWord() {
 
     const apiKey = getCMFAIApiKey?.() || getGrantApiKey?.();
     if (!apiKey) {
-        alert('Please configure your API key in the AI settings.');
+        // Reveal the centralized header API-key bar so the user can act immediately.
+        const keyContainer = document.getElementById('headerApiKeyContainer');
+        if (keyContainer) keyContainer.classList.remove('hidden');
+        alert('No AI API key found. Enter your Anthropic (Claude) API key in the 🔑 field at the top of the page and click 💾 Save, then try generating again. Need a key? Use the "🔑 Get key" link in that bar.');
+        const keyField = document.getElementById('headerApiKey');
+        if (keyField) { keyField.scrollIntoView({ behavior: 'smooth', block: 'center' }); keyField.focus(); }
         return;
     }
 
@@ -1882,7 +1910,7 @@ async function download4AgentApplicationWord() {
     if (grantState.selectedLocationIndices.length > 1) {
         isMulti = true;
         location = getCombinedSelectionStats();
-        locationNames = grantState.selectedLocationIndices.map(idx => grantState.rankedLocations[idx].name);
+        locationNames = grantState.selectedLocationIndices.map(idx => grantState.rankedLocations[idx]?.name).filter(Boolean);
     } else if (grantState.selectedLocationIndices.length === 1) {
         location = grantState.rankedLocations[grantState.selectedLocationIndices[0]];
         locationNames = [location.name];
@@ -1911,7 +1939,7 @@ async function download4AgentApplicationWord() {
             const agg = {};
             grantState.selectedLocationIndices.forEach(idx => {
                 const loc = grantState.rankedLocations[idx];
-                if (loc.patterns) {
+                if (loc && loc.patterns) {
                     Object.entries(loc.patterns).forEach(([k, v]) => {
                         if (typeof v === 'number') agg[k] = (agg[k] || 0) + v;
                         else if (typeof v === 'object' && v !== null) {
@@ -1924,6 +1952,16 @@ async function download4AgentApplicationWord() {
             return agg;
         })() : {})
     };
+
+    // Pre-flight data validation — see download4AgentApplicationPDF for rationale.
+    if (!(crashData.total > 0)) {
+        alert('This location has no crashes in the selected analysis period. Choose a location with crash history, or widen the Grants date filter, before generating an application.');
+        return;
+    }
+    const sevSum = crashData.K + crashData.A + crashData.B + crashData.C + crashData.O;
+    if (sevSum > crashData.total) {
+        if (!confirm(`Data check: the severity counts (K+A+B+C+O = ${sevSum}) exceed the total crash count (${crashData.total}) for this selection — the generated application may contain inconsistent numbers. Generate anyway?`)) return;
+    }
 
     const projectParams = {
         title: document.getElementById('appProjectTitle')?.value || (isMulti ? 'Multi-Corridor Safety Improvement' : `${location.name} Safety Improvement`),
