@@ -1,6 +1,6 @@
 # index.html function inventory — PART 4 (L120001–end)
 
-Snapshot: 2026-05-20 · source `app/index.html` (88670 lines)
+Snapshot: 2026-05-20 · source `app/index.html` (87792 lines)
 
 Declarations in this part: **0**
 
