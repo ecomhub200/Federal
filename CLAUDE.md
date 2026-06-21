@@ -935,6 +935,26 @@ risk register.
   `PED_*` consts stay inside their IIFE (no external refs, verified). New
   `CL.studies` root in `loader.js`. Generic neighbors `analyzeWarrantsFromMap` /
   `evaluateStopWarrant` left INLINE. LATE cluster. `app/index.html` 117,385 → 101,803.
+- **Round X extracted (Session 2026-06-21 ai-analyst salvage, off-limits):**
+  `ai/ai-analyst-chat` (12 decls — `const aiState` + 11 fns
+  `loadSavedKey`..`buildCrashDataContext`), `ai/ai-analyst-mutcd` (8 decls —
+  module-private `const PINECONE_CONFIG` + 7 fns
+  `initMUTCDLocationDropdown`..`buildPineconeRAGContext`), `ai/ai-analyst-context`
+  (4 fns `buildSystemPrompt`/`getAIAnalysisContext`/`buildLocationCrashContext`/
+  `updateAIContextIndicator`). Three separate verbatim blocks (chat L52817–53094,
+  mutcd L53096–53392, context L54865–55151 — byte-for-byte identical to the now
+  superseded PR #171's prompt-40c1/40c2/40c3 module files; deleted bottom-up).
+  EARLY cluster, in order chat→mutcd→context, right after `ai/ai-mode-toggle.js`.
+  All decls dual-exposed `window.<fn>` + `CL.ai.<fn>`. `aiState` mirrored to
+  `window.aiState`/`CL.ai.aiState` (read by inline code + other ai/* modules);
+  `PINECONE_CONFIG` stays module-private (refs only inside mutcd block). Shared
+  inline globals (`mutcdState`, `selectionState`, `cmfState`, `warrantsState`,
+  `crashState`, `buildLocationCrashProfile`/`buildCountyWideCrashProfile`,
+  `updateMUTCDAILocationBar`) left INLINE, resolved via global lexical env — NOT
+  mirrored. `CL.ai.context` (off-limits `ai/context.js` math module) is a
+  different namespace from these `CL.ai.*` fns — no R1 collision. The 6 other
+  PR #171 extractions (report-ba-*, reports-memo, reports-recommend) were already
+  landed independently, so only these 3 ai-analyst modules were salvaged.
 - **After each successful extraction, append the newly created module to this
   protected list** (orchestrator does this once the prompt verifies green).
 
