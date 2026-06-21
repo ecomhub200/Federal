@@ -24260,6 +24260,9 @@ function updateGrantQuickLinks(stateFips, dotName, hso) {
 
 // Main ranking function - now async with chunked processing and caching
 async function rankLocationsForGrants() {
+    // Each fresh ranking re-arms the default rank-#1 selection (applied once by
+    // displayGrantLocations). Clearing/unchecking on page 1 won't re-trigger it.
+    grantState._defaultSelectionApplied = false;
     // Try matview path first — mv_grants_baseline is populated at every tier
     // (federal/state/region/MPO/PD/county/city) after PR #68's column-alias fix.
     // The matview path doesn't depend on crashState.loaded (which only flips
@@ -27642,6 +27645,18 @@ function displayGrantLocations() {
     const pageData = getPaginatedData('grant');
     const state = paginationState.grant;
     const startIndex = (state.page - 1) * state.pageSize;
+
+    // Default selection: auto-select the #1 ranked location once per ranking
+    // (page 1 only, only when nothing is selected) — mirrors the Hot Spots /
+    // Intersections tabs. The _defaultSelectionApplied flag (re-armed in
+    // rankLocationsForGrants) prevents re-selecting after the user clears.
+    if (!grantState._defaultSelectionApplied && state.page === 1 &&
+        (grantState.selectedLocationIndices || []).length === 0 && allLocations.length > 0) {
+        grantState.selectedLocationIndices = [0];
+        grantState.selectedLocationIdx = 0;
+        grantState._defaultSelectionApplied = true;
+        if (typeof updateAppBuilderFromSelection === 'function') updateAppBuilderFromSelection();
+    }
 
     // Program label mapping
     const programLabels = {
@@ -45086,21 +45101,43 @@ window.addEventListener('message', function(evt) {
 function sendCrashDataToAssetDeficiency() {
     const frame = document.getElementById('assetDeficiencyFrame');
     if (!frame || !frame.contentWindow || frame.src === 'about:blank') return;
-    if (!crashState.loaded || !crashState.sampleRows?.length) return;
 
-    // Include road type filter label so the iframe can display which dataset is active
-    const filterRadio = document.querySelector('input[name="roadTypeFilter"]:checked');
-    const filterValue = filterRadio?.value || localStorage.getItem('selectedFilterProfile') || 'countyOnly';
-    const filterLabels = { countyOnly: 'County Roads Only', cityOnly: 'City Roads Only', countyPlusVDOT: 'All Roads (No Interstate)', allRoads: 'All Roads (Incl. Interstates)' };
-    const roadTypeLabel = filterLabels[filterValue] || filterValue;
+    const _send = () => {
+        const f = document.getElementById('assetDeficiencyFrame');
+        if (!f || !f.contentWindow || f.src === 'about:blank') return;
+        if (!crashState.sampleRows || !crashState.sampleRows.length) {
+            // No row-level data available (e.g. aggregate tier where R2 is
+            // skipped). Asset Deficiency needs per-crash coordinates; leave the
+            // iframe's pending banner up rather than sending an empty set.
+            console.log('[AssetDef] No crash rows available to send (sampleRows empty)');
+            return;
+        }
+        // Include road type filter label so the iframe can display which dataset is active
+        const filterRadio = document.querySelector('input[name="roadTypeFilter"]:checked');
+        const filterValue = filterRadio?.value || localStorage.getItem('selectedFilterProfile') || 'countyOnly';
+        const filterLabels = { countyOnly: 'County Roads Only', cityOnly: 'City Roads Only', countyPlusVDOT: 'All Roads (No Interstate)', allRoads: 'All Roads (Incl. Interstates)' };
+        const roadTypeLabel = filterLabels[filterValue] || filterValue;
 
-    frame.contentWindow.postMessage({
-        type: 'ad-crash-data',
-        rows: crashState.sampleRows,
-        roadTypeFilter: filterValue,
-        roadTypeLabel: roadTypeLabel
-    }, '*');
-    console.log('[AssetDef] Sent', crashState.sampleRows.length, 'crash rows to Asset Deficiency (filter:', roadTypeLabel, ')');
+        f.contentWindow.postMessage({
+            type: 'ad-crash-data',
+            rows: crashState.sampleRows,
+            roadTypeFilter: filterValue,
+            roadTypeLabel: roadTypeLabel
+        }, '*');
+        console.log('[AssetDef] Sent', crashState.sampleRows.length, 'crash rows to Asset Deficiency (filter:', roadTypeLabel, ')');
+    };
+
+    // Hydrate row-level crash data on demand so the iframe auto-runs its
+    // analysis instead of sitting on the "Analysis Pending" banner. Previously
+    // this bailed when sampleRows wasn't loaded yet (the common first-open case).
+    if (crashState.sampleRows && crashState.sampleRows.length) {
+        _send();
+    } else if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
+        console.log('[AssetDef] Hydrating sampleRows before sending to Asset Deficiency…');
+        CL.worker.ensureSampleRows().then(_send).catch(e => console.warn('[AssetDef] ensureSampleRows failed:', e && e.message));
+    } else {
+        _send();
+    }
 }
 
 function sendInventoryToAssetDeficiency() {
@@ -46434,6 +46471,16 @@ async function _loadIntersectionsFromHotspots() {
                 if (typeof _updateIntersectionThead === 'function') _updateIntersectionThead();
             } catch (_) { /* non-fatal */ }
             _renderIntersectionRows();
+            // Auto-select rank #1 by default (matview path — mirrors the legacy
+            // updateIntersectionTab() path). Page 1 only; skip if already selected.
+            try {
+                const _instate = paginationState.intersection;
+                if (typeof autoSelectTopIntersection === 'function' &&
+                    intDetailState.selectedLocations.length === 0 &&
+                    nodeSorted.length > 0 && _instate && _instate.page === 1) {
+                    autoSelectTopIntersection(nodeSorted);
+                }
+            } catch (_) { /* non-fatal */ }
             console.log('[Intersections] Table populated from mv_hotspots (' + nodeSorted.length + ' rows with readable names).');
         }
 
@@ -54738,21 +54785,37 @@ function loadLocationForCMF() {
             .then(rows => {
                 // Discard if user has picked another location since
                 if (reqToken !== cmfState._locReqToken) return;
-                // getCrashesByLocation handles name-format drift internally via its
-                // fuzzy ILIKE retry — so an empty result here means there genuinely
-                // are no matching crashes. Still keep a belt-and-braces sampleRows
-                // fallback for the pathological case of Supabase being missing data
-                // that the R2 CSV has.
-                if ((rows || []).length === 0 && (cmfState.aggregateCount || 0) > 0 && crashState.sampleRows?.length) {
-                    console.log('[CMF] Supabase + fuzzy retry both empty for', name, '— final fallback to sampleRows');
-                    cmfState.locationCrashes = crashState.sampleRows.filter(row =>
-                        type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name
-                    );
+                if ((rows || []).length > 0) {
+                    cmfState.locationCrashes = rows;
                     _finalizeCMFAfterLocationLoad();
                     return;
                 }
-                cmfState.locationCrashes = rows || [];
-                _finalizeCMFAfterLocationLoad();
+                // Supabase + fuzzy retry empty: node/rte_name format can differ
+                // from the R2 CSV, or sampleRows isn't hydrated yet. Hydrate
+                // row-level data on demand and filter so the Crash Profile and
+                // contributing-factor panels populate instead of showing zero.
+                const _applyFromSample = () => {
+                    if (reqToken !== cmfState._locReqToken) return;
+                    cmfState.locationCrashes = (crashState.sampleRows || []).filter(row =>
+                        type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name
+                    );
+                    _finalizeCMFAfterLocationLoad();
+                };
+                if (crashState.sampleRows && crashState.sampleRows.length) {
+                    _applyFromSample();
+                } else if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
+                    console.log('[CMF] Supabase empty for', name, '— hydrating sampleRows fallback');
+                    CL.worker.ensureSampleRows().then(_applyFromSample).catch(e => {
+                        console.warn('[CMF] ensureSampleRows fallback failed:', e && e.message);
+                        if (reqToken === cmfState._locReqToken) {
+                            cmfState.locationCrashes = [];
+                            _finalizeCMFAfterLocationLoad();
+                        }
+                    });
+                } else {
+                    cmfState.locationCrashes = [];
+                    _finalizeCMFAfterLocationLoad();
+                }
             })
             .catch(err => {
                 console.warn('[Phase4] CMF Supabase location load failed, falling back to sampleRows:', err && err.message);
@@ -62357,7 +62420,7 @@ function updateSafetyHarmfulEventChart(crashes) {
     updateSafetyGridVisibility();
 }
 
-function updateSafetyYearChart(crashes) {
+function updateSafetyYearChart(crashes, precomputedByYear) {
     const ctx = document.getElementById('safetyYearChart');
     const card = document.getElementById('safetyYearCard');
     if (!ctx) return;
@@ -62399,17 +62462,26 @@ function updateSafetyYearChart(crashes) {
         return null;
     };
 
-    // Count by year with improved year extraction
+    // Count by year with improved year extraction. In matview mode (aggregate
+    // tiers) per-row crashes are unavailable; the caller passes a precomputed
+    // { year: count } map sourced from mv_safety_categories_yearly instead.
     const byYear = {};
     let invalidYearCount = 0;
-    crashes.forEach(row => {
-        const year = extractCrashYear(row);
-        if (year) {
-            byYear[year] = (byYear[year] || 0) + 1;
-        } else {
-            invalidYearCount++;
-        }
-    });
+    if (precomputedByYear && typeof precomputedByYear === 'object' && Object.keys(precomputedByYear).length > 0) {
+        Object.keys(precomputedByYear).forEach(y => {
+            const yr = parseInt(y, 10);
+            if (!isNaN(yr) && yr >= 2000 && yr <= 2030) byYear[yr] = Number(precomputedByYear[y]) || 0;
+        });
+    } else {
+        (crashes || []).forEach(row => {
+            const year = extractCrashYear(row);
+            if (year) {
+                byYear[year] = (byYear[year] || 0) + 1;
+            } else {
+                invalidYearCount++;
+            }
+        });
+    }
 
     // Log debug info if there are issues
     if (invalidYearCount > 0) {
@@ -62489,6 +62561,14 @@ async function updateSafetyFactorBadges(crashes) {
         _renderSafetySubKpiUnavailable();
         return;
     }
+    // Matview mode (aggregate tiers): per-row crashes are empty, so derive the
+    // sub-factor tiles from the mv_safety_co_factors counts merged onto
+    // safetyState.data[cat] by _hydrateSafetyCoFactors(). Show a note when the
+    // selected category has no co-factor data in this state.
+    if (safetyState.matviewMode) {
+        _renderSafetyFactorBadgesFromMatview();
+        return;
+    }
     const total = crashes.length;
     if (total === 0) {
         ['Speed', 'Senior', 'Young', 'Night', 'Impaired', 'Distracted'].forEach(factor => {
@@ -62538,6 +62618,46 @@ async function updateSafetyFactorBadges(crashes) {
 
     document.getElementById('safetyFactorDistracted').textContent = distractedCount.toLocaleString();
     document.getElementById('safetyFactorDistractedPct').textContent = ((distractedCount / total) * 100).toFixed(1) + '%';
+}
+
+// Matview-mode sub-factor tiles: render from the mv_safety_co_factors counts
+// merged onto safetyState.data[cat] (per-row crashes are unavailable at
+// aggregate tiers). When the active category has no co-factor data for the
+// current state, blank the tiles and show an inline note instead of zeros.
+function _renderSafetyFactorBadgesFromMatview() {
+    const cat = safetyState.activeCategory;
+    const d = (cat && safetyState.data && safetyState.data[cat]) || {};
+    const denom = Number(d.cofactor_total) || 0;
+    const wrap = document.getElementById('safetyFactorBadges');
+    const prevNote = document.getElementById('safetyFactorEmptyNote');
+    if (prevNote) prevNote.remove();
+    const map = [
+        ['Speed', d.speed_count], ['Senior', d.senior_count], ['Young', d.young_count],
+        ['Night', d.nighttime_count], ['Impaired', d.impaired_count], ['Distracted', d.distracted_count]
+    ];
+    if (denom <= 0) {
+        map.forEach(([factor]) => {
+            const v = document.getElementById('safetyFactor' + factor);
+            const p = document.getElementById('safetyFactor' + factor + 'Pct');
+            if (v) v.textContent = '—';
+            if (p) p.textContent = '';
+        });
+        if (wrap && !document.getElementById('safetyFactorEmptyNote')) {
+            const note = document.createElement('div');
+            note.id = 'safetyFactorEmptyNote';
+            note.style.cssText = 'padding:.5rem .75rem;font-size:.8rem;color:#64748b;grid-column:1/-1';
+            note.textContent = 'No contributing-factor data for this category in this state.';
+            wrap.appendChild(note);
+        }
+        return;
+    }
+    map.forEach(([factor, count]) => {
+        const c = Number(count) || 0;
+        const v = document.getElementById('safetyFactor' + factor);
+        const p = document.getElementById('safetyFactor' + factor + 'Pct');
+        if (v) v.textContent = c.toLocaleString();
+        if (p) p.textContent = ((c / denom) * 100).toFixed(1) + '%';
+    });
 }
 
 
@@ -69500,6 +69620,29 @@ function selectWarrantLocation(type, name) {
     loadLocationDataForWarrants(name, type, crashes, aggregateCount, displayName);
 }
 
+// Hydrate row-level crash data on demand, then filter to the selected location.
+// Used when Supabase's per-location query returns 0 rows (node/route format
+// drift) or sampleRows isn't loaded yet. Mirrors the Countermeasures tab's
+// ensureSampleRows() pattern so the Warrant Crash Profile auto-populates.
+function _warrantFallbackFromSampleRows(name, type, aggregateCount, displayName) {
+    const _filter = () => (crashState.sampleRows || []).filter(row =>
+        type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name);
+    if (crashState.sampleRows && crashState.sampleRows.length) {
+        loadLocationDataForWarrants(name, type, _filter(), aggregateCount, displayName);
+        return;
+    }
+    if (typeof CL !== 'undefined' && CL.worker && CL.worker.ensureSampleRows) {
+        CL.worker.ensureSampleRows()
+            .then(() => loadLocationDataForWarrants(name, type, _filter(), aggregateCount, displayName))
+            .catch(e => {
+                console.warn('[Warrant] ensureSampleRows fallback failed:', e && e.message);
+                loadLocationDataForWarrants(name, type, [], aggregateCount, displayName);
+            });
+    } else {
+        loadLocationDataForWarrants(name, type, [], aggregateCount, displayName);
+    }
+}
+
 // Load location for warrants from dropdown
 function loadLocationForWarrants() {
     const select = document.getElementById('warrantLocationSelect');
@@ -69572,24 +69715,22 @@ function loadLocationForWarrants() {
 
         window.crashLensClient.getCrashesByLocation(tierInfo.tier, tierInfo.value, type, name)
             .then(rows => {
-                // Empty-response guard: if aggregates say this location has crashes but
-                // Supabase returns 0 rows, the rte_name/node column format differs between
-                // the R2 CSV and the Supabase `crashes` table (Delaware: `DE 18` vs server-
-                // side normalised form). Fall back to sampleRows silently — Phase 4 is a
-                // performance optimisation, not a correctness change.
-                if ((rows || []).length === 0 && aggregateCount > 0 && crashState.sampleRows?.length) {
-                    console.log('[Warrant] Supabase returned 0 rows for', name, '— falling back to sampleRows');
-                    const fallback = crashState.sampleRows.filter(row => type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name);
-                    loadLocationDataForWarrants(name, type, fallback, aggregateCount, displayName);
+                if ((rows || []).length > 0) {
+                    console.log('[Warrant] Supabase location load:', { type, name, rows: rows.length });
+                    loadLocationDataForWarrants(name, type, rows, aggregateCount, displayName);
                     return;
                 }
-                console.log('[Warrant] Supabase location load:', { type, name, rows: (rows || []).length });
-                loadLocationDataForWarrants(name, type, rows || [], aggregateCount, displayName);
+                // Supabase returned 0 rows: the node/rte_name format can differ
+                // between the Supabase `crashes` table and the R2 CSV (Delaware:
+                // `DE 18` vs normalised form), or sampleRows simply isn't
+                // hydrated yet. Hydrate the row-level data on demand and filter
+                // so the Crash Profile auto-populates instead of showing zero.
+                console.log('[Warrant] Supabase returned 0 rows for', name, '— hydrating sampleRows fallback');
+                _warrantFallbackFromSampleRows(name, type, aggregateCount, displayName);
             })
             .catch(err => {
                 console.warn('[Phase4] Warrants Supabase location load failed, falling back to sampleRows:', err && err.message);
-                const crashes = (crashState.sampleRows || []).filter(row => type === 'route' ? row[COL.ROUTE] === name : row[COL.NODE] === name);
-                loadLocationDataForWarrants(name, type, crashes, aggregateCount, displayName);
+                _warrantFallbackFromSampleRows(name, type, aggregateCount, displayName);
             });
         return;
     }

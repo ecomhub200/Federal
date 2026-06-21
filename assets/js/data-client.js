@@ -1759,7 +1759,10 @@ class CrashLensDataClient {
     return this._swr(swrKey, async () => {
       try {
         const tierFilters = this._tierFilter(tier, value);
-        const allFilters = { ...tierFilters, mode: `eq.${mode}` };
+        // Exclude rows with no resolvable location name (segments lacking a
+        // route/intersection name). The matview emits NULL for these; without
+        // this filter they collapse into one high-volume row that ranks #1.
+        const allFilters = { ...tierFilters, mode: `eq.${mode}`, location_name: 'not.is.null' };
         const data = await this._supabaseQuery('mv_pedbike_locations', {
           filters: allFilters,
           order: 'total.desc',

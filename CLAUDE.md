@@ -1,6 +1,55 @@
 # Claude Guidelines for Virginia Crash Analysis Tool
 **Status: v1.0 SHIPPED 2026-06-06. See `docs/SHIPPED_v1.0.md` for what's locked. New work goes to `docs/v1_1_backlog.md` until a paying customer complaint dictates otherwise.**
 
+---
+
+## 🛑 Surgical Bug-Fix Protocol (READ FIRST — protects the tabs)
+
+Bug fixes in this app keep breaking *unrelated* tabs. The cause is almost always
+mechanical, not logical: a syntax error in a touched module/IIFE, a duplicate
+function name (hoisting overwrites the original silently), a moved `<script>`
+tag, a renamed function still called elsewhere, or a shared global
+(`crashState` / `cmfState` / `warrantsState`) mutated for one tab that another
+tab reads. To stop this, **every bug fix MUST follow this protocol** — it
+overrides any urge to "just quickly fix it":
+
+1. **Smallest viable change.** Change only the lines that fix the reported bug.
+   No drive-by refactors, no reformatting, no "while I'm here" cleanups, no
+   reordering `<script>` tags, no new helper functions unless the fix is
+   impossible without one. A bug fix diff that touches more than the bug is a
+   regression risk.
+2. **Navigate via `app/CODE_MAP.md` first** (Policy 1). Read only the affected
+   range — never blind-scan `app/index.html`.
+3. **Never duplicate or rename a function** without grepping for every caller
+   first. Keep the dual export (`window.<fn>` AND `CL.<area>.<fn>`).
+4. **Don't relocate shared globals** still read by inline code.
+5. **Prove the tabs still work before claiming done.** Run the tab smoke test:
+   ```bash
+   cd tests-e2e
+   npm run test:smoke          # against deployed app (default BASE_URL)
+   # or local:  BASE_URL=http://localhost:8000/app/ npm run test:smoke
+   ```
+   It visits every tab and FAILS on any console/page error or empty tab — the
+   exact "broken tab" signature. Do not say a fix works until this is green.
+6. **Prefer an isolated git worktree** for any non-trivial fix so experiments
+   never touch the main working copy until verified (see
+   `superpowers:using-git-worktrees`). Multiple agent sessions in one working
+   copy silently interleave — worktrees are the safe pattern.
+
+### Automated guards (wired in `.claude/settings.json`, "warn loudly, allow")
+
+These run automatically and are non-blocking — they surface problems, they do
+not stop you, so you must still act on what they report:
+
+- **PreToolUse** (`.claude/hooks/pre-edit-codemap.mjs`) — when you edit
+  `app/index.html` or a module, injects a reminder of this protocol.
+- **PostToolUse** (`.claude/hooks/post-edit-check.mjs` → `check-js.mjs`) — after
+  any JS/HTML edit, runs `node --check` (syntax) and scans for duplicate
+  top-level function names, reporting findings back to you. Run it by hand on
+  any file with: `node .claude/hooks/check-js.mjs <file>`.
+
+---
+
 ## Role & Expertise
 
 When working on this project, act as:
@@ -42,11 +91,14 @@ When working on this project, act as:
 
 ## Code Contribution Rules
 
-### 1. No Direct Pushes
-- **Never push directly to the codebase** after completing code changes
-- Always create a **Pull Request (PR)** instead
-- Provide the PR link to the user for review and approval
-- This ensures proper code review and prevents accidental overwrites
+### 1. Git Workflow — Auto-Push & Auto-Merge (user directive 2026-06-21)
+- After completing code changes, **always push the branch and merge the PR
+  yourself — do NOT wait for the user's review or approval.**
+- Still work on a **dedicated branch** (never commit straight onto the default
+  branch) and open a PR so there's a record, but then push and merge it without
+  pausing. Provide the PR link in your summary after merging.
+- This overrides the previous "provide the PR link for review and approval"
+  rule. The user has explicitly opted into autonomous push + merge.
 
 ### 2. Thorough Codebase Review
 - **Always explore and understand the codebase** before writing any code
@@ -237,7 +289,8 @@ crash-lens/
    - Summary of changes
    - Testing performed
    - Screenshots if UI changes
-5. Provide the PR link to the user
+5. **Merge the PR yourself** (auto-merge — see Code Contribution Rule 1), then
+   give the user the PR link in your summary. Do not wait for approval.
 
 ---
 
