@@ -972,7 +972,7 @@ Before any code edit:
   - `getCachedAnalysisCount()` @ L70380 — const cache = loadADAnalysisCache();
   - `displayDetailedCrashAnalysis()` @ L71627 — Display detailed crash analysis panel
   - `cancelCMFAIAnalysis()` @ L72322 — Cancel CMF AI Analysis
-  - `calculateCrossAnalysis()` @ L78562 — const data = crashState.sampleRows || [];
+  - `calculateCrossAnalysis()` @ L65270 — guard: bail if #tab-safety cross-cells absent (matview no-data wipe)
   - `sfCheckCrossAnalysisConsistency()` @ L83313 — Check 5: Cross-Analysis Consistency
   - `refreshCrashTreeAnalysis()` @ L84506 — Refresh crash tree analysis
   - `analyzeRiskFactors()` @ L85852 — Analyze risk factors with FHWA-style overrepresentation
@@ -1467,7 +1467,7 @@ Before any code edit:
 | calculateConfidence | inline @ L73316 | inline | shared |
 | calculateCountyBaselines | modules/grants/grants-rank-score.js | module-private | grants |
 | calculateCountyBenchmarks | inline @ L50230 | inline | shared |
-| calculateCrossAnalysis | inline @ L78562 | inline | analysis |
+| calculateCrossAnalysis | inline @ L65270 | inline | analysis |
 | calculateDayTotalVolume | inline @ L112389 | inline | shared |
 | calculateDistrictYearTrend | inline @ L125435 | inline | shared |
 | calculateEnhancedGrantScore_legacy | modules/grants/grants-rank-score.js | module-private | grants |

@@ -61751,6 +61751,15 @@ function processSafetyData() {
 // This allows Report tab date filters to work with Safety Focus reports
 
 function calculateCrossAnalysis() {
+    // Defense-in-depth: the Safety Focus matview "no-data" path replaces
+    // #tab-safety innerHTML (safety-focus-cards.js initSafetyFocus), which
+    // removes the cross-analysis cells. If a later legacy-path call runs
+    // against that wiped DOM, the unguarded getElementById(...).textContent
+    // writes below would throw "Cannot set properties of null" and abort
+    // Safety Focus init (caught silently by initSafetyFocus's try/catch).
+    // Bail when the cells are absent — all 19 are siblings in one container,
+    // so a single representative check suffices.
+    if (!document.getElementById('crossCurveGuardrail')) return;
     const data = crashState.sampleRows || [];
     const startDateVal = document.getElementById('safetyStartDate')?.value;
     const endDateVal = document.getElementById('safetyEndDate')?.value;
