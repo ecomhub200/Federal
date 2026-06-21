@@ -22,7 +22,13 @@ async function renderPedBikeLocationsFromMatview(dc, tierResolved) {
         // mv_pedbike_locations columns: location_type, location_name, total,
         // k, a, at_intersection, night_count, first_year, last_year.
         // Map to the same shape pedAnalysisState.allLocations expects.
-        return (rows || []).map(r => {
+        // Guard: drop rows with no resolvable location name. The matview now
+        // emits NULL (not the literal 'Unknown') for segments lacking a route/
+        // intersection name; those crashes are unmappable and must not surface
+        // as a single high-volume "Unknown" row at the top of the ranking.
+        return (rows || [])
+            .filter(r => r.location_name && r.location_name !== 'Unknown')
+            .map(r => {
             const sev = { K: r.k || 0, A: r.a || 0, B: 0, C: 0, O: 0 };
             const total = r.total || 0;
             const intCount = r.at_intersection || (r.location_type === 'intersection' ? total : 0);

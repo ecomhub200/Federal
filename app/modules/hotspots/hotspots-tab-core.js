@@ -270,6 +270,12 @@ async function _loadHotspotsFromMatview() {
         setPaginationData('hotspots', filtered);
         renderHotspots();
         try { initSignalWarrantChecker(); } catch (e) { /* non-fatal */ }
+        // Auto-select rank #1 by default (matview path — mirrors the legacy
+        // analyzeHotspots() path). Only when nothing is selected so re-renders
+        // and user selections aren't clobbered.
+        if (hotspotDetailState.selectedLocations.length === 0 && crashState.hotspots.length > 0) {
+            autoSelectTopHotspot();
+        }
         hideLoading();
         console.log('[Hot Spots] Loaded ' + filtered.length + ' locations from mv_hotspots');
 
