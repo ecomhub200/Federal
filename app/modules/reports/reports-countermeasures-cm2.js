@@ -447,5 +447,10 @@ async function generateFatalSpeedReport(crashes, title, author) {
   CL.reports = CL.reports || {};
   CL.reports.cm2 = CL.reports.cm2 || {};
   window.generateCrashTreeSystemicReport = generateCrashTreeSystemicReport; CL.reports.cm2.generateCrashTreeSystemicReport = generateCrashTreeSystemicReport;
+  // Fix: the Fatal & Speed-Related report generator was extracted into this
+  // module but never dual-exposed, so the dispatcher's bare `await
+  // generateFatalSpeedReport(...)` threw "is not defined" and the report came
+  // up blank. Expose it the same way as its sibling above.
+  window.generateFatalSpeedReport = generateFatalSpeedReport; CL.reports.cm2.generateFatalSpeedReport = generateFatalSpeedReport;
   CL._registerModule('reports/reports-countermeasures-cm2');
 })();

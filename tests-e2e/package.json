@@ -7,6 +7,8 @@
     "install:browsers": "playwright install --with-deps chromium",
     "auth": "playwright test auth.setup.ts --headed",
     "test": "playwright test",
+    "test:smoke": "playwright test tests/00-tab-smoke.spec.ts",
+    "test:reports": "playwright test -c playwright.repro.config.ts tests/04-reports-render.spec.ts",
     "test:matrix": "playwright test tests/02-tier-matrix.spec.ts",
     "test:scan": "playwright test tests/01-empty-matrix-scan.spec.ts",
     "test:visual": "playwright test tests/03-visual-regression.spec.ts --update-snapshots=missing",
