@@ -492,7 +492,17 @@ CL.data.mapBridge = (function () {
 
         // Show "viewport" label instead of "of Y" since we're showing viewport data
         el = document.getElementById('mapOfTotal'); if (el) el.textContent = '(viewport)';
-        el = document.getElementById('mapMissingRow'); if (el) el.style.display = 'none';
+        // Gap C — at aggregate tiers the map plots only geocoded crashes from
+        // the viewport matview; crashes without coordinates are never plotted.
+        // Disclose that so the viewport count isn't read as a complete total.
+        // (A precise per-tier excluded count isn't available here without an
+        // extra query, so we disclose the limitation rather than guess a number.)
+        el = document.getElementById('mapMissingRow');
+        if (el) {
+            el.style.display = '';
+            var _info = document.getElementById('mapMissingInfo');
+            if (_info) _info.textContent = 'Geocoded crashes only — those without coordinates are not plotted.';
+        }
     }
 
     // M3 — flush any pending viewport request when the user returns to the

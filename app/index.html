@@ -1772,19 +1772,19 @@ Your data stays private. All processing happens in your browser.
 <div class="map-roadtype-list">
 <label class="map-roadtype-row">
 <input type="radio" name="roadTypeFilterMap" id="filterAllRoadsMap" value="allRoads"
-       onchange="syncRoadTypeFilter(this.value)"> All Roads
+       onchange="syncRoadTypeFilter(this.value)"> <span id="mapFilterLabelAllRoads">All Roads</span>
 </label>
 <label class="map-roadtype-row">
 <input type="radio" name="roadTypeFilterMap" id="filterCountyOnlyMap" value="countyOnly"
-       onchange="syncRoadTypeFilter(this.value)"> County Only
+       onchange="syncRoadTypeFilter(this.value)"> <span id="mapFilterLabelCountyOnly">County Roads Only</span>
 </label>
 <label class="map-roadtype-row">
 <input type="radio" name="roadTypeFilterMap" id="filterCityOnlyMap" value="cityOnly"
-       onchange="syncRoadTypeFilter(this.value)"> City Only
+       onchange="syncRoadTypeFilter(this.value)"> <span id="mapFilterLabelCityOnly">City Roads Only</span>
 </label>
 <label class="map-roadtype-row">
 <input type="radio" name="roadTypeFilterMap" id="filterCountyPlusVDOTMap" value="countyPlusVDOT"
-       onchange="syncRoadTypeFilter(this.value)"> All No Interstate
+       onchange="syncRoadTypeFilter(this.value)"> <span id="mapFilterLabelCountyPlusVDOT">All Roads (No Interstate)</span>
 </label>
 </div>
 </div>
@@ -16109,10 +16109,24 @@ function updateRoadTypeLabels(tier) {
         countyPlusVDOT: 'filterLabelCountyPlusVDOT',
         allRoads:       'filterLabelAllRoads'
     };
+    // Map-tab filter panel mirror radios — compact (label-only, no hint) so
+    // the panel stays narrow. Same single source of truth, so the map labels
+    // read correctly per tier ("DOT Roads Only" at aggregate tiers, "County
+    // Roads Only" at place tiers) instead of the old hardcoded text.
+    const mapIds = {
+        countyOnly:     'mapFilterLabelCountyOnly',
+        cityOnly:       'mapFilterLabelCityOnly',
+        countyPlusVDOT: 'mapFilterLabelCountyPlusVDOT',
+        allRoads:       'mapFilterLabelAllRoads'
+    };
     if (map) {
         Object.keys(ids).forEach(radio => {
             const el = document.getElementById(ids[radio]);
             if (el) el.innerHTML = map.labelFor(tier, radio);
+        });
+        Object.keys(mapIds).forEach(radio => {
+            const el = document.getElementById(mapIds[radio]);
+            if (el) el.textContent = map.get(tier, radio).label;
         });
         console.log(`[RoadType] Labels updated for tier: ${tier}`);
         return;

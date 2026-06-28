@@ -83,3 +83,49 @@ on repeat visits instead of waiting ~2.5 s.
 - Performance: diagnosed; backend remediation (index/SRID check + pre-cluster
   matview) requires DB access (Supabase MCP disconnected this session) and is
   a production change — provided as verifiable SQL above for review/apply.
+
+---
+
+## ⚠️ Gap D — `mv_map_points.road_type` diverges from the canonical buckets
+
+The aggregate-tier map (`map_viewport_crashes` RPC over `mv_map_crashes`) and the
+dashboard (`dashboard_summary`) both derive `road_type` from **`crashes.ownership`**
+(`1. State Hwy Agency → dot_roads`, `2. County Hwy Agency → county_roads`,
+`3. City or Town Hwy Agency → city_roads`, else `other_roads`) with `is_interstate`
+as a separate boolean. **`mv_map_points` does NOT** — it uses a different scheme.
+
+Verified live against `srv1503081.hstgr.cloud` REST (Delaware):
+
+| road_type bucket | `dashboard_summary` (ownership, all 569,829) | `mv_map_points` (geocoded, 560,234) |
+|---|---|---|
+| dot_roads     | 438,501 | 266,823 |
+| city_roads    | 81,315  | 31,525  |
+| county_roads  | 39,885  | **0 (bucket absent)** |
+| other(_roads) | 10,128  | 235,262 |
+| interstate (separate bucket, only in mv_map_points) | — (folded into `is_interstate`) | 26,624 |
+
+So `mv_map_points` has **no `county_roads` bucket**, splits `interstate` into its own
+bucket, and dumps ~42% of crashes into `other`. It is clearly derived from a
+different column (likely `system`/`functional_class`), not `ownership`.
+
+### Impact
+- **Aggregate-tier map: NOT affected** — it renders from the ownership-based RPC,
+  which matches the dashboard.
+- **Latent client-side filter bug** (`app/index.html` `getFilteredMapPoints()`):
+  the road-type guard does `if (roadTypeSel==='countyOnly' && p.road_type!=='county_roads') return false;`.
+  Because `mv_map_points` never carries `county_roads`, this branch is
+  **unsatisfiable** — any path that renders mv_map_points-hydrated points while
+  "County Roads Only" is selected would show an **empty map**. In practice place
+  tiers load pre-filtered `{state}/{county}/{road_type}.parquet` R2 files (the
+  filter is skipped when `p.road_type === undefined`), so exposure is conditional
+  on the mv_map_points hydration/fallback path — but the mismatch is real.
+
+### Recommended fix (backend matview migration — scoped follow-up, NOT applied here)
+Rebuild `mv_map_points.road_type` to use the **same ownership-based CASE** as
+`mv_map_crashes` / `dashboard_summary`, add the `county_roads` bucket, and fold
+interstate into the existing `is_interstate` flag (drop the `interstate`
+road_type bucket). This is a production matview change with broad blast radius
+(every `mv_map_points` consumer: map point hydration + hotspots/analysis/
+intersection/pedestrian/warrants/CMF/assets) and needs a `REFRESH MATERIALIZED
+VIEW` + per-consumer validation, so it is deliberately left as its own scoped
+task rather than bundled into the surgical map-tab UI fixes (Gaps A/B/C).
