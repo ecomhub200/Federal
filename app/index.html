@@ -1537,6 +1537,7 @@ Your data stays private. All processing happens in your browser.
 <div class="chart-card"><div class="chart-title">📊 K+A Crashes by Year</div><div class="chart-container"><canvas id="chartKAYear"></canvas></div></div>
 <div class="chart-card"><div class="chart-title">📅 Day of Week Distribution</div><div class="chart-container"><canvas id="chartDOW"></canvas></div></div>
 <div class="chart-card"><div class="chart-title">📆 Monthly Distribution</div><div class="chart-container"><canvas id="chartMonth"></canvas></div></div>
+<div class="chart-card"><div class="chart-title">🕐 Crashes by Hour of Day</div><div class="chart-container"><canvas id="chartHour"></canvas></div></div>
 </div>
 
 <!-- Functional Class Distribution -->
@@ -2042,6 +2043,12 @@ Your data stays private. All processing happens in your browser.
 <!-- HOTSPOTS TAB -->
 <div id="tab-hotspots" class="tab-content" role="tabpanel" aria-labelledby="tab-hotspots-btn">
 
+<!-- Road-type-filter disclosure: at aggregate tiers / when county sampleRows
+     aren't loaded, Hot Spots reads mv_hotspots (no road_type column), so the
+     Road Type Filter is ignored on that path. Toggled by hsUpdateRoadTypeNotice(). -->
+<div id="hsRoadTypeNotice" style="display:none;margin:0 0 .75rem;padding:.6rem .8rem;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;color:#92400e;font-size:.8rem;line-height:1.4">
+ℹ️ <strong>Road Type filter not applied here.</strong> At this view level, Hot Spots are ranked across all road types — the Road Type Filter does not change these results.
+</div>
 
 <div class="card">
 <div class="card-title"><span aria-hidden="true">🔥</span> High-Crash Locations Analysis</div>
@@ -4259,6 +4266,12 @@ Schools with <strong>documented pedestrian/bicycle crashes</strong> and supporti
 <!-- FATAL & SPEEDING TAB -->
 <div id="tab-fatalspeeding" class="tab-content">
 <div class="fs-container">
+
+<!-- Road-type-filter disclosure: mv_fatal_factors / mv_speed_summary have no
+     road_type column, so the Road Type Filter does not affect these numbers. -->
+<div id="fsRoadTypeNotice" style="display:none;margin-bottom:.75rem;padding:.6rem .8rem;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;color:#92400e;font-size:.8rem;line-height:1.4">
+ℹ️ <strong>Road Type filter not applied here.</strong> Fatal &amp; Speeding figures are reported across all road types — the Road Type Filter does not change these numbers.
+</div>
 
 <!-- Header with View Toggle and Filters -->
 <div class="fs-header">
@@ -24985,6 +24998,34 @@ async function loadAadtCoverageBanner() {
     } catch (_) { /* non-fatal */ }
 }
 window.addEventListener('crashtab:hotspots:shown', loadAadtCoverageBanner);
+
+// Road-type disclosure for the Hot Spots tab. At aggregate tiers (or whenever
+// county sampleRows aren't loaded), Hot Spots are ranked from mv_hotspots /
+// mv_hotspots_yearly, neither of which has a road_type column — so the global
+// Road Type Filter is silently ignored on that path. The R2/sampleRows path
+// loads a road-type-specific parquet and DOES honor it, so only disclose when
+// the matview path is active. Mirrors the analyzeHotspots() path decision.
+function hsUpdateRoadTypeNotice() {
+    var el = document.getElementById('hsRoadTypeNotice');
+    if (!el) return;
+    var radio = document.querySelector('input[name="roadTypeFilter"]:checked');
+    var val = radio ? radio.value
+        : ((typeof localStorage !== 'undefined' && localStorage.getItem('selectedFilterProfile')) || 'allRoads');
+    var nonAllRoads = !!(val && val !== 'allRoads');
+    var tier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
+    var isAggregate = ['federal','state','region','mpo','planning_district'].indexOf(tier) !== -1;
+    var hasSampleRows = !!(typeof crashState !== 'undefined' && crashState.sampleRows && crashState.sampleRows.length > 0);
+    var matviewPath = isAggregate || !hasSampleRows;
+    el.style.display = (nonAllRoads && matviewPath) ? '' : 'none';
+}
+window.hsUpdateRoadTypeNotice = hsUpdateRoadTypeNotice;
+window.addEventListener('crashtab:hotspots:shown', hsUpdateRoadTypeNotice);
+if (!window._hsRoadTypeNoticeBound) {
+    window._hsRoadTypeNoticeBound = true;
+    document.addEventListener('change', function (e) {
+        if (e && e.target && e.target.name === 'roadTypeFilter') hsUpdateRoadTypeNotice();
+    });
+}
 
 // Round 20 §8 — resize dashboard charts on tab show. Charts created while the
 // dashboard tab was hidden compute their canvas size against display:none and
@@ -64270,9 +64311,34 @@ function _showFSLoadingSkeleton() {
 window._showFSLoadingSkeleton = _showFSLoadingSkeleton;
 window.addEventListener('crashtab:fatalspeeding:shown', _showFSLoadingSkeleton);
 
+// Road-type disclosure for the Fatal & Speeding tab. mv_fatal_factors and
+// mv_speed_summary carry no road_type / is_interstate column, so the global
+// Road Type Filter cannot affect these figures (the data client also flags
+// this via dc._roadTypeNotApplicable). Show a notice whenever a non-"All Roads"
+// option is selected so the user isn't misled by unchanged numbers.
+function fsUpdateRoadTypeNotice() {
+    var el = document.getElementById('fsRoadTypeNotice');
+    if (!el) return;
+    var radio = document.querySelector('input[name="roadTypeFilter"]:checked');
+    var val = radio ? radio.value
+        : ((typeof localStorage !== 'undefined' && localStorage.getItem('selectedFilterProfile')) || 'allRoads');
+    el.style.display = (val && val !== 'allRoads') ? '' : 'none';
+}
+window.fsUpdateRoadTypeNotice = fsUpdateRoadTypeNotice;
+window.addEventListener('crashtab:fatalspeeding:shown', fsUpdateRoadTypeNotice);
+// The F&S tab does not reload on a road_type change (its FilterEngine subscriber
+// only watches year/severity), so update the notice live on radio change. Bound once.
+if (!window._fsRoadTypeNoticeBound) {
+    window._fsRoadTypeNoticeBound = true;
+    document.addEventListener('change', function (e) {
+        if (e && e.target && e.target.name === 'roadTypeFilter') fsUpdateRoadTypeNotice();
+    });
+}
+
 function initFatalSpeedingTab() {
     // Round 22 §4 — write skeleton before any async work so users don't see all zeros.
     _showFSLoadingSkeleton();
+    fsUpdateRoadTypeNotice();
 
     const _fsTier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext?.viewTier) || 'county';
 

@@ -127,6 +127,7 @@ async function paintDashboardChartsFromMatview() {
             const wxLabels = wx.map(([k]) => String(k).substring(0, 20));
             const wxData = wx.map(([_, v]) => v.total);
             const wxColors = ['#0ea5e9','#64748b','#f59e0b','#10b981','#8b5cf6','#ec4899'];
+            if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartWeather');
             createChart('chartWeather', 'doughnut', {
                 labels: wxLabels,
                 datasets: [{ data: wxData, backgroundColor: wxColors, borderWidth: 2, borderColor: '#fff' }]
@@ -136,6 +137,8 @@ async function paintDashboardChartsFromMatview() {
                 buildCustomLegend('legendWeather', wxLabels, wxData, wxColors, total);
             }
         }
+    } else if (typeof showChartPlaceholder === 'function') {
+        showChartPlaceholder('chartWeather', 'No weather-condition data available for this jurisdiction.');
     }
 
     // chartLight — Top 6 light conditions doughnut
@@ -149,6 +152,7 @@ async function paintDashboardChartsFromMatview() {
             const ltLabels = lt.map(([k]) => String(k).substring(0, 20));
             const ltData = lt.map(([_, v]) => v.total);
             const ltColors = ['#fcd34d','#1e293b','#94a3b8','#f97316','#6366f1','#14b8a6'];
+            if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartLight');
             createChart('chartLight', 'doughnut', {
                 labels: ltLabels,
                 datasets: [{ data: ltData, backgroundColor: ltColors, borderWidth: 2, borderColor: '#fff' }]
@@ -158,6 +162,8 @@ async function paintDashboardChartsFromMatview() {
                 buildCustomLegend('legendLight', ltLabels, ltData, ltColors, total);
             }
         }
+    } else if (typeof showChartPlaceholder === 'function') {
+        showChartPlaceholder('chartLight', 'No light-condition data available for this jurisdiction.');
     }
 
     // chartDOW — Round 12: getAnalysisBreakdown now unions mv_analysis_extra
@@ -177,6 +183,26 @@ async function paintDashboardChartsFromMatview() {
         });
     } else if (typeof showChartPlaceholder === 'function') {
         showChartPlaceholder('chartDOW', 'No day-of-week data available for this jurisdiction.');
+    }
+
+    // chartHour — Hour-of-day distribution. byHour comes from mv_analysis_extra
+    // ('hour' dimension), shaped { 0: N, 1: N, ... }. May be absent on states
+    // whose instance lacks the hour dimension — show a placeholder, not a blank.
+    if (D.byHour && Object.keys(D.byHour).length > 0) {
+        paintWhenVisible('chartHour', () => {
+            if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartHour');
+            const hourLabels = Array.from({length:24}, (_, h) => (h % 12 || 12) + (h < 12 ? 'a' : 'p'));
+            createChart('chartHour', 'bar', {
+                labels: hourLabels,
+                datasets: [{
+                    label: 'Crashes',
+                    data: hourLabels.map((_, h) => D.byHour[h] || 0),
+                    backgroundColor: '#0891b2'
+                }]
+            });
+        });
+    } else if (typeof showChartPlaceholder === 'function') {
+        showChartPlaceholder('chartHour', 'No hour-of-day data available for this jurisdiction.');
     }
 }
 

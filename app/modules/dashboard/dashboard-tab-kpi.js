@@ -436,6 +436,14 @@ function updateCharts(filteredAgg, filteredTotal) {
         datasets: [{ label: 'Crashes', data: monthLabels.map((_,i) => agg.byMonth[i] || 0), backgroundColor: '#7c3aed' }]
     });
 
+    // Hour of Day chart
+    if (typeof clearChartPlaceholder === 'function') clearChartPlaceholder('chartHour');
+    const hourLabels = Array.from({length:24}, (_,h) => (h % 12 || 12) + (h < 12 ? 'a' : 'p'));
+    createChart('chartHour', 'bar', {
+        labels: hourLabels,
+        datasets: [{ label: 'Crashes', data: hourLabels.map((_,h) => (agg.byHour && agg.byHour[h]) || 0), backgroundColor: '#0891b2' }]
+    });
+
     // Functional Class chart
     const fcSorted = Object.entries(agg.byFuncClass).sort((a,b) => b[1].total - a[1].total);
     createChart('chartFuncClass', 'bar', {

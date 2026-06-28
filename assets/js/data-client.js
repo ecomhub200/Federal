@@ -2146,6 +2146,13 @@ class CrashLensDataClient {
    */
   async getFatalFactors(tier, value, opts = {}) {
     if (!this.preferSupabase || !this.supabaseKey) return null;
+    // mv_fatal_factors has no road_type / is_interstate column, so it can only
+    // ever answer across all road types. Set the disclosure flag deterministically
+    // here (before the SWR cache, which may skip the callback on a hit) so the
+    // F&S tab can surface a "filter not applicable" notice. Reset to null when
+    // the active selection is "All Roads".
+    this._roadTypeNotApplicable = (opts && (opts.roadType || opts.roadTypes || opts.noInterstate))
+      ? 'mv_fatal_factors aggregates across road types' : null;
     const swrKey = CrashLensDataClient._swrKey({
       op: 'getFatalFactors', state: this.state, tier, value, opts
     });
@@ -2168,11 +2175,8 @@ class CrashLensDataClient {
         // produced HTTP 400 and an empty Fatal & Speeding panel whenever the
         // user picked anything other than "All Roads". Skipping the filter
         // returns totals aggregated across road types, which is the only
-        // useful answer this matview can give. Note this in the response so
-        // UI can disclose the rollup if it wants.
-        if (opts && (opts.roadType || opts.roadTypes)) {
-          this._roadTypeNotApplicable = 'mv_fatal_factors aggregates across road types';
-        }
+        // useful answer this matview can give. The _roadTypeNotApplicable
+        // disclosure flag is set deterministically at the top of this method.
         const data = await this._supabaseQuery('mv_fatal_factors', { filters });
         this._source = 'supabase';
         return Array.isArray(data) ? data : [];
@@ -2189,6 +2193,11 @@ class CrashLensDataClient {
    */
   async getSpeedSummary(tier, value, opts = {}) {
     if (!this.preferSupabase || !this.supabaseKey) return null;
+    // Same constraint as getFatalFactors: mv_speed_summary has no road_type /
+    // is_interstate column. Set the disclosure flag deterministically before
+    // the SWR cache so the F&S tab can show a "filter not applicable" notice.
+    this._roadTypeNotApplicable = (opts && (opts.roadType || opts.roadTypes || opts.noInterstate))
+      ? 'mv_speed_summary aggregates across road types' : null;
     const swrKey = CrashLensDataClient._swrKey({
       op: 'getSpeedSummary', state: this.state, tier, value, opts
     });
@@ -2208,9 +2217,7 @@ class CrashLensDataClient {
         // Same constraint as getFatalFactors: mv_speed_summary aggregates
         // across road_type / is_interstate and has neither column. Filtering
         // 400s with column-does-not-exist; skip so the panel always renders.
-        if (opts && (opts.roadType || opts.roadTypes)) {
-          this._roadTypeNotApplicable = 'mv_speed_summary aggregates across road types';
-        }
+        // The _roadTypeNotApplicable flag is set at the top of this method.
         const data = await this._supabaseQuery('mv_speed_summary', { filters });
         this._source = 'supabase';
         return Array.isArray(data) ? data : [];
