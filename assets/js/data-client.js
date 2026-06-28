@@ -1229,6 +1229,11 @@ class CrashLensDataClient {
       try {
         const tierFilters = this._tierFilter(tier, value);
         const allFilters = { ...tierFilters };
+        // Road-type filter (mv_analysis_summary has a road_type column). Mirrors
+        // getHotspots/getIntersectionSummary so the Crash Analysis charts honor
+        // the Road Type Filter. allFilters is shared by both the summary and the
+        // mv_analysis_extra query below, so this filters both.
+        this._applyRoadTypeMatviewFilters(allFilters, opts);
         // NOTE: mv_analysis_summary has no crash_year column — 'year' is already
         // a breakdown axis (rows with dimension='year'), not a filter.
         const data = await this._supabaseQuery('mv_analysis_summary', {

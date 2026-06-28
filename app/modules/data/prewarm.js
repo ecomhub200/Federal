@@ -119,11 +119,12 @@ CL.data = CL.data || {};
                 return client.getCrashTree(tier, value, withSignal(callOpts));
             });
         }
-        // Analysis
+        // Analysis — pass the road-type spec + matching keyExtra so the prewarm
+        // cache slot aligns with the Analysis tab loader (cache-key alignment).
         if (typeof client.getAnalysisBreakdown === 'function') {
             push('mv_analysis_summary', function (callOpts) {
-                return client.getAnalysisBreakdown(tier, value, withSignal(callOpts));
-            });
+                return client.getAnalysisBreakdown(tier, value, withSignal(callOpts, _rtSpec));
+            }, _rtSpec);
         }
         // Hot Spots — main matview (per tier/value, with topN keyExtra to match tab loader)
         if (typeof client.getHotspots === 'function') {

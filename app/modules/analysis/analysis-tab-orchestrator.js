@@ -75,8 +75,15 @@
                                && typeof CL.data.supabaseBridge.resolveTier === 'function'
                                ? CL.data.supabaseBridge.resolveTier() : null;
                     if (!dc || !tr) return;
+                    // Road Type Filter — pass the active spec so the four charts
+                    // honor DOT/City/Non-DOT/All Roads, and fold it into the cache
+                    // key so a road-type switch doesn't serve a stale all-roads
+                    // result (mirrors hotspots-tab-core.js).
+                    const _rtSpec = (CL.data.supabaseBridge && typeof CL.data.supabaseBridge.roadTypeSpec === 'function')
+                        ? (CL.data.supabaseBridge.roadTypeSpec() || {}) : {};
                     const data = await CL.data.cachedMatview('mv_analysis_summary', tr.tier, tr.value,
-                        () => dc.getAnalysisBreakdown(tr.tier, tr.value));
+                        () => dc.getAnalysisBreakdown(tr.tier, tr.value, _rtSpec),
+                        _rtSpec);
                     if (!data) return;
                     if (typeof createChart !== 'function') return;
                     // Round 15 §12.6 — wrap each chart in paintWhenVisible so a 0×0
