@@ -88,6 +88,25 @@ async function _loadHotspotsFromMatview() {
         const t = CL.data.supabaseBridge.resolveTier();
         window.crashLensClient.state = stateKey;
 
+        // Honor the global Road Type Filter on the matview path (aggregate
+        // tiers + county/city when sampleRows aren't loaded). roadTypeSpec()
+        // is the single source of truth shared with Dashboard/Reports/Map and
+        // returns {roadType} | {roadTypes} | {noInterstate} | {} for the active
+        // tier + radio. getHotspots() already filters/merges on these keys; the
+        // spec is also folded into every cachedMatview key below so switching
+        // road type doesn't return a stale (all-roads) cached result.
+        const _rtSpec = (CL.data.supabaseBridge && typeof CL.data.supabaseBridge.roadTypeSpec === 'function')
+            ? (CL.data.supabaseBridge.roadTypeSpec() || {}) : {};
+        // mv_hotspots_with_rates only understands a scalar roadType (no
+        // roadTypes[]/noInterstate). Map the spec down: a single bucket passes
+        // through; "No Interstate" maps to the matview's all_no_interstate
+        // sentinel; "All Roads" and the Non-DOT multi-bucket case pass 'all'
+        // (no filter) — the rates rows are joined to the already road-type-
+        // filtered mv_hotspots rows by location key, so a superset is harmless.
+        const _ratesRoadType = _rtSpec.roadType
+            ? _rtSpec.roadType
+            : (_rtSpec.noInterstate ? 'all_no_interstate' : 'all');
+
         const minCrashesEl = document.getElementById('hsMinCrashes');
         const topNEl = document.getElementById('hsTopN');
         const groupByEl = document.getElementById('hsGroupBy');
@@ -110,16 +129,17 @@ async function _loadHotspotsFromMatview() {
             ? CL.data.cachedMatview('mv_hotspots_with_rates', t.tier, t.value,
                 () => window.crashLensClient.getHotspotsWithRates({
                     county: t.tier === 'county' ? t.value : undefined,
-                    limit: Math.max(200, topN * 4)
+                    limit: Math.max(200, topN * 4),
+                    roadType: _ratesRoadType
                 }),
-                { county: t.tier === 'county' ? t.value : null, limit: Math.max(200, topN * 4) },
+                { county: t.tier === 'county' ? t.value : null, limit: Math.max(200, topN * 4), roadType: _ratesRoadType },
                 { persist: true, persistTtlMs: 6 * 60 * 60 * 1000,
                   state: (window.crashLensClient && window.crashLensClient.state) })
             : Promise.resolve(null);
         const [data, topCollMap, factorsMap, ratesRows] = await Promise.all([
             CL.data.cachedMatview('mv_hotspots', t.tier, t.value,
-                () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: topN }),
-                { limit: topN }),
+                () => window.crashLensClient.getHotspots(t.tier, t.value, { limit: topN, ..._rtSpec }),
+                { limit: topN, ..._rtSpec }),
             (typeof window.crashLensClient.getHotspotsTopCollision === 'function'
                 ? CL.data.cachedMatview('mv_hotspots_topcoll', 'state', stateKey,
                     () => window.crashLensClient.getHotspotsTopCollision(stateKey))
@@ -334,6 +354,17 @@ async function _hotspots_fetchMatview() {
         }
         else if (t.tier === 'city')         params.set('jurisdiction_physical_juris', 'eq.' + t.value);
         // dot_district / region tier: no filter — matview has no such column.
+        // Honor the active Road Type Filter on the fallback path too — mirrors
+        // CrashLensDataClient._applyRoadTypeMatviewFilters against the matview's
+        // road_type / is_interstate columns.
+        const _fbSpec = (typeof CL.data.supabaseBridge.roadTypeSpec === 'function')
+            ? (CL.data.supabaseBridge.roadTypeSpec() || {}) : {};
+        if (Array.isArray(_fbSpec.roadTypes) && _fbSpec.roadTypes.length > 0) {
+            params.set('road_type', 'in.(' + _fbSpec.roadTypes.join(',') + ')');
+        } else if (_fbSpec.roadType && _fbSpec.roadType !== 'all_roads' && _fbSpec.roadType !== 'allRoads') {
+            params.set('road_type', 'eq.' + _fbSpec.roadType);
+        }
+        if (_fbSpec.noInterstate) params.set('is_interstate', 'eq.false');
         const url = `${dc.supabaseUrl}/mv_hotspots_with_rates?${params.toString()}`;
         const resp = await fetch(url, {
             headers: { apikey: dc.supabaseKey, Authorization: 'Bearer ' + dc.supabaseKey }
@@ -497,6 +528,23 @@ function showHotspotInfoBanner() {
     bindHotspotsRoadTypeChange();
   }
   window.bindHotspotsRoadTypeChange = CL.hotspots.bindHotspotsRoadTypeChange = bindHotspotsRoadTypeChange; CL.hotspots.tab.bindHotspotsRoadTypeChange = bindHotspotsRoadTypeChange;
+
+  // The Hot Spots matview path now honors the Road Type Filter (see
+  // _loadHotspotsFromMatview above), so the "Road Type filter not applied here"
+  // disclosure (#hsRoadTypeNotice, toggled by the inline hsUpdateRoadTypeNotice)
+  // is no longer accurate for this tab. Suppress it with a scoped !important
+  // rule rather than editing the inline disclosure code — this keeps the fix
+  // self-contained to this module and leaves the Fatal & Speed / Safety Focus
+  // notices (whose matviews genuinely lack a road_type column) untouched.
+  (function _suppressHotspotsRoadTypeNotice() {
+    try {
+      if (document.getElementById('hsRoadTypeNoticeSuppress')) return;
+      var st = document.createElement('style');
+      st.id = 'hsRoadTypeNoticeSuppress';
+      st.textContent = '#hsRoadTypeNotice{display:none !important;}';
+      (document.head || document.documentElement).appendChild(st);
+    } catch (e) { /* non-fatal */ }
+  })();
 
   CL._registerModule('hotspots/hotspots-tab-core');
 })();
