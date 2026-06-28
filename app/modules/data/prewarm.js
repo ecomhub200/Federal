@@ -90,6 +90,17 @@ CL.data = CL.data || {};
             return merged;
         };
 
+        // Hot Spots honors the global Road Type Filter on the matview path, so
+        // the prewarm must fetch (and cache-key) the SAME road-type bucket the
+        // tab loader will request — otherwise prewarm warms an all-roads slot
+        // the tab loader never reads (silent cache miss). Mirrors
+        // _loadHotspotsFromMatview in hotspots/hotspots-tab-core.js.
+        var _rtSpec = (CL.data && CL.data.supabaseBridge && typeof CL.data.supabaseBridge.roadTypeSpec === 'function')
+            ? (CL.data.supabaseBridge.roadTypeSpec() || {}) : {};
+        var _ratesRoadType = _rtSpec.roadType
+            ? _rtSpec.roadType
+            : (_rtSpec.noInterstate ? 'all_no_interstate' : 'all');
+
         // Dashboard / cross-tab
         if (typeof client.getSummary === 'function') {
             push('dashboard_summary', function (callOpts) {
@@ -119,8 +130,8 @@ CL.data = CL.data || {};
             var topNEl = document.getElementById('hsTopN');
             var topN = parseInt(topNEl && topNEl.value, 10) || 25;
             push('mv_hotspots', function (callOpts) {
-                return client.getHotspots(tier, value, withSignal(callOpts, { limit: topN }));
-            }, { limit: topN });   // keyExtra — must match the tab loader's cachedMatview call
+                return client.getHotspots(tier, value, withSignal(callOpts, Object.assign({ limit: topN }, _rtSpec)));
+            }, Object.assign({ limit: topN }, _rtSpec));   // keyExtra — must match the tab loader's cachedMatview call
         }
         // Round 15 §3 — Hot Spots crash-rate matview (per tier/value).
         // keyExtra MUST match _loadHotspotsFromMatview (county + limit).
@@ -131,9 +142,10 @@ CL.data = CL.data || {};
             push('mv_hotspots_with_rates', function (callOpts) {
                 return client.getHotspotsWithRates(withSignal(callOpts, {
                     county: tier === 'county' ? value : undefined,
-                    limit: rateLimit
+                    limit: rateLimit,
+                    roadType: _ratesRoadType
                 }));
-            }, { county: tier === 'county' ? value : null, limit: rateLimit });
+            }, { county: tier === 'county' ? value : null, limit: rateLimit, roadType: _ratesRoadType });
         }
         // Hot Spots — top collision per location (STATE-SCOPED, not tier/value)
         if (typeof client.getHotspotsTopCollision === 'function') {
