@@ -2043,12 +2043,6 @@ Your data stays private. All processing happens in your browser.
 <!-- HOTSPOTS TAB -->
 <div id="tab-hotspots" class="tab-content" role="tabpanel" aria-labelledby="tab-hotspots-btn">
 
-<!-- Road-type-filter disclosure: at aggregate tiers / when county sampleRows
-     aren't loaded, Hot Spots reads mv_hotspots (no road_type column), so the
-     Road Type Filter is ignored on that path. Toggled by hsUpdateRoadTypeNotice(). -->
-<div id="hsRoadTypeNotice" style="display:none;margin:0 0 .75rem;padding:.6rem .8rem;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;color:#92400e;font-size:.8rem;line-height:1.4">
-ℹ️ <strong>Road Type filter not applied here.</strong> At this view level, Hot Spots are ranked across all road types — the Road Type Filter does not change these results.
-</div>
 
 <div class="card">
 <div class="card-title"><span aria-hidden="true">🔥</span> High-Crash Locations Analysis</div>
@@ -24998,34 +24992,6 @@ async function loadAadtCoverageBanner() {
     } catch (_) { /* non-fatal */ }
 }
 window.addEventListener('crashtab:hotspots:shown', loadAadtCoverageBanner);
-
-// Road-type disclosure for the Hot Spots tab. At aggregate tiers (or whenever
-// county sampleRows aren't loaded), Hot Spots are ranked from mv_hotspots /
-// mv_hotspots_yearly, neither of which has a road_type column — so the global
-// Road Type Filter is silently ignored on that path. The R2/sampleRows path
-// loads a road-type-specific parquet and DOES honor it, so only disclose when
-// the matview path is active. Mirrors the analyzeHotspots() path decision.
-function hsUpdateRoadTypeNotice() {
-    var el = document.getElementById('hsRoadTypeNotice');
-    if (!el) return;
-    var radio = document.querySelector('input[name="roadTypeFilter"]:checked');
-    var val = radio ? radio.value
-        : ((typeof localStorage !== 'undefined' && localStorage.getItem('selectedFilterProfile')) || 'allRoads');
-    var nonAllRoads = !!(val && val !== 'allRoads');
-    var tier = (typeof jurisdictionContext !== 'undefined' && jurisdictionContext.viewTier) || 'county';
-    var isAggregate = ['federal','state','region','mpo','planning_district'].indexOf(tier) !== -1;
-    var hasSampleRows = !!(typeof crashState !== 'undefined' && crashState.sampleRows && crashState.sampleRows.length > 0);
-    var matviewPath = isAggregate || !hasSampleRows;
-    el.style.display = (nonAllRoads && matviewPath) ? '' : 'none';
-}
-window.hsUpdateRoadTypeNotice = hsUpdateRoadTypeNotice;
-window.addEventListener('crashtab:hotspots:shown', hsUpdateRoadTypeNotice);
-if (!window._hsRoadTypeNoticeBound) {
-    window._hsRoadTypeNoticeBound = true;
-    document.addEventListener('change', function (e) {
-        if (e && e.target && e.target.name === 'roadTypeFilter') hsUpdateRoadTypeNotice();
-    });
-}
 
 // Round 20 §8 — resize dashboard charts on tab show. Charts created while the
 // dashboard tab was hidden compute their canvas size against display:none and
