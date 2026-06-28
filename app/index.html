@@ -17501,6 +17501,15 @@ function _debouncedBridgeRefresh() {
             if (CL.data && CL.data.supabaseBridge && CL.data.supabaseBridge.injectFastDashboard) {
                 CL.data.supabaseBridge.injectFastDashboard({ force: true });
             }
+            // Map fix — when the viewport map bridge currently owns the map
+            // (aggregate tiers), the dashboard refresh above doesn't repaint
+            // the markers. Refresh the bridge too so a road-type change updates
+            // the Map tab in lockstep with the dashboard (not only on pan/zoom).
+            // isActive()-guarded so the county-tier legacy R2 renderer is untouched.
+            if (CL.data && CL.data.mapBridge && CL.data.mapBridge.isActive
+                && CL.data.mapBridge.isActive()) {
+                CL.data.mapBridge.refresh();
+            }
         } catch (e) { /* non-fatal */ }
     }, 250);
 }
