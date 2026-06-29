@@ -17538,7 +17538,13 @@ function saveFilterProfile(opts) {
         showFilterLoadingState(false);
         return;
     }
-    if (crashState.loaded || _autoLoadGeneration > 0) {
+    // Reload when row data is present by EITHER path: the full autoLoad pipeline
+    // (crashState.loaded) OR on-demand lazy hydration (crashState.sampleRowsLoaded
+    // — set by CL.worker.ensureSampleRows when a row-level tab like Asset
+    // Deficiency hydrates rows itself). Without sampleRowsLoaded here, a county
+    // road-type change after on-demand hydration did nothing, leaving Asset
+    // Deficiency analyzing the previous road type's rows.
+    if (crashState.loaded || crashState.sampleRowsLoaded || _autoLoadGeneration > 0) {
         const dataFilePath = getDataFilePath();
         console.log('[Config] Reloading data from:', dataFilePath);
         // Invalidate cache since filter changed — old filter's cached data must not be served
@@ -17546,6 +17552,13 @@ function saveFilterProfile(opts) {
             console.warn('[Config] Cache clear on filter change failed:', err);
             if (typeof showToast === 'function') showToast('Warning: Could not clear old cache. Data may be stale.', 'warning');
         });
+        // Also drop the lazy sample-rows cache + flag so the reload re-fetches the
+        // new road-type file instead of the loader's fast-path returning the
+        // already-hydrated (old road-type) rows.
+        if (typeof CL !== 'undefined' && CL.worker && typeof CL.worker.resetSampleRowsLoader === 'function') {
+            CL.worker.resetSampleRowsLoader();
+        }
+        crashState.sampleRowsLoaded = false;
         // Show loading state on filter options
         showFilterLoadingState(true);
         autoLoadCrashData(true); // skipCache = true since filter changed and cache was just cleared
