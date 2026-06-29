@@ -1700,14 +1700,15 @@ Your data stays private. All processing happens in your browser.
 <button class="btn-toggle" id="btnHeat" onclick="setMapMode('heat')">🔥 Heatmap</button>
 <button class="btn-toggle" id="btnMarkers" onclick="setMapMode('markers')">⚫ Markers</button>
 </div>
-<!-- Single "Filters" button + active-count badge — opens the vertical multi-select panel below -->
-<button class="btn-soft btn-soft-primary" id="btnOpenMapFilters"
-        onclick="toggleMapFiltersPanel()" style="margin-left:.5rem;display:inline-flex;align-items:center;gap:.35rem">
-🎛️ Filters
-<span id="mapActiveFiltersBadge" class="badge"
-      style="display:none;padding:.1rem .45rem;border-radius:9999px;background:#1e40af;color:#fff;font-size:.7rem"></span>
-<span id="mapFiltersChevron" style="font-size:.7rem">▾</span>
-</button>
+<!-- Inline quick-filter chips (replaces the old "Filters" dropdown button) -->
+<span class="filter-chips" style="margin-left:.5rem">
+<span style="color:var(--gray);font-size:.75rem;margin-right:.1rem">Filters:</span>
+<span class="filter-chip" data-filter="fatal" onclick="toggleMapFactor('fatal')">🔴 Fatal</span>
+<span class="filter-chip" data-filter="serious" onclick="toggleMapFactor('serious')">🩹 K+A</span>
+<span class="filter-chip" data-filter="ped" onclick="toggleMapFactor('ped')">🚶 Ped</span>
+<span class="filter-chip" data-filter="bike" onclick="toggleMapFactor('bike')">🚴 Bike</span>
+<span class="filter-chip" data-filter="intersection" onclick="toggleMapFactor('intersection')">🚦 Intersection</span>
+</span>
 <select id="mapYearFilter" onchange="updateMapDisplay()"
         style="margin-left:auto;padding:.35rem;border-radius:var(--radius);border:1px solid var(--border);font-size:.8rem">
 <option value="">All Years</option>
