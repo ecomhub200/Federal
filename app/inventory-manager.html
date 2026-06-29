@@ -485,8 +485,11 @@ window.addEventListener('message',function(evt){
     $('stSel').value=evt.data.state;
     updateCountyDropdown(evt.data.state);
     $('coSel').value=evt.data.jurisdictionKey;
-    // Use tier-aware R2 path from parent if available, else fall back to state/county
-    imR2BasePath=evt.data.r2BasePath||(evt.data.state+'/'+evt.data.jurisdictionKey);
+    // Use tier-aware R2 path from parent if available, else fall back to
+    // state/folder. Prefer evt.data.folder (state-abbrev prefix already stripped
+    // by the parent, e.g. Delaware "de_kent" -> "kent") so the fallback matches
+    // the prefix-less R2 bucket layout instead of 404-ing on the raw key.
+    imR2BasePath=evt.data.r2BasePath||(evt.data.state+'/'+(evt.data.folder||evt.data.jurisdictionKey));
     $('r2Path').textContent=imR2BasePath;
     saveCfg(); // Persist parent's selection to localStorage so it overrides stale defaults
     // Update map center to jurisdiction
@@ -538,6 +541,14 @@ async function loadData(){
         toast('Data loaded (parquet.gz)','ok');
       }
     }catch(e){console.warn('[IM] Parquet load failed, trying cache:',e.message)}
+    // R2 .csv fallback — the parquet may 404 (or fail to parse) while the CSV
+    // variant exists in the same folder. It feeds the same parseCSV pipeline.
+    if(!csv){
+      try{
+        const cr=await fetch(pub+'/'+fk.replace(/\.parquet\.gz$/,'.csv'));
+        if(cr.ok){csv=await cr.text();toast('Data loaded (csv)','ok');}
+      }catch(e){console.warn('[IM] CSV fallback failed:',e.message)}
+    }
     if(!csv){csv=await cGet(fk);if(csv)toast('Loaded from cache','warn')}
     if(!csv){toast('No data — check server configuration','err');return}
     await cSet(fk,csv).catch(()=>{});

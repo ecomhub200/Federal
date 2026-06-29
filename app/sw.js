@@ -13,7 +13,7 @@
  * Bump CACHE_NAME on every release so old caches get evicted on activate.
  */
 
-const CACHE_NAME = 'crashlens-v20260627-r13';
+const CACHE_NAME = 'crashlens-v20260628-r14';
 
 // Pre-cache the critical app shell. Other modules will be lazy-cached on
 // first fetch via the stale-while-revalidate handler below — listing every
