@@ -41701,92 +41701,91 @@ function runSegmentPreflight() {
     const checkCoords = document.getElementById('preflightCoords');
     const checkOSM = document.getElementById('preflightOSM');
 
+    // Crash source: CSV sampleRows (upload) or matview-hydrated mapPoints.
+    const hasSample = !!(crashState.loaded && crashState.sampleRows && crashState.sampleRows.length > 0);
+    const hasMapPts = !!(crashState.mapPoints && crashState.mapPoints.length > 0);
+    const srcRows = hasSample ? crashState.sampleRows : (hasMapPts ? crashState.mapPoints : null);
+    const srcIsMatview = !hasSample && hasMapPts;
+    const setRow = (el, icon, color, text) => {
+        el.querySelector('.preflight-icon').textContent = icon;
+        el.querySelector('.preflight-icon').style.color = color;
+        el.querySelector('.preflight-value').textContent = text;
+        el.querySelector('.preflight-value').style.color = color;
+    };
+
     // Check crash data
-    if (crashState.loaded && crashState.sampleRows && crashState.sampleRows.length > 0) {
-        checkCrash.querySelector('.preflight-icon').textContent = '✓';
-        checkCrash.querySelector('.preflight-icon').style.color = '#16a34a';
-        checkCrash.querySelector('.preflight-value').textContent = crashState.sampleRows.length.toLocaleString() + ' crashes';
-        checkCrash.querySelector('.preflight-value').style.color = '#16a34a';
+    if (srcRows) {
+        setRow(checkCrash, '✓', '#16a34a', srcRows.length.toLocaleString() + ' crashes' + (srcIsMatview ? ' (matview)' : ''));
     } else {
-        checkCrash.querySelector('.preflight-icon').textContent = '✕';
-        checkCrash.querySelector('.preflight-icon').style.color = '#dc2626';
-        checkCrash.querySelector('.preflight-value').textContent = 'Not loaded';
-        checkCrash.querySelector('.preflight-value').style.color = '#dc2626';
+        setRow(checkCrash, '✕', '#dc2626', 'Not loaded');
     }
 
-    // Check routes
-    if (crashState.loaded && crashState.sampleRows) {
+    // Check routes / segments
+    if (srcRows && srcIsMatview) {
+        // Slim matview points carry no route name — crashes are snapped to OSM
+        // roads spatially at analysis time, so report point availability here.
+        setRow(checkRoutes, '✓', '#16a34a', 'spatial match');
+    } else if (srcRows) {
         const routes = new Set();
-        for (const row of crashState.sampleRows) {
+        for (const row of srcRows) {
             const route = row[COL.ROUTE];
             if (route && route !== 'Unknown') routes.add(route);
         }
         if (routes.size > 0) {
-            checkRoutes.querySelector('.preflight-icon').textContent = '✓';
-            checkRoutes.querySelector('.preflight-icon').style.color = '#16a34a';
-            checkRoutes.querySelector('.preflight-value').textContent = routes.size.toLocaleString() + ' routes';
-            checkRoutes.querySelector('.preflight-value').style.color = '#16a34a';
+            setRow(checkRoutes, '✓', '#16a34a', routes.size.toLocaleString() + ' routes');
         } else {
-            checkRoutes.querySelector('.preflight-icon').textContent = '✕';
-            checkRoutes.querySelector('.preflight-icon').style.color = '#dc2626';
-            checkRoutes.querySelector('.preflight-value').textContent = 'No route data';
-            checkRoutes.querySelector('.preflight-value').style.color = '#dc2626';
+            setRow(checkRoutes, '✕', '#dc2626', 'No route data');
         }
     } else {
-        checkRoutes.querySelector('.preflight-icon').textContent = '⏳';
-        checkRoutes.querySelector('.preflight-value').textContent = '--';
-        checkRoutes.querySelector('.preflight-value').style.color = '#999';
+        setRow(checkRoutes, '⏳', '#999', '--');
     }
 
     // Check coordinates
-    if (crashState.loaded && crashState.sampleRows) {
+    if (srcRows) {
         let validCoords = 0;
-        for (const row of crashState.sampleRows) {
-            const lat = parseFloat(row[COL.Y]);
-            const lon = parseFloat(row[COL.X]);
-            if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
-                validCoords++;
-            }
+        for (const row of srcRows) {
+            const lat = parseFloat(srcIsMatview ? row.lat : row[COL.Y]);
+            const lon = parseFloat(srcIsMatview ? row.lng : row[COL.X]);
+            if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) validCoords++;
         }
-        const pct = ((validCoords / crashState.sampleRows.length) * 100).toFixed(1);
+        const pct = ((validCoords / srcRows.length) * 100).toFixed(1);
         if (validCoords > 0) {
-            checkCoords.querySelector('.preflight-icon').textContent = '✓';
-            checkCoords.querySelector('.preflight-icon').style.color = '#16a34a';
-            checkCoords.querySelector('.preflight-value').textContent = `${pct}% (${validCoords.toLocaleString()})`;
-            checkCoords.querySelector('.preflight-value').style.color = '#16a34a';
+            setRow(checkCoords, '✓', '#16a34a', `${pct}% (${validCoords.toLocaleString()})`);
         } else {
-            checkCoords.querySelector('.preflight-icon').textContent = '✕';
-            checkCoords.querySelector('.preflight-icon').style.color = '#dc2626';
-            checkCoords.querySelector('.preflight-value').textContent = 'No coordinates';
-            checkCoords.querySelector('.preflight-value').style.color = '#dc2626';
+            setRow(checkCoords, '✕', '#dc2626', 'No coordinates');
         }
     } else {
-        checkCoords.querySelector('.preflight-icon').textContent = '⏳';
-        checkCoords.querySelector('.preflight-value').textContent = '--';
-        checkCoords.querySelector('.preflight-value').style.color = '#999';
+        setRow(checkCoords, '⏳', '#999', '--');
     }
 
-    // Check OSM cache
+    // Check OSM cache: in-memory → R2 parquet (async HEAD) → sessionStorage/Overpass
     if (segmentAnalysisState.osmRouteData && segmentAnalysisState.osmRouteData.size > 0) {
-        checkOSM.querySelector('.preflight-icon').textContent = '✓';
-        checkOSM.querySelector('.preflight-icon').style.color = '#16a34a';
-        checkOSM.querySelector('.preflight-value').textContent = segmentAnalysisState.osmRouteData.size.toLocaleString() + ' roads';
-        checkOSM.querySelector('.preflight-value').style.color = '#16a34a';
+        setRow(checkOSM, '✓', '#16a34a', segmentAnalysisState.osmRouteData.size.toLocaleString() + ' roads');
     } else {
-        // Check sessionStorage
-        const cacheKey = getOSMCacheKey ? getOSMCacheKey(getJurisdictionBounds()) : null;
-        const cached = cacheKey ? sessionStorage.getItem(`osm_centerline_${cacheKey}`) : null;
-        if (cached) {
-            checkOSM.querySelector('.preflight-icon').textContent = '✓';
-            checkOSM.querySelector('.preflight-icon').style.color = '#16a34a';
-            checkOSM.querySelector('.preflight-value').textContent = 'Cached (24h)';
-            checkOSM.querySelector('.preflight-value').style.color = '#16a34a';
-        } else {
-            checkOSM.querySelector('.preflight-icon').textContent = '○';
-            checkOSM.querySelector('.preflight-icon').style.color = '#f59e0b';
-            checkOSM.querySelector('.preflight-value').textContent = 'Will fetch';
-            checkOSM.querySelector('.preflight-value').style.color = '#f59e0b';
-        }
+        setRow(checkOSM, '⏳', '#999', 'Checking…');
+        (async () => {
+            try {
+                const stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
+                const cfg = (stateKey && appConfig?.states?.[stateKey]) || {};
+                const r2Prefix = cfg.r2Prefix || stateKey;
+                const abbr = (cfg.abbreviation || '').toLowerCase();
+                if (r2Prefix && abbr && typeof resolveDataUrl === 'function') {
+                    const url = resolveDataUrl(`${r2Prefix}/cache/${abbr}_roads.parquet.gz`);
+                    const resp = await fetch(url, { method: 'HEAD' });
+                    if (resp.ok) {
+                        setRow(checkOSM, '✓', '#16a34a', `R2 cached (${abbr})`);
+                        return;
+                    }
+                }
+            } catch (e) { /* fall through to Overpass display */ }
+            const cacheKey = getOSMCacheKey ? getOSMCacheKey(getJurisdictionBounds()) : null;
+            const cached = cacheKey ? sessionStorage.getItem(`osm_centerline_${cacheKey}`) : null;
+            if (cached) {
+                setRow(checkOSM, '✓', '#16a34a', 'Cached (24h)');
+            } else {
+                setRow(checkOSM, '○', '#f59e0b', 'Will fetch (Overpass)');
+            }
+        })();
     }
 }
 
@@ -42259,7 +42258,14 @@ async function fetchOSMCenterlineData(bounds) {
  * @returns {object} {minLat, maxLat, minLon, maxLon}
  */
 function getJurisdictionBounds() {
-    const rows = crashState.sampleRows;
+    // Prefer CSV sampleRows; for matview-served scopes fall back to the
+    // hydrated mapPoints (mv_map_points) so bounds are still data-driven.
+    let rows = (crashState.sampleRows && crashState.sampleRows.length) ? crashState.sampleRows : null;
+    let useMapPoints = false;
+    if (!rows && crashState.mapPoints && crashState.mapPoints.length) {
+        rows = crashState.mapPoints;
+        useMapPoints = true;
+    }
 
     // Build fallback bounds from the active jurisdiction's config bbox,
     // so the fallback is correct for ANY state/jurisdiction (not just Virginia).
@@ -42296,8 +42302,8 @@ function getJurisdictionBounds() {
     let validCoordCount = 0;
 
     for (const row of rows) {
-        const lat = parseFloat(row[COL.Y]);
-        const lon = parseFloat(row[COL.X]);
+        const lat = parseFloat(useMapPoints ? row.lat : row[COL.Y]);
+        const lon = parseFloat(useMapPoints ? row.lng : row[COL.X]);
         if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
             minLat = Math.min(minLat, lat);
             maxLat = Math.max(maxLat, lat);
@@ -42366,6 +42372,166 @@ function matchCrashRouteToOSM(crashRoute, osmRouteMap) {
     return null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Matview-scope support (2026-06-28) — make the segment analysis work for
+// scopes served by Supabase matviews (no CSV upload). Crashes come from
+// crashState.mapPoints (mv_map_points: lat/lng/sev only, no route/date) and
+// OSM centerlines from the pre-cached R2 parquet. See plan act-as-my-developer.
+// ─────────────────────────────────────────────────────────────────────────
+
+const SEGMENT_MATCH_TOLERANCE_M = 50;   // crash → road snap distance (meters)
+const _SEGMENT_GRID_CELL_DEG = 0.005;   // ~0.5 km spatial-index cell
+
+/**
+ * Uniform crash iterator over either crashState.sampleRows (CSV upload) or
+ * crashState.mapPoints (matview-hydrated). Yields {route, severity, lat, lon,
+ * date}. mapPoints carry no route or date, so callers must spatial-match and
+ * skip the date filter for that source (hasRoute/hasDate flags say which).
+ * @returns {{source:string, rows:Array, hasRoute:boolean, hasDate:boolean, get:function}|null}
+ */
+function _segmentGetCrashIterator() {
+    if (crashState.sampleRows && crashState.sampleRows.length > 0) {
+        return {
+            source: 'sampleRows', rows: crashState.sampleRows, hasRoute: true, hasDate: true,
+            get: (row) => ({
+                route: row[COL.ROUTE], severity: row[COL.SEVERITY],
+                lat: parseFloat(row[COL.Y]), lon: parseFloat(row[COL.X]), date: row[COL.DATE]
+            })
+        };
+    }
+    if (crashState.mapPoints && crashState.mapPoints.length > 0) {
+        return {
+            source: 'mapPoints', rows: crashState.mapPoints, hasRoute: false, hasDate: false,
+            get: (row) => ({
+                route: null, severity: row.sev,
+                lat: parseFloat(row.lat), lon: parseFloat(row.lng), date: null
+            })
+        };
+    }
+    return null;
+}
+
+/**
+ * Build a coarse lat/lon grid index over all OSM way vertices (and the
+ * midpoint of each vertex pair) so crashes can be snapped to the nearest road
+ * in ~O(1). Works for both R2 (2-point) and Overpass (multi-point) geometries.
+ */
+function _buildOSMSpatialIndex(osmRouteMap) {
+    const grid = new Map();
+    const cell = _SEGMENT_GRID_CELL_DEG;
+    const add = (lat, lon, name) => {
+        if (isNaN(lat) || isNaN(lon)) return;
+        const key = Math.round(lat / cell) + ':' + Math.round(lon / cell);
+        let bucket = grid.get(key);
+        if (!bucket) { bucket = []; grid.set(key, bucket); }
+        bucket.push({ lat, lon, name });
+    };
+    for (const [name, data] of osmRouteMap) {
+        const geoms = data.geometries || [];
+        for (const geom of geoms) {
+            if (!Array.isArray(geom)) continue;
+            for (let i = 0; i < geom.length; i++) {
+                const p = geom[i];
+                if (!p) continue;
+                add(p.lat, p.lon, name);
+                if (i > 0 && geom[i - 1]) {
+                    add((geom[i - 1].lat + p.lat) / 2, (geom[i - 1].lon + p.lon) / 2, name);
+                }
+            }
+        }
+    }
+    return grid;
+}
+
+/**
+ * Snap a crash coordinate to the nearest OSM road name using the grid index.
+ * @returns {string|null} matched road name within SEGMENT_MATCH_TOLERANCE_M, else null
+ */
+function _segmentMatchCrashToRoad(lat, lon, grid) {
+    if (isNaN(lat) || isNaN(lon) || !grid) return null;
+    const cell = _SEGMENT_GRID_CELL_DEG;
+    const cLat = Math.round(lat / cell);
+    const cLon = Math.round(lon / cell);
+    let best = null, bestDist = Infinity;
+    for (let dLat = -1; dLat <= 1; dLat++) {
+        for (let dLon = -1; dLon <= 1; dLon++) {
+            const bucket = grid.get((cLat + dLat) + ':' + (cLon + dLon));
+            if (!bucket) continue;
+            for (const pt of bucket) {
+                const d = segmentHaversineDistance(lat, lon, pt.lat, pt.lon);
+                if (d < bestDist) { bestDist = d; best = pt.name; }
+            }
+        }
+    }
+    return bestDist <= SEGMENT_MATCH_TOLERANCE_M ? best : null;
+}
+
+/**
+ * Load pre-cached OSM centerline data from R2 (parquet) for the active state.
+ * Returns the SAME Map<name,{…,lengthMiles,fhwaCode,geometries}> shape as
+ * fetchOSMCenterlineData() so all downstream code is unchanged. Throws on any
+ * failure so the caller can fall back to the live Overpass fetch.
+ * R2 key: {r2Prefix}/cache/{abbr}_roads.parquet.gz (e.g. delaware/cache/de_roads.parquet.gz)
+ */
+async function fetchOSMCenterlineFromR2(stateKey, abbr, bounds) {
+    const cfg = (typeof appConfig !== 'undefined' && appConfig.states && appConfig.states[stateKey]) || {};
+    const r2Prefix = cfg.r2Prefix || stateKey;
+    const ab = (abbr || cfg.abbreviation || '').toLowerCase();
+    if (!r2Prefix || !ab) throw new Error('No state prefix/abbreviation for OSM R2 fetch');
+
+    const key = `${r2Prefix}/cache/${ab}_roads.parquet.gz`;
+    const url = (typeof resolveDataUrl === 'function') ? resolveDataUrl(key) : key;
+    console.log('[SegmentAnalysis] Loading OSM centerlines from R2:', url);
+
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`R2 OSM fetch failed: HTTP ${resp.status}`);
+    const buf = await resp.arrayBuffer();
+    const parsed = await _parseParquetGz(buf);
+    const rows = parsed.rows || [];
+    console.log(`[SegmentAnalysis] R2 parquet parsed: ${rows.length} OSM ways`);
+
+    const routeDataMap = new Map();
+    let kept = 0;
+    for (const r of rows) {
+        const uLat = parseFloat(r.u_lat), uLon = parseFloat(r.u_lon);
+        const vLat = parseFloat(r.v_lat), vLon = parseFloat(r.v_lon);
+        if (isNaN(uLat) || isNaN(uLon) || isNaN(vLat) || isNaN(vLon)) continue;
+
+        // Optional clip to scope bounds (statewide parquet → sub-jurisdiction)
+        if (bounds) {
+            const mLat = parseFloat(r.mid_lat), mLon = parseFloat(r.mid_lon);
+            const cLat = !isNaN(mLat) ? mLat : (uLat + vLat) / 2;
+            const cLon = !isNaN(mLon) ? mLon : (uLon + vLon) / 2;
+            if (cLat < bounds.minLat || cLat > bounds.maxLat || cLon < bounds.minLon || cLon > bounds.maxLon) continue;
+        }
+
+        const highway = r.highway || 'unknown';
+        const ref = (r.ref && r.ref !== '') ? r.ref : null;
+        const name = (r.name && r.name !== '') ? r.name : (ref || 'Unnamed');
+        const lengthMiles = metersToMiles(parseFloat(r.length_m) || 0);
+        const fhwaInfo = getFHWAClassFromOSM(highway, ref);
+        const geometry = [{ lat: uLat, lon: uLon }, { lat: vLat, lon: vLon }];
+
+        if (routeDataMap.has(name)) {
+            const existing = routeDataMap.get(name);
+            existing.lengthMiles += lengthMiles;
+            existing.wayCount += 1;
+            existing.geometries.push(geometry);
+        } else {
+            routeDataMap.set(name, {
+                name: name, osmHighway: highway, routeRef: ref,
+                fhwaClass: fhwaInfo.fhwaClass, fhwaCode: fhwaInfo.fhwaCode,
+                fhwaDisplayName: fhwaInfo.displayName,
+                lengthMiles: lengthMiles, wayCount: 1, geometries: [geometry]
+            });
+        }
+        kept++;
+    }
+    console.log(`[SegmentAnalysis] R2 OSM aggregated ${routeDataMap.size} roads from ${kept} ways`);
+    if (routeDataMap.size === 0) throw new Error('R2 OSM parquet produced no roads in scope');
+    return routeDataMap;
+}
+
 /**
  * Main analysis function: Analyze over-represented segments
  * Calculates crash rates by route, compares to functional class averages
@@ -42376,27 +42542,7 @@ async function analyzeOverRepSegments() {
         return;
     }
 
-    if (!crashState.loaded || !crashState.sampleRows || crashState.sampleRows.length === 0) {
-        // Bug fix (round 3, 2026-05-08): in Supabase-only mode the user has
-        // crashState.totalRows but no sampleRows. Replace the modal alert with
-        // an inline info-box explaining the requirement clearly.
-        const emptyEl = document.getElementById('segmentEmptyState');
-        if (emptyEl) {
-            emptyEl.innerHTML =
-                '<div style="padding:1rem;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;text-align:left;color:#78350f">'
-              +   '<strong>⚠️ Segment crash-rate analysis requires per-row crash data.</strong><br>'
-              +   'Your current scope is served by aggregate matviews only. Upload a CSV via the '
-              +   '<em>Upload Data</em> tab — or switch to a tier where row-level data is loaded — '
-              +   'to enable FHWA over-represented segment analysis.'
-              + '</div>';
-            emptyEl.style.display = 'block';
-        } else {
-            alert('Please load crash data first before analyzing segments.');
-        }
-        return;
-    }
-
-    // Show loading state
+    // Show loading state up-front — crash data may need matview hydration first.
     segmentAnalysisState.isLoading = true;
     document.getElementById('segmentLoadingIndicator').style.display = 'block';
     document.getElementById('segmentEmptyState').style.display = 'none';
@@ -42407,6 +42553,39 @@ async function analyzeOverRepSegments() {
     resetSegmentSteps();
 
     try {
+        // Resolve a crash source: CSV sampleRows (upload) or, for matview-served
+        // scopes, per-row points hydrated from mv_map_points (crashState.mapPoints).
+        let crashIter = _segmentGetCrashIterator();
+        if (!crashIter) {
+            document.getElementById('segmentLoadingStatus').textContent = 'Loading crash points from matviews...';
+            try {
+                if (typeof CL !== 'undefined' && CL.map && CL.map._hydrateMapPointsFromMatview) {
+                    await CL.map._hydrateMapPointsFromMatview('segment-analysis');
+                } else if (typeof _hydrateMapPointsFromMatview === 'function') {
+                    await _hydrateMapPointsFromMatview('segment-analysis');
+                }
+            } catch (e) {
+                console.warn('[SegmentAnalysis] mapPoints hydration failed:', e);
+            }
+            crashIter = _segmentGetCrashIterator();
+        }
+        if (!crashIter) {
+            const emptyEl = document.getElementById('segmentEmptyState');
+            if (emptyEl) {
+                emptyEl.innerHTML =
+                    '<div style="padding:1rem;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;text-align:left;color:#78350f">'
+                  +   '<strong>⚠️ Segment crash-rate analysis needs crash points for this scope.</strong><br>'
+                  +   'No row-level or matview crash points are loaded for the current selection. '
+                  +   'Pick a state/jurisdiction (or upload a CSV via the <em>Upload Data</em> tab) and try again.'
+                  + '</div>';
+                emptyEl.style.display = 'block';
+            } else {
+                alert('Please load crash data first before analyzing segments.');
+            }
+            document.getElementById('segmentLoadingIndicator').style.display = 'none';
+            return;
+        }
+        const crashIsMatview = crashIter.source === 'mapPoints';
         // Get filter parameters
         const startDate = document.getElementById('segStartDate')?.value || null;
         const endDate = document.getElementById('segEndDate')?.value || null;
@@ -42425,56 +42604,83 @@ async function analyzeOverRepSegments() {
         console.log('[SegmentAnalysis] Bounds calculated:', bounds);
         updateSegmentStep(1, 'done');
 
-        // Step 2: Fetch OSM centerline data if not cached
+        // Step 2: Load OSM centerline data (pre-cached R2 parquet primary,
+        // live Overpass API as fallback where a state's R2 cache is absent).
         updateSegmentStep(2, 'active');
-        document.getElementById('segmentLoadingStatus').textContent = 'Fetching road network from OpenStreetMap...';
-        document.getElementById('segmentLoadingDetail').textContent = 'Connecting to OSM Overpass API...';
-        if (segmentAnalysisState.osmRouteData.size === 0) {
-            console.log('[SegmentAnalysis] Fetching OSM data for bounds:', bounds);
-            segmentAnalysisState.osmRouteData = await fetchOSMCenterlineData(bounds);
+        document.getElementById('segmentLoadingStatus').textContent = 'Loading road network centerlines...';
+        if (!segmentAnalysisState.osmRouteData || segmentAnalysisState.osmRouteData.size === 0) {
+            const stateKey = (typeof _getActiveStateKey === 'function') ? _getActiveStateKey() : null;
+            const stateCfg = (stateKey && appConfig?.states?.[stateKey]) || {};
+            const abbr = (stateCfg.abbreviation || '').toLowerCase();
+            let loaded = null;
+            if (stateKey && abbr) {
+                document.getElementById('segmentLoadingDetail').textContent = `Loading cached OSM network (${abbr.toUpperCase()}) from R2...`;
+                try {
+                    loaded = await fetchOSMCenterlineFromR2(stateKey, abbr, bounds);
+                } catch (e) {
+                    console.warn('[SegmentAnalysis] R2 OSM cache unavailable, falling back to Overpass:', e.message);
+                }
+            }
+            if (!loaded || loaded.size === 0) {
+                document.getElementById('segmentLoadingDetail').textContent = 'Fetching road network from OpenStreetMap (Overpass)...';
+                console.log('[SegmentAnalysis] Fetching OSM data via Overpass for bounds:', bounds);
+                loaded = await fetchOSMCenterlineData(bounds);
+            }
+            segmentAnalysisState.osmRouteData = loaded;
         }
         document.getElementById('segmentLoadingDetail').textContent = `Found ${segmentAnalysisState.osmRouteData.size.toLocaleString()} road segments`;
         updateSegmentStep(2, 'done');
 
-        // Step 3: Filter crash data by date if specified
+        // Step 3: Aggregate crashes by segment.
+        // sampleRows carry route + date; mapPoints (matview) carry only
+        // lat/lng/sev, so for the matview path we spatially snap each crash to
+        // the nearest OSM road and skip the (unavailable) date filter.
         updateSegmentStep(3, 'active');
-        document.getElementById('segmentLoadingStatus').textContent = 'Aggregating crash data by route...';
-        let filteredCrashes = crashState.sampleRows;
-        if (startDate || endDate) {
-            filteredCrashes = filteredCrashes.filter(row => {
-                const crashDate = row[COL.DATE];
-                if (!crashDate) return true;
-                if (startDate && crashDate < startDate) return false;
-                if (endDate && crashDate > endDate) return false;
-                return true;
-            });
-        }
-        console.log(`[SegmentAnalysis] Filtered crashes: ${filteredCrashes.length} (from ${crashState.sampleRows.length})`);
+        document.getElementById('segmentLoadingStatus').textContent = 'Aggregating crash data by segment...';
 
-        // Step 3: Aggregate crashes by route
+        const osmGrid = crashIsMatview ? _buildOSMSpatialIndex(segmentAnalysisState.osmRouteData) : null;
+        const dateRequested = !!(startDate || endDate);
+        const dateSkipped = crashIsMatview && dateRequested; // date filter N/A for slim matview points
+
         const crashesByRoute = new Map();
-        for (const row of filteredCrashes) {
-            const route = row[COL.ROUTE];
-            if (!route || route === 'Unknown') continue;
+        let consideredCrashes = 0;
+        for (const row of crashIter.rows) {
+            const c = crashIter.get(row);
 
-            if (!crashesByRoute.has(route)) {
-                crashesByRoute.set(route, {
-                    total: 0,
-                    K: 0, A: 0, B: 0, C: 0, O: 0,
-                    crashes: []
-                });
+            // Date filter — only when the source carries dates (CSV sampleRows)
+            if (crashIter.hasDate && dateRequested && c.date) {
+                if (startDate && c.date < startDate) continue;
+                if (endDate && c.date > endDate) continue;
             }
 
-            const data = crashesByRoute.get(route);
+            // Resolve the segment key: matched OSM road (matview) or route name (CSV)
+            let routeKey;
+            if (crashIsMatview) {
+                if (isNaN(c.lat) || isNaN(c.lon)) continue;
+                routeKey = _segmentMatchCrashToRoad(c.lat, c.lon, osmGrid);
+                if (!routeKey) continue; // no road within tolerance
+            } else {
+                routeKey = c.route;
+                if (!routeKey || routeKey === 'Unknown') continue;
+            }
+            consideredCrashes++;
+
+            if (!crashesByRoute.has(routeKey)) {
+                crashesByRoute.set(routeKey, { total: 0, K: 0, A: 0, B: 0, C: 0, O: 0, crashes: [] });
+            }
+            const data = crashesByRoute.get(routeKey);
             data.total++;
-            const severity = row[COL.SEVERITY];
+            const severity = c.severity;
             if (severity && ['K', 'A', 'B', 'C', 'O'].includes(severity)) {
                 data[severity]++;
             }
             data.crashes.push(row);
         }
-        console.log(`[SegmentAnalysis] Crashes aggregated for ${crashesByRoute.size} routes`);
-        document.getElementById('segmentLoadingDetail').textContent = `${crashesByRoute.size.toLocaleString()} unique routes with ${filteredCrashes.length.toLocaleString()} crashes`;
+        console.log(`[SegmentAnalysis] Crashes aggregated for ${crashesByRoute.size} segments (${consideredCrashes} crashes, source=${crashIter.source})`);
+        document.getElementById('segmentLoadingDetail').textContent =
+            `${crashesByRoute.size.toLocaleString()} segments · ${consideredCrashes.toLocaleString()} crashes`
+            + (crashIsMatview ? ' (matview points)' : '')
+            + (dateSkipped ? ' · date filter N/A in matview mode' : '');
         updateSegmentStep(3, 'done');
 
         // Step 4: Match crash routes to OSM and calculate metrics
@@ -42490,7 +42696,9 @@ async function analyzeOverRepSegments() {
         const funcClassStats = {};
 
         for (const [crashRoute, crashData] of crashesByRoute) {
-            const osmMatch = matchCrashRouteToOSM(crashRoute, segmentAnalysisState.osmRouteData);
+            const osmMatch = crashIsMatview
+                ? (segmentAnalysisState.osmRouteData.has(crashRoute) ? crashRoute : null)
+                : matchCrashRouteToOSM(crashRoute, segmentAnalysisState.osmRouteData);
 
             if (!osmMatch) {
                 console.log(`[SegmentAnalysis] No OSM match for: ${crashRoute}`);

@@ -945,7 +945,7 @@ Before any code edit:
   - `closeDrawingAnalysisModal()` @ L45482 — document.getElementById('drawingAnalysisModal').classList.remove('visible');
   - `showMapSelectionAnalysis()` @ L45937 — Show map selection analysis panel in grants tab
   - `resetSegmentAnalysisForJurisdictionChange()` @ L48470 — try {
-  - `analyzeOverRepSegments()` @ L48703 — if (segmentAnalysisState.isLoading) {
+  - `analyzeOverRepSegments()` @ L42539 — if (segmentAnalysisState.isLoading) {  [2026-06-28: works for matview-served scopes — crashes from crashState.mapPoints spatial-matched to OSM, centerlines from R2 parquet via fetchOSMCenterlineFromR2; Overpass fallback. Block extract-candidate: true]
   - `renderSegmentAnalysisResults()` @ L49031 — 
   - `analyzeSelectedSegment()` @ L49393 — const select = document.getElementById('measureRouteSelect');
   - `updateAnalysis()` → `app/modules/analysis/analysis-tab-orchestrator.js` (CC 204 Pass B; window-mirrored)
@@ -1240,7 +1240,11 @@ Before any code edit:
 | analyzeDrawingSelection | inline @ L45317 | inline | analysis |
 | analyzeHotspots | modules/hotspots/hotspots-tab-core.js | window+CL | hotspots |
 | analyzeLocation | inline @ L33929 | inline | analysis |
-| analyzeOverRepSegments | inline @ L48703 | inline | analysis |
+| analyzeOverRepSegments | inline @ L42539 | inline | analysis |
+| fetchOSMCenterlineFromR2 | inline @ L42476 | inline | shared |
+| _segmentGetCrashIterator | inline @ L42392 | inline | analysis |
+| _buildOSMSpatialIndex | inline @ L42419 | inline | analysis |
+| _segmentMatchCrashToRoad | inline @ L42450 | inline | analysis |
 | analyzeRiskFactors | modules/crash-tree/crash-tree-analysis.js | window+CL | analysis |
 | analyzeSelectedSegment | inline @ L49393 | inline | analysis |
 | analyzeSignalWarrant | inline @ L66124 | inline | warrants, analysis |
@@ -1872,7 +1876,7 @@ Before any code edit:
 | extractWarrantRoadProperties | inline @ L93598 | inline | warrants |
 | fallbackR2Url | modules/upload/upload-tier-ui.js | module-private | upload |
 | fetchCsvWithFallback | modules/spatial/r2-resolve.js | window+CL | shared |
-| fetchOSMCenterlineData | inline @ L48517 | inline | shared |
+| fetchOSMCenterlineData | inline @ L42186 | inline | shared |
 | fetchReportDataForType | modules/reports/reports-standard-core.js | window+CL | reports |
 | fetchStaticMapAsBase64 | inline @ L43050 | inline | map |
 | fetchWithRetry | inline @ L19728 | inline | shared |
@@ -2064,7 +2068,7 @@ Before any code edit:
 | getImprovedGrantMatches | modules/grants/grants-rank-score.js | module-private | grants |
 | getIntCollisionProblemClass | modules/intersection/intersection-tab-detail.js | window+CL | intersection |
 | getIntPeakHours | modules/intersection/intersection-tab-selection.js | window+CL | intersection |
-| getJurisdictionBounds | inline @ L48591 | inline | shared |
+| getJurisdictionBounds | inline @ L42260 | inline | shared |
 | getJurisdictionConfig | modules/upload/road-defaults.js | module-private | upload |
 | getJurisdictionLabel | inline @ L19598 | inline | shared |
 | getJurisdictionPolygon | modules/spatial/spatial-clip.js | module-private | shared |
@@ -2376,7 +2380,7 @@ Before any code edit:
 | mapSnap_sortRoutePoints | inline @ L42064 | inline | map |
 | markChartPainted | modules/ui/skeletons.js | module-private | shared |
 | markR2Loaded | modules/data/lazy-loader.js | module-private | shared |
-| matchCrashRouteToOSM | inline @ L48668 | inline | shared |
+| matchCrashRouteToOSM | inline @ L42344 | inline | shared |
 | matchMPOFeature | modules/spatial/geo-tier.js | module-private | shared |
 | mergeGrantProgramsFromSupabase | modules/grants/grants-rank-init.js | module-private | grants |
 | mergeSubscribers | inline @ L31208 | inline | shared |
@@ -2728,7 +2732,7 @@ Before any code edit:
 | runMUTCDAIAnalysis | inline @ L65353 | inline | ai, analysis |
 | runNow | modules/data/prewarm.js | module-private | shared |
 | runSafetyDataCheck | inline @ L83119 | inline | shared |
-| runSegmentPreflight | inline @ L48028 | inline | shared |
+| runSegmentPreflight | inline @ L41698 | inline | shared |
 | safeFitBounds | modules/map/map-safe-helpers.js | window+CL | map |
 | safeFlyTo | modules/map/map-safe-helpers.js | window+CL | map |
 | safeFlyToBounds | modules/map/map-safe-helpers.js | window+CL | map |
