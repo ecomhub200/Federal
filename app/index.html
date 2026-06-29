@@ -55040,6 +55040,12 @@ function loadLocationForCMF() {
         updateAIContextIndicator();
         // Auto-load asset deficiency data for this location
         syncADFromCMF(true);
+        // Auto-generate algorithmic recommendations on selection so picking a
+        // location surfaces countermeasures without a second click. AI mode is
+        // left manual (it needs an API key / explicit opt-in).
+        if (cmfState.mode === 'algo' && cmfState.selectedLocation) {
+            findCountermeasures();
+        }
     };
 
     if (_canSupabaseCMF) {
@@ -55149,6 +55155,11 @@ function loadLocationForCMF() {
 
     // Auto-load asset deficiency data for this location
     syncADFromCMF(true);
+    // Auto-generate algorithmic recommendations on selection (see note in the
+    // Supabase path above). AI mode stays manual.
+    if (cmfState.mode === 'algo' && cmfState.selectedLocation) {
+        findCountermeasures();
+    }
 }
 
 // Extract and display road properties
@@ -59972,8 +59983,12 @@ function findCountermeasures() {
             }
             const costEffectiveness = cmf.crfPct > 0 ? Math.round((cmf.crfPct / costTier) * 10) / 10 : 0;
 
-            // Calculate expected reduction
-            const expectedReduction = Math.round(profile.total * (1 - cmf.cmf) * 10) / 10;
+            // Calculate expected reduction (annualized + crash-type matched via
+            // the shared helper). The previous inline `profile.total * (1 - cmf)`
+            // used the full multi-year crash total but the card labels it
+            // "Prevented/yr", overstating the annual benefit by ~the number of
+            // years of data. calculateExpectedReduction divides by years-of-data.
+            const expectedReduction = calculateExpectedReduction(cmf, profile);
 
             // Calculate confidence level based on rating and CI
             let confidenceLevel = 'Medium';
@@ -60340,8 +60355,10 @@ function displayCMFRecommendations(detectedLocationType) {
         // Confidence display
         const confidenceColor = cmf.confidenceLevel === 'High' ? '#059669' :
                                cmf.confidenceLevel === 'Medium' ? '#f59e0b' : '#6b7280';
-        const ciDisplay = cmf.ciLow !== null && cmf.ciHigh !== null ?
-            `±${Math.round((cmf.ciHigh - cmf.ciLow) * 50)}%` : 'N/A';
+        // Use the shared confidence helper so missing CIs fall back to a
+        // rating-based ±estimate instead of rendering "±NaN%" (the inline
+        // `!== null` check let `undefined` CIs through into the arithmetic).
+        const ciDisplay = calculateConfidence(cmf).ciDisplay;
 
         return `
             <div class="cmf-card ${isHighRelevance ? 'high-relevance' : ''} ${isProvenCM ? 'proven-countermeasure' : ''} ${cmfState.shortlist.includes(cmf.id) ? 'shortlisted' : ''}" data-cmf-id="${cmf.id}" style="position:relative;padding-top:1.75rem">
