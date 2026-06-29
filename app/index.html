@@ -45214,6 +45214,21 @@ document.addEventListener('click', function(e) {
 // Sends all jurisdictions from appConfig + the selected key to the
 // Traffic Inventory iframe so its dropdown matches the Upload tab.
 
+// Strip a state-abbreviation prefix from a jurisdiction key so it matches the
+// prefix-less R2 folder layout (e.g. Delaware "de_kent" -> "kent"). No-op for
+// states whose keys have no "abbr_" prefix (VA/CO/etc.). Mirrors the strip in
+// CL.upload.getR2BasePath() so the R2-reading iframes (Inventory Manager /
+// Asset Deficiency) never request the prefixed 404 path as a fallback.
+function _stripStateAbbrPrefix(jurKey, stateKey) {
+    if (!jurKey) return jurKey;
+    let abbr = appConfig?.states?.[stateKey]?.abbreviation;
+    if (abbr) {
+        abbr = abbr.toLowerCase();
+        if (jurKey.toLowerCase().startsWith(abbr + '_')) return jurKey.substring(abbr.length + 1);
+    }
+    return jurKey;
+}
+
 function sendAllJurisdictionsToTrafficInventory() {
     const frame = document.getElementById('trafficInventoryFrame');
     if (!frame || !frame.contentWindow || frame.src === 'about:blank') return;
@@ -45241,7 +45256,7 @@ function sendAllJurisdictionsToTrafficInventory() {
             mapCenter: j.mapCenter,
             mapZoom: j.mapZoom || 10,
             state: r2Prefix,
-            folder: key
+            folder: _stripStateAbbrPrefix(key, jurStateKey)
         };
     });
 
@@ -45295,7 +45310,7 @@ function sendAllJurisdictionsToInventoryManager() {
             type: j.type || 'county',
             fips: j.fips || '',
             state: r2Prefix,
-            folder: key
+            folder: _stripStateAbbrPrefix(key, jurStateKey)
         };
     });
 
@@ -45327,6 +45342,7 @@ function syncJurisdictionToInventoryManager() {
             state: r2Prefix,
             stateKey: stateKey,
             jurisdictionKey: jurisdictionKey,
+            folder: _stripStateAbbrPrefix(jurisdictionKey, stateKey),
             fips: imFullFips,
             mapCenter: jurisdictionConfig?.mapCenter || null,
             mapZoom: jurisdictionConfig?.mapZoom || 10,
@@ -45431,7 +45447,7 @@ function sendConfigToAssetDeficiency() {
     const r2Prefix = stateConfig?.r2Prefix || stateKey;
     const baseUrl = (typeof r2State !== 'undefined' && r2State.manifest?.r2BaseUrl) ? r2State.manifest.r2BaseUrl : R2_BASE_URL;
     // Use tier-aware R2 base path from upload module (single source of truth)
-    const r2Path = (typeof CL !== 'undefined' && CL.upload?.getR2BasePath) ? CL.upload.getR2BasePath() : (r2Prefix + '/' + jurisdictionId);
+    const r2Path = (typeof CL !== 'undefined' && CL.upload?.getR2BasePath) ? CL.upload.getR2BasePath() : (r2Prefix + '/' + _stripStateAbbrPrefix(jurisdictionId, stateKey));
 
     // Construct full 5-digit state+county FIPS (e.g., "08035" for Douglas County, CO)
     // jurisdictionConfig.fips may be county-only (e.g., "035") when loaded from config.json
