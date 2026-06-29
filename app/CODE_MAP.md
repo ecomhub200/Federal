@@ -869,6 +869,7 @@ Before any code edit:
   - `autoSetWarrantDateByStudy()` @ L92803 — Auto-set date range based on current warrant study type
   - `updateWarrantPeriodBadge()` @ L92849 — Update the period badge based on study type
   - `applyWarrantDateFilter()` @ L92868 — Apply date filter and update Warrant analysis
+  - `_warrantDataMaxDate()` @ L69605 — Most-recent crash date for the selected warrant location (parses string dates, falls back to getMaxCrashDate); inline private helper, no export
   - `setDefaultWarrant7Period()` @ L92909 — 
   - `filterWarrantCrashesByDate()` @ L92958 — Filter crashes for selected location by date range
   - `updateWarrantDateInfo()` @ L92999 — Update date info display
@@ -2854,6 +2855,7 @@ Before any code edit:
 | setCrashTreeDatePreset | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
 | setCrashTreeType | modules/crash-tree/crash-tree-loader.js | window+CL | crashtree |
 | setDashboardLoadingState | inline @ L40395 | inline | dashboard |
+| _warrantDataMaxDate | inline @ L69605 | inline | warrants |
 | setDefaultWarrant7Period | inline @ L92909 | inline | warrants |
 | setEmailPrimary | modules/notifications/email-chips.js | window+CL | shared |
 | setEmailTimeFrame | inline @ L32290 | inline | shared |

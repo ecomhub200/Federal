@@ -69440,7 +69440,7 @@ function triggerWarrantSearch() {
 
 // Apply date preset for Warrant tab (1 year = 12 months, 3 years = 36 months)
 function applyWarrantDatePreset(years) {
-    const maxDate = getMaxCrashDate();
+    const maxDate = _warrantDataMaxDate();
     const endDate = new Date(maxDate);
     endDate.setHours(0, 0, 0, 0);
 
@@ -69497,7 +69497,7 @@ function autoSetWarrantDateByStudy() {
     const requiredMonths = warrantsState.requiredPeriods[study] || 12;
     const years = requiredMonths / 12;
 
-    const maxDate = getMaxCrashDate();
+    const maxDate = _warrantDataMaxDate();
     const endDate = new Date(maxDate);
     endDate.setHours(0, 0, 0, 0);
 
@@ -69598,9 +69598,29 @@ function applyWarrantDateFilter() {
  * Uses the most recent 12 months of available crash data
  * This is the MUTCD-recommended approach for crash experience analysis
  */
+// Most-recent crash date for the SELECTED warrant location. Parses the
+// "M/D/YYYY" string dates the same way filterWarrantCrashesByDate() does, so
+// the default window and the filter agree. Falls back to the global helper
+// only when no location crashes are loaded (legacy / sampleRows path).
+function _warrantDataMaxDate() {
+    const rows = warrantsState.locationCrashes;
+    if (rows && rows.length) {
+        let max = 0;
+        for (const c of rows) {
+            const v = c[COL.DATE];
+            if (!v) continue;
+            const d = (typeof v === 'number' || !isNaN(v)) ? new Date(parseInt(v)) : new Date(v);
+            const t = d.getTime();
+            if (!isNaN(t) && t > max) max = t;
+        }
+        if (max > 0) return new Date(max);
+    }
+    return getMaxCrashDate();
+}
+
 function setDefaultWarrant7Period() {
-    // Get the most recent crash date from the dataset
-    const maxDate = getMaxCrashDate();
+    // Get the most recent crash date from the dataset (location-scoped)
+    const maxDate = _warrantDataMaxDate();
     if (!maxDate) {
         console.warn('[Warrant 7] No crash data available to set default period');
         return;
