@@ -196,7 +196,10 @@ async function paintDashboardChartsFromMatview() {
                 labels: hourLabels,
                 datasets: [{
                     label: 'Crashes',
-                    data: hourLabels.map((_, h) => D.byHour[h] || 0),
+                    // mv_analysis_summary emits zero-padded hour dim_values
+                    // ('00'..'23'), so check both padded and unpadded keys —
+                    // else hours 0-9 (12a-9a) render as empty bars.
+                    data: hourLabels.map((_, h) => D.byHour[h] || D.byHour[String(h).padStart(2, '0')] || 0),
                     backgroundColor: '#0891b2'
                 }]
             });
