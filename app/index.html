@@ -1572,7 +1572,7 @@ Your data stays private. All processing happens in your browser.
 <!-- Crashes by Magisterial District Matrix -->
 <div class="card district-matrix-widget" id="districtMatrixWidget" style="margin-top:1rem;display:none;">
 <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-    <span>🗺️ Crashes by Magisterial District</span>
+    <span id="districtMatrixTitle">🗺️ Crashes by Magisterial District</span>
     <div style="display:flex;gap:0.5rem;align-items:center;">
         <span id="districtMatrixStatus" style="font-size:0.75rem;color:var(--gray);font-weight:normal;"></span>
         <button class="btn-soft btn-soft-secondary btn-soft-sm" onclick="refreshMagisterialDistrictCache()" id="districtMatrixRefreshBtn" title="Refresh district boundaries from server">
@@ -35825,11 +35825,27 @@ window.addEventListener('crashtab:dashboard:shown', _renderStateCoverageBanner);
 // out_is_blocked_upstream:true; the caps row reports has_ccd_assignment:false.
 // State-agnostic — keys on the capability flag, not on any state literal.
 async function _hideDistrictWidgetIfUnsupported() {
+    window._districtClientCcdFallback = false;
     try {
         const dc = window.crashLensClient;
         if (!dc || typeof dc.getStateCapabilities !== 'function') return false;
         const caps = await dc.getStateCapabilities(String(dc.state || '').toLowerCase());
         if (caps && caps.has_ccd_assignment === false) {
+            // Client-side CCD fallback: when a county is active and TIGERweb is
+            // enabled, the dashboard matrix is computed in-browser from TIGERweb
+            // county-subdivision boundaries (server-side crashes.ccd_name not
+            // required). Don't block — let renderDistrictMatrixWidget /
+            // computeDistrictCrashStatistics own the widget; they show an honest
+            // "no crashes matched" notice if 0 crashes land in a subdivision.
+            try {
+                const _jid = localStorage.getItem('selectedJurisdiction');
+                const _j = appConfig && appConfig.jurisdictions && appConfig.jurisdictions[_jid];
+                const _tigerOn = appConfig && appConfig.apis && appConfig.apis.tigerweb && appConfig.apis.tigerweb.enabled;
+                if (_j && _j.type === 'county' && _tigerOn) {
+                    window._districtClientCcdFallback = true;
+                    return false;
+                }
+            } catch (_) { /* fall through to the not-ingested notice */ }
             const widget = document.getElementById('districtMatrixWidget');
             if (widget) {
                 widget.innerHTML = `

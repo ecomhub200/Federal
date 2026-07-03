@@ -2193,7 +2193,14 @@ async function renderDistrictMatrixWidget() {
         // Case 5: Truly empty - no districts available or no crash data
         if (loadingEl) loadingEl.style.display = 'none';
         if (errorEl) errorEl.style.display = 'none';
-        if (emptyEl) emptyEl.style.display = 'block';
+        if (emptyEl) {
+            // Reset to the generic empty message — the CCD-fallback path below may
+            // have repainted emptyEl with a different notice on a prior render.
+            emptyEl.innerHTML = '<div style="font-size:1.5rem;margin-bottom:0.5rem;">🗺️</div>'
+                + '<div style="font-size:0.9rem;">No district data available</div>'
+                + '<div style="font-size:0.75rem;margin-top:0.25rem;">Select a county jurisdiction to view district statistics</div>';
+            emptyEl.style.display = 'block';
+        }
         if (tableEl) tableEl.style.display = 'none';
         if (chartsEl) chartsEl.style.display = 'none';
         return;
@@ -2208,6 +2215,31 @@ async function renderDistrictMatrixWidget() {
     // Get districts sorted by EPDO
     const districts = Object.values(districtState.statistics.byDistrict)
         .sort((a, b) => b.epdo - a.epdo);
+
+    // Client-side CCD fallback safety net (see _hideDistrictWidgetIfUnsupported).
+    // Boundaries loaded but zero crashes matched a subdivision (e.g. the loaded
+    // rows lack coordinates at this tier) — show an honest notice instead of a
+    // table of zero-rows + a NaN%-pie (the exact output the server-capability
+    // gate was added to prevent). Non-destructive: only toggles display.
+    if (window._districtClientCcdFallback && (districtState.statistics.totalAssigned || 0) === 0) {
+        if (tableEl) tableEl.style.display = 'none';
+        if (chartsEl) chartsEl.style.display = 'none';
+        if (emptyEl) {
+            emptyEl.innerHTML = '<div style="font-size:1.5rem;margin-bottom:0.5rem;">🗺️</div>'
+                + '<div style="font-size:0.9rem;">Census-subdivision boundaries loaded, but no crashes matched</div>'
+                + '<div style="font-size:0.75rem;margin-top:0.25rem;">The loaded crash records lack coordinates for this view, so no accurate breakdown can be shown.</div>';
+            emptyEl.style.display = 'block';
+        }
+        if (statusEl) statusEl.textContent = '';
+        return;
+    }
+
+    // Relabel for the client-side CCD fallback (e.g. Delaware Census County
+    // Divisions, not Virginia magisterial districts).
+    const _titleEl = document.getElementById('districtMatrixTitle');
+    if (_titleEl && window._districtClientCcdFallback) {
+        _titleEl.textContent = '🗺️ Crashes by Census Subdivisions';
+    }
 
     if (districts.length === 0) {
         if (tableEl) tableEl.style.display = 'none';
